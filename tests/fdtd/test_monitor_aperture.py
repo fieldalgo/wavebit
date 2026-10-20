@@ -66,8 +66,8 @@ def test_asymmetric_aperture_samples_and_flux_use_the_selected_surface(axis, rev
     # Flux snaps endpoints to nearest nodes, unlike Field's point-in-interval selection.
     widths = [(round((high+.2)/dx)-round((low+.2)/dx))*dx for low, high in spans]
     area = widths[0]*widths[1]
-    full = np.asarray(r['whole'].energy_density)
-    finite_flux = np.asarray(r['finite'].energy_density)
+    full = np.asarray(r['whole'].spectral_energy)
+    finite_flux = np.asarray(r['finite'].spectral_energy)
     assert np.all(np.abs(full) > 0)
     assert np.all(full < 0) if reverse else np.all(full > 0)
     np.testing.assert_allclose(finite_flux/full, area/(.4*.4), rtol=2e-14, atol=0.)

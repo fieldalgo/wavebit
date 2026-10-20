@@ -19,8 +19,8 @@ class TimeSeriesMonitor(Spoken, _legacy_monitors.Record):
     """A monitor that records one field component at one grid point, every time step.
 
     ``fdtd.TimeSeriesMonitor('probe', at=(x, y, z), component='Ey')`` is read back as
-    ``result['probe']``, a :class:`wavebit.TimeSeries` in seconds and V/m (A/m for an H
-    component). ``at`` is a static point in ``Problem.units`` inside the physical domain; the
+    ``result['probe']``, a :class:`wavebit.TimeSeries` with its time axis in ``times_seconds`` and
+    values in V/m (A/m for an H component). ``at`` is a static point in ``Problem.units`` inside the physical domain; the
     sample is the nearest Yee point of that component, not an interpolation. ``component`` is
     one of ``'Ex'``, ``'Ey'``, ``'Ez'``, ``'Hx'``, ``'Hy'``, ``'Hz'``.
     """
@@ -31,7 +31,7 @@ class FieldMonitor:
     """A monitor that records Fourier-transformed E and H on a plane or in a box, at chosen wavelengths.
 
     ``fdtd.FieldMonitor('f', plane=fdtd.Plane(z=0.2), wavelengths=(0.8,), components=('Ex', 'Hy'))``
-    is read back as ``result['f']``, a :class:`wavebit.SpectralFieldSamples`: the raw pulse
+    is read back as ``result['f']``, a :class:`wavebit.RawFieldSpectrum`: the raw pulse
     transform of each component on its own Yee points, in V*s/m and A*s/m. Give exactly one of
     ``plane`` (an :class:`fdtd.Plane`, optionally with transverse spans) or ``box`` (an
     :class:`fdtd.SnappedBox`, whose volume is recorded). ``wavelengths`` are vacuum wavelengths
@@ -53,7 +53,7 @@ class FluxMonitor:
     """A monitor that records the spectral energy crossing a plane, or leaving a closed box.
 
     ``fdtd.FluxMonitor('t', plane=fdtd.Plane(z=-0.3), wavelengths=(0.75, 0.8))`` is read back as
-    ``result['t']``, an :class:`fdtd.SpectralFlux`. Its ``energy_density`` is the two-sided pulse
+    ``result['t']``, an :class:`fdtd.SpectralFlux`. Its ``spectral_energy`` is the two-sided pulse
     spectral energy in J/Hz (per metre or per square metre with invariant axes), along the
     plane's positive normal or out of the box; it is not a monochromatic power. Divide by the
     same quantity from a reference run to get a transmission. Give exactly one of ``plane`` or

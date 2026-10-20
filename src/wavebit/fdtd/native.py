@@ -12,7 +12,7 @@ from wavebit._common.declarations import spec
 from wavebit._common.execution import Execution, CheckReport, frozen_mapping
 from wavebit._common.pytrees import register_dataclass
 from wavebit.errors import ValidationError, UnsupportedFeatureError, IncompatibleProblemError
-from wavebit.observations import TimeSeries, SpectralFieldSamples, Validity
+from wavebit.observations import TimeSeries, RawFieldSpectrum, Validity
 from wavebit.units import require_units, Z0, EPSILON0, C0
 from ._numerics import ConductiveAbsorber
 from ._public_names import removed as _removed
@@ -389,14 +389,14 @@ def _adapt(raw, problem, numerics):
         snapshots[public] = TimeSeries(values=data['values']/(Z0 if magnetic else 1.),
             coordinates={a: data[a] for a in ('x', 'y', 'z')}, components=(public,),
             units={'field': 'A/m' if magnetic else 'V/m', 'coordinates': u.length, 'time': 's'},
-            times=data['t']*u.time_unit_seconds, sampling='native Yee stagger',
+            times_seconds=data['t']*u.time_unit_seconds, sampling='native Yee stagger',
             metadata={'axis_order': ('time', 'z', 'y', 'x')})
     xp = array_namespace(raw['E'])
     spectrum = None
     if problem.outputs.spectrum is not None:
         e = xp.moveaxis(raw['electric_spectrum'], 2, -1)*u.time_unit_seconds
         h = xp.moveaxis(raw['magnetic_spectrum'], 2, -1)*u.time_unit_seconds/Z0
-        spectrum = SpectralFieldSamples(values=xp.concat((e, h), axis=-1),
+        spectrum = RawFieldSpectrum(values=xp.concat((e, h), axis=-1),
             coordinates={'z': raw['z_nodes'][raw['monitor_z']],
                          'y': xp.arange(e.shape[2], dtype=e.real.dtype,
                                         device=_device_of(e))*numerics.grid.spacing[1],
@@ -404,7 +404,7 @@ def _adapt(raw, problem, numerics):
                                         device=_device_of(e))*numerics.grid.spacing[2]},
             components=('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'),
             units={'E': 'V s/m', 'H': 'A s/m', 'coordinates': u.length},
-            wavelengths=raw['wavelengths'], frequencies=C0/(raw['wavelengths']*u.length_unit_meters),
+            wavelengths=raw['wavelengths'], frequencies_hz=C0/(raw['wavelengths']*u.length_unit_meters),
             sampling='spatially collocated; E/H retain their native Fourier timestamps',
             metadata={'axis_order': ('wavelength', 'plane', 'y', 'x', 'component'),
                       'normalization': 'raw Fourier integral; no incident normalization'})

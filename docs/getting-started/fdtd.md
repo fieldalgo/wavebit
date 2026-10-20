@@ -32,7 +32,7 @@ result = fdtd.run(problem, numerics=numerics)
 ## 2. Read the recorded signal
 
 ```python
-print("samples:", len(result["probe"].time), "time unit: s; field unit:", result["probe"].units)
+print("samples:", len(result["probe"].times_seconds), "time unit: s; field unit:", result["probe"].units)
 ```
 
 

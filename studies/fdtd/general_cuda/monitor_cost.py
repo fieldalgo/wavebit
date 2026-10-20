@@ -139,7 +139,7 @@ def main():
             sample = {}
             for name in ('front', 'back'):
                 field = result[name].values['Ey']
-                flux = result[name + '_flux'].energy_density
+                flux = result[name + '_flux'].spectral_energy
                 checks[name + '_placement_dtype'] = bool(
                     field.device == torch.device(args.device) and field.dtype == torch.complex128
                     and flux.device == torch.device(args.device) and flux.dtype == torch.float64)

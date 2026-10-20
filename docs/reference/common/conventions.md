@@ -323,8 +323,11 @@ material is used; this is not `sqrt(real(epsilon_r))`. The normal
 wavevector satisfies `kz**2 = k0**2*epsilon_r*mu_r - kx**2 - ky**2` and is the half-space's own
 root (Maystre's cut, or its mirror for a double negative: [`branch-cuts.md`](../../theory/rcwa/branch-cuts.md)
 §8, §9), so the incident wave decays toward the structure in an absorbing medium of either sign.
-The public `kz` of an ordinary medium is negative for top incidence and positive for bottom
-incidence; in a negative-index medium its real part has the other sign.
+The incident `kz` of an ordinary medium is negative for top incidence and positive for bottom
+incidence; in a negative-index medium its real part has the other sign. A result reports each
+outgoing order's normal component as `DiffractionOrders.k_normal`, with the same Cartesian sign:
+in an ordinary medium `Re(k_normal) > 0` for an order leaving through the top port and `< 0`
+for one leaving through the bottom.
 
 In an **absorbing** medium the Poynting vector departs from `s * Re(k)` by an amount set by the
 loss and the polarization, which the angle does not try to undo (a power direction that depends

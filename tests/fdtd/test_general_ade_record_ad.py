@@ -93,7 +93,7 @@ def test_homogeneous_record_amplitude_material_full_hessian(device, block, kind,
             assert values.dtype == torch.float64 and values.device == torch.device(device)
             assert bool(torch.isfinite(values).all())
             shift = 1. if label[0] == 'E' else .5
-            np.testing.assert_allclose(host(result[label].times),
+            np.testing.assert_allclose(host(result[label].times_seconds),
                 (np.arange(STEPS)+shift)*dt, rtol=2e-14, atol=0.)
         values = torch.stack([result[label].values*(Z0 if label[0] == 'H' else 1.)
                               for label in LABELS])

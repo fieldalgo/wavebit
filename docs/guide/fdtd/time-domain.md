@@ -1317,7 +1317,7 @@ problem = fdtd.Problem(
 result = fdtd.run(problem, numerics=fdtd.Numerics(
     grid=fdtd.UniformGrid(spacing=.025), duration=fdtd.Duration(periods=50, source='light')))
 print(f"{problem.sources[0].plane.position:.4f}")     # requested sheet position
-print(f"{result.sources['light']['plane']:.4f}")      # the node plane it sits on
+print(f"{result.source_references['light']['plane']:.4f}")  # the node plane it sits on
 ```
 
 ```
@@ -1370,7 +1370,8 @@ to be distinguished.
 
 In the current module each measurement plane is the `DiffractionMonitor(plane=...)` the problem
 declares, and `reference_plane` and `incident_plane` move its phase references (as in the
-example above); each result carries the Yee `kz` and `k_parallel` of every order. It has no
+example above); each result carries the Yee `k_normal` (the wavevector component along the port's normal
+axis) and `k_parallel` of every order. It has no
 cutoff classification yet, so the example below keeps the earlier route.
 
 `diffraction_distance` controls the extraction-plane distances from the reflection
@@ -2306,7 +2307,7 @@ optimization parameters. For direct grid-index selection on `fdtd_grid`, use
 `wavebit.compat.legacy.fit_fdtd_modes(t, signal, modes=...)` analyzes a single point/component
 after the source becomes negligible. It has no current equivalent yet. It is NumPy
 post-processing of any uniformly sampled trace, so the series of a current `fdtd.TimeSeriesMonitor`
-(`result[name].time` in seconds, `.values`) also works; frequencies and decay rates then come
+(`result[name].times_seconds` in seconds, `.values`) also works; frequencies and decay rates then come
 out in Hz and 1/s. Select a trace from the recorded fields:
 
 ```python

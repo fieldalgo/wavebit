@@ -137,7 +137,7 @@ def test_public_static_bloch_has_exact_discrete_fields_and_records(device, rotat
             assert series.values.dtype == torch.complex128
             values = host(series.values) * (Z0 if field == 'H' else 1.)
             times = (np.arange(STEPS) + (1. if field == 'E' else .5)) * DT
-            np.testing.assert_allclose(host(series.times), times * UNITS.time_unit_seconds,
+            np.testing.assert_allclose(host(series.times_seconds), times * UNITS.time_unit_seconds,
                                        rtol=2e-14, atol=0.)
             spatial = value(field, c, probe_at(field, c))
             expected = spatial * (np.cos(omega * times) if field == 'E'

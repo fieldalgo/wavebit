@@ -66,7 +66,7 @@ def test_padding_is_outside_and_nonvacuum_background_continues():
     old=legacy.run(manual);new=fdtd.run(problem,numerics=numerics)
     np.testing.assert_array_equal(new['e'].values,old['e'].values)
     np.testing.assert_allclose(new['h'].values,old['h'].values/Z0,rtol=1e-15,atol=0)
-    np.testing.assert_allclose(new['e'].time,old['e'].t*1e-6/C0,rtol=1e-15)
+    np.testing.assert_allclose(new['e'].times_seconds,old['e'].t*1e-6/C0,rtol=1e-15)
 
 
 def test_changing_pml_cells_preserves_physical_domain_and_monitor_coordinates():
@@ -84,7 +84,7 @@ def test_same_physical_pulse_in_nm_and_um_has_equal_fields_and_seconds():
     for name in ('e','h'):
         assert np.max(np.abs(a[name].values))>1e-6
         np.testing.assert_allclose(a[name].values,b[name].values,rtol=2e-11,atol=2e-13)
-        np.testing.assert_allclose(a[name].time,b[name].time,rtol=2e-15)
+        np.testing.assert_allclose(a[name].times_seconds,b[name].times_seconds,rtol=2e-15)
 
 
 def test_public_h_and_conductivity_obey_si_update_equation():
@@ -184,18 +184,18 @@ def test_raw_spectral_energy_integrates_the_cell_and_keeps_one_port():
     outgoing=r['raw'];scattering=r['t']
     assert scattering.amplitude_s.shape==(1,1,1)
     assert scattering.k_parallel.shape==(1,1,1,2)
-    assert np.all(np.real(scattering.kz)<0)  # transmitted wave travels toward -z
+    assert np.all(np.real(scattering.k_normal)<0)  # transmitted wave travels toward -z
     assert scattering.reference['outward_normal']==(0,0,-1)
     assert scattering.reference['cell_area_m2']==pytest.approx(1e-14)
     assert scattering.power is None and not hasattr(scattering,'T')
     assert bool(scattering.metadata['source_usable'][0])
     assert float(scattering.efficiency[0,0,0])==pytest.approx(1.,abs=3e-6)
-    np.testing.assert_allclose(outgoing.spectral_energy[:,0,0],-r['q'].energy_density,rtol=1e-6,atol=0)
+    np.testing.assert_allclose(outgoing.spectral_energy[:,0,0],-r['q'].spectral_energy,rtol=1e-6,atol=0)
     np.testing.assert_allclose(outgoing.amplitude_s,
         scattering.amplitude_s*scattering.reference['incident_amplitude'][:,None,None],rtol=1e-14)
     assert outgoing.reference['spectral_energy_units']=='J/Hz'
     assert r['f'].units=={'Ey':'V*s/m','Hx':'A*s/m'}
-    np.testing.assert_array_equal(outgoing.at_wavelength(0).spectral_energy,outgoing.spectral_energy)
+    np.testing.assert_array_equal(outgoing.at_wavelength_index(0).spectral_energy,outgoing.spectral_energy)
 
 
 def test_raw_spectral_units_are_invariant_under_geometry_length_unit():
@@ -205,7 +205,7 @@ def test_raw_spectral_units_are_invariant_under_geometry_length_unit():
         np.testing.assert_allclose(getattr(a['raw'],name),getattr(b['raw'],name),rtol=2e-11,atol=0)
     for component in ('Ey','Hx'):
         np.testing.assert_allclose(a['f'].values[component],b['f'].values[component],rtol=2e-11,atol=0)
-    np.testing.assert_allclose(a['q'].energy_density,b['q'].energy_density,rtol=2e-11,atol=0)
+    np.testing.assert_allclose(a['q'].spectral_energy,b['q'].spectral_energy,rtol=2e-11,atol=0)
 
 
 def test_zero_source_retains_zero_raw_spectrum_but_cannot_normalize():
@@ -247,9 +247,9 @@ def test_point_current_si_units_are_invariant_under_geometry_units(kind,componen
     b=fdtd.run(problem(1000.,'nm'),numerics=small_numerics(30).replace(grid=fdtd.UniformGrid(spacing=100.)))
     assert np.max(np.abs(a['p'].values))>1e-8
     np.testing.assert_allclose(a['p'].values,b['p'].values,rtol=1e-10,atol=1e-15)
-    np.testing.assert_allclose(a.sources['d']['drive'],b.sources['d']['drive'],rtol=1e-12,atol=amplitude*1e-14)
-    assert max(abs(a.sources['d']['drive']))<=amplitude
-    assert a.sources['d']['drive_units']==('A*m' if kind=='electric' else 'V*m')
+    np.testing.assert_allclose(a.source_references['d']['drive'],b.source_references['d']['drive'],rtol=1e-12,atol=amplitude*1e-14)
+    assert max(abs(a.source_references['d']['drive']))<=amplitude
+    assert a.source_references['d']['drive_units']==('A*m' if kind=='electric' else 'V*m')
 
 
 def test_halfspace_continues_to_outer_edge_with_its_own_material():
@@ -322,7 +322,7 @@ def test_diffraction_band_guard_is_separate_from_runtime_stability():
     assert r.validity.checks['runtime_stability']
     assert np.isnan(r['t'].efficiency[1]).all()
     assert np.isfinite(r['raw'].amplitude_s).all()
-    assert r['t'].at_wavelength(1).metadata['source_usable'].shape==(1,)
+    assert r['t'].at_wavelength_index(1).metadata['source_usable'].shape==(1,)
 
 
 def test_ranged_geometry_derivative_and_runtime_guard_survive_public_lifecycle():

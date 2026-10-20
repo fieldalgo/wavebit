@@ -75,12 +75,12 @@ def main():
     print('wavelength (um)   epsilon                      R          T          A')
     for wavelength, eps, r, t, a in zip(WAVELENGTHS, epsilon, reflection, transmission, absorption):
         print(f'{wavelength:15.2f}   {eps.real:8.5f}+{eps.imag:.5f}j   {r:.6f}   {t:.6f}   {a:.6f}')
-    print(f'{len(time.time)} samples; time in s, Ey in V/m; Fourier field units: {dict(fields.units)}')
+    print(f'{len(time.times_seconds)} samples; time in s, Ey in V/m; Fourier field units: {dict(fields.units)}')
     print('Half-amplitude reuse agrees for the time record and both Fourier components.')
     if args.plot:
         import matplotlib.pyplot as plt
         fig, ax = plt.subplots()
-        ax.plot(np.asarray(time.time)*1e15, np.asarray(time.values))
+        ax.plot(np.asarray(time.times_seconds)*1e15, np.asarray(time.values))
         ax.set(xlabel='Time (fs)', ylabel='Transmitted Ey (V/m)', title='Pulse through a Lorentz film')
         args.plot.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(args.plot, dpi=150, bbox_inches='tight')

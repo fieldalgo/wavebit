@@ -67,7 +67,7 @@ def test_same_delay_leaf_huge_waveform_then_recovers(device, block, huge, tmp_pa
         assert any(word in str(exc).lower() for word in ('finite', 'waveform', 'overflow'))
         facts.update(structured_refusal=True, code=exc.code, message=str(exc))
     else:
-        arrays = {'drive': host(invalid.sources['d']['drive']),
+        arrays = {'drive': host(invalid.source_references['d']['drive']),
                   'E': host(invalid.final_fields.values['E']),
                   'H': host(invalid.final_fields.values['H'])}
         np.savez(tmp_path/'invalid-waveform.npz', **arrays)

@@ -41,7 +41,7 @@ def main():
     fig,ax=plt.subplots(constrained_layout=True)
     mesh=ax.pcolormesh(series.coordinates['x'],series.coordinates['z'],series.values[frame,:,0,:].real,shading='auto')
     fig.colorbar(mesh,ax=ax,label=f"{args.component} ({series.units['field']})")
-    ax.set(xlabel='x (nm)',ylabel='z (nm)',title=f't = {float(series.time[frame])*1e15:.3f} fs')
+    ax.set(xlabel='x (nm)',ylabel='z (nm)',title=f't = {float(series.times_seconds[frame])*1e15:.3f} fs')
     fig.savefig(args.output, dpi=150)
     import matplotlib.pyplot as plt
     plt.close(fig)

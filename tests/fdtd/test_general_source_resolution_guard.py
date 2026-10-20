@@ -64,7 +64,7 @@ def test_same_band_leaves_undersampled_then_recover(device, block, trajectory):
     def outputs(result):
         return (*result.final_fields.values.values(),
                 *(result[name].values for name in pulse.LABELS),
-                *(result.sources['d'][key] for key in ('drive', 'field', 'delivered_power')))
+                *(result.source_references['d'][key] for key in ('drive', 'field', 'delivered_power')))
 
     first = run()
     assert bool(first.validity.checks['runtime_stability'])

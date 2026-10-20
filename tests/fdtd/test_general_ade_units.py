@@ -118,7 +118,7 @@ def test_translated_rectangular_full_slab_same_si_units(device, slab_axis, kind,
                 assert values.dtype == torch.float64 and values.device == torch.device(device)
                 actual[label] = host(values)*(Z0 if field == 'H' else 1.)
                 times = (np.arange(STEPS)+(1. if field == 'E' else .5))*dt
-                np.testing.assert_allclose(host(result[label].times), times, rtol=2e-14, atol=0.)
+                np.testing.assert_allclose(host(result[label].times_seconds), times, rtol=2e-14, atol=0.)
         for label, values in actual.items():
             assert np.max(abs(expected[label])) > .01
             errors[unit_name+'_'+label] = scaled_error(values, expected[label])

@@ -104,8 +104,8 @@ def test_field_samples_and_flux_integral_keep_the_requested_aperture(axis, backe
                 assert np.max(coords[a]) <= .05 + 1e-14
         values = array(r['field'].values[component])
         assert values.shape == (1, *(len(c) for c in reversed(coords)))
-    partial = array(r['finite'].energy_density)
-    whole = array(r['full'].energy_density)
+    partial = array(r['finite'].spectral_energy)
+    whole = array(r['full'].spectral_energy)
     assert partial.shape == whole.shape == (1,)
     assert np.all(np.isfinite(whole)) and np.all(whole > 0)
     # The finite aperture has half the width on each transverse axis.

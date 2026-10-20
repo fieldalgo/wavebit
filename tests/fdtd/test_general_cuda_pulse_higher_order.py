@@ -42,7 +42,7 @@ def exact(point, stamp, steps):
 
 def objective(result, group, torch):
     if group == 'drive':
-        return (result.sources['d']['drive']/reference.MOMENT).square().mean()
+        return (result.source_references['d']['drive']/reference.MOMENT).square().mean()
     fields = torch.cat((result.final_fields.values['E'], Z0*result.final_fields.values['H']))
     records = torch.stack([result[c].values*(Z0 if c[0] == 'H' else 1.) for c in COMPONENTS])
     w = torch.as_tensor(WEIGHTS, dtype=torch.float64, device=fields.device)
@@ -54,7 +54,7 @@ def objective(result, group, torch):
 
 def public_tensors(result):
     return (*result.final_fields.values.values(), *(result[c].values for c in COMPONENTS),
-            *(result.sources['d'][k] for k in ('drive', 'field', 'delivered_power')))
+            *(result.source_references['d'][k] for k in ('drive', 'field', 'delivered_power')))
 
 
 def scaled_error(value, expected, scale):
@@ -82,7 +82,7 @@ def check_forward(result, expected, steps, device):
             assert str(actual.device) == device and str(actual.dtype) == 'torch.float64'
             assert tuple(actual.shape) == (steps,)
             errors.append(scaled_error(host(actual), expected['records'][name], scale))
-    history = result.sources['d']
+    history = result.source_references['d']
     errors.append(scaled_error(host(history['drive']), expected['drive'], reference.MOMENT))
     dt = result.provenance['dt_seconds']
     np.testing.assert_allclose(dt, reference.DT, rtol=2e-14, atol=0.)
@@ -91,7 +91,7 @@ def check_forward(result, expected, steps, device):
     np.testing.assert_allclose(host(history['field_time']), (n+1)*dt, rtol=2e-14, atol=0.)
     for name in COMPONENTS:
         shift = 1 if name[0] == 'E' else .5
-        np.testing.assert_allclose(host(result[name].times), (n+shift)*dt, rtol=2e-14, atol=0.)
+        np.testing.assert_allclose(host(result[name].times_seconds), (n+shift)*dt, rtol=2e-14, atol=0.)
     previous = np.r_[0., host(history['field'])[:-1]]
     power = -host(history['drive'])*(host(history['field'])+previous)/2
     np.testing.assert_allclose(host(history['delivered_power']), power, rtol=1e-13, atol=0.)
@@ -187,7 +187,7 @@ def test_pulse_physical_um_nm_fresh_preparations(device):
             left, right = (r[field+c].values for r in results)
             assert scaled_error(host(right), host(left), scale) < RTOL
     for name in ('drive', 'field', 'delivered_power'):
-        left, right = (r.sources['d'][name] for r in results)
+        left, right = (r.source_references['d'][name] for r in results)
         assert scaled_error(host(right), host(left), np.max(abs(host(left)))) < RTOL
 
 

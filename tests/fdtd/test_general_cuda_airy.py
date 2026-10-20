@@ -72,7 +72,7 @@ def measurements(request):
                       steps=prepared.contract['resolved_steps'])
         for name in ('front', 'back'):
             value = result[name].values['Ey']
-            flux = result[name + '_flux'].energy_density
+            flux = result[name + '_flux'].spectral_energy
             assert value.device == torch.device(device) and value.dtype == torch.complex128
             assert flux.device == torch.device(device) and flux.dtype == torch.float64
             field = value.detach().cpu().numpy().reshape(len(BAND), -1)

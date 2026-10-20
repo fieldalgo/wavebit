@@ -84,7 +84,7 @@ def test_jax_entire_observation_and_nested_references_are_pytrees():
         gradient=jax.grad(lambda p:jnp.real(response(p).amplitude_s).sum())(2e15)
         assert gradient!=0
         assert result.order(0).amplitude_s.shape==(1,)
-        assert result.at_wavelength(0).amplitude_s.shape==(1,1,1)
+        assert result.at_wavelength_index(0).amplitude_s.shape==(1,1,1)
 
 
 def test_torch_material_values_keep_their_graph():

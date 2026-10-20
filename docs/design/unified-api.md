@@ -335,7 +335,7 @@ numerics = fdtd.Numerics(
 )
 
 result = fdtd.run(problem, numerics=numerics)
-t_seconds = result.outputs["probe"].time
+t_seconds = result.outputs["probe"].times_seconds
 ey = result.outputs["probe"].values
 
 prepared = fdtd.prepare(problem, numerics=numerics, backend="jax")
@@ -503,7 +503,7 @@ monochromatic phasors. For the raw transform
 `E_tilde(f) = integral E(t) exp(+i*2*pi*f*t) dt`, field units are V*s/m and A*s/m.
 The corresponding spectral energy density has units J/Hz after spatial
 integration (or J/(Hz*m) per invariant length), not steady power in W.
-Raw SpectralFieldSamples/RawDiffractionSpectrum record transform normalization,
+RawFieldSpectrum and RawDiffractionSpectrum record transform normalization,
 window, sampling, and the one-sided/two-sided spectrum convention. Spectral
 density per wavelength requires the frequency-to-wavelength Jacobian.
 
@@ -526,7 +526,7 @@ results expose boundary powers without inventing a unique R/T normalization.
 An incoherent average combines powers and has no single complex amplitude.
 
 FieldSamples exposes coordinates, component labels, sampling/staggering metadata,
-and explicit units. SpectralFieldSamples additionally follows the raw-transform
+and explicit units. RawFieldSpectrum additionally follows the raw-transform
 contract above. Requested collocated fields and raw Yee components are
 different observation forms; interpolation is never implicit in a named raw sample.
 RCWA field reconstruction state is retained only when requested. FDTD final

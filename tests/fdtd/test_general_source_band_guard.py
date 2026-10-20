@@ -32,7 +32,7 @@ def source_problem(wavelength, bandwidth, block):
 def output_tensors(result):
     return (*result.final_fields.values.values(),
             *(result[name].values for name in ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')),
-            *(result.sources['d'][key] for key in ('drive', 'field', 'delivered_power')))
+            *(result.source_references['d'][key] for key in ('drive', 'field', 'delivered_power')))
 
 
 @pytest.mark.parametrize('device,block', CASES, ids=CASE_IDS)

@@ -91,7 +91,7 @@ def test_public_dipole_one_step_si_moment_and_yee_centroid(torch_device, kind, a
     moment_per_node = -density * coefficient * (DX * UNITS.length_unit_meters) ** 3 / dt
     moment = moment_per_node.sum()
     np.testing.assert_allclose(moment, source.current_moment, rtol=1e-13, atol=0.)
-    np.testing.assert_allclose(host(result.sources['d']['drive'])[0], source.current_moment,
+    np.testing.assert_allclose(host(result.source_references['d']['drive'])[0], source.current_moment,
                                rtol=1e-14, atol=0.)
     assert np.max(np.abs(host(value)[[c for c in range(3) if c != component]])) == 0
     # Independent Yee geometry: E_c is half a cell along c, H_c along the
@@ -126,7 +126,7 @@ def slab_problem(kind='electric', stamp='bspline', moment=1.3e-16, phase=.4,
 
 
 def assert_source_contract(result, problem):
-    source, history = problem.sources[0], result.sources['d']
+    source, history = problem.sources[0], result.source_references['d']
     magnetic = source.kind == 'magnetic'
     dt = result.provenance['dt_seconds']
     times = (np.arange(STEPS) + (0. if magnetic else .5)) * dt
@@ -153,9 +153,9 @@ def compare_results(result, reference, device):
     assert bool(result.validity.checks['runtime_stability'])
     arrays = [(result.final_fields.values[f], reference.final_fields.values[f]) for f in ('E', 'H')]
     arrays += [(result['probe'].values, reference['probe'].values),
-               (result['flux'].energy_density, reference['flux'].energy_density)]
+               (result['flux'].spectral_energy, reference['flux'].spectral_energy)]
     arrays += [(result['near'].values[f], reference['near'].values[f]) for f in ('Ey', 'Hy')]
-    arrays += [(result.sources['d'][key], reference.sources['d'][key])
+    arrays += [(result.source_references['d'][key], reference.source_references['d'][key])
                for key in ('drive', 'field', 'delivered_power')]
     for actual, expected in arrays:
         assert actual.device.type == device.split(':')[0]
@@ -168,7 +168,7 @@ def objective(result, kind):
     # A quadratic of final fields AND the live source-field history exercises
     # both routes, including a history carried across checkpoint boundaries.
     return ((fields['E'] ** 2).sum() + Z0 ** 2 * (fields['H'] ** 2).sum()
-            + scale ** 2 * (result.sources['d']['field'] ** 2).sum())
+            + scale ** 2 * (result.source_references['d']['field'] ** 2).sum())
 
 
 def live_solve(torch, device, prepared, kind, stamp, values):
@@ -242,14 +242,14 @@ def test_cuda_dipole_checkpoint_tail_and_fresh_reuse_own_source_histories(kind, 
                          backend='torch', device=device)
         compare_results(result, fresh, device)
         if saved is None:
-            saved = (result, {key: result.sources['d'][key].detach().clone()
+            saved = (result, {key: result.source_references['d'][key].detach().clone()
                              for key in ('drive', 'field', 'delivered_power')},
                      result.final_fields.values['E'].detach().clone())
         else:
             for key, value in saved[1].items():
-                assert torch.equal(saved[0].sources['d'][key], value)
+                assert torch.equal(saved[0].source_references['d'][key], value)
             assert torch.equal(saved[0].final_fields.values['E'], saved[2])
-            assert not torch.equal(result.sources['d']['drive'], saved[1]['drive'])
+            assert not torch.equal(result.source_references['d']['drive'], saved[1]['drive'])
 
 
 @pytest.mark.parametrize('invalid, pattern', [

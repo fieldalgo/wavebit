@@ -16,7 +16,7 @@ excitation = rcwa.Excitation(
                             theta=.2, phi=0.),))
 ```
 
-Plane-wave amplitude is in V/m. Polarization is `"s"`, `"p"`, or a complex `(s,p)` Jones pair normalized to unit electric magnitude; its relative phase is retained. The outgoing amplitudes are linear in that normalized pair: `amplitude_s`, `amplitude_p` and `cartesian` for `(a_s, a_p)` are `a_s/n` times those for `"s"` plus `a_p/n` times those for `"p"`, with `n = sqrt(|a_s|**2 + |a_p|**2)`, and the source `amplitude` does not change them. Two runs therefore give the amplitudes of every polarization at one direction and wavelength. Combine amplitudes, never `R`, `T` or `power`: those are squared magnitudes, and adding them drops the cross term between the two states. `OrderExcitation` names coherent incident diffraction orders. `GaussianBeam` describes an angular spectrum. `ElectricDipole(position=..., moment=...)` specifies a physical electric dipole moment in C·m. These source families have different support and normalization requirements; `check` validates the requested combination.
+Plane-wave amplitude is in V/m. Polarization is `"s"`, `"p"`, or a complex `(s,p)` Jones pair normalized to unit electric magnitude; its relative phase is retained. The outgoing amplitudes are linear in that normalized pair: `amplitude_s`, `amplitude_p` and `amplitude_xyz` for `(a_s, a_p)` are `a_s/n` times those for `"s"` plus `a_p/n` times those for `"p"`, with `n = sqrt(|a_s|**2 + |a_p|**2)`, and the source `amplitude` does not change them. Two runs therefore give the amplitudes of every polarization at one direction and wavelength. Combine amplitudes, never `R`, `T` or `power`: those are squared magnitudes, and adding them drops the cross term between the two states. `OrderExcitation` names coherent incident diffraction orders. `GaussianBeam` describes an angular spectrum. `ElectricDipole(position=..., moment=...)` specifies a physical electric dipole moment in C·m. These source families have different support and normalization requirements; `check` validates the requested combination.
 
 The [reference](../../reference/rcwa/index.md) lists their constructors. The sections below give the details of direction, polarization and incidence side.
 
@@ -216,7 +216,7 @@ formulations, under ETM and SMM, from either side and under `excitation=`. Combi
 amplitudes, not `R` and `T`: an efficiency is a squared magnitude, so adding the two variants'
 efficiencies drops their cross term. `s_inc` and `p_inc` are `None` under `tetm=` and at
 `answers='efficiency'`. The current `Result` does not return them yet: run `'s'` and `'p'` once
-each and combine their `amplitude_s`, `amplitude_p` and `cartesian` the same way. The two runs
+each and combine their `amplitude_s`, `amplitude_p` and `amplitude_xyz` the same way. The two runs
 reproduce `s_inc` and `p_inc` to 5e-15.
 
 Every order named in an `OrderExcitation` has to propagate in the incidence medium. One past

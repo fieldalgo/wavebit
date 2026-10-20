@@ -10,7 +10,7 @@ from collections.abc import Mapping
 import numpy as np
 
 from wavebit._common.backend import eager_under_torch_compile, array_namespace, _concrete
-from wavebit._common.declarations import spec
+from wavebit._common.declarations import renamed_keywords, spec
 from wavebit._common.execution import Execution, CheckReport, frozen_mapping
 from wavebit._common.pytrees import register_dataclass
 from wavebit.errors import ValidationError, UnsupportedFeatureError, IncompatibleProblemError
@@ -475,8 +475,9 @@ class Result:
     @property
     def T(self): return self.transmission.efficiency
 
-    def sample(self,*,x=0.,y=0.,z,times=None):
-        """Concrete offline interpolation of all six fields at SI times.
+    @renamed_keywords('periodic.Result.sample', {'times': 'times_seconds'})
+    def sample(self,*,x=0.,y=0.,z,times_seconds=None):
+        """Concrete offline interpolation of all six fields at the SI times ``times_seconds``.
 
         Requires all six Snapshots components (the default). Interpolation across the source
         discontinuity is refused; this NumPy postprocessing does not retain AD.
@@ -484,12 +485,12 @@ class Result:
         from ._periodic.probes import sample_fdtd_fields
         ts=self.provenance['time_unit_seconds']
         raw=_engine(sample_fdtd_fields,self._engine_diagnostics,x=x,y=y,z=z,
-                    t=None if times is None else np.asarray(times)/ts)
+                    t=None if times_seconds is None else np.asarray(times_seconds)/ts)
         amplitude=self.provenance['incident_amplitude']
         return TimeSeries(values=np.concatenate((raw['E'],raw['H']/Z0),axis=-1)*amplitude,
             coordinates={'x':x,'y':y,'z':z},components=('Ex','Ey','Ez','Hx','Hy','Hz'),
             units={'E':'V/m','H':'A/m','coordinates':self.provenance['length_unit']},
-            times=raw['t']*ts,sampling='linear space/time interpolation of Yee records',
+            times_seconds=raw['t']*ts,sampling='linear space/time interpolation of Yee records',
             metadata={'region':raw['region'],'axis_order':('time','component')})
 
 
@@ -526,7 +527,7 @@ def _adapt(raw,diag,problem,numerics):
         snapshots[name.capitalize()]=TimeSeries(values=data['values']*amplitude/(Z0 if name.startswith('h') else 1.),
             coordinates={a:data[a] for a in ('x','y','z')},components=(name.capitalize(),),
             units={'field':'A/m' if name.startswith('h') else 'V/m','coordinates':u.length},
-            times=data['t']*u.time_unit_seconds,sampling='native Yee stagger',
+            times_seconds=data['t']*u.time_unit_seconds,sampling='native Yee stagger',
             metadata={'axis_order':('time','z','y','x'),
                 'calibration':diag.get('field_normalization',diag.get('normalization'))})
     planes={};powers={}

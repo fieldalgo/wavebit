@@ -52,7 +52,7 @@ To select one order or wavelength:
 ```python
 print(result.R.shape)  # (3, 3, 3): wavelength, order_v, order_u
 print(result.transmission.order(0, 0).efficiency)
-print(result.transmission.at_wavelength(1).wavelengths)
+print(result.transmission.at_wavelength_index(1).wavelengths)
 ```
 
 `R` and `T` have axes `(wavelength, order_v, order_u)`, even for a single wavelength. Order (0, 0) is the undiffracted order.

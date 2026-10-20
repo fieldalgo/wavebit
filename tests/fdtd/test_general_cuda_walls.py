@@ -91,7 +91,7 @@ def assert_trace(result, field, c, expected, omega, wrong_omega, device):
     assert series.values.device == torch.device(name) and series.values.dtype == torch.float64
     values = host(series.values) * (Z0 if field == 'H' else 1.)
     times = (np.arange(STEPS) + (1. if field == 'E' else .5)) * DT
-    np.testing.assert_allclose(host(series.times), times * UNITS.time_unit_seconds,
+    np.testing.assert_allclose(host(series.times_seconds), times * UNITS.time_unit_seconds,
                                rtol=2e-14, atol=0.)
     peak = np.max(np.abs(expected))
     assert peak > 1e-3 and np.max(np.abs(values)) > 1e-3

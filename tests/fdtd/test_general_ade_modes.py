@@ -70,7 +70,7 @@ def test_uniform_closed_roots_and_recurrence(execution_device, kind, damped, com
             metrics['record'][key] = error
             assert error < FIELD_TOL
             times = (np.arange(steps)+(1. if field == 'E' else .5))*dt
-            np.testing.assert_allclose(host(result[key].times), times, rtol=2e-14, atol=0.)
+            np.testing.assert_allclose(host(result[key].times_seconds), times, rtol=2e-14, atol=0.)
     values = np.r_[1., host(result['E'+'xyz'[component]].values)]
     g, h, d = coefficients(dt, *parameters)
     residual = values[2:]-(g-d/EPSILON)*values[1:-1]+h*values[:-2]-(1-g+h)

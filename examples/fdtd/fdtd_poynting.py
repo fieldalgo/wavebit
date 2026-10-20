@@ -28,13 +28,13 @@ def main():
     flux=np.cross(probe.values[:,:3].real,probe.values[:,3:].real)
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(8, 4), constrained_layout=True)
-    ax.plot(probe.time/(900*units.time_unit_seconds), flux[:,2], color='#297fc1')
+    ax.plot(probe.times_seconds/(900*units.time_unit_seconds), flux[:,2], color='#297fc1')
     ax.set(xlabel='Time (optical cycles)', ylabel='Sz (W/m²)',
            title='Instantaneous energy flow at z=50 nm inside a dielectric film')
     ax.axhline(0., color='gray', linewidth=.7)
     fig.savefig(args.output, dpi=150)
     plt.close(fig)
-    print(f"Probe region: {probe.metadata['region']}; samples: {len(probe.time)}")
+    print(f"Probe region: {probe.metadata['region']}; samples: {len(probe.times_seconds)}")
     print(f'Flux trace: {args.output.resolve()}')
 
 

@@ -87,8 +87,8 @@ coordinates and E/H half-step timestamps in seconds; `result.snapshots` is keyed
 component. `bounds` maps `'x'`, `'y'` or `'z'` to a physical `(low, high)` pair in the
 length unit and requires shared stepping. Shared snapshots use a constant carrier
 calibration to retain a causal waveform, distinct from frequency-by-frequency
-plane calibration. `result.sample(x=..., y=..., z=..., times=...)` interpolates all
-six components offline using SI times, so it needs the default `components`; it
+plane calibration. `result.sample(x=..., y=..., z=..., times_seconds=...)` interpolates
+all six components offline at those SI times, so it needs the default `components`; it
 refuses source-discontinuity crossings and does not retain AD. Instantaneous
 Poynting is `cross(E.real, H.real)`, without the phasor factor 1/2. See the
 [snapshot](../../../examples/fdtd/fdtd_record.py) and

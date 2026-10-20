@@ -18,9 +18,9 @@ import numpy as np
 
 from .jobs import Job, run
 from ._common.provenance import capture_source, environment, sha256, source_identity
-from ._common.record_io import RecordedFields, decode, encode, record_error
+from ._common.record_io import RecordedObject, decode, encode, record_error
 
-__all__ = ['RunRecord', 'RecordedFields', 'save_run', 'load_run', 'run_recorded']
+__all__ = ['RunRecord', 'RecordedObject', 'save_run', 'load_run', 'run_recorded']
 _SCHEMA = 'wavebit.run/v2'
 _PACKAGE = Path(__file__).resolve().parent
 _FILES = {'job.json', 'observations.json', 'arrays.npz', 'source.zip', 'source.patch'}
@@ -38,7 +38,7 @@ class RunRecord:
     job: Job
     outputs: Mapping
     samples: Mapping
-    validity: RecordedFields
+    validity: RecordedObject
     diagnostics: Mapping
     provenance: Mapping
     extra: Mapping
@@ -89,7 +89,7 @@ def _observations(job, result, samples):
             deferred['field_reconstruction'] = {'type': 'rcwa_fields',
                 'action': 'Evaluate result.field(x=..., y=..., z=...) and include the returned FieldSamples in samples.'}
     else:
-        extra['sources'] = result.sources
+        extra['source_references'] = result.source_references
         extra['final_fields'] = result.final_fields
     return dict(outputs=outputs, samples=dict(samples or {}), validity=result.validity,
                 diagnostics=result.diagnostics, provenance=result.provenance,
@@ -264,6 +264,18 @@ def load_run(path):
         raise record_error('Unexpected result envelope.', 'observations.json')
     if any(not isinstance(restored[key], Mapping) for key in expected):
         raise record_error('Result envelope entries must contain named fields.', 'observations.json')
-    if not isinstance(restored['validity'], RecordedFields):
+    if not isinstance(restored['validity'], RecordedObject):
         raise record_error('Missing validity declaration.', 'observations.json')
     return RunRecord(path.resolve(), job, manifest=MappingProxyType(manifest), **restored)
+
+
+#: Names this module no longer has (fieldalgo/wavebit#57): each is a tombstone naming its
+#: replacement, not an alias.
+_RENAMED = {'RecordedFields': 'RecordedObject'}
+
+
+def __getattr__(name):
+    if name in _RENAMED:
+        from ._common.declarations import removed
+        raise removed('wavebit.records', name, f'wavebit.records.{_RENAMED[name]}')
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')

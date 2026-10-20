@@ -52,7 +52,7 @@ print("R + T:", (result.R + result.T).sum(axis=(1, 2)))
 ```python
 print(result.R.shape)  # (3, 3, 3): wavelength, order_v, order_u
 print(result.transmission.order(0, 0).efficiency)
-print(result.transmission.at_wavelength(1).wavelengths)
+print(result.transmission.at_wavelength_index(1).wavelengths)
 ```
 
 `R`과 `T`의 축은 `(파장, v 방향 차수, u 방향 차수)`입니다. 파장이 하나여도 파장 축은 유지됩니다. (0, 0)은 회절되지 않은 0차 성분입니다.

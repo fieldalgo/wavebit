@@ -27,7 +27,7 @@ def observable_losses(result, units):
     # The general solver returns a two-sided pulse spectral energy. This fixed
     # factor restores its internal signed plane flux without normalizing it by
     # a source amplitude or detaching the field-dependent result.
-    flux = result['flux'].energy_density.sum() / (
+    flux = result['flux'].spectral_energy.sum() / (
         2 * units.time_unit_seconds ** 2 * units.length_unit_meters ** 2 / Z0)
     return record, field, flux
 

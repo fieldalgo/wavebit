@@ -24,7 +24,7 @@ numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.025),
 report = fdtd.check(problem, numerics=numerics)
 assert report.ok
 result = fdtd.run(problem, numerics=numerics)
-print("samples:", len(result["probe"].time), "time unit: s; field unit:", result["probe"].units)
+print("samples:", len(result["probe"].times_seconds), "time unit: s; field unit:", result["probe"].units)
 ```
 
 ## Physical coordinates and units

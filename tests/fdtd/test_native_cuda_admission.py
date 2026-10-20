@@ -89,14 +89,14 @@ def test_native_observations_share_the_execution_device(torch_device):
         assert coordinate.dtype == torch.float64, name
         np.testing.assert_allclose(coordinate.detach().cpu(), reference.spectrum.coordinates[name],
                                    rtol=2e-15, atol=0.)
-    for name in ('wavelengths', 'frequencies'):
+    for name in ('wavelengths', 'frequencies_hz'):
         value = getattr(result.spectrum, name)
         assert value.device == torch_device and value.dtype == torch.float64
         np.testing.assert_allclose(value.detach().cpu(), getattr(reference.spectrum, name),
                                    rtol=2e-15, atol=0.)
     for field in result.snapshots.values():
-        assert field.values.device == field.time.device == torch_device
-        assert field.values.dtype == torch.complex128 and field.time.dtype == torch.float64
+        assert field.values.device == field.times_seconds.device == torch_device
+        assert field.values.dtype == torch.complex128 and field.times_seconds.dtype == torch.float64
         assert all(coordinate.device == torch_device for coordinate in field.coordinates.values())
         assert all(coordinate.dtype == torch.float64 for coordinate in field.coordinates.values())
     for value in result.validity.checks.values():
