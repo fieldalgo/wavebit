@@ -98,6 +98,24 @@ def _finite(values, xp):
     return finite
 
 
+#: Engine grazing-row keys and the public names a caller reads them under (``axis1d`` becomes
+#: ``invariant_axes``, the names of the single-cell transverse axes, in :func:`_grazing_row`).
+_GRAZING_KEYS={'polarisation':'polarization','polarisations':'polarizations','stabilize':'stabilizing_loss'}
+
+
+def _grazing_row(row):
+    """One ``diagnostics['grazing']`` row with its public key names; the engine keeps its own."""
+    public={}
+    for key,value in row.items():
+        if key=='axis1d':
+            # The engine's flags follow the face's transverse axes, in xyz order.
+            transverse=[a for a in 'xyz' if a!=row['face'][0]]
+            public['invariant_axes']=tuple(a for a,single in zip(transverse,value) if single)
+        else:
+            public[_GRAZING_KEYS.get(key,key)]=value
+    return public
+
+
 def _port(normal):
     """The face label ('z+', 'x-', ...) of a plane with this outward normal."""
     axis=next(i for i,v in enumerate(normal) if v)
@@ -253,6 +271,8 @@ def adapt_result(problem,numerics,execution,raw,metadata):
             metadata={'E_time_seconds':raw.plan.steps*raw.plan.dt*ts,
                       'H_time_seconds':(raw.plan.steps-.5)*raw.plan.dt*ts,'allocated_domain':metadata['allocated_domain']})
     diagnostics=dict(raw.diagnostics)
+    if diagnostics.get('grazing'):
+        diagnostics['grazing']=[_grazing_row(row) for row in diagnostics['grazing']]
     if 'stopping' in diagnostics:
         stopping = dict(diagnostics['stopping'])
         stopping['window_seconds'] = stopping.pop('window') * ts
