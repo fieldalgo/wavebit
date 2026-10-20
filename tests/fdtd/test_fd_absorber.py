@@ -61,8 +61,10 @@ table.
    pins that, in the spirit of gate 1's
    ``test_the_cfs_pole_and_kappa_are_not_settled_by_this_probe``: a surprise recorded, not an
    optimum proposed, because what the constant is *for* is the evanescent near field of a
-   structure sitting in the layer and nothing here can see one. The constant stays where it is
-   and ``damping_profile``'s docstring now says so.
+   structure sitting in the layer, and that is not measured for this layer (the near-field
+   study ``studies/fdtd/cpml_evanescent/fdtd_cpml_evanescent.py`` measured the PML's two
+   constants, not this one). The constant stays where it is and ``damping_profile``'s
+   docstring now says so.
 3. *(message fixed, door kept)* The refusal that sends a lossy medium from ``PML`` to
    ``Absorber`` costs 21x at normal incidence: with the door held open the PML reflects 5.2e-4
    against the Absorber's 1.1e-2, and 20 000 steps show no late-time growth. Its stated reason
@@ -580,7 +582,9 @@ def test_the_profile_strength_is_not_settled_by_this_probe():
     constant is ported from a legacy engine with its own probe; this pins the surprise so that
     nobody reads it as an optimum established here, and leaves it where it is, because what a
     stronger profile costs in the evanescent near field of a structure sitting in the layer is
-    not measurable anywhere in this repository yet.
+    not measured: the near-field study
+    (``studies/fdtd/cpml_evanescent/fdtd_cpml_evanescent.py``) measured the PML's constants,
+    not this profile.
     """
     shipped, _, _ = reflection(absorbing, 12, 0.0)
     stronger, _, _ = reflection(absorbing, 12, 0.0, mutate_params=rebuilt_profile(factor=5.0))

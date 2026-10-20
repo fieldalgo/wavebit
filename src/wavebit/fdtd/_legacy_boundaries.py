@@ -88,7 +88,8 @@ PML_REFLECTION_TABLE = """\
 
 #: The refusal below :data:`PML_CELLS`, quoting the table its own gate measured. Kept here
 #: rather than inline so that the test that re-measures the table can assert the message
-#: still carries what it found (``tests/fdtd/test_fd_pml.py``).
+#: still carries what it found (``tests/fdtd/test_fd_pml.py``). Its last sentence rests on the
+#: measurement that :class:`PML`'s ``cells`` entry quotes, and carries no number of its own.
 THIN_PML_MESSAGE = (
     'PML(cells={cells}) is thinner than the 12 cells this kernel was measured at. The '
     'doubling study in tests/fdtd/test_fd_pml.py -- a Gaussian packet launched at a z face, the '
@@ -101,7 +102,8 @@ THIN_PML_MESSAGE = (
     'that target dominates, and the last row is why. So more cells buy accuracy near normal '
     'incidence, and at grazing a lower reflection= is what buys it -- not more cells. Pass '
     'allow_thin=True to take fewer anyway (the scene runs, it just reflects more), or raise '
-    'cells. The absorber is dx-independent, so cells and not a thickness is the knob.')
+    'cells. The reflection depends on the cell count far more than on dx, so cells and not a '
+    'thickness is the knob.')
 
 #: The three axes in the order the public API spells a triple, and the six face names.
 AXES = ('x', 'y', 'z')
@@ -378,11 +380,14 @@ class PML(Absorbing):
     imported); ``src/wavebit/fdtd/_prepare/cpml.py`` carries them and the audit.
 
     ``cells``
-        The depth, **in cells and not in a length**: a correctly graded CPML is
-        ``dx``-independent, which the legacy engine measured (a 1-D probe in glass at a fixed
-        20-cell depth reflects 2.06e-6 / 1.63e-6 / 1.42e-6 / 1.37e-6 as ``dz`` runs 20 / 10 /
-        5 / 2.5 nm). Fewer than 12 is refused unless ``allow_thin=True``; the refusal quotes
-        the table ``tests/fdtd/test_fd_pml.py`` measured on *this* kernel.
+        The depth, **in cells and not in a length**: a correctly graded CPML's reflection
+        depends on its cell count far more than on ``dx``. The legacy engine's 1-D probe in
+        glass at a fixed 20-cell depth reflects 2.06e-6 / 1.63e-6 / 1.42e-6 / 1.37e-6 as ``dz``
+        runs 20 / 10 / 5 / 2.5 nm. On this kernel 12 cells at normal incidence reflect 9.2e-5
+        at 20 cells per wavelength and 3.0e-5 at 40, while 6 cells at 20 (as thick as 12 at 40)
+        reflect 2.6e-2 (``studies/fdtd/cpml_evanescent/records/fdtd_cpml_evanescent.log``).
+        Fewer than 12 is refused unless ``allow_thin=True``; the refusal quotes the table
+        ``tests/fdtd/test_fd_pml.py`` measured on *this* kernel.
     ``wavelength``
         **Required, with no default.** It sets ``alpha_max``, the CFS pole, which is a
         frequency and is therefore meaningless without one to be relative to. Stage 1 has no

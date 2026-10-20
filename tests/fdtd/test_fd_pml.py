@@ -58,8 +58,10 @@ a propagating wave the CFS pole is pure cost. That is the same thing the legacy 
 comment says about ``PML_KAPPA_MAX`` ("classically justified by grazing and evanescent
 absorption, which the probe cannot see") and it is now measured rather than asserted:
 :func:`test_the_cfs_pole_and_kappa_are_not_settled_by_this_probe` pins it, so that nobody
-reads the two constants as optima this file established. What a *structure's* evanescent near
-field does to them is not measured anywhere in this repository yet.
+reads the two constants as optima this file established. What a source's evanescent near
+field does to them was measured later, on a dipole 0.05-0.5 wavelengths from a 12-cell layer
+(``studies/fdtd/cpml_evanescent/fdtd_cpml_evanescent.py``): its four readings of "wins on the
+near field" disagree, and it moved neither constant.
 
 The mutants that do work are the three that break the layer rather than tune it: dropping the
 recurrence (``a = 0``, leaving a real coordinate stretch that reflects 0.89-0.98), grading the
@@ -354,9 +356,10 @@ def test_the_cfs_pole_and_kappa_are_not_settled_by_this_probe():
     propagating wave the complex-frequency shift is pure cost (it moves the pole away from the
     operating frequency and makes the stretch more real) while ``kappa > 1`` costs a little as
     the legacy engine's own comment already says. What the two constants are *for* -- absorbing
-    the evanescent near field a structure radiates into the layer -- is not measured anywhere
-    in this repository, so this pins the surprise rather than the optimum, and the constants
-    stay at the legacy values until something that can see evanescent fields moves them.
+    the evanescent near field a structure radiates into the layer -- is measured on a dipole by
+    ``studies/fdtd/cpml_evanescent/fdtd_cpml_evanescent.py``, and its four readings of "wins on
+    the near field" disagree, so this pins the surprise rather than the optimum, and the
+    constants stay at the legacy values.
     """
     import wavebit.fdtd._prepare.cpml as cpml_module
 
