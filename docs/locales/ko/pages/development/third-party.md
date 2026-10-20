@@ -37,7 +37,8 @@ Apache-2.0이고, 파생 원본 코드의 MIT 고지는
 - Wavebit이 배포하는 것(sdist·wheel의 `src/wavebit/` 패키지)은 GPL 코드를 import·
   링크·번들하지 않고, 필수 의존성으로도 두지 않습니다. 배포하지 않는 시험·연구·
   레퍼런스 스크립트는 S4나 Meep 같은 GPL 도구를 Wavebit과 같은 프로세스에서도
-  실행할 수 있습니다. 조건은 sdist·wheel 밖에 있고, 도구가 없어도 설치와 기본 시험이
+  실행할 수 있습니다. 조건은 sdist·wheel 밖에 있고(`MANIFEST.in`이 `tests/`·`studies/`를
+  빼고 `tools/run_distribution_smoke.py`가 확인), 도구가 없어도 설치와 기본 시험이
   동작하는 것(필요한 시험은 건너뜀)입니다. 라이선스 검사는 시험 환경에 설치한 그런
   도구를 통과시킵니다. GPL 소스는 구현 참고용으로 읽지 않습니다.
 - AGPL은 배포하지 않는 시험·연구·CI 도구에서 GPL과 같이 다룹니다. 조건이 두 가지

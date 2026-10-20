@@ -43,7 +43,8 @@ Policy:
   `src/wavebit/` package in the sdist and wheel), and is never a requirement.
   Unshipped test, study and reference scripts may run a GPL tool such as S4 or
   Meep, also in the same process as Wavebit, provided they stay outside the
-  sdist and wheel and the installation and the default test run work without
+  sdist and wheel (`MANIFEST.in` prunes `tests/` and `studies/`, and
+  `tools/run_distribution_smoke.py` checks it) and the installation and the default test run work without
   the tool (tests that need it skip). The license check accepts such a tool
   installed in a test environment. GPL source is not read for implementation.
 - AGPL is treated like GPL for unshipped tests, studies and CI tools, with two

@@ -58,6 +58,19 @@ def check_no_native_files(wheel, sdist):
             raise RuntimeError(f'{sdist.name} contains native files: {compiled}')
 
 
+# Unshipped code that may run GPL or AGPL tools; MANIFEST.in prunes it from the sdist.
+UNSHIPPED = ('tests', 'studies')
+
+
+def check_no_unshipped_code(sdist):
+    """The sdist holds no tests or studies, which may import GPL or AGPL tools."""
+    with tarfile.open(sdist) as archive:
+        names = archive.getnames()
+    top = names[0].split('/')[0]
+    if found := [n for n in names if n.split('/')[1:2] and n.split('/')[1] in UNSHIPPED]:
+        raise RuntimeError(f'{sdist.name} contains unshipped code under {top}/: {found[:5]}')
+
+
 def run(command, *, cwd, env):
     print('+', ' '.join(map(str, command)), flush=True)
     subprocess.run(list(map(str, command)), cwd=cwd, env=env, check=True, timeout=1200)
@@ -90,6 +103,7 @@ def main():
             raise RuntimeError('expected exactly one wheel and one sdist')
         check_notices(wheels[0], sdists[0])
         check_no_native_files(wheels[0], sdists[0])
+        check_no_unshipped_code(sdists[0])
         run([sys.executable, '-m', 'twine', 'check', '--strict', *wheels, *sdists],
             cwd=work, env=env)
         target = work / 'venv'
