@@ -28,7 +28,7 @@ _CLASS_MODULES = {
                          'TabulatedMaterial', 'Drude', 'Lorentz', 'Debye'),
     'wavebit.rcwa': ('Problem', 'Stack', 'Layer', 'Region', 'Rectangle', 'Circle',
                      'Ellipse', 'Polygon', 'Excitation', 'Outputs', 'Numerics',
-                     'PlaneWave', 'OrderExcitation', 'GaussianBeam', 'ElectricDipole'),
+                     'PlaneWave', 'IncidentOrders', 'GaussianBeam', 'ElectricDipole'),
     'wavebit.fdtd': ('Problem', 'Scene', 'Domain', 'Structure', 'SnappedSlab', 'Box', 'Sphere',
                      'Cylinder', 'Prism', 'Plane', 'SnappedBox', 'Boundaries', 'Periodic', 'Bloch',
                      'Open', 'PEC', 'PMC', 'MirrorSymmetry', 'InvariantAxis', 'PlaneWave',

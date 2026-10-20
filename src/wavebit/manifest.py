@@ -183,7 +183,10 @@ from wavebit._common._jobs_v1 import SPEC_VERSION
 # docs/migration/public-names.md), and Jobs are wavebit.job/v2. The old names are gone, not aliased.
 # '24': fdtd.native and fdtd.periodic names a consumer calls say what they are too (Record is
 # Snapshots, Tail is DecayCheck, among others); Jobs stay v2. Removed, not aliased, as in '23'.
-MANIFEST_VERSION = '24'
+# '25': the rcwa names say what they are too (OrderExcitation(orders=) is
+# IncidentOrders(weights=), GaussianBeam(spectral_extent=) is angular_spectrum_extent=,
+# layer_thicknesses moves to wavebit, among others); Jobs stay v2. Removed, not aliased.
+MANIFEST_VERSION = '25'
 
 
 # --------------------------------------------------------------- how a structure is spelled
@@ -548,7 +551,7 @@ RESULTS = {
                            'order with m + n odd). Each amplitude is the Fourier coefficient '
                            'of the public field on its face about the centre; an ordinary '
                            'incidence is unit there; excitation weights mean what '
-                           'OrderExcitation(orders=...) weights mean, and the scattering '
+                           'IncidentOrders(weights=...) weights mean, and the scattering '
                            'matrix ports use the same variables as the amplitudes',
         # A key of its own rather than two more names in `fields`, so a consumer that
         # assumes every `fields` entry has the (n_orders_v, n_orders_u) layout never meets

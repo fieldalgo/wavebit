@@ -570,7 +570,7 @@ def test_under_nvf_the_vertex_derivative_integrates_to_the_change_on_a_finer_nor
 # ------------------------------------------------------------------------------- pictures
 
 def test_the_structure_picture_is_the_painted_outline():
-    from wavebit.rcwa.plotting import slice_structure
+    from wavebit.rcwa._plotting import slice_structure
     layers = [dict(background=1., shapes=[dict(type='polygon', vertices=L_SHAPE, material=6.25),
                                           dict(type='polygon', vertices=TRIANGLE[::-1],
                                                material=2.)])]

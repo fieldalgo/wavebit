@@ -6,11 +6,13 @@ public module's ``__all__``: a name is added or removed by editing it here, in t
 as the code. ``KNOWN_DUPLICATES`` lists the objects still reachable from two public paths; it
 may only shrink (fieldalgo/wavebit#57 removes them). The FDTD part of the rename
 (``docs/migration/public-names.md``), ``fdtd.native`` and ``fdtd.periodic`` included, is checked
-here too: the old names and keywords fail with an error that names their replacement.
+here too, as are the shared, observation and RCWA renames: the old names and keywords fail with
+an error that names their replacement.
 """
 import dataclasses
 import importlib
 import pkgutil
+import re
 import traceback
 
 import numpy as np
@@ -29,8 +31,8 @@ PUBLIC = {
              'Issue', 'Job', 'Lattice', 'Lorentz', 'Material', 'MaterialResponse', 'NumericalError',
              'RawDiffractionSpectrum', 'RawFieldSpectrum', 'TabulatedMaterial', 'TimeSeries',
              'Units', 'UnsupportedFeatureError', 'ValidationError', 'Validity', 'WavebitError',
-             'eps_from_refractive_index', 'fdtd', 'materials', 'rcwa', 'refractive_index_from_eps',
-             'run'),
+             'eps_from_refractive_index', 'fdtd', 'layer_thicknesses', 'materials', 'rcwa',
+             'refractive_index_from_eps', 'run'),
  'wavebit.fdtd': ('Bloch', 'Boundaries', 'Box', 'ConductiveAbsorber', 'CurrentDipole', 'Cylinder',
                   'DecayStop', 'DiffractionMonitor', 'Domain', 'Duration', 'FarFieldMonitor',
                   'FarFieldSpectrum', 'FieldMonitor', 'FluxMonitor', 'GaussianPulse',
@@ -61,9 +63,12 @@ PUBLIC = {
                           'Validity', 'fit_modes'),
  'wavebit.observations.modes': ('ModeFit', 'fit_modes'),
  'wavebit.rcwa': ('BoundaryPower', 'Circle', 'ElectricDipole', 'Ellipse', 'Excitation',
-                  'GaussianBeam', 'Layer', 'Numerics', 'OrderExcitation', 'Outputs', 'PlaneWave',
+                  'GaussianBeam', 'IncidentOrders', 'Layer', 'Numerics', 'Outputs', 'PlaneWave',
                   'Polygon', 'Prepared', 'Problem', 'Rectangle', 'Region', 'Result', 'Stack',
-                  'check', 'layer_thicknesses', 'prepare', 'run', 'sample_structure'),
+                  'check', 'prepare', 'run', 'sample_structure'),
+ 'wavebit.rcwa.diagnostics': ('AutoDetuneWarning', 'ComplexIncidenceWarning',
+                              'ExceptionalPointWarning', 'GainCutoffWarning',
+                              'RayleighPointWarning'),
  'wavebit.rcwa.experimental': ('AffineProfileNVF', 'CartesianPairOpeningPlan',
                                'CartesianPairTransmissionGalerkinGapCell', 'CartesianRectangleNVF',
                                'CartesianRectanglePairNVF', 'ConformingNVF'),
@@ -632,3 +637,230 @@ def test_a_tombstoned_observation_survives_a_jit_round_trip(build):
     old = next(old for b, old, _ in OBSERVATION_RENAMED if b is build)
     with pytest.raises(AttributeError, match='is now'):
         getattr(out, old)
+
+
+# ---------------------------------------------------------------------------------------------
+# RCWA (#57 sections 4 and 6)
+# ---------------------------------------------------------------------------------------------
+
+from wavebit import rcwa  # noqa: E402
+from wavebit.rcwa import experimental, operators  # noqa: E402
+
+#: (removed name in wavebit.rcwa, the full path that replaced it).
+RCWA_RENAMED = [('OrderExcitation', 'wavebit.rcwa.IncidentOrders'),
+                ('layer_thicknesses', 'wavebit.layer_thicknesses')]
+
+
+@pytest.mark.parametrize('old, new', RCWA_RENAMED, ids=[old for old, _ in RCWA_RENAMED])
+def test_a_removed_rcwa_name_fails_naming_its_replacement(old, new):
+    assert not hasattr(rcwa, old)
+    with pytest.raises(AttributeError, match=rf'wavebit\.rcwa\.{old} is now {re.escape(new)}\b') as caught:
+        getattr(rcwa, old)
+    shown = _shown(caught.value)
+    assert 'public-names.md' in shown and 'Did you mean' not in shown, shown
+    module, name = new.rsplit('.', 1)
+    assert name in importlib.import_module(module).__all__
+    with pytest.raises(AttributeError, match="has no attribute 'unrelated'"):
+        getattr(rcwa, 'unrelated')
+
+
+def test_rcwa_plotting_is_no_longer_a_public_path():
+    with pytest.raises(AttributeError, match='no longer public') as caught:
+        getattr(rcwa, 'plotting')
+    shown = _shown(caught.value)
+    assert 'public-names.md' in shown and 'Did you mean' not in shown, shown
+    with pytest.raises(ModuleNotFoundError):
+        importlib.import_module('wavebit.rcwa.plotting')
+
+
+def test_dir_of_rcwa_is_its_public_surface():
+    listed = [name for name in dir(rcwa) if not name.startswith('__')]
+    assert sorted(listed) == sorted(set(rcwa.__all__) | {'diagnostics', 'experimental', 'operators'})
+
+
+def test_the_rcwa_warnings_have_one_public_home():
+    """The engine warns with these very classes, so a filter on the public name catches them."""
+    from wavebit._common import backend
+    from wavebit.rcwa import diagnostics
+    for name in diagnostics.__all__:
+        assert getattr(diagnostics, name) is getattr(backend, name)
+        text = getattr(diagnostics, name).__doc__
+        for engine in ('auto_detune', 'truncation_order', 'OrderExcitation', '_engine'):
+            assert engine not in text, (name, engine)
+        assert f'wavebit.rcwa.diagnostics.{name}' in text
+
+
+def test_a_complex_angle_warns_with_the_public_category():
+    from wavebit import Material, Units
+    from wavebit.rcwa import diagnostics
+    problem = rcwa.Problem(units=Units(length='um'), stack=rcwa.Stack(period=(.8, .9), layers=(
+        rcwa.Layer(thickness=.2, background=Material(2.25)),)),
+        excitation=rcwa.Excitation(wavelength=.6, sources=(rcwa.PlaneWave(theta=.2+.1j),)))
+    with pytest.warns(diagnostics.ComplexIncidenceWarning):
+        rcwa.run(problem, numerics=rcwa.Numerics())
+
+
+def _gap_cell(**kw):
+    return experimental.CartesianPairTransmissionGalerkinGapCell(
+        experimental.CartesianPairOpeningPlan(0), reference=(12.25, -10.+1j, 1.), **kw)
+
+
+#: (constructor with the keywords it needs, removed keyword, a value it took, its replacement).
+RCWA_RENAMED_KEYWORDS = [
+    (lambda **kw: rcwa.IncidentOrders(**kw), 'orders', (((0, 0), 1.),), 'weights'),
+    (lambda **kw: rcwa.GaussianBeam(waist=1., **kw), 'spectral_extent', 3., 'angular_spectrum_extent'),
+    (lambda **kw: experimental.ConformingNVF(**kw), 'truncation_order', 1, 'orders'),
+    (lambda **kw: experimental.AffineProfileNVF(**kw), 'truncation_order', 1, 'orders'),
+    (lambda **kw: experimental.CartesianRectangleNVF(**kw), 'truncation_order', 1, 'orders'),
+    (lambda **kw: experimental.CartesianRectanglePairNVF(**kw), 'truncation_order', 1, 'orders'),
+    (_gap_cell, 'order', 1, 'orders'),
+]
+
+
+@pytest.mark.parametrize('make, old, value, new', RCWA_RENAMED_KEYWORDS,
+                         ids=[f'{i}:{old}->{new}' for i, (_, old, _, new)
+                              in enumerate(RCWA_RENAMED_KEYWORDS)])
+def test_a_removed_rcwa_keyword_fails_naming_its_replacement(make, old, value, new):
+    with pytest.raises(TypeError, match=rf'\({old}=\.\.\.\) is now \w+\({new}=\.\.\.\)') as caught:
+        make(**{old: value})
+    shown = _shown(caught.value)
+    assert 'public-names.md' in shown and 'did you mean' not in shown.lower(), shown
+    made = make(**{new: value})
+    assert getattr(made, new) == (value if new != 'orders' else (value, value))
+
+
+def test_sample_structure_names_its_samples_keyword():
+    import inspect
+    from wavebit import Material, Units
+    problem = rcwa.Problem(units=Units(length='um'), stack=rcwa.Stack(period=(.8, .9), layers=(
+        rcwa.Layer(thickness=.2, background=Material(2.25)),)),
+        excitation=rcwa.Excitation(wavelength=.6, sources=(rcwa.PlaneWave(),)))
+    with pytest.raises(TypeError, match=r'sample_structure\(n=\.\.\.\) is now '
+                                        r'sample_structure\(samples=\.\.\.\)') as caught:
+        rcwa.sample_structure(problem, n=8)
+    assert 'public-names.md' in _shown(caught.value)
+    with pytest.raises(TypeError, match=r"does not take \['size'\]"):
+        rcwa.sample_structure(problem, size=8)
+    with pytest.raises(ValidationError, match='samples must be') as caught:
+        rcwa.sample_structure(problem, samples=0)
+    assert caught.value.path == 'samples'
+    assert rcwa.sample_structure(problem, samples=8).shape == (8, 8)
+    assert 'samples' in inspect.signature(rcwa.sample_structure).parameters
+
+
+def _port():
+    return operators.Port(kx_over_k0=np.zeros(1), ky_over_k0=None, refractive_index=1.5, mu=1.,
+                          channel='sp')
+
+
+#: (builder, removed attribute, the replacement its message names).
+RCWA_RENAMED_ATTRIBUTES = [
+    (lambda: rcwa.BoundaryPower(incoming=0., outgoing=0., units='W', power_region='cell'),
+     'integration_measure', 'rcwa.BoundaryPower.power_region'),
+    (_port, 'kx', 'rcwa.operators.Port.kx_over_k0'),
+    (_port, 'ky', 'rcwa.operators.Port.ky_over_k0'),
+    (_port, 'index', 'rcwa.operators.Port.refractive_index'),
+    (lambda: experimental.ConformingNVF(1), 'truncation_order',
+     'rcwa.experimental.ConformingNVF.orders'),
+    (lambda: experimental.AffineProfileNVF(1), 'truncation_order',
+     'rcwa.experimental.AffineProfileNVF.orders'),
+    (lambda: experimental.CartesianRectangleNVF(1), 'truncation_order',
+     'rcwa.experimental.CartesianRectangleNVF.orders'),
+    (lambda: experimental.CartesianRectanglePairNVF(1), 'truncation_order',
+     'rcwa.experimental.CartesianRectanglePairNVF.orders'),
+    (_gap_cell, 'order', 'rcwa.experimental.CartesianPairTransmissionGalerkinGapCell.orders'),
+]
+
+
+@pytest.mark.parametrize('build, old, replacement', RCWA_RENAMED_ATTRIBUTES,
+                         ids=[row[2].rsplit('.', 2)[-2] + '.' + row[1]
+                              for row in RCWA_RENAMED_ATTRIBUTES])
+def test_a_renamed_rcwa_attribute_fails_naming_its_replacement(build, old, replacement):
+    value = build()
+    assert not hasattr(value, old)
+    with pytest.raises(AttributeError, match=rf'\.{old} is now {re.escape(replacement)}\b') as caught:
+        getattr(value, old)
+    shown = _shown(caught.value)
+    assert 'public-names.md' in shown and 'Did you mean' not in shown, shown
+    assert hasattr(value, replacement.rsplit('.', 1)[1])
+    with pytest.raises(AttributeError) as caught:
+        value.unrelated
+    assert str(caught.value) == f"'{type(value).__name__}' object has no attribute 'unrelated'"
+
+
+def test_the_renamed_rcwa_members_answer_what_they_did():
+    power = rcwa.BoundaryPower(incoming=1., outgoing=0., units='W/m^2',
+                               power_region='infinite-area mean')
+    assert power.power_region == 'infinite-area mean'
+    assert 'power_region=' in repr(power) and 'integration_measure' not in repr(power)
+    with pytest.raises(TypeError, match=r'BoundaryPower\(integration_measure=\.\.\.\) is now '
+                                        r'BoundaryPower\(power_region=\.\.\.\)'):
+        rcwa.BoundaryPower(incoming=1., outgoing=0., units='W', integration_measure='cell')
+    port = _port()
+    assert port._fields == ('kx_over_k0', 'ky_over_k0', 'refractive_index', 'mu', 'channel')
+    assert port.refractive_index == 1.5 and port.ky_over_k0 is None
+    assert experimental.CartesianRectanglePairNVF((1, 2)).orders == (1, 2)
+    assert _gap_cell(orders=(1, 2)).orders == (1, 2)
+    with pytest.raises(ValidationError, match=r'ConformingNVF\(orders=\.\.\.\) must be'):
+        experimental.ConformingNVF(-1)
+
+
+def test_a_port_named_tuple_constructor_cannot_name_its_replacement():
+    """``typing.NamedTuple`` refuses a custom ``__new__``, so the old keywords get Python's own
+    error; the migration guide names the replacement. Only attribute reads are tombstoned."""
+    with pytest.raises(TypeError, match="unexpected keyword argument 'kx'"):
+        operators.Port(kx=0., ky=None, index=1., mu=1., channel='sp')
+    with pytest.raises(ValueError, match="unexpected field names: .*'kx'"):
+        _port()._replace(kx=0.)
+
+
+def test_a_tombstoned_port_survives_a_jit_round_trip():
+    jax = pytest.importorskip('jax')
+    from wavebit.rcwa._engine import scattering
+    port = _port()
+    scattering._register_pytree_if_jax_loaded()
+    out = jax.jit(lambda p: p)(port)
+    assert type(out) is operators.Port and out.channel == 'sp'
+    with pytest.raises(AttributeError, match='is now'):
+        out.index
+
+
+def _fields_result():
+    from wavebit import Material, Units
+    problem = rcwa.Problem(units=Units(length='um'), stack=rcwa.Stack(period=(.8, .9), layers=(
+        rcwa.Layer(thickness=.2, background=Material(2.25)),)),
+        excitation=rcwa.Excitation(wavelength=.6, sources=(rcwa.PlaneWave(),)),
+        outputs=rcwa.Outputs(fields=True))
+    return rcwa.run(problem, numerics=rcwa.Numerics())
+
+
+@pytest.mark.parametrize('coordinates, axis', [
+    ({'x': np.zeros((2, 2))}, 'x'), ({'x': 'a'}, 'x'), ({'y': []}, 'y'), ({'y': 0}, 'y'),
+    ({'z': [np.nan]}, 'z'), ({'z': 1.5}, 'z'), ({'x': [1j]}, 'x'), ({'z': [5.]}, 'z')])
+def test_field_coordinates_are_refused_under_their_public_names(coordinates, axis):
+    """The sampler names ``sample_x``; the caller wrote ``x``."""
+    result = _fields_result()
+    with pytest.raises(ValidationError) as caught:
+        result.field(**{'x': [0.], 'y': [0.], 'z': [.1], **coordinates})
+    assert caught.value.code == 'field.coordinates' and caught.value.path == axis
+    assert 'sample_' not in str(caught.value)
+    if axis != 'z':
+        with pytest.raises(ValidationError) as caught:
+            result.boundary_fields(side='top', **{'x': [0.], 'y': [0.],
+                                                  **{k: v for k, v in coordinates.items()}})
+        assert caught.value.path == axis and 'sample_' not in str(caught.value)
+    assert result.field(x=3, y=[0.], z=[.1]).values.shape == (1, 1, 1, 3, 6)
+
+
+def test_the_public_door_rewords_the_engine_detuning_advice():
+    """The engine's ``solve`` retries by default; a public run only with Numerics(detuning=)."""
+    from wavebit._common.backend import check_finite
+    from wavebit.rcwa._lifecycle import _public
+    with pytest.raises(FloatingPointError) as caught:
+        check_finite(np, r=np.array([np.nan]))
+    engine = str(caught.value)
+    assert 'solve(auto_detune=True), the default' in engine
+    public = _public(engine)
+    assert 'auto_detune' not in public and 'truncation_order' not in public, public
+    assert 'rcwa.Numerics(detuning=...) makes that retry' in public
+    assert 'off by default (detuning=None)' in public

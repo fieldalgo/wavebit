@@ -32,14 +32,14 @@ class PlaneWave:
             object.__setattr__(self, 'polarization', tuple(self.polarization))
 
 
-@spec
-class OrderExcitation:
-    """Coherent incident orders around a reference plane-wave direction.
+@spec(renamed={'orders': 'weights'})
+class IncidentOrders:
+    """Incident diffraction orders, lit coherently around a reference plane-wave direction.
 
-    orders is a tuple of ((m,n), complex_weight) entries. Values are relative
-    electric amplitudes at the cell-centered reference plane.
+    weights is a tuple of ((m,n), complex_weight) entries: each order's relative
+    electric amplitude at x = y = 0 on the lit boundary, the cell-centered reference.
     """
-    orders: tuple
+    weights: tuple
     side: str = 'top'
     polarization: object = 's'
     amplitude: object = 1.
@@ -53,24 +53,30 @@ class OrderExcitation:
             object.__setattr__(self, 'polarization', tuple(self.polarization))
         PlaneWave(side=self.side, polarization=self.polarization, amplitude=self.amplitude,
                   theta=self.theta, phi=self.phi, kx=self.kx, ky=self.ky)
-        if isinstance(self.orders, dict):
+        if isinstance(self.weights, dict):
             raise ValidationError('Use tuple (((m,n),weight), ...), not a mutable order mapping.',
-                                  code='source.orders', path='source.orders')
-        object.__setattr__(self, 'orders', tuple((tuple(k), v) for k, v in self.orders))
-        if not self.orders or any(len(k) != 2 or any(type(v) is not int for v in k) for k, _ in self.orders):
+                                  code='source.weights', path='source.weights')
+        object.__setattr__(self, 'weights', tuple((tuple(k), v) for k, v in self.weights))
+        if not self.weights or any(len(k) != 2 or any(type(v) is not int for v in k) for k, _ in self.weights):
             raise ValidationError('Each order needs two integer indices and a weight.',
-                                  code='source.orders', path='source.orders')
-        if len({k for k, _ in self.orders}) != len(self.orders):
-            raise ValidationError('Order labels must be unique.', code='source.orders_duplicate', path='source.orders')
+                                  code='source.weights', path='source.weights')
+        if len({k for k, _ in self.weights}) != len(self.weights):
+            raise ValidationError('Order labels must be unique.', code='source.weights_duplicate',
+                                  path='source.weights')
 
 
-@spec
+@spec(renamed={'spectral_extent': 'angular_spectrum_extent'})
 class GaussianBeam:
-    """Propagating Gaussian angular spectrum; waist is the 1/e amplitude radius."""
+    """Propagating Gaussian angular spectrum; waist is the 1/e amplitude radius.
+
+    sampling sets the midpoint-quadrature points on the two axes transverse to the
+    central direction; angular_spectrum_extent is the half-width of that quadrature,
+    in units of 1/waist.
+    """
     waist: object
     focus: tuple = (0., 0., 0.)
     sampling: tuple = (9, 9)
-    spectral_extent: float = 4.
+    angular_spectrum_extent: float = 4.
     side: str = 'top'
     polarization: object = 's'
     amplitude: object = 1.

@@ -1,28 +1,81 @@
 """Owned RCWA observations, with spectral axes and physical field calibration."""
+import re
+from contextlib import contextmanager
 from dataclasses import field
 from types import MappingProxyType
 
+import numpy as np
 
-from .._common.declarations import spec
+from .._common.declarations import renamed_attributes, spec
 from .._common.backend import array_namespace, as_array
-from ..errors import UnsupportedFeatureError
+from ..errors import UnsupportedFeatureError, ValidationError
 from ..observations import FieldSamples
 from ..units import Z0
 
 
-@spec
+#: BoundaryPower fields that were renamed (fieldalgo/wavebit#57), and their replacements.
+_POWER_RENAMED = {'integration_measure': 'power_region'}
+
+
+@spec(renamed=_POWER_RENAMED)
 class BoundaryPower:
-    """A measured port quantity with an explicit spatial integration measure."""
+    """Incoming and outgoing power through one boundary of a coherent-source run.
+
+    ``power_region`` names the area the power is taken over: ``'infinite-area mean'`` for a
+    mean per unit area (``units`` W/m^2), or the integrated region, ``'cell'`` or the
+    ``Outputs(power_region=...)`` rectangle (``units`` W).
+    """
     incoming: object
     outgoing: object
     units: str
-    integration_measure: object
+    power_region: object
     reference: object = field(default_factory=dict)
 
     def __post_init__(self):
         from .._common.pytrees import register_dataclass
         register_dataclass(type(self))
         object.__setattr__(self, 'reference', MappingProxyType(dict(self.reference)))
+
+    __getattr__ = renamed_attributes(_POWER_RENAMED, prefix='rcwa.')
+
+
+def _coordinates(name, value):
+    """Refuse a concrete ``x``/``y``/``z`` the field sampler cannot read, under its public name.
+
+    A count is a positive integer; anything else is a nonempty one-dimensional array of finite
+    real coordinates. A value traced under ``jax.jit`` is left to the sampler.
+    """
+    from . import _adapt
+    if isinstance(value, (int, np.integer)) and not isinstance(value, bool):
+        if value >= 1:
+            return
+    elif not _adapt.opaque(value):
+        try:
+            a = _adapt.host(value, name)
+            usable = (a.dtype.kind in 'biufc' and a.ndim == 1 and a.size > 0
+                      and bool(np.all(np.isfinite(a))) and not np.any(np.imag(a)))
+        except (TypeError, ValueError):
+            usable = False
+        if usable:
+            return
+    else:
+        return
+    raise ValidationError(f'{name} must be a positive integer count or a nonempty one-dimensional '
+                          f'array of finite real coordinates.', code='field.coordinates', path=name)
+
+
+@contextmanager
+def _public_sampling():
+    """Name the sampler's coordinates as the caller wrote them (``sample_x`` is ``x``)."""
+    try:
+        yield
+    except (TypeError, ValueError) as error:
+        text = str(error)
+        public = re.sub(r'\bsample_([xyz])\b', r'\1', text)
+        if public == text:
+            raise
+        axis = re.search(r'\bsample_([xyz])\b', text).group(1)
+        raise ValidationError(public, code='field.coordinates', path=axis) from error
 
 
 @spec
@@ -89,9 +142,12 @@ class Result:
         the upper layer, matching the engine's explicit-coordinate convention.
         """
         records = self._fields()
+        for name, value in (('x', x), ('y', y), ('z', z)):
+            _coordinates(name, value)
         values = []
         for state, amplitude in zip(records, self._field_amplitudes):
-            a = state.reconstruct(x, y, z, 'incident') * amplitude
+            with _public_sampling():
+                a = state.reconstruct(x, y, z, 'incident') * amplitude
             xp = array_namespace(a)
             factors = as_array(xp, [1., 1., 1., 1/Z0, 1/Z0, 1/Z0], dtype=a.dtype,
                                device=getattr(a, 'device', None))
@@ -107,9 +163,12 @@ class Result:
     def boundary_fields(self, *, side, x, y, part='total'):
         """Collocated boundary phasors from this result's requested field state."""
         records = self._fields()
+        for name, value in (('x', x), ('y', y)):
+            _coordinates(name, value)
         values = []
         for state, amplitude in zip(records, self._field_amplitudes):
-            a = state.boundary(side, x, y, part, 'incident') * amplitude
+            with _public_sampling():
+                a = state.boundary(side, x, y, part, 'incident') * amplitude
             xp = array_namespace(a)
             factors = as_array(xp, [1., 1., 1., 1/Z0, 1/Z0, 1/Z0], dtype=a.dtype,
                                device=getattr(a, 'device', None))
@@ -260,7 +319,7 @@ def pack(problem, numerics, execution, solves, checks, report):
             outputs[port] = BoundaryPower(incoming=_stack([p[0] for p in pairs]),
                                          outgoing=_stack([p[1] for p in pairs]),
                                          units='W/m^2' if area is None else 'W',
-                                         integration_measure='infinite-area mean' if area is None else problem.outputs.power_region or 'cell',
+                                         power_region='infinite-area mean' if area is None else problem.outputs.power_region or 'cell',
                                          reference={'port': port, 'time_convention': 'exp(-i omega t)'})
         if all(a is not None for a in absorption):
             outputs['absorption'] = _stack(absorption)
@@ -291,7 +350,7 @@ def pack(problem, numerics, execution, solves, checks, report):
                   validity=Validity(checks={**checks, 'numerical_finite': finite},
                                     convergence={'status': 'not assessed', 'requires': 'independent refinement study'}),
                   diagnostics={'report': report, 'effective_wavelengths': tuple(actual_wavelengths),
-                               'source_groups': tuple(getattr(r, 'group_count', 1) for _, r in solves),
+                               'source_group_counts': tuple(getattr(r, 'group_count', 1) for _, r in solves),
                                'effective_theta': tuple(actual_directions),
                                'port_power_defined': xp.stack(power_defined) if power_defined else None,
                                'detuning_relative_step': numerics.detuning,

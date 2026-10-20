@@ -78,7 +78,8 @@ def test_rcwa_fields_scattering_coordinates_and_job_roundtrip(tmp_path, solved):
             np.testing.assert_array_equal(saved[block], getattr(live, block))
         for port in ('entry_port', 'exit_port'):
             assert saved[port]['channel'] == getattr(live, port).channel
-            np.testing.assert_array_equal(saved[port]['index'], getattr(live, port).index)
+            np.testing.assert_array_equal(saved[port]['refractive_index'],
+                                          getattr(live, port).refractive_index)
     assert 'field_reconstruction' in restored.deferred
     assert 'caller-supplied' in restored.manifest['association']
     assert (record.path/'source.zip').is_file()

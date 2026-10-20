@@ -419,10 +419,11 @@ def layer_thicknesses(logits, total, *, minimum=0.):
     are promoted to float64. ``total`` and ``minimum`` are static host values;
     minimum is a nonnegative scalar or one length per layer, with sum < total.
 
-    The output is an ordinary thickness array accepted by :class:`Stack`, RCWA
-    and FDTD. For FDTD, also pass static ``mesh_thickness`` with the same total.
-    With positive ``layer_smoothing=h``, give the first and last layers minimum
-    lengths of at least h/2 so the averaged interfaces stay inside the stack.
+    The output is an ordinary array of lengths, one ``thickness`` per ``rcwa.Layer``
+    or ``fdtd.periodic.Layer``. For ``fdtd.periodic``, also pass a static
+    ``Numerics(nominal_layer_thickness=...)`` with the same total. With a positive
+    ``Numerics(layer_smoothing=h)``, give the first and last layers minimum lengths
+    of at least h/2 so the averaged interfaces stay inside the stack.
 
     Adding a constant to all logits changes nothing. Fix one logit when an
     optimizer needs independent coordinates. Very unequal logits can saturate

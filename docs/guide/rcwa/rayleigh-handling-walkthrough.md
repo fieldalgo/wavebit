@@ -145,6 +145,10 @@ pass `1e-8` for the same behaviour.
   anomaly). Linear extrapolation misconverges, and the one-ULP neighbour computed with the
   *old* construction is itself inside the broken band. Use the two-sided sqrt
   extrapolation from far detunes (~1e-8 relative), as `rayleigh-points.md` §6 does.
+- **Filtering the warnings**: `RayleighPointWarning`, `AutoDetuneWarning` and
+  `ExceptionalPointWarning` are public in `wavebit.rcwa.diagnostics`, each its own category,
+  so a sweep can escalate or silence one without the others
+  (`warnings.simplefilter('error', diagnostics.RayleighPointWarning)`).
 
 ## Not this process: the 1D conical x-cutoff
 

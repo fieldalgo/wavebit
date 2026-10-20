@@ -360,7 +360,8 @@ imaginary part, the incident intensity varies along the surface. Evanescent
 incidence, `theta = pi/2 + 1j*alpha`, is not such a case: its `kx` is real.
 The per-order `R` and `T` are then formal ratios rather than fractions of an
 incident power, and their sum can exceed 1 on a lossless stack. `power_entering`
-and `absorption` are NaN, and each such solve emits `ComplexIncidenceWarning`.
+and `absorption` are NaN, and each such solve emits
+`wavebit.rcwa.diagnostics.ComplexIncidenceWarning`.
 Which root of `kz` the exit medium takes is a convention at a complex `kx`, and
 other solvers choose differently (`docs/validation/rcwa/time-convention-audit.md` §9). This is
 the only route to a complex transverse wavevector. A direct `kx`/`ky` must be
@@ -626,7 +627,7 @@ Amplitude fine print, stated once so it never has to be discovered:
   `-y`. The pure 1D path did the same from 2026-09-27; before, it multiplied `+y` into every
   lit order, which is different light once the lit set straddles `kx = 0`. A weight is the
   amplitude of its plane wave at `x = y = 0` on the lit face — the weights
-  `OrderExcitation(orders=...)` takes, and the same light (since 2026-09-27; see the phase
+  `rcwa.IncidentOrders(weights=...)` takes, and the same light (since 2026-09-27; see the phase
   reference below);
 - the scattering matrix's **s** block holds amplitudes: `S11 @ delta` is `r_s`, `S21 @ delta`
   is `t_s`. Its **p** block holds port variables — the p wave's magnetic field,
@@ -678,7 +679,7 @@ Amplitude fine print, stated once so it never has to be discovered:
   - the incident field on the lit face is `sum_m w_m e_m exp(1j k_m . x)`, `w` the
     `excitation` weights (one unit wave on the specular order by default) and `e_m` the
     order's own `s_hat` / `p_hat` combination: **unit at the centre**. It is
-    `OrderExcitation(orders=w)`'s field, and by default `PlaneWave`'s;
+    `IncidentOrders(weights=w)`'s field, and by default `PlaneWave`'s;
   - the outgoing field on the lit face is `sum_m r_xyz[m] exp(1j k_m . x)`, and `t_xyz` the
     same on the far face: every amplitude is a Fourier coefficient of the public field about
     the centre;

@@ -28,14 +28,14 @@ def main():
     independent = problem((rcwa.PlaneWave(side='top',theta=np.deg2rad(20.),phi=0.),
         rcwa.PlaneWave(side='bottom',theta=np.deg2rad(35.),phi=0.,amplitude=.7j)), region='infinite')
     result = rcwa.run(independent, numerics=numerics)
-    assert result.diagnostics['source_groups'] == (2,)
+    assert result.diagnostics['source_group_counts'] == (2,)
     fields = result.boundary_fields(side='top', x=np.linspace(-400.,400.,81), y=[0.])
     assert fields.values.shape == (1,1,81,6)
     regional = rcwa.run(independent.replace(outputs=independent.outputs.replace(
         power_region=((-400.,400.),(-300.,300.)))), numerics=numerics)
     assert 'absorption' not in regional.outputs
     assert regional.outputs['top'].units == 'W'
-    print('Independent directions:', result.diagnostics['source_groups'][0], 'calculation groups')
+    print('Independent directions:', result.diagnostics['source_group_counts'][0], 'calculation groups')
 
 
 if __name__ == '__main__':

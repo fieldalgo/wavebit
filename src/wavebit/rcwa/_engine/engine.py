@@ -1711,7 +1711,7 @@ class CoreSolveMixin:
         flow -- is aux_data and is known from *which keyword was used* without reading one.
 
         The `None` was load-bearing in the meantime, which is how you can tell it cost
-        something: :func:`~wavebit.rcwa.plotting.slice_structure` reaches past this property to
+        something: :func:`~wavebit.rcwa._plotting.slice_structure` reaches past this property to
         ``_geometry_lattice_for`` precisely to get the materialised basis, "instead of a
         lookalike".
 
@@ -3037,7 +3037,7 @@ class CoreSolveMixin:
 
         ``None`` before a structure has been assigned. The *type of the object* passed as
         ``structure`` is the choice -- there is no separate mode switch -- so this is the only
-        place that says which one was read, and it is what ``wavebit.rcwa.plotting`` reads to
+        place that says which one was read, and it is what ``wavebit.rcwa._plotting`` reads to
         label a picture with the path that drew it. Read-only.
 
         A ``str`` enum, so ``solver.modeling_path == 'raster'`` holds without importing
@@ -5867,7 +5867,7 @@ class CoreFactorizationMixin:
             return swap_fourier_origin(self._mu_conv_matrices(geometry), *self.order_window)
 
     def slice_structure(self, layer=0, n=512, show='eps', band_limited=False, *, component=None):
-        """One layer's structure as an array. See :func:`wavebit.rcwa.plotting.slice_structure`.
+        """One layer's structure as an array. See :func:`wavebit.rcwa._plotting.slice_structure`.
 
         Verb-first to match :meth:`plot_structure`, which is this call with ``plot()`` around
         it -- same arguments, one returning the array and one drawing it. It was
@@ -5876,19 +5876,19 @@ class CoreFactorizationMixin:
         opposite directions. The field pair says the same thing the same way
         (:meth:`reconstruct_field` / :meth:`plot_field`).
         """
-        from wavebit.rcwa.plotting import slice_structure
+        from wavebit.rcwa._plotting import slice_structure
         return slice_structure(self, layer=layer, n=n, show=show, band_limited=band_limited,
                                component=component)
 
     def plot_structure(self, layer=0, n=512, show='eps', ax=None, band_limited=False, *, component=None):
-        """Draw one layer of the structure. See :func:`wavebit.rcwa.plotting.plot_structure`.
+        """Draw one layer of the structure. See :func:`wavebit.rcwa._plotting.plot_structure`.
 
         Here rather than on the three backend solvers because the picture is NumPy either way,
         which is the argument ``plot_field`` already makes; the difference is that this one
         reads the *solver* rather than an array it was handed, so the per-backend wrapper had
         nothing left to do.
         """
-        from wavebit.rcwa.plotting import plot_structure
+        from wavebit.rcwa._plotting import plot_structure
         return plot_structure(self, layer=layer, n=n, show=show, ax=ax,
                               band_limited=band_limited, component=component)
 

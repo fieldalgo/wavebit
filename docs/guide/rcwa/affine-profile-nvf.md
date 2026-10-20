@@ -22,7 +22,7 @@ builder = experimental.AffineProfileNVF(
     (2, 1), rows=2, body_degree=2, gap_degree=2, grade_y=False,
 )
 conv = builder.conv_matrices(structure, lattice)
-numerics = rcwa.Numerics(orders=builder.truncation_order)
+numerics = rcwa.Numerics(orders=builder.orders)
 transmitted = []
 for polarization in ('p', 's'):
     problem = rcwa.Problem(
@@ -61,7 +61,7 @@ The rest of the periodic cell contains the layer background.
 
 | Input | Contract |
 | --- | --- |
-| `truncation_order` | Nonnegative integer or `(u, v)` integer pair. The exact requested modes are selected before matrix closure, including zero order along either axis. |
+| `orders` | Nonnegative integer or `(u, v)` integer pair. The exact requested modes are selected before matrix closure, including zero order along either axis. |
 | `lattice` | A `Lattice` or finite real 2-by-2 array with positive determinant. Its vectors and `offset` use the consuming problem's length unit. No integer basis reduction is performed. |
 | `structure` | Nonempty sequence of layer dictionaries with `background` and `profile`. An absent or `None` profile is uniform. Background defaults to 1. |
 | `width` | Required positive fractional span strictly less than 1. |

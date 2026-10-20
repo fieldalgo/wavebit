@@ -669,7 +669,7 @@ at 0.2 on 210. In a grating every order has its own grazing condition in the gai
 the band recurs near each order's Rayleigh condition. `solver.gain_cutoff_band()` returns the
 per-order verdict for each side, and it traces, so a `jax.jit` or `vmap` caller can read it
 where the warning cannot run. `CoherentSolver` runs the same test on its own ports for the
-sectors a `PlaneWave`, `GaussianBeam` or `OrderExcitation` lights. It skips dipole sources
+sectors a `PlaneWave`, `GaussianBeam` or `IncidentOrders` lights. It skips dipole sources
 (see below).
 
 **The fixed-kx flip does not set it.** Continue the root in complex frequency at fixed real

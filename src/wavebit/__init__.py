@@ -19,6 +19,7 @@ from .observations import (DiffractionOrders, FieldSamples, RawFieldSpectrum,
 from .errors import (WavebitError, ValidationError, UnsupportedFeatureError, IncompatibleProblemError,
                      NumericalError, Issue)
 from .jobs import Job, run
+from ._common.periodic import layer_thicknesses
 
 __all__ = ['materials', 'rcwa', 'fdtd', 'Material', 'MaterialResponse', 'ConductiveMaterial',
            'DispersiveMaterial', 'TabulatedMaterial', 'Drude', 'Lorentz', 'Debye',
@@ -26,7 +27,7 @@ __all__ = ['materials', 'rcwa', 'fdtd', 'Material', 'MaterialResponse', 'Conduct
            'Execution', 'CheckReport', 'Backend', 'DiffractionOrders', 'FieldSamples',
            'RawFieldSpectrum', 'RawDiffractionSpectrum', 'TimeSeries', 'Validity',
            'ValidationError', 'UnsupportedFeatureError', 'IncompatibleProblemError',
-           'NumericalError', 'WavebitError', 'Issue', 'Job', 'run']
+           'NumericalError', 'WavebitError', 'Issue', 'Job', 'run', 'layer_thicknesses']
 
 #: Names this package no longer has (fieldalgo/wavebit#57): each is a tombstone naming its
 #: replacement, not an alias.

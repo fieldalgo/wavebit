@@ -25,9 +25,9 @@ from wavebit import Material, Units, rcwa
 from wavebit.rcwa import experimental, operators
 
 basis = np.diag([700., 700.])
-order = (1, 1)
+orders = (1, 1)
 cell = experimental.CartesianPairTransmissionGalerkinGapCell(
-    experimental.CartesianPairOpeningPlan(0, refinement=0), order,
+    experimental.CartesianPairOpeningPlan(0, refinement=0), orders,
     reference=(12.25, -10.+1j, 1.), degree=3, branches=2,
     quadrature=80, angular_quadrature=48, coercivity_angle=1.53,
 )
@@ -43,7 +43,7 @@ problem = rcwa.Problem(
         layers=(rcwa.Layer(thickness=300., background=Material(epsilon=1.)),)),
     excitation=rcwa.Excitation(wavelength=900., sources=(rcwa.PlaneWave(
         side='top', polarization='s', theta=.2, phi=0.),)))
-assembled = operators.assemble(problem, numerics=rcwa.Numerics(orders=order),
+assembled = operators.assemble(problem, numerics=rcwa.Numerics(orders=orders),
                                backend='numpy').replace(epsilon=(matrices,))
 answer = operators.solve(problem, assembled)
 ```

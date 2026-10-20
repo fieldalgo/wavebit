@@ -13,7 +13,7 @@ Targets:
 - `tests/references/test_meep_multilayer.py`
 - `tests/references/interface/meep_multilayer.py`
 
-TL;DR: `layer_thicknesses` turns ordinary NumPy/JAX/Torch design weights into
+TL;DR: `wavebit.layer_thicknesses` turns ordinary NumPy/JAX/Torch design weights into
 positive lengths with a fixed total and optional individual minima. The same
 array feeds RCWA and FDTD. A six-variable dielectric coating example reduced
 the independent sharp-stack mean reflectance over 81 sampled wavelengths

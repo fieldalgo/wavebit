@@ -1457,7 +1457,7 @@ def test_every_reader_of_the_default_moves_together(cell_name, A):
     and a mutation run caught this test committing it on four oblique cells.
     """
     from wavebit.rcwa._engine import boundary as _b
-    from wavebit.rcwa import plotting as _d
+    from wavebit.rcwa import _plotting as _d
     from wavebit.lattice import periods_of
 
     Px, Py = periods_of(A)

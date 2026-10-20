@@ -79,6 +79,7 @@ from wavebit._common.conventions import boundary_kz
 from wavebit._common.conventions import half_space_medium
 from wavebit._common.conventions import order_azimuth
 from wavebit._common.conventions import order_frame_sign
+from wavebit._common.declarations import renamed_attributes
 from wavebit.rcwa._engine.enums import Answers
 from wavebit.rcwa._engine.enums import answers_of
 from wavebit._common.conventions import incident_column
@@ -382,9 +383,10 @@ class Port(NamedTuple):
     end they meet at counts the *same* waves, and that is what this records so
     :meth:`ScatteringMatrix.cascade` can check it instead of trusting the caller.
 
-    ``index`` and ``mu`` are the half-space the port opens into. ``kx`` / ``ky`` are the
-    retained orders' in-plane wavevectors, normalised by ``k0`` as everywhere else in the core;
-    ``ky`` is ``None`` on the pure 1D TE/TM path, which has no out-of-plane order.
+    ``refractive_index`` and ``mu`` are the half-space the port opens into. ``kx_over_k0`` /
+    ``ky_over_k0`` are the retained orders' in-plane wavevector components divided by the vacuum
+    wavenumber ``k0``; ``ky_over_k0`` is ``None`` on the pure 1D TE/TM path, which has no
+    out-of-plane order.
 
     ``channel`` is the polarization the port's amplitude vector counts: ``'te'`` or ``'tm'`` on
     the pure 1D path, one entry per order, and ``'sp'`` on the coupled paths -- conical, 2D and
@@ -396,16 +398,35 @@ class Port(NamedTuple):
     On JAX ``channel`` is pytree aux data, not a child (:func:`_register_pytree_if_jax_loaded`):
     a string cannot cross a ``jax.jit`` boundary as a leaf, and which waves a port counts is
     fixed by the path, never by a traced value.
+
+    The fields were ``kx``, ``ky`` and ``index`` until fieldalgo/wavebit#57. Reading an old
+    name raises and names the new one. ``Port(kx=...)`` and ``port._replace(kx=...)`` cannot:
+    ``typing.NamedTuple`` refuses a custom ``__new__``, so those raise Python's own
+    ``TypeError`` for an unexpected field.
     """
-    kx: object
-    ky: object
-    index: object
+    kx_over_k0: object
+    ky_over_k0: object
+    refractive_index: object
     mu: object
     channel: str
 
+    __getattr__ = renamed_attributes(
+        {'kx': 'kx_over_k0', 'ky': 'ky_over_k0', 'index': 'refractive_index'},
+        prefix='rcwa.operators.')
+
+    @property
+    def index(self):
+        """Removed; the port medium's index is ``refractive_index``.
+
+        Without this the old ``port.index`` would quietly answer with ``tuple.index``, a bound
+        method, and never reach ``__getattr__``. The AttributeError hands the read to
+        ``__getattr__``, which names the replacement.
+        """
+        raise AttributeError('index')
+
 
 #: The fields of a :class:`Port` that are pytree children, in order; ``channel`` is aux data.
-_PORT_CHILDREN = ('kx', 'ky', 'index', 'mu')
+_PORT_CHILDREN = ('kx_over_k0', 'ky_over_k0', 'refractive_index', 'mu')
 
 _PYTREE_REGISTERED = False
 
@@ -415,11 +436,11 @@ def _register_pytree_if_jax_loaded():
 
     A ``NamedTuple`` is a pytree without registration, every field a child, which is how a
     ``ScatteringMatrix`` has always crossed a ``jax.jit`` boundary. A string child cannot: the
-    output would be refused as ``not a valid JAX type``. Registered here, ``kx`` / ``ky`` /
-    ``index`` / ``mu`` stay children -- a traced joint medium is still a leaf -- and the channel
+    output would be refused as ``not a valid JAX type``. Registered here, ``kx_over_k0`` /
+    ``ky_over_k0`` / ``refractive_index`` / ``mu`` stay children -- a traced joint medium is still a leaf -- and the channel
     rides in the treedef, as it has to for a jitted function returning one of these to be
     rebuilt with it. Registered *with keys*, so a leaf's path still names its field
-    (``.entry_port.kx``) as the unregistered ``NamedTuple``'s did, not a flat index.
+    (``.entry_port.kx_over_k0``) as the unregistered ``NamedTuple``'s did, not a flat index.
 
     Lazy, and never importing JAX, for the reason
     :func:`wavebit._common.periodic._register_pytree_if_jax_loaded` gives at length. Called from
@@ -596,8 +617,10 @@ def _scattering_matrix(S, backside, kx, ky, n_ref, n_trn, mu_ref, mu_trn, channe
     _register_pytree_if_jax_loaded()
     return ScatteringMatrix(
         *(S[::-1] if backside else S),
-        entry_port=Port(kx=kx, ky=ky, index=n_ref, mu=mu_ref, channel=channel),
-        exit_port=Port(kx=kx, ky=ky, index=n_trn, mu=mu_trn, channel=channel))
+        entry_port=Port(kx_over_k0=kx, ky_over_k0=ky, refractive_index=n_ref, mu=mu_ref,
+                        channel=channel),
+        exit_port=Port(kx_over_k0=kx, ky_over_k0=ky, refractive_index=n_trn, mu=mu_trn,
+                       channel=channel))
 
 
 def _coupled_ports_1d(S, sigma, tetm_index):
@@ -661,14 +684,14 @@ def _port_disagreement(a, b):
             return True
         return bool(np.max(np.abs(xa - ya)) > tol)
 
-    if differ(a.kx, b.kx) or differ(a.ky, b.ky):
+    if differ(a.kx_over_k0, b.kx_over_k0) or differ(a.ky_over_k0, b.ky_over_k0):
         return ('their retained orders are different in-plane wavevectors. `theta` is measured '
                 'in the incidence medium, so the same angle means a different `k_par` on either '
                 'side of a material step. Choose the angles for the same transverse '
                 'wavevector in both media, and check `order_kxy()` matches before composing. '
                 'For lossless media this is `theta_b = arcsin(sin(theta_a) * n_a / n_b)` with '
                 'the signed indices `n_top` / `n_bot` (negative for a negative-index medium)')
-    if differ(a.index, b.index) or differ(a.mu, b.mu):
+    if differ(a.refractive_index, b.refractive_index) or differ(a.mu, b.mu):
         return ('they open into different half-spaces. The joint medium is a basis rather than '
                 'a layer -- any index will do, and a zero-thickness one changes nothing -- but '
                 'both pieces have to name the same one')

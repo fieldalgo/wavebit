@@ -202,10 +202,10 @@ class Excitation:
     sources: tuple
 
     def __post_init__(self):
-        from .sources import PlaneWave, OrderExcitation, GaussianBeam, ElectricDipole
+        from .sources import PlaneWave, IncidentOrders, GaussianBeam, ElectricDipole
         object.__setattr__(self, 'sources', tuple(self.sources))
         object.__setattr__(self, 'wavelength', _freeze_sequence(self.wavelength))
-        if not self.sources or not all(isinstance(s, (PlaneWave, OrderExcitation, GaussianBeam,
+        if not self.sources or not all(isinstance(s, (PlaneWave, IncidentOrders, GaussianBeam,
                                                        ElectricDipole)) for s in self.sources):
             raise ValidationError('sources must be a nonempty tuple of RCWA source declarations.',
                                   code='excitation.sources', path='excitation.sources')

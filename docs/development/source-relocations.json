@@ -87,7 +87,7 @@
     "src/wavebit/_core/conforming/triangle_polynomials.py": "src/wavebit/rcwa/_engine/conforming/triangle_polynomials.py",
     "src/wavebit/_core/conventions.py": "src/wavebit/_common/conventions.py",
     "src/wavebit/_core/domain.py": "src/wavebit/_common/periodic.py",
-    "src/wavebit/_core/draw.py": "src/wavebit/rcwa/plotting.py",
+    "src/wavebit/_core/draw.py": "src/wavebit/rcwa/_plotting.py",
     "src/wavebit/_core/engine.py": "src/wavebit/rcwa/_engine/engine.py",
     "src/wavebit/_core/enums.py": "src/wavebit/rcwa/_engine/enums.py",
     "src/wavebit/_core/factorization.py": "src/wavebit/rcwa/_engine/factorization.py",
@@ -210,7 +210,8 @@
     "src/wavebit/main.py": "src/wavebit/compat/legacy.py",
     "src/wavebit/materials.py": "src/wavebit/materials/catalog.py",
     "src/wavebit/materials/tabulated.py": "src/wavebit/materials/_tabulated.py",
-    "src/wavebit/materials/time_domain.py": "src/wavebit/materials/_time_domain.py"
+    "src/wavebit/materials/time_domain.py": "src/wavebit/materials/_time_domain.py",
+    "src/wavebit/rcwa/plotting.py": "src/wavebit/rcwa/_plotting.py"
   },
   "modules": {
     "wavebit": "wavebit",
@@ -300,7 +301,7 @@
     "wavebit._core.conforming.triangle_polynomials": "wavebit.rcwa._engine.conforming.triangle_polynomials",
     "wavebit._core.conventions": "wavebit._common.conventions",
     "wavebit._core.domain": "wavebit._common.periodic",
-    "wavebit._core.draw": "wavebit.rcwa.plotting",
+    "wavebit._core.draw": "wavebit.rcwa._plotting",
     "wavebit._core.engine": "wavebit.rcwa._engine.engine",
     "wavebit._core.enums": "wavebit.rcwa._engine.enums",
     "wavebit._core.factorization": "wavebit.rcwa._engine.factorization",
@@ -424,7 +425,8 @@
     "wavebit.manifest": "wavebit.manifest",
     "wavebit.materials": "wavebit.materials.catalog",
     "wavebit.materials.tabulated": "wavebit.materials._tabulated",
-    "wavebit.materials.time_domain": "wavebit.materials._time_domain"
+    "wavebit.materials.time_domain": "wavebit.materials._time_domain",
+    "wavebit.rcwa.plotting": "wavebit.rcwa._plotting"
   },
   "symbols": [
     {

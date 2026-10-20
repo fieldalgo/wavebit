@@ -1211,7 +1211,7 @@ def _pn_disc(basis, n=PN_N):
     Written out here rather than taken from a helper because the **shape** is what has to
     cross between the two cells, not an array: the disc has a Cartesian centre and a Cartesian
     radius, and each cell samples that same disc on its own lattice grid.
-    :func:`wavebit.rcwa.plotting._shape_inside` cannot serve -- its periodic image loop is fixed
+    :func:`wavebit.rcwa._plotting._shape_inside` cannot serve -- its periodic image loop is fixed
     at ``(-1, 0, 1)``, which does not reach across a cell sheared by two lattice vectors: it
     draws 0.262 of ``SHEAR_2A1`` filled where the disc covers 0.503.
     """
