@@ -138,6 +138,15 @@ def test_an_sspl_external_tool_must_be_marked_lab_only():
     assert any(error.startswith('server') and 'lab_only' in error for error in errors)
 
 
+def test_notice_names_every_bundled_source():
+    notice = (checker.ROOT/'NOTICE').read_text(encoding='utf-8')
+    for name, entry in INVENTORY['bundled'].items():
+        assert entry['url'] in notice, name
+    for history in ('https://doi.org/10.5281/zenodo.14631951', 'https://github.com/invrs-io/fmmax',
+                    'https://github.com/zhaonat/Rigorous-Coupled-Wave-Analysis'):
+        assert history in notice, history
+
+
 def test_both_language_pages_name_every_entry():
     errors, _ = checker.check([], INVENTORY)
     assert errors == []

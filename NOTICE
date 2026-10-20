@@ -1,0 +1,52 @@
+Wavebit
+Copyright 2026 FieldAlgo
+
+Wavebit is licensed under Apache-2.0 AND MIT; see LICENSE. This notice lists
+the third-party work that Wavebit's code and data come from. LICENSE holds the
+full history and conditions for each item, and LICENSE.meent and LICENSE.fmmax
+hold the MIT texts. docs/development/third-party.md in the source repository
+lists every third-party component and how it is used.
+
+meent
+  https://github.com/kc-ml2/meent
+  Copyright (c) 2022 ML2. MIT License, reproduced in LICENSE.meent.
+  Part of the RCWA code in src/wavebit/rcwa/ derives from it.
+
+fmmax
+  https://github.com/facebookresearch/fmmax
+  Copyright (c) 2023 Meta Research. MIT License, reproduced in LICENSE.fmmax.
+  The eigendecomposition gradient in src/wavebit/_common/backend.py is a port
+  of _eig_bwd from that project. Its maintained fork,
+  https://github.com/invrs-io/fmmax, carries the same function under the same
+  MIT terms as "Copyright: 2025 invrs.io LLC"; which of the two the port was
+  taken from is not recorded, so both are named.
+
+RETICOLO
+  RETICOLO, by J.P. Hugonin and P. Lalanne
+  copyright (c) 2005 Institut d'Optique/CNRS
+  Material: https://doi.org/10.5281/zenodo.14631951
+  Citation: arXiv:2101.00901
+  Licence: CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+  Earlier versions of the Fourier factorization code in this repository's
+  history, which descend from meent code written with reference to
+  RETICOLO's MATLAB source, are used under CC BY 4.0 with the attribution
+  above. They have been replaced by a rewrite from L. Li's published rules.
+  RETICOLO itself is not part of Wavebit. LICENSE records the details.
+
+Rigorous-Coupled-Wave-Analysis (Nathan Zhao)
+  https://github.com/zhaonat/Rigorous-Coupled-Wave-Analysis
+  MIT License. Scattering-matrix helpers derived from it were in this
+  repository's history from 2022-09-20 to 2026-08-03 and were then deleted;
+  nothing in the current code derives from them. LICENSE records the details.
+
+refractiveindex.info database
+  https://github.com/polyanskiy/refractiveindex.info-database
+  CC0 1.0 Universal (public domain dedication). The refractive-index tables in
+  src/wavebit/data/refractiveindex/ come from it; that directory's README.md
+  cites the publication behind each table.
+
+Third-party Python packages
+  The packages Wavebit requires or offers as extras (NumPy, SciPy, JAX, PyTorch,
+  Matplotlib and others) are installed separately by pip and are not part of
+  this distribution. Native libraries inside their wheels, such as OpenBLAS or
+  the GCC runtime, are under their own terms, stated by each wheel.
