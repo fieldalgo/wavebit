@@ -315,3 +315,26 @@ def test_a_traced_static_face_value_is_refused_with_the_public_leaves():
     jax.grad(build)(1.)
     assert 'The traced leaves of a public problem' in said[0], said[0]
     assert not REMOVED.search(said[0]) and 'Band(' not in said[0], said[0]
+
+
+def test_grazing_rows_and_an_invariant_diffraction_reference_use_the_public_names():
+    """Engine row keys (``polarisation``, ``stabilize``, ``axis1d``) stay in the engine; a caller
+    reads ``polarization``, ``stabilizing_loss`` and ``invariant_axes`` (axis names)."""
+    n = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.01), duration=fdtd.Duration(steps=3),
+                      absorber=fdtd.PML(cells=12, wavelength=1., stabilizing_loss=1e-5))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        r = fdtd.run(invariant(), numerics=n)
+    rows = r.diagnostics['grazing']
+    assert rows and not any({'polarisation', 'polarisations', 'stabilize', 'axis1d'} & set(row) for row in rows)
+    stabilized = [row for row in rows if 'stabilizing_loss' in row]
+    assert stabilized and any('polarization' in row for row in stabilized)
+    for row in stabilized:
+        assert row['stabilizing_loss'] == 1e-5 and row['invariant_axes'] == ('x', 'y')
+        assert set(row['polarizations']) <= {'TE', 'TM'}
+        assert 'polarization' not in row or row['polarization'] in row['polarizations']
+    # Both transverse axes are invariant: the cell measure is per unit length of each, '1'.
+    for name, port, wave in (('T', 'z-', 'transmitted'), ('R', 'z+', 'reflected')):
+        reference = r[name].reference
+        assert (reference['port'], reference['wave'], reference['cell_measure_units']) == (port, wave, '1')
+        assert reference['cell_measure'] == pytest.approx(1.)
