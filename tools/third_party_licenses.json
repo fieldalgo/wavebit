@@ -42,7 +42,8 @@
     ],
     "rules": [
       "runtime (base requirements of wavebit, transitively): permissive only",
-      "optional (wavebit extras) and tool: permissive, or weak copyleft when the entry sets weak_copyleft_review (unmodified, installed separately by pip, never bundled or loaded directly)",
+      "optional (wavebit extras): permissive, or weak copyleft when the entry sets weak_copyleft_review (unmodified, installed separately by pip, never bundled or loaded directly)",
+      "tool (installed but not required: test runners, CI tools, external_tools a test environment installs): any license but never, GPL included, since tools never ship; each still needs a reviewed entry",
       "GPL: never imported, linked or bundled by src/wavebit and never a requirement; unshipped tests, studies and reference scripts may run GPL tools, skipping when they are absent",
       "never: rejected in every environment"
     ]

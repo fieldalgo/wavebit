@@ -7,13 +7,17 @@ the strictest way the environment reaches the distribution:
 
 - runtime: a base requirement of Wavebit (transitively)
 - optional: an extra of Wavebit (``jax``, ``pytorch``, ``docs``, ...)
-- tool: installed but not required by Wavebit (test runners, CI tools)
+- tool: installed but not required by Wavebit (test runners, CI tools, and the
+  reference tools under ``external_tools`` when a test environment installs one)
 
 Runtime dependencies must be permissive. Weak copyleft (LGPL, MPL) is accepted
-for optional and tool entries that set ``weak_copyleft_review``: such a
-component is installed separately by pip, unmodified, and never bundled. GPL is
-accepted only for ``external_process`` entries, and Wavebit's package code must
-not import them. AGPL and SSPL are always rejected; an external tool under them
+for optional entries that set ``weak_copyleft_review``: such a component is
+installed separately by pip, unmodified, and never bundled. Tools never ship, so
+unshipped tests, studies and CI tools may use them under any license but the
+``never`` list, GPL included and in the same process as Wavebit; they still need
+a reviewed entry, and a reference tool recorded under ``external_tools`` counts
+as one. Wavebit's package code must not import a GPL tool, and a tool must not
+become a requirement. AGPL and SSPL are always rejected; an external tool under them
 may be listed only as a past comparison marked ``lab_only``. Installed metadata that names
 a different expression, or a copyleft family the entry does not record, also fails.
 
@@ -188,6 +192,7 @@ def check(paths, inventory, check_docs=True, reachable_only=False):
     never = set(policy["never"])
     first_party = {canonicalize_name(n) for n in inventory["first_party"]}
     entries = {canonicalize_name(k): v for k, v in inventory["distributions"].items()}
+    external = {canonicalize_name(k): v for k, v in inventory.get("external_tools", {}).items()}
     dists = {}
     for dist in metadata.distributions(path=paths):
         name = canonicalize_name(dist.metadata["Name"])
@@ -207,6 +212,9 @@ def check(paths, inventory, check_docs=True, reachable_only=False):
             report[name] = {**record, "use": "first-party", "spdx": expected}
             continue
         entry = entries.get(name)
+        external_tool = entry is None and name in external
+        if external_tool:
+            entry = external[name]
         klass = use.get(name, "tool")
         if reachable_only and name not in use and entry is None:
             continue
@@ -233,6 +241,9 @@ def check(paths, inventory, check_docs=True, reachable_only=False):
         if ids & never:
             errors.append(f"{name}: {entry['spdx']} is never allowed")
             continue
+        if external_tool and klass != "tool":
+            errors.append(f"{name} is recorded only as an external tool but is a Wavebit {klass} requirement")
+            continue
         if "external_process" in entry:
             record["use"] = "external-process"
             modules = set(entry["external_process"]["forbidden_imports"])
@@ -240,6 +251,11 @@ def check(paths, inventory, check_docs=True, reachable_only=False):
                 errors.append(f"{name} is external-process only but is imported by {offenders}")
             if klass == "runtime":
                 errors.append(f"{name}: an external-process tool cannot be a base runtime requirement")
+            continue
+        if klass == "tool":
+            # Unshipped tests, studies and CI tools may run any non-never license in the
+            # Wavebit process (GPL included); the never check above still applies.
+            record["use"] = "external-tool" if external_tool else "tool"
             continue
         allowed = permissive if klass == "runtime" else (
             permissive | weak if entry.get("weak_copyleft_review") else permissive)

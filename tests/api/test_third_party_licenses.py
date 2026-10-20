@@ -72,6 +72,23 @@ def test_weak_copyleft_in_the_base_requirements_fails_even_when_reviewed(tmp_pat
     assert any('not allowed for runtime use' in error for error in errors)
 
 
+def test_gpl_test_tools_installed_in_a_test_environment_pass(tmp_path):
+    # Unshipped tests may run GPL tools in the Wavebit process; only AGPL/SSPL and requirements fail.
+    _distribution(tmp_path, 'wavebit', 'Apache-2.0 AND MIT')
+    _distribution(tmp_path, 's4', 'GPL-2.0-or-later')  # recorded under external_tools as S4
+    _distribution(tmp_path, 'gpltool', 'GPL-3.0-only')
+    errors, report = checker.check([str(tmp_path)], _inventory(gpltool={'spdx': 'GPL-3.0-only'}), check_docs=False)
+    assert errors == []
+    assert report['s4']['use'] == 'external-tool' and report['gpltool']['use'] == 'tool'
+
+
+def test_an_external_tool_must_not_become_a_requirement(tmp_path):
+    _distribution(tmp_path, 'wavebit', 'Apache-2.0 AND MIT', extras=['fast'], requires=['s4; extra == "fast"'])
+    _distribution(tmp_path, 's4', 'GPL-2.0-or-later')
+    errors, _ = checker.check([str(tmp_path)], _inventory(), check_docs=False)
+    assert any('recorded only as an external tool' in error for error in errors)
+
+
 def test_unreviewed_and_changed_licenses_fail(tmp_path):
     _distribution(tmp_path, 'wavebit', 'Apache-2.0 AND MIT')
     _distribution(tmp_path, 'newtool', 'MIT')

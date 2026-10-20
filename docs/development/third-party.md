@@ -24,9 +24,13 @@ environment; see [Automated check](#automated-check).
 Policy:
 
 - Runtime dependencies are permissive.
-- LGPL or MPL is accepted for optional or tool components that are installed
+- LGPL or MPL is accepted for optional components that are installed
   separately by pip, unmodified and never bundled; the inventory records the
   review for each.
+- Tools never ship, so a test runner, CI tool or reference tool installed in a
+  test environment may be under any license except AGPL and SSPL. It still
+  needs a reviewed entry; a reference tool listed under
+  [External reference tools](#external-reference-tools) counts as one.
 - LGPL or MPL is never a runtime requirement, and Wavebit's code never loads
   such a library directly (ctypes, cffi or a compiled extension); it uses the
   component's public API only.
@@ -35,7 +39,8 @@ Policy:
   Unshipped test, study and reference scripts may run a GPL tool such as S4 or
   Meep, also in the same process as Wavebit, provided they stay outside the
   sdist and wheel and the installation and the default test run work without
-  the tool (tests that need it skip). GPL source is not read for implementation.
+  the tool (tests that need it skip). The license check accepts such a tool
+  installed in a test environment. GPL source is not read for implementation.
 - AGPL and SSPL are never a dependency, never in CI and never run by this
   repository's tests or scripts. One AGPL tool, inkstone, was compared once
   as a black box before this rule; it is listed under
