@@ -13,9 +13,9 @@ def lower_material(model, *, units):
     """Convert SI rates/conductivity exactly once for a declared geometry length unit."""
     units = require_units(units)
     if isinstance(model, td.MaterialBase):
-        raise UnsupportedFeatureError('normalized engine materials are not physical declarations; use a common physical material model', code='legacy_material', path='material')
+        raise UnsupportedFeatureError('normalized engine materials are not physical declarations; use a common physical material model', code='material.engine_model', path='material')
     if isinstance(model, (TabulatedMaterial, MaterialResponse)):
-        raise UnsupportedFeatureError('time-domain execution requires a supported causal material model, not a table or an evaluated response', code='causal_model_required', path='material')
+        raise UnsupportedFeatureError('time-domain execution requires a supported causal material model, not a table or an evaluated response', code='material.causal_model', path='material')
     if not isinstance(model, (Material, ConductiveMaterial, DispersiveMaterial)):
         model = Material(model)
     def diagonal(value):
@@ -34,8 +34,8 @@ def lower_material(model, *, units):
             if isinstance(p, Drude): poles.append(td.Drude(omega_p=p.omega_p * scale, gamma=p.gamma * scale))
             elif isinstance(p, Lorentz): poles.append(td.Lorentz(omega_0=p.omega_0 * scale, gamma=p.gamma * scale, strength=p.strength * scale ** 2))
             elif isinstance(p, Debye): poles.append(td.Debye(tau=p.tau / scale, delta_eps=p.delta_epsilon))
-            else: raise UnsupportedFeatureError('unsupported material pole', code='material_pole', path='material.poles')
+            else: raise UnsupportedFeatureError('unsupported material pole', code='material.pole_type', path='material.poles')
         return td.Dispersive(eps_inf=diagonal(model.epsilon_inf), poles=tuple(poles), mu=diagonal(model.mu))
     except (TypeError, ValueError) as exc:
         if isinstance(exc, UnsupportedFeatureError): raise
-        raise UnsupportedFeatureError(str(exc), code='fdtd_material', path='material') from exc
+        raise UnsupportedFeatureError(str(exc), code='material.fdtd', path='material') from exc

@@ -32,16 +32,17 @@ def test_finite_port_span_is_structured_at_every_lifecycle_door(axis, target, ex
     span = {a: (-.1, .1) if extent == 'full' else (-.05, .05) for a in axes}
     p = problem(axis, span, target)
     path = 'sources.light.plane' if target == 'source' else 'outputs.reflection.plane'
+    code = 'source.plane_span' if target == 'source' else 'monitor.plane_span'
     report = fd.check(p, numerics=NUMERICS)
     assert not report.ok
     (issue,) = report.issues
-    assert (issue.code, issue.path) == ('plane_span', path)
+    assert (issue.code, issue.path) == (code, path)
     assert issue.actual == span
     assert issue.expected == 'no transverse spans'
     for door in (fd.prepare, fd.run):
         with pytest.raises(UnsupportedFeatureError) as caught:
             door(p, numerics=NUMERICS)
-        assert (caught.value.code, caught.value.path) == ('plane_span', path)
+        assert (caught.value.code, caught.value.path) == (code, path)
         assert caught.value.actual == issue.actual
         assert caught.value.expected == issue.expected
 

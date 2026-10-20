@@ -148,7 +148,7 @@ def test_gpu_pattern_values_refused_and_policy_recovers(kind, output):
     with pytest.raises(ValidationError) as caught:
         fdtd.run(problem, numerics=fixed_numerics(STEPS), backend='torch', device='cuda:0')
     assert caught.value.issue.path.startswith('initial')
-    assert caught.value.issue.code in ('static_input', 'cuda_scope')
+    assert caught.value.issue.code in ('prepared.static_input', 'execution.cuda_scope')
     if kind != 'array':
         assert calls == [1]
     # The exception must not leave the stricter policy enabled for ordinary CPU AD.
@@ -187,7 +187,7 @@ def test_cpu_policy_rejects_before_conversion_without_host_reads(kind, monkeypat
         monkeypatch.setattr(torch.Tensor, name, forbidden)
     with fields.static_host_patterns(True), pytest.raises(ValidationError) as caught:
         fields.evaluate('E', value, grid, 'E', rt, 'float64')
-    assert caught.value.issue.code == 'static_input'
+    assert caught.value.issue.code == 'prepared.static_input'
     assert caught.value.issue.path == 'initial.E'
     assert calls == ([] if kind == 'array' else [1])
 
@@ -242,7 +242,7 @@ def test_cpu_transformed_callback_rejected_without_host_reads(transform, monkeyp
             torch.func.jacfwd(evaluate)(torch.tensor(1.))
         else:
             torch.vmap(evaluate)(torch.ones(2))
-    assert caught.value.issue.code == 'static_input'
+    assert caught.value.issue.code == 'prepared.static_input'
 
 
 def test_cpu_jax_pattern_ad_unchanged_and_scoped_tracer_refused():
@@ -262,7 +262,7 @@ def test_cpu_jax_pattern_ad_unchanged_and_scoped_tracer_refused():
     assert jax.grad(lambda value: total(value, False))(1.) == 8**3
     with pytest.raises(ValidationError) as caught:
         jax.jit(lambda value: total(value, True))(1.)
-    assert caught.value.issue.code == 'static_input'
+    assert caught.value.issue.code == 'prepared.static_input'
 
 
 def test_gpu_same_callback_output_policy_recovery_and_old_results():
@@ -287,7 +287,7 @@ def test_gpu_same_callback_output_policy_recovery_and_old_results():
         before = len(calls)
         with pytest.raises(ValidationError) as caught:
             prepared.run(problem)
-        assert caught.value.issue.code in ('static_input', 'cuda_scope')
+        assert caught.value.issue.code in ('prepared.static_input', 'execution.cuda_scope')
         assert caught.value.issue.path == 'initial.E'
         assert len(calls) == before+1
         current[0] = np.ones((8, 8, 8))
@@ -323,14 +323,14 @@ def test_cpu_callback_nested_legacy_and_public_policy_reset(monkeypatch):
         events.append('legacy')
         with pytest.raises(ValidationError) as caught:
             nested.run(None)
-        assert caught.value.issue.code == 'static_input'
+        assert caught.value.issue.code == 'prepared.static_input'
         # Nested failure restores the callback's legacy policy.
         assert fields.evaluate('E', values, grid, 'E', rt, 'float64').requires_grad
         return leaf
 
     with fields.static_host_patterns(True), pytest.raises(ValidationError) as caught:
         fields.evaluate('E', (None, callback, None), grid, 'E', rt, 'float64')
-    assert caught.value.issue.code == 'static_input'
+    assert caught.value.issue.code == 'prepared.static_input'
     assert events == ['legacy', 'nested-public-cuda']
     assert fields.evaluate('E', values, grid, 'E', rt, 'float64').requires_grad
 
@@ -350,7 +350,7 @@ def test_cpu_callback_exception_list_output_and_decay_contract():
         assert caught.value is failure
         with pytest.raises(ValidationError) as caught:
             fields.evaluate('E', (None, lambda x, y, z: [leaf], None), grid, 'E', rt, 'float64')
-        assert caught.value.issue.code == 'static_input'
+        assert caught.value.issue.code == 'prepared.static_input'
     # The original Decay concrete-only restriction takes precedence on CPU too.
     with pytest.raises(ValueError, match='DecayConcreteOnly'):
         fields.evaluate('E', (None, lambda x, y, z: leaf, None), grid, 'E', rt,
@@ -375,7 +375,7 @@ def test_gpu_magnetic_callback_raw_carrier_refused_before_unit_scaling(mode, rec
         E=(0., pattern, 0.), H=None, amplitude=1.))
     with context(), pytest.raises(ValidationError) as caught:
         fdtd.run(electric, numerics=policy, backend='torch', device='cuda:0')
-    assert caught.value.issue.code == 'static_input'
+    assert caught.value.issue.code == 'prepared.static_input'
     assert caught.value.issue.path == 'initial.E'
     assert calls == [1]
     calls.clear()
@@ -385,7 +385,7 @@ def test_gpu_magnetic_callback_raw_carrier_refused_before_unit_scaling(mode, rec
         with context():
             result = fdtd.run(magnetic, numerics=policy, backend='torch', device='cuda:0')
     except ValidationError as exc:
-        assert exc.issue.code == 'static_input'
+        assert exc.issue.code == 'prepared.static_input'
         assert exc.issue.path == 'initial.H'
         assert calls == [1]
         assert leaf.is_leaf and leaf.requires_grad and leaf._version == version
@@ -512,5 +512,5 @@ def test_cpu_magnetic_raw_guard_precedes_scaling_and_host_reads(mode, monkeypatc
     context = torch.no_grad if mode == 'no_grad' else torch.inference_mode
     with context(), fields.static_host_patterns(True), pytest.raises(ValidationError) as caught:
         fields.evaluate('H', (None, scaled, None), grid, 'H', rt, 'float64')
-    assert caught.value.issue.code == 'static_input'
+    assert caught.value.issue.code == 'prepared.static_input'
     assert caught.value.issue.path == 'initial.H' and calls == [1]

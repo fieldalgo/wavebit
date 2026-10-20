@@ -19,7 +19,7 @@ def test_checkpoint_rejects_nonpositive_or_noninteger_block_before_planning(monk
     monkeypatch.setattr(api,'_planned',lambda *a,**k:pytest.fail('invalid checkpoint reached planning'))
     p=closed_problem();n=fixed_numerics().replace(checkpoint_steps=value)
     report=fdtd.check(p,numerics=n,backend='torch',device='cuda')
-    assert not report.ok and report.issues[0].code=='checkpoint_steps'
+    assert not report.ok and report.issues[0].code=='numerics.checkpoint_steps'
     assert report.issues[0].path=='numerics.checkpoint_steps'
     with pytest.raises(ValidationError):fdtd.prepare(p,numerics=n,backend='torch',device='cuda')
 
@@ -28,7 +28,7 @@ def test_checkpoint_rejects_nonpositive_or_noninteger_block_before_planning(monk
 def test_checkpoint_is_not_silently_ignored_by_cpu_backends(monkeypatch,backend):
     monkeypatch.setattr(Execution,'validate',lambda self:self)
     report=fdtd.check(closed_problem(),numerics=fixed_numerics().replace(checkpoint_steps=11),backend=backend)
-    assert not report.ok and report.issues[0].code=='checkpoint_scope'
+    assert not report.ok and report.issues[0].code=='numerics.checkpoint_scope'
     assert report.issues[0].path=='numerics.checkpoint_steps'
 
 
@@ -38,11 +38,11 @@ def test_checkpoint_refuses_decay_and_carried_block_lengths(monkeypatch):
     p=closed_problem()
     n=fixed_numerics().replace(checkpoint_steps=11,stopping=fdtd.DecayStop(threshold=1e-3,window_seconds=1e-15))
     report=fdtd.check(p,numerics=n,backend='torch',device='cuda')
-    assert not report.ok and report.issues[0].code=='checkpoint_scope'
+    assert not report.ok and report.issues[0].code=='numerics.checkpoint_scope'
     assert report.issues[0].path=='numerics.stopping'
     n=fixed_numerics().replace(checkpoint_steps=torch.tensor(11.,requires_grad=True))
     report=fdtd.check(p,numerics=n,backend='torch',device='cuda')
-    assert not report.ok and report.issues[0].code=='checkpoint_steps'
+    assert not report.ok and report.issues[0].code=='numerics.checkpoint_steps'
 
 
 @pytest.mark.parametrize('value',[True,False,[True]])
@@ -51,7 +51,7 @@ def test_checkpoint_rejects_boolean_tensors(monkeypatch,value):
     monkeypatch.setattr(Execution,'validate',lambda self:self)
     numerics=fixed_numerics().replace(checkpoint_steps=torch.tensor(value))
     report=fdtd.check(closed_problem(),numerics=numerics,backend='torch',device='cuda')
-    assert not report.ok and report.issues[0].code=='checkpoint_steps'
+    assert not report.ok and report.issues[0].code=='numerics.checkpoint_steps'
     assert report.issues[0].path=='numerics.checkpoint_steps'
 
 

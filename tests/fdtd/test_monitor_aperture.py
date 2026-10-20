@@ -29,7 +29,7 @@ def test_requested_transverse_bounds_cannot_be_clipped_or_rounded_into_domain(ax
     plane = fd.Plane(**{axis: 0., transverse: span})
     p = problem([kind('aperture', plane=plane, wavelengths=(.8,))])
     (issue,) = fd.check(p, numerics=NUMERICS).issues
-    assert (issue.code, issue.path) == ('monitor_extent', 'outputs.aperture.plane.'+transverse)
+    assert (issue.code, issue.path) == ('monitor.extent', 'outputs.aperture.plane.'+transverse)
     assert issue.expected == (-.2, .2)
     assert issue.actual == span
     for door in (fd.prepare, fd.run):
@@ -97,6 +97,6 @@ def test_aperture_bounds_use_physical_domain_before_open_padding(kind, span):
     p = p.replace(scene=p.scene.replace(boundaries=fd.Boundaries(
         x=fd.Open(), y=fd.Periodic(), z=fd.Periodic())))
     (issue,) = fd.check(p, numerics=NUMERICS).issues
-    assert (issue.code, issue.path) == ('monitor_extent', 'outputs.padded.plane.x')
+    assert (issue.code, issue.path) == ('monitor.extent', 'outputs.padded.plane.x')
     assert issue.expected == (-.2, .2)
     assert issue.actual == span

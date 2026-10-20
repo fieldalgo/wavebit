@@ -27,9 +27,9 @@ class Duration:
 
     def __post_init__(self):
         if sum(v is not None for v in (self.seconds, self.steps, self.periods)) != 1:
-            raise ValidationError('choose exactly one of seconds, steps, or periods', path='numerics.duration')
+            raise ValidationError('choose exactly one of seconds, steps, or periods', code='numerics.duration', path='numerics.duration')
         if (self.periods is not None) != (self.source is not None):
-            raise ValidationError('periods requires one explicitly named reference source', path='numerics.duration.source')
+            raise ValidationError('periods requires one explicitly named reference source', code='numerics.duration', path='numerics.duration.source')
 
 
 @spec(renamed={'stabilize': 'stabilizing_loss'})

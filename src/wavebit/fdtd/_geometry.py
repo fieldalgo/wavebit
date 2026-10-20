@@ -170,5 +170,5 @@ class Structure:
         if (len(set(faces)) != len(faces)
                 or any(f not in ('x-', 'x+', 'y-', 'y+', 'z-', 'z+') for f in faces)):
             raise ValidationError('continuation needs distinct physical face names such as z-',
-                                  code='padding_continuation', path='scene.structures.'+self.name)
+                                  code='fdtd.padding_continuation', path='scene.structures.'+self.name)
         object.__setattr__(self, 'continuation', faces)

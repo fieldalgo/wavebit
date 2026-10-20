@@ -90,7 +90,7 @@ def test_unsupported_continuations_are_refused_before_stepping(change):
     p = p.replace(scene=p.scene.replace(structures=(glass, p.scene.structures[1])))
     with pytest.raises(UnsupportedFeatureError) as error:
         fdtd.prepare(p, numerics=n)
-    assert error.value.code == 'padding_continuation'
+    assert error.value.code == 'fdtd.padding_continuation'
 
 
 def test_prepared_continuation_is_part_of_the_static_contract():

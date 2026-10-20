@@ -22,14 +22,14 @@ class Scene:
     def __post_init__(self):
         object.__setattr__(self, 'structures', tuple(self.structures))
         if not isinstance(self.domain, Domain) or not isinstance(self.boundaries, Boundaries):
-            raise ValidationError('expected Domain and physical Boundaries', path='scene')
+            raise ValidationError('expected Domain and physical Boundaries', code='scene.type', path='scene')
         names = []
         for s in self.structures:
             if not isinstance(s, Structure) or not isinstance(s.name, str) or not s.name:
-                raise ValidationError('each Structure needs a nonempty stable name', path='scene.structures')
+                raise ValidationError('each Structure needs a nonempty stable name', code='scene.structure_name', path='scene.structures')
             names.append(s.name)
         if len(names) != len(set(names)):
-            raise ValidationError('structure names must be unique', path='scene.structures')
+            raise ValidationError('structure names must be unique', code='scene.structure_name_duplicate', path='scene.structures')
 
 
 @spec
@@ -45,4 +45,4 @@ class Problem:
         require_units(self.units)
         object.__setattr__(self, 'sources', tuple(self.sources))
         if not isinstance(self.scene, Scene) or not isinstance(self.outputs, Outputs):
-            raise ValidationError('expected Scene and Outputs', path='problem')
+            raise ValidationError('expected Scene and Outputs', code='problem.type', path='problem')

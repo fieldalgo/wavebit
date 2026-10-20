@@ -199,7 +199,7 @@ def test_unwritable_final_receipt_does_not_replace_original_exception(tmp_path, 
 ])
 def test_invalid_source_gate_requires_finiteness_related_refusal(message, accepted):
     from wavebit.errors import ValidationError
-    error = ValidationError(message, code='invalid_input', path='sources.d.phase')
+    error = ValidationError(message, code='fdtd.invalid', path='sources.d.phase')
     if accepted:
         assert study.finite_refusal(error)['message'] == message
     else:

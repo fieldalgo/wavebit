@@ -446,7 +446,7 @@ def test_public_numerics_refusal_preserves_message_and_issue_fields(entry, field
             fdtd.prepare(_film(), numerics=numerics)
         issue = error.value.issue
     assert issue.message == f'Numerics({field}={value!r}): {choices}.'
-    assert issue.code == 'invalid_input'
+    assert issue.code == 'numerics.choice'
     assert issue.path == f'numerics.{field}'
     assert issue.actual == value
     assert issue.expected is None

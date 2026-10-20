@@ -93,11 +93,11 @@ def test_cuda_scope_refuses_before_planning_without_a_device(monkeypatch, case, 
         p=p.replace(outputs=fdtd.Outputs(monitors=(fdtd.FarFieldMonitor('far', wavelengths=(.8,), box=fdtd.SnappedBox(size=(.2,.2,.2))),)))
     report=fdtd.check(p,numerics=n,backend='torch',device='cuda')
     assert not report.ok
-    assert report.issues[0].code=='cuda_scope'
+    assert report.issues[0].code=='execution.cuda_scope'
     assert report.issues[0].path==path
     with pytest.raises(UnsupportedFeatureError) as exc:
         fdtd.prepare(p,numerics=n,backend='torch',device='cuda')
-    assert exc.value.issue.code=='cuda_scope'
+    assert exc.value.issue.code=='execution.cuda_scope'
     assert exc.value.issue.path==path
 
 
@@ -290,10 +290,10 @@ def test_cuda_diagonal_epsilon_and_mu_nonuniform_fields(cuda,conductivity):
     parity(result['e'].values,reference['e'].values)
 
 @pytest.mark.parametrize('device,available,count,precision,code', [
-    ('cuda',False,0,'double','device_unavailable'),
-    ('cuda:1',True,1,'double','device_unavailable'),
-    ('cuda:-1',True,1,'double','device'),
-    ('cuda:0',True,1,'single','precision')])
+    ('cuda',False,0,'double','execution.device_unavailable'),
+    ('cuda:1',True,1,'double','execution.device_unavailable'),
+    ('cuda:-1',True,1,'double','execution.device'),
+    ('cuda:0',True,1,'single','execution.precision')])
 def test_cuda_execution_rejection_precedes_scene_lowering(monkeypatch,device,available,count,precision,code):
     import wavebit.fdtd._api as api
     torch=pytest.importorskip('torch')
@@ -323,7 +323,7 @@ def test_cuda_prepared_cpu_tensor_patterns_are_static_and_do_not_alias(monkeypat
     live=p.replace(initial=fdtd.InitialField(E=field.clone().requires_grad_()))
     report=fdtd.check(live,numerics=fixed_numerics(),backend='torch',device='cuda')
     assert not report.ok
-    assert report.issues[0].code=='static_input'
+    assert report.issues[0].code=='prepared.static_input'
     assert report.issues[0].path=='initial.E'
 
 
@@ -418,10 +418,10 @@ def test_cuda_live_reuse_rechecks_scope_even_when_material_signature_matches(mon
     assert api._signature(changed,prepared.numerics)==api._signature(p,prepared.numerics)
     monkeypatch.setattr(api,'execute',lambda *a,**k: pytest.fail('unsupported reuse reached execution'))
     report=prepared.validate(changed)
-    assert not report.ok and report.issues[0].code=='cuda_scope'
+    assert not report.ok and report.issues[0].code=='execution.cuda_scope'
     assert report.issues[0].path=='scene.background'
     with pytest.raises(UnsupportedFeatureError) as exc: prepared.run(changed)
-    assert exc.value.issue.code=='cuda_scope'
+    assert exc.value.issue.code=='execution.cuda_scope'
 
 
 

@@ -17,7 +17,7 @@ class Units(Declaration):
 
     def __post_init__(self):
         if not isinstance(self.length, str) or self.length not in _LENGTH_METRES:
-            raise ValidationError("length must be 'm', 'mm', 'um', or 'nm'", code='unknown_length_unit', path='units.length', actual=self.length)
+            raise ValidationError("length must be 'm', 'mm', 'um', or 'nm'", code='units.length', path='units.length', actual=self.length)
 
     @property
     def length_unit_meters(self):
@@ -61,5 +61,5 @@ _RENAMED = {
 
 def require_units(units):
     if not isinstance(units, Units):
-        raise ValidationError('expected Units(length=...)', code='units_required', path='units', actual=type(units).__name__)
+        raise ValidationError('expected Units(length=...)', code='units.type', path='units', actual=type(units).__name__)
     return units

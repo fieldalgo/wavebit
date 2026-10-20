@@ -110,7 +110,7 @@ class DiffractionOrders(Declaration):
         for name in ('orders_u', 'orders_v'):
             values = tuple(integer_index(v) for v in getattr(self, name))
             if len(set(values)) != len(values):
-                raise ValidationError('order labels must be unique', code='orders', path=name)
+                raise ValidationError('order labels must be unique', code='observation.order_labels', path=name)
             object.__setattr__(self, name, values)
         for name in ('reference', 'metadata'):
             object.__setattr__(self, name, frozen_mapping(getattr(self, name)))
@@ -120,19 +120,19 @@ class DiffractionOrders(Declaration):
             nw = len(self.wavelengths)
         else:
             if len(shape) != 1:
-                raise ValidationError('wavelengths must have one explicit axis', code='wavelength_axis', path='wavelengths')
+                raise ValidationError('wavelengths must have one explicit axis', code='observation.wavelength_axis', path='wavelengths')
             nw = shape[0]
         expected = (nw, len(self.orders_v), len(self.orders_u))
         if nw < 1 or not self.orders_u or not self.orders_v:
-            raise ValidationError('spectral and order axes must be nonempty', code='empty_observation', path='outputs')
+            raise ValidationError('spectral and order axes must be nonempty', code='observation.empty', path='outputs')
         for name in ('amplitude_s', 'amplitude_p', 'power', 'efficiency', 'k_normal'):
             value = getattr(self, name)
             if value is not None and tuple(getattr(value, 'shape', ())) != expected:
-                raise ValidationError(f'expected shape {expected}', code='observation_shape', path=name, expected=expected, actual=getattr(value, 'shape', None))
+                raise ValidationError(f'expected shape {expected}', code='observation.shape', path=name, expected=expected, actual=getattr(value, 'shape', None))
         if self.k_parallel is not None and tuple(self.k_parallel.shape) != expected + (2,):
-            raise ValidationError('Parallel wave vectors require a trailing two-dimensional tangent axis', code='observation_shape', path='k_parallel', expected=expected+(2,), actual=self.k_parallel.shape)
+            raise ValidationError('Parallel wave vectors require a trailing two-dimensional tangent axis', code='observation.shape', path='k_parallel', expected=expected+(2,), actual=self.k_parallel.shape)
         if self.amplitude_xyz is not None and tuple(self.amplitude_xyz.shape) != expected + (3,):
-            raise ValidationError('amplitude_xyz requires a trailing xyz axis', code='observation_shape', path='amplitude_xyz', expected=expected+(3,), actual=self.amplitude_xyz.shape)
+            raise ValidationError('amplitude_xyz requires a trailing xyz axis', code='observation.shape', path='amplitude_xyz', expected=expected+(3,), actual=self.amplitude_xyz.shape)
 
     __getattr__ = renamed_attributes(_ORDERS_RENAMED)
 

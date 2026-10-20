@@ -31,17 +31,17 @@ def _namespace(*values):
 
 def _scalar(value, name, *, positive=False, nonnegative=False):
     if getattr(value, 'shape', ()) != () or isinstance(value, (list, tuple, dict, str, bytes, bool)):
-        raise ValidationError('expected a real scalar', code='material_scalar', path=name)
+        raise ValidationError('expected a real scalar', code='material.scalar', path=name)
     xp, ref = _namespace(value)
     a = as_array(xp, value, device=getattr(ref, 'device', None))
     if xp.isdtype(a.dtype, 'complex floating'):
-        raise ValidationError('expected a real scalar', code='material_scalar', path=name)
+        raise ValidationError('expected a real scalar', code='material.scalar', path=name)
     valid = xp.isfinite(a)
     if positive: valid = valid & (a > 0)
     if nonnegative: valid = valid & (a >= 0)
     if _concrete(valid) is False:
         rule = 'positive' if positive else 'nonnegative' if nonnegative else 'finite'
-        raise ValidationError(f'expected a finite {rule} scalar', code='material_scalar', path=name)
+        raise ValidationError(f'expected a finite {rule} scalar', code='material.scalar', path=name)
     return valid
 
 
@@ -93,7 +93,7 @@ def _response(epsilon, mu, term, omega):
     def broadcast(value):
         a = _array(xp, value, dtype=dtype, device=device)
         if a.shape not in ((), (3,), (3, 3)):
-            raise ValidationError('material response must be scalar, diagonal, or a 3x3 tensor', code='material_shape', path='material')
+            raise ValidationError('material response must be scalar, diagonal, or a 3x3 tensor', code='material.shape', path='material')
         return xp.broadcast_to(a, spectral_shape + tuple(a.shape))
     e = broadcast(e)
     original_shape = tuple(getattr(epsilon, 'shape', ()))
@@ -116,10 +116,10 @@ def angular_frequency(wavelength, *, units, values=()):
     xp, ref = _namespace(wavelength, values)
     w = as_array(xp, wavelength, device=getattr(ref, 'device', None))
     if xp.isdtype(w.dtype, 'complex floating'):
-        raise ValidationError('vacuum wavelength must be real', code='wavelength', path='wavelength')
+        raise ValidationError('vacuum wavelength must be real', code='wavelength.value', path='wavelength')
     valid = xp.isfinite(w) & (w > 0)
     if _concrete(xp.all(valid)) is False:
-        raise ValidationError('vacuum wavelength must be finite and positive', code='wavelength', path='wavelength')
+        raise ValidationError('vacuum wavelength must be finite and positive', code='wavelength.value', path='wavelength')
     safe = xp.where(valid, w, xp.ones_like(w))
     omega = 2 * math.pi * C0 / (safe * units.length_unit_meters)
     return xp.where(valid, omega, as_array(xp, float('nan'), device=getattr(ref, 'device', None)))
@@ -225,7 +225,7 @@ class DispersiveMaterial(Declaration):
     def __post_init__(self):
         object.__setattr__(self, 'poles', tuple(self.poles))
         if not self.poles or any(not isinstance(p, (Drude, Lorentz, Debye)) for p in self.poles):
-            raise ValidationError('poles must be a nonempty sequence of Drude, Lorentz, or Debye models', code='material_poles', path='material.poles')
+            raise ValidationError('poles must be a nonempty sequence of Drude, Lorentz, or Debye models', code='material.poles', path='material.poles')
         _register(type(self), ('epsilon_inf', 'poles', 'mu'))
 
     def at(self, wavelength, *, units):
@@ -278,7 +278,7 @@ class TabulatedMaterial(LegacyTabulatedMaterial):
             w = as_array(xp, wavelength, device=getattr(ref, 'device', None))
             result = super().at(w * scale)
         except ValueError as exc:
-            raise ValidationError(str(exc), code='material_wavelength', path='wavelength', expected=self.wavelength_range, actual=wavelength) from exc
+            raise ValidationError(str(exc), code='material.wavelength_range', path='wavelength', expected=self.wavelength_range, actual=wavelength) from exc
         return MaterialResponse(result.epsilon, result.mu, _wavelength_shape=result._wavelength_shape)
 
     @property
@@ -308,7 +308,7 @@ class TabulatedMaterial(LegacyTabulatedMaterial):
     def replace(self, **changes):
         allowed = {'wavelengths', 'epsilon' if self._quantity == 'epsilon' else 'index', 'mu', 'wavelength_unit'}
         if set(changes) - allowed:
-            raise ValidationError('unknown table field', code='unknown_field', path='material', actual=sorted(set(changes)-allowed))
+            raise ValidationError('unknown table field', code='material.unknown_field', path='material', actual=sorted(set(changes)-allowed))
         values = dict(wavelengths=self.wavelengths, **{'epsilon' if self._quantity=='epsilon' else 'index':self.values}, mu=self.mu, wavelength_unit=self.wavelength_unit)
         values.update(changes)
         return (type(self).from_refractive_index if self._quantity=='index' else type(self))(**values)

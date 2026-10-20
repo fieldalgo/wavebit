@@ -18,7 +18,7 @@ from wavebit.units import require_units, Z0, EPSILON0, C0
 from ._numerics import ConductiveAbsorber
 from ._public_names import removed as _removed
 from ._yee_outputs import (COMPONENTS, decay_check_fields, engine_components, engine_message,
-                           snapshot_components, snapshot_every)
+                           public_refusal, refusals, snapshot_components, snapshot_every)
 
 
 @spec
@@ -44,7 +44,7 @@ class Medium:
     def __post_init__(self):
         object.__setattr__(self, 'poles', tuple(self.poles))
         if any(not isinstance(p, Oscillator) for p in self.poles):
-            raise ValidationError('use native.Oscillator with SI coefficients', path='medium.poles')
+            raise ValidationError('use native.Oscillator with SI coefficients', code='medium.poles', path='medium.poles')
 
 
 @spec
@@ -94,7 +94,7 @@ class Snapshots:
                     or len(self.slices) != 3:
                 raise ValidationError('slices needs three (z,y,x) selectors: an integer index or '
                                       'a (start, stop[, step]) tuple per axis',
-                                      path='outputs.snapshots.slices')
+                                      code='snapshots.slices', path='outputs.snapshots.slices')
             # A slice object is stored as its (start, stop, step) tuple: the same selection,
             # but plain data, so a job can save it and two equal problems compare equal.
             object.__setattr__(self, 'slices', tuple(
@@ -158,11 +158,11 @@ class Numerics:
 
     def __post_init__(self):
         if not isinstance(self.grid, Grid):
-            raise ValidationError('expected native.Grid', path='numerics.grid')
+            raise ValidationError('expected native.Grid', code='numerics.type', path='numerics.grid')
         if self.absorber is not None and not isinstance(self.absorber, (PML, ConductiveAbsorber)):
-            raise ValidationError('expected native.PML or fdtd.ConductiveAbsorber', path='numerics.absorber')
+            raise ValidationError('expected native.PML or fdtd.ConductiveAbsorber', code='numerics.type', path='numerics.absorber')
         if self.decay_check is not None and not isinstance(self.decay_check, DecayCheck):
-            raise ValidationError('expected native.DecayCheck', path='numerics.decay_check')
+            raise ValidationError('expected native.DecayCheck', code='numerics.type', path='numerics.decay_check')
 
 
 @spec
@@ -178,25 +178,25 @@ class Problem:
         require_units(self.units)
         for name, typ in (('medium', Medium), ('initial', InitialField), ('outputs', Outputs)):
             if not isinstance(getattr(self, name), typ):
-                raise ValidationError(f'expected native.{typ.__name__}', path=name)
+                raise ValidationError(f'expected native.{typ.__name__}', code='problem.type', path=name)
         if self.current is not None and not isinstance(self.current, Current):
-            raise ValidationError('expected native.Current', path='current')
+            raise ValidationError('expected native.Current', code='problem.type', path='current')
         for name, typ in (('spectrum', Spectrum), ('snapshots', Snapshots)):
             value = getattr(self.outputs, name)
             if value is not None and not isinstance(value, typ):
-                raise ValidationError(f'expected native.{typ.__name__}', path='outputs.'+name)
+                raise ValidationError(f'expected native.{typ.__name__}', code='problem.type', path='outputs.'+name)
 
 
 def _execution(backend, device, precision):
     execution = Execution(backend=backend, device=device, precision=precision).validate()
     if precision != 'double':
-        raise UnsupportedFeatureError('native execution currently requires double precision', path='execution.precision')
+        raise UnsupportedFeatureError('native execution currently requires double precision', code='execution.precision', path='execution.precision')
     return execution
 
 
 def _arguments(problem, numerics, execution):
     if not isinstance(problem, Problem) or not isinstance(numerics, Numerics):
-        raise ValidationError('expected native.Problem and native.Numerics', path='problem')
+        raise ValidationError('expected native.Problem and native.Numerics', code='problem.type', path='problem')
     from wavebit._common.backend import as_array
     from ._periodic.runtime import time_loop_backend
     device = execution.device
@@ -219,7 +219,7 @@ def _arguments(problem, numerics, execution):
     snapshots, spectrum = problem.outputs.snapshots, problem.outputs.spectrum
     dt = float(numerics.time_step_seconds)/u.time_unit_seconds
     if not np.isfinite(dt) or dt <= 0:
-        raise ValidationError('time step must be finite and positive', path='numerics.time_step_seconds')
+        raise ValidationError('time step must be finite and positive', code='numerics.time_step_seconds', path='numerics.time_step_seconds')
     window_steps = None
     decay = numerics.decay_check
     if decay is not None:
@@ -229,7 +229,7 @@ def _arguments(problem, numerics, execution):
             raise ValidationError(
                 f'DecayCheck(window_seconds={decay.window_seconds!r}) covers {window_steps} '
                 f'steps; it must be shorter than the run, Numerics(steps={numerics.steps!r})',
-                path='numerics.decay_check.window_seconds')
+                code='decay_check.window_seconds', path='numerics.decay_check.window_seconds')
     region = None
     if snapshots is not None and snapshots.slices is not None:
         region = tuple(slice(*v) if isinstance(v, (tuple, list)) else v for v in snapshots.slices)
@@ -261,7 +261,7 @@ def _arguments(problem, numerics, execution):
 
 def _signature(problem, numerics):
     if not isinstance(problem, Problem) or not isinstance(numerics, Numerics):
-        raise ValidationError('expected native.Problem and native.Numerics', path='problem')
+        raise ValidationError('expected native.Problem and native.Numerics', code='problem.type', path='problem')
     from ._api import _static
     from wavebit.rcwa._adapt import structure
     # Numerical grids/output locations are fixed; all field/material/source values
@@ -269,6 +269,24 @@ def _signature(problem, numerics):
     return (_static(numerics, 'numerics'), problem.units.length,
             structure(problem.medium), structure(problem.current), structure(problem.initial),
             structure(problem.bloch_phase), _static(problem.outputs, 'outputs'))
+
+
+#: The declaration each entry of ``_signature`` fixes, as a public path.
+_SIGNATURE_PATHS = ('numerics', 'units.length', 'medium', 'current', 'initial', 'bloch_phase',
+                    'outputs')
+
+
+def _same_layout(problem, numerics, signature):
+    """Refuse a problem whose fixed layout differs from a preparation's, naming what changed."""
+    from wavebit.rcwa._adapt import structure_change
+    new = _signature(problem, numerics)
+    if new != signature:
+        index = next(i for i, (a, b) in enumerate(zip(new, signature)) if a != b)
+        path = _SIGNATURE_PATHS[index]
+        if path in ('medium', 'current', 'initial'):
+            path = structure_change(new[index], signature[index], path)
+        raise IncompatibleProblemError('native layout changed; prepare this problem again',
+                                       code='prepared.structure', path=path)
 
 
 #: Engine keywords a native refusal can name, and the public spelling that set them.
@@ -282,7 +300,7 @@ def _grid(epsilon, options, **extra):
     try:
         return fdtd_grid(epsilon, **options, **extra)
     except ValueError as exc:
-        public = engine_message(exc, _ENGINE_SPELLING)
+        public = engine_message(exc, _ENGINE_SPELLING, 'native')
         if public is exc:
             raise
         raise public from exc
@@ -309,8 +327,7 @@ def check(problem, *, numerics, backend='numpy', device='cpu', precision='double
         _signature(problem, numerics)
         return _validated(problem, numerics, execution)
     except (TypeError, ValueError, NotImplementedError) as exc:
-        issue = exc if isinstance(exc, ValidationError) else ValidationError(str(exc), path='problem')
-        return CheckReport(issues=(issue.issue,))
+        return CheckReport(issues=(public_refusal(exc, 'native').issue,))
 
 
 @spec
@@ -323,25 +340,24 @@ class Prepared:
     def validate(self, problem):
         """Check concrete reuse and input admission without advancing fields."""
         try:
-            if _signature(problem, self.numerics) != self._signature:
-                raise IncompatibleProblemError('native layout changed; prepare this problem again', path='problem')
+            _same_layout(problem, self.numerics, self._signature)
             return _validated(problem, self.numerics, self.execution)
         except (TypeError, ValueError, NotImplementedError) as exc:
-            issue = exc if isinstance(exc, ValidationError) else ValidationError(str(exc), path='problem')
-            return CheckReport(issues=(issue.issue,))
+            return CheckReport(issues=(public_refusal(exc, 'native').issue,))
 
     def run(self, problem):
-        if _signature(problem, self.numerics) != self._signature:
-            raise IncompatibleProblemError('native layout changed; prepare this problem again', path='problem')
-        return _run(problem, self.numerics, self.execution)
+        with refusals('native'):
+            _same_layout(problem, self.numerics, self._signature)
+            return _run(problem, self.numerics, self.execution)
 
 
 @eager_under_torch_compile
 def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='double'):
-    execution = _execution(backend, device, precision)
-    report = _validated(problem, numerics, execution)
-    return Prepared(numerics=numerics, execution=execution, report=report,
-                    _signature=_signature(problem, numerics))
+    with refusals('native'):
+        execution = _execution(backend, device, precision)
+        report = _validated(problem, numerics, execution)
+        return Prepared(numerics=numerics, execution=execution, report=report,
+                        _signature=_signature(problem, numerics))
 
 
 #: Result attributes that were renamed, and their replacements.
@@ -462,7 +478,8 @@ def _run(problem, numerics, execution):
 
 @eager_under_torch_compile
 def run(problem, *, numerics, backend='numpy', device='cpu', precision='double'):
-    return _run(problem, numerics, _execution(backend, device, precision))
+    with refusals('native'):
+        return _run(problem, numerics, _execution(backend, device, precision))
 
 
 __all__ = ['Oscillator', 'Medium', 'Grid', 'Current', 'InitialField', 'Snapshots', 'Spectrum',

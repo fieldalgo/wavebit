@@ -137,7 +137,7 @@ def test_unsupported_ade_refuses_before_planning(no_device, monkeypatch, case, p
         p = p.replace(initial=p.initial.replace(E=patterns[case]))
     report = fdtd.check(p, numerics=n, backend='torch', device='cuda:0')
     # Empty InitialField is refused by the established common lowerer first.
-    code = 'fdtd_input' if case == 'empty_initial' else 'cuda_scope'
+    code = 'fdtd.invalid' if case == 'empty_initial' else 'execution.cuda_scope'
     error = ValidationError if case == 'empty_initial' else UnsupportedFeatureError
     assert not report.ok and report.issues[0].code == code
     assert report.issues[0].path == path
@@ -158,7 +158,7 @@ def test_cell_coverage_uses_snapped_cells_not_declared_continuum_span(no_device,
     if admitted:
         assert any(issue.code == 'geometry.cell_snapped' for issue in report.issues)
     else:
-        assert report.issues[0].code == 'cuda_scope'
+        assert report.issues[0].code == 'execution.cuda_scope'
         assert report.issues[0].path == 'scene.structures.body.shape'
 
 
@@ -187,7 +187,7 @@ def test_static_material_transform_refuses_before_planning(no_device, monkeypatc
         else:
             torch.func.jacfwd(prepare)(x)
     suffix = 'poles[0].'+field if field in ('gamma', 'omega_0') else field
-    assert caught.value.code == 'static_input'
+    assert caught.value.code == 'prepared.static_input'
     assert caught.value.path == 'scene.structures.body.material.'+suffix
 
 
@@ -202,7 +202,7 @@ def test_reuse_cannot_introduce_static_parameter_tangents(no_device, monkeypatch
         dual = torch.autograd.forward_ad.make_dual(x, torch.ones_like(x))
         changed = problem(**{field: dual})
         report = prepared.validate(changed)
-        assert not report.ok and report.issues[0].code == 'static_input'
+        assert not report.ok and report.issues[0].code == 'prepared.static_input'
         with pytest.raises(IncompatibleProblemError, match='static scalars'):
             prepared.run(changed)
 
@@ -224,7 +224,7 @@ def test_weight_amplitude_reuse_and_static_scalars_remain_accepted(no_device, ki
     assert not prepared.validate(changed).ok
     with pytest.raises(IncompatibleProblemError) as caught:
         prepared.run(changed)
-    assert caught.value.code == 'prepared_structure' and caught.value.path == 'initial'
+    assert caught.value.code == 'prepared.structure' and caught.value.path == 'initial.E'
 
 
 def test_cpu_material_derivative_and_contract_remain_unchanged():

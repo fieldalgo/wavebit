@@ -44,41 +44,41 @@ class Execution(Declaration):
         try:
             backend = backend_of(self.backend).value
         except ValueError as exc:
-            raise ValidationError(str(exc), code='backend', path='execution.backend') from exc
+            raise ValidationError(str(exc), code='execution.backend', path='execution.backend') from exc
         if self.precision not in ('single', 'double'):
-            raise ValidationError("precision must be 'single' or 'double'", code='precision', path='execution.precision')
+            raise ValidationError("precision must be 'single' or 'double'", code='execution.precision', path='execution.precision')
         if not isinstance(self.device, str):
-            raise ValidationError('device must be an explicit string', code='device', path='execution.device')
+            raise ValidationError('device must be an explicit string', code='execution.device', path='execution.device')
         if backend == 'numpy' and self.device != 'cpu':
-            raise UnsupportedFeatureError('NumPy execution requires cpu', code='device', path='execution.device', actual=self.device)
+            raise UnsupportedFeatureError('NumPy execution requires cpu', code='execution.device', path='execution.device', actual=self.device)
         if backend == 'jax':
             try:
                 import jax
             except ImportError as exc:
-                raise UnsupportedFeatureError('install the jax extra to use this backend', code='backend_unavailable', path='execution.backend') from exc
+                raise UnsupportedFeatureError('install the jax extra to use this backend', code='execution.backend_unavailable', path='execution.backend') from exc
             if self.precision == 'double' and not jax.config.x64_enabled:
-                raise UnsupportedFeatureError('JAX double precision requires jax.config.update("jax_enable_x64", True) before creating arrays', code='jax_x64_disabled', path='execution.precision')
+                raise UnsupportedFeatureError('JAX double precision requires jax.config.update("jax_enable_x64", True) before creating arrays', code='execution.jax_x64', path='execution.precision')
             platform, sep, index = self.device.partition(':')
             if platform not in ('cpu', 'gpu', 'tpu') or (sep and not index.isdigit()):
-                raise UnsupportedFeatureError('JAX device must be cpu, gpu, or tpu, optionally followed by :index', code='device', path='execution.device')
+                raise UnsupportedFeatureError('JAX device must be cpu, gpu, or tpu, optionally followed by :index', code='execution.device', path='execution.device')
             try:
                 devices = jax.devices(platform)
             except RuntimeError as exc:
-                raise UnsupportedFeatureError(f'JAX {platform} device is unavailable', code='device_unavailable', path='execution.device') from exc
+                raise UnsupportedFeatureError(f'JAX {platform} device is unavailable', code='execution.device_unavailable', path='execution.device') from exc
             if not devices or int(index or 0) >= len(devices):
-                raise UnsupportedFeatureError('requested JAX device is unavailable', code='device_unavailable', path='execution.device')
+                raise UnsupportedFeatureError('requested JAX device is unavailable', code='execution.device_unavailable', path='execution.device')
         if backend == 'torch':
             try:
                 import torch
                 dev = torch.device(self.device)
             except ImportError as exc:
-                raise UnsupportedFeatureError('install the pytorch extra to use this backend', code='backend_unavailable', path='execution.backend') from exc
+                raise UnsupportedFeatureError('install the pytorch extra to use this backend', code='execution.backend_unavailable', path='execution.backend') from exc
             except (RuntimeError, ValueError) as exc:
-                raise ValidationError('invalid Torch device', code='device', path='execution.device') from exc
+                raise ValidationError('invalid Torch device', code='execution.device', path='execution.device') from exc
             if dev.type not in ('cpu', 'cuda'):
-                raise UnsupportedFeatureError('supported Torch devices are cpu and cuda', code='device', path='execution.device')
+                raise UnsupportedFeatureError('supported Torch devices are cpu and cuda', code='execution.device', path='execution.device')
             if dev.type == 'cuda' and (not torch.cuda.is_available() or (dev.index or 0) >= torch.cuda.device_count()):
-                raise UnsupportedFeatureError('requested CUDA device is unavailable', code='device_unavailable', path='execution.device')
+                raise UnsupportedFeatureError('requested CUDA device is unavailable', code='execution.device_unavailable', path='execution.device')
         return self
 
 

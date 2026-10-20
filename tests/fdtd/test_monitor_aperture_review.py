@@ -28,7 +28,7 @@ def test_nonaligned_domain_uses_resolved_physical_box(kind,padded):
     p=p.replace(outputs=fd.Outputs(monitors=(kind('edge',plane=outside,wavelengths=(.8,)),)))
     with pytest.raises(ValidationError) as error:
         lower_problem(p,NUMERICS)
-    assert error.value.code=='monitor_extent'
+    assert error.value.code=='monitor.extent'
     assert error.value.path=='outputs.edge.plane.x'
     assert error.value.expected==(low,high)
 
@@ -46,7 +46,7 @@ def test_existing_absolute_boundary_tolerance_is_preserved(kind,side,distance):
     if distance=='beyond':
         with pytest.raises(ValidationError,match='outside the physical domain') as error:
             lower_problem(p,NUMERICS)
-        assert error.value.code=='monitor_extent'
+        assert error.value.code=='monitor.extent'
     else:
         lower_problem(p,NUMERICS)
 
@@ -58,12 +58,12 @@ def test_physical_extent_and_sampling_pml_clearance_are_separate():
     # Unpadded high node does not exist; this is sampling, not monitor_extent.
     report=fd.check(p,numerics=nums)
     assert not report.ok
-    assert all(issue.code!='monitor_extent' for issue in report.issues)
+    assert all(issue.code!='monitor.extent' for issue in report.issues)
     p=p.replace(scene=p.scene.replace(boundaries=fd.Boundaries(
         x=fd.Open(),y=fd.Periodic(),z=fd.Periodic())))
     padded=fd.check(p,numerics=nums)
     assert not padded.ok  # Stored physical face still reaches the absorbing layer.
-    assert all(issue.code!='monitor_extent' for issue in padded.issues)
+    assert all(issue.code!='monitor.extent' for issue in padded.issues)
     assert 'absorbing layer' in padded.issues[0].message
     interior=monitor.replace(plane=fd.Plane(z=0.,x=(.1,.15),y=(-.1,.1)))
     assert fd.check(p.replace(outputs=fd.Outputs(monitors=(interior,))),numerics=nums).ok
@@ -71,4 +71,4 @@ def test_physical_extent_and_sampling_pml_clearance_are_separate():
     p=p.replace(outputs=fd.Outputs(monitors=(outside,)))
     report=fd.check(p,numerics=nums)
     assert not report.ok
-    assert any(issue.code=='monitor_extent' for issue in report.issues)
+    assert any(issue.code=='monitor.extent' for issue in report.issues)
