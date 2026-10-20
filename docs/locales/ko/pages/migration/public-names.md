@@ -397,8 +397,8 @@ periodic의 `coordinate_convention`은 `coordinate_frame`입니다. rcwa의 `cod
 | `invariant_axes` | 축 이름 | 개수 |
 
 rcwa에는 `incident_power`와 `incident_power_units`도 있습니다(전에는 `incident_power_w`). 기준 값의
-단위 라벨(`amplitude_units`, `power_units`, `wavevector_units`)은 모든 생산자에서 `reference`에
-있습니다. 무차원 진폭의 라벨은 `'1'`입니다. rcwa metadata의 문자열 `integration_measure`
+단위 라벨(`amplitude_units`, 전력이 있으면 `power_units`, 파수가 있으면 `wavevector_units`)은 모든
+생산자에서 `reference`에 있습니다. 무차원 진폭의 라벨은 `'1'`입니다. rcwa metadata의 문자열 `integration_measure`
 (`'periodic cell'`)는 없어졌습니다.
 
 ### 단위와 표본 시각
@@ -455,7 +455,10 @@ rcwa에는 `incident_power`와 `incident_power_units`도 있습니다(전에는 
 
 ### 결과 키 Job 파일, 실행 기록, 수치
 
-Job 필드는 바뀌지 않으므로 job 키와 `wavebit.job/v2`는 그대로입니다. 실행 기록은
-`wavebit.run/v2` 그대로입니다. 기록은 결과의 매핑을 그대로 저장하므로 이전에 저장한 기록은 옛 키로
-읽히고, 지금 저장하는 기록에는 새 키가 들어갑니다. 기능 매니페스트는 버전 26입니다. 수치, 계획
+Job 필드 이름은 바뀌지 않으므로 job 키와 `wavebit.job/v2`는 그대로입니다. 예외가 하나 있습니다.
+`orders`를 맨 정수로 저장한 job(`fdtd.DiffractionMonitor`, `fdtd.periodic.Numerics`)은 선언 자체와
+마찬가지로 코드 `job.encoding`으로 거부됩니다. 원래 뜻한 쌍(모니터는 `(M, M)`, periodic은 `(M, 0)`)으로
+쓰십시오. 실행 기록은 `wavebit.run/v2` 그대로입니다. 기록은 결과의 매핑을 그대로 저장하므로 이전에
+저장한 기록은 옛 키를 유지하고 지금 저장하는 기록에는 새 키가 들어갑니다. 기록은 그 job을 읽을 수
+있을 때만 읽힙니다. 기능 매니페스트는 버전 26입니다. 수치, 계획
 골격, 기준 골든은 하나도 바뀌지 않았습니다.

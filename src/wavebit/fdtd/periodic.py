@@ -656,7 +656,7 @@ def _adapt(raw,diag,problem,numerics,execution):
 register_dataclass(Numerics,static_fields=('spacing','duration_seconds','algorithm','courant',
     'pml_cells','pml_reflection','subpixel','padding_scale','align_layers','variable_depth',
     'layer_smoothing','shape_integration','extraction_method','checkpoint_steps','dft_subsample',
-    'decay_check'))
+    'decay_check','orders'))
 
 
 def _run(problem,numerics,execution):

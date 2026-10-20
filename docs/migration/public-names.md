@@ -412,8 +412,8 @@ from every producer:
 | `invariant_axes` | axis names | a count |
 
 rcwa also has `incident_power` and `incident_power_units` (was `incident_power_w`). The unit
-labels of a reference (`amplitude_units`, `power_units`, `wavevector_units`) are in `reference`
-for every producer. A dimensionless amplitude is labeled `'1'`. rcwa's metadata string
+labels of a reference (`amplitude_units`, `power_units` where there is a power,
+`wavevector_units` where there are wavevectors) are in `reference` for every producer. A dimensionless amplitude is labeled `'1'`. rcwa's metadata string
 `integration_measure` (`'periodic cell'`) is gone.
 
 ### Units and sample times
@@ -473,7 +473,10 @@ NumPy integers are accepted; `True`/`False` are not. The experimental builders' 
 
 ### Result-key job files, run records and numbers
 
-No job field changes, so job keys and `wavebit.job/v2` are unchanged. Run records stay
-`wavebit.run/v2`: a record stores a result's mappings as they were, so a record saved earlier
-still loads with its old keys, and a record saved now has the new ones. The capability manifest is
+No job field is renamed, so job keys and `wavebit.job/v2` are unchanged, with one exception: a
+job that wrote `orders` as a bare integer (`fdtd.DiffractionMonitor`, `fdtd.periodic.Numerics`)
+is refused with code `job.encoding`, like the declaration itself; write the pair it meant,
+`(M, M)` for the monitor and `(M, 0)` for periodic. Run records stay `wavebit.run/v2`: a record
+stores a result's mappings as they were, so a record saved earlier keeps its old keys and one
+saved now has the new ones; a record loads only if its job does. The capability manifest is
 version 26. Every number, plan skeleton and reference golden is unchanged.
