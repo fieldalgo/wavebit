@@ -564,7 +564,7 @@ print(k0 * kx_over_k0, k0 * ky_over_k0)             # 파수 단위: nm⁻¹
 - **풀이마다 `ComplexIncidenceWarning` 경고를 한 번 냅니다.** 경고 분류가 따로 있으므로, 의도한 계산이라면 `warnings.filterwarnings('ignore', category=wavebit.ComplexIncidenceWarning)`로 이 경고만 끌 수 있습니다.
 - **다른 솔버와 답이 다를 수 있습니다.** 위아래 반공간의 각 차수에서 `kz`의 두 근 중 무엇을 고를지가 규약이 되어, 같은 입력에서도 Wavebit, fmmax, RETICOLO가 서로 다른 반사계수를 낼 수 있습니다. 규칙마다 무엇이 다른지는 {ref}`부록 A <complex-kx-roots>`에서 무손실 매질로 설명하고, 흡수 입사 매질에서 실수 `theta`와 복소 `theta`가 왜 다른 `kx`를 주는지와 흡수·이득 반공간에서 달라지는 점은 {ref}`부록 B <complex-kx-lossy-gain>`에서 설명합니다.
 
-소멸파 입사처럼 `theta = π/2 + iα` 꼴의 복소 각도는 `sin(θ) = cosh(α)`가 실수입니다. 입사 매질이 무손실이면 `kx/k0 = n cosh(α)`도 실수로 남으므로 `ComplexIncidenceWarning`이 나오지 않습니다. 입사 매질이 흡수성이면 n이 복소수라 `kx`도 복소수가 되고 경고가 나옵니다.
+소멸파 입사처럼 `theta = π/2 + iα` 꼴의 복소 각도는 `sin(θ) = cosh(α)`가 실수입니다. 입사 매질이 무손실이면 `kx/k0 = n cosh(α)`도 실수로 남으므로 `ComplexIncidenceWarning`이 나오지 않습니다. 이때 입사파 자체가 소멸파여서 표면 쪽으로 전력을 나르지 않으므로, 반사 전력과 투과 전력을 나눌 기준이 없습니다. 그래서 `R`, `T`, `power_entering`, `absorption`은 경고 없이 `NaN`이고, `r_s`, `t_s` 같은 진폭은 평소대로 반환됩니다. 입사 매질이 흡수성이면 n이 복소수라 `kx`도 복소수가 되고 경고가 나옵니다.
 
 (absorbing-transmission)=
 ### 투과 매질에 손실이 있을 때

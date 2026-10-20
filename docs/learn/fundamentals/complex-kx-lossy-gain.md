@@ -100,7 +100,7 @@ Before drawing, the script checks three things: that the phase direction compute
 
 **Why are there two rules?** Previously, {math}`n\sin\theta` was also used for real `theta`, so even a real angle produced complex {math}`k_x` in an absorbing medium. That caused the case found by the [Time-convention audit](../../validation/rcwa/time-convention-audit.md): in a lossy dielectric above gold, changing the angle by {math}`6.7\times10^{-5}` rad made the reflection amplitude jump by 2.96. The {ref}`next section <ckr-lossy>` identifies the branch cut involved. Now, real `theta` is interpreted only as a physical direction, and formal calculations use complex `theta`.
 
-**Evanescent incidence.** Here the incident wave itself is evanescent in the incident medium. As Appendix A showed, {math}`\theta=\pi/2+i\alpha` has real {math}`\sin\theta=\cosh\alpha`. In a lossless incident medium, {math}`k_x=n\cosh\alpha` remains real. In an absorbing incident medium, complex {math}`n` makes {math}`k_x` complex too, producing `ComplexIncidenceWarning`.
+**Evanescent incidence.** Here the incident wave itself is evanescent in the incident medium. As Appendix A showed, {math}`\theta=\pi/2+i\alpha` has real {math}`\sin\theta=\cosh\alpha`. In a lossless incident medium, {math}`k_x=n\cosh\alpha` remains real; the incident wave then carries no power toward the surface, so `R`, `T`, `power_entering` and `absorption` are `NaN` while the amplitudes are kept. In an absorbing incident medium, complex {math}`n` makes {math}`k_x` complex too, producing `ComplexIncidenceWarning`.
 
 (ckr-lossy)=
 ## Absorbing half-space: the branch point leaves the real axis

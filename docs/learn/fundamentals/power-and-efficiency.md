@@ -919,7 +919,7 @@ A lossless incident medium alone does not imply {math}`A=0`: absorbing layers ca
 
 Absorption covers **all finite-thickness layers supplied in `structure`**, regardless of layer count. It excludes absorption inside the `top` and `bot` half-spaces themselves. Even with an absorbing exit medium, {math}`T_{\mathrm{total}}` means power crossing the exit boundary.
 
-Net entering power and absorption are also available with `answers="efficiency"`; boundary amplitudes suffice, with no internal-field reconstruction. If either transverse wavevector (`kx`, `ky`) has a nonzero imaginary part, summing order powers may differ from integrating over a cell. In that case `power_entering` and `absorption` are `NaN`. {ref}`Chapter 8 <absorbing-incidence>` explains the real transverse-wavevector conditions used here.
+Net entering power and absorption are also available with `answers="efficiency"`; boundary amplitudes suffice, with no internal-field reconstruction. If either transverse wavevector (`kx`, `ky`) has a nonzero imaginary part, summing order powers may differ from integrating over a cell. In that case `power_entering` and `absorption` are `NaN`. They are `NaN` as well, together with `R` and `T`, when the incident wave is evanescent ({ref}`Chapter 8 <complex-transverse-wavevector>`): it carries no incident power to divide by. {ref}`Chapter 8 <absorbing-incidence>` explains the real transverse-wavevector conditions used here.
 
 (boundary-power-example)=
 ## Checking with numerical examples

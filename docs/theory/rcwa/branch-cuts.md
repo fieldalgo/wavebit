@@ -494,10 +494,14 @@ and `tests/rcwa/test_fp_warnings.py` (the last three):
 The float64/float32 pair is the load-bearing one: zero false positives at double precision is
 what makes the warning worth emitting at all.
 
-Note that `|R| <= 1` is **not** available as an assertion under evanescent illumination — the
-incident wave carries no power, and the analytic Airy result for a lossless stack legitimately
-reaches 1.01. Orders that must be identically zero are the honest invariant, which is what the
-uniform-stack test uses.
+Note that `|r_s| <= 1` is **not** available as an assertion under evanescent illumination — the
+incident wave carries no power, and the analytic Airy amplitude for a lossless stack
+legitimately reaches 1.01. Nor are the efficiencies: with no incident power there is nothing to
+divide by, and the solve returns `R`, `T` and `power_entering` as NaN at every
+`Re(theta) = pi/2` point of the sweep, keeping the amplitudes these tests compare
+([#84](https://github.com/fieldalgo/wavebit/issues/84);
+[`conventions.md`](../../reference/common/conventions.md#real-angle-incidence)). Orders that
+must be identically zero are the honest invariant, which is what the uniform-stack test uses.
 
 ---
 
