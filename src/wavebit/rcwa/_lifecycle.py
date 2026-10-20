@@ -147,7 +147,7 @@ def _report(problem, numerics, execution, solvers):
                   'shape_nvf_grid_size': scene.shape_nvf_grid_size if scene.factorization.value == 'nvf' else None,
                   'backend': execution.backend, 'device': execution.device, 'precision': execution.precision,
                   'retained_fields': problem.outputs.fields, 'retained_scattering': problem.outputs.scattering,
-                  'length_unit': problem.units.length})
+                  'length_units': problem.units.length})
 
 
 @eager_under_torch_compile

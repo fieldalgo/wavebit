@@ -32,11 +32,11 @@ result = fdtd.run(problem, numerics=numerics)
 ## 2. Read the recorded signal
 
 ```python
-print("samples:", len(result["probe"].times_seconds), "time unit: s; field unit:", result["probe"].units)
+print("samples:", len(result["probe"].times_seconds), "time unit: s; units:", result["probe"].units)
 ```
 
 
-The monitor's time axis is in seconds, and Ey is in V/m; an H component is in A/m. `TimeSeriesMonitor` samples the nearest Yee point for its selected component; it is not spatial interpolation at an arbitrary position.
+The monitor's time axis is in seconds, and Ey is in V/m; an H component is in A/m. `units` maps the recorded component to its unit and `'coordinates'` to the problem's length unit. `TimeSeriesMonitor` samples the nearest Yee point for its selected component; it is not spatial interpolation at an arbitrary position.
 
 ## Optional: reuse a prepared calculation
 

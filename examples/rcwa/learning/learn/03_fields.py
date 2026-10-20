@@ -13,7 +13,7 @@ z = np.linspace(0., 120., 25)
 field = result.field(x=[0.], y=[0.], z=z)
 Ey = np.asarray(field.values[0, :, 0, 0, 1])
 np.testing.assert_allclose(result.R.sum()+result.T.sum(), 1., atol=2e-12)
-assert field.units['E'] == 'V/m' and field.units['H'] == 'A/m'
+assert field.units['Ey'] == 'V/m' and field.units['Hx'] == 'A/m' and field.units['coordinates'] == 'nm'
 print(json.dumps(dict(shape=list(field.values.shape), components=list(field.components),
     units=dict(field.units), R=float(result.R.sum()), T=float(result.T.sum()), z_nm=z.tolist(),
     Ey_real=Ey.real.tolist(), Ey_imag=Ey.imag.tolist(), Ey_abs2=(np.abs(Ey)**2).tolist()), indent=2))

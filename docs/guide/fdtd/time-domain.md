@@ -1317,7 +1317,7 @@ problem = fdtd.Problem(
 result = fdtd.run(problem, numerics=fdtd.Numerics(
     grid=fdtd.UniformGrid(spacing=.025), duration=fdtd.Duration(periods=50, source='light')))
 print(f"{problem.sources[0].plane.position:.4f}")     # requested sheet position
-print(f"{result.source_references['light']['plane']:.4f}")  # the node plane it sits on
+print(f"{result.source_references['light']['plane_E']:.4f}")  # the node plane E sits on
 ```
 
 ```

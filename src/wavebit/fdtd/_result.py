@@ -8,6 +8,7 @@ from wavebit._common.execution import frozen_mapping
 from wavebit._common.pytrees import register_dataclass
 from wavebit.observations import (TimeSeries, FieldSamples, RawFieldSpectrum,
                                  DiffractionOrders, RawDiffractionSpectrum, Validity)
+from wavebit.observations.fields import _component_units
 from wavebit.units import C0, Z0
 from . import _monitors as monitors, _boundaries as boundaries
 
@@ -97,6 +98,12 @@ def _finite(values, xp):
     return finite
 
 
+def _port(normal):
+    """The face label ('z+', 'x-', ...) of a plane with this outward normal."""
+    axis=next(i for i,v in enumerate(normal) if v)
+    return 'xyz'[axis]+('+' if normal[axis]>0 else '-')
+
+
 def _coords(raw,component):
     return raw.plan.grid.yee_points(component[0], 'xyz'.index(component[1]))
 
@@ -149,16 +156,17 @@ def adapt_result(problem,numerics,execution,raw,metadata):
                 if hasattr(observer,key):coordinates['sample_'+key]=getattr(observer,key)
             measured.append((value.values,None))
             outputs[name]=TimeSeries(times_seconds=value.t*ts,coordinates=coordinates,values=value.values*scale,
-                components=(m.component,),units='A/m' if scale!=1 else 'V/m',sampling='raw Yee component',
-                metadata={'time_unit':'s','length_unit':units.length,'component_time_level':m.component[0]})
+                components=(m.component,),units=_component_units((m.component,),units.length),sampling='raw Yee component',
+                metadata={'component_time_level':m.component[0]})
         elif isinstance(m,monitors.FieldMonitor):
             values={c:v*(ts/Z0 if c.startswith('H') else ts) for c,v in value.fields.items()}
             measured.extend((v,None) for v in value.fields.values())
             outputs[name]=RawFieldSpectrum(coordinates=value.coords,values=values,
-                components=tuple(value.fields),units={c:'A*s/m' if c.startswith('H') else 'V*s/m' for c in value.fields},
+                components=tuple(value.fields),
+                units=_component_units(tuple(value.fields),units.length,electric='V*s/m',magnetic='A*s/m'),
                 sampling='raw Yee components',wavelengths=value.wavelengths,
                 frequencies_hz=np.asarray([C0/(w*units.length_unit_meters) for w in value.wavelengths]),
-                window=transform['window'],metadata={'length_unit':units.length,'duration_seconds':transform['duration_seconds']})
+                window=transform['window'],metadata={'duration_seconds':transform['duration_seconds']})
         elif isinstance(m,monitors.FluxMonitor):
             measured.append((value.flux,None))
             measured.extend((v,None) for v in (value.faces or {}).values())
@@ -186,24 +194,23 @@ def adapt_result(problem,numerics,execution,raw,metadata):
             floor=100*np.finfo(float).eps*xp.max(xp.abs(source.incident))*transform['duration_seconds']
             usable=(nominal>=declaration.pulse.cutoff)&xp.isfinite(incident)&(xp.abs(incident)>floor)
             source_usable[name]=usable
-            reference=dict(plane=value.reference_plane,incident_plane=value.incident_plane,
+            reference=dict(port=_port(value.raw['outward_normal']),wave=m.wave,
+                plane=value.reference_plane,incident_plane=value.incident_plane,length_units=units.length,
                 lateral_origin=value.lateral_origin,propagation='yee',polarization_frame='per-order s/p',
-                source=m.source,normalization='measured incident reference',length_unit=units.length,
-                amplitude_units='dimensionless',port='reflect' if reflected else 'transmit',invariant_axes=invariant_axes,
+                source=m.source,normalization='measured incident reference',
+                amplitude_units='1',invariant_axes=invariant_axes,
                 epsilon=value.raw['epsilon'],mu=value.raw['mu'],
                 outward_normal=value.raw['outward_normal'],tangent_axes=value.raw['tangent_axes'],
-                incident_amplitude=incident,incident_amplitude_units='V*s/m')
-            if invariant==0:
-                reference['cell_area_m2']=value.raw['cell_area']*units.length_unit_meters**2
-            else:
-                reference['integration_measure']=value.raw['cell_area']*units.length_unit_meters**(2-invariant)/raw.plan.dx**invariant
-                reference['integration_measure_units']='m' if invariant==1 else '1'
+                incident_amplitude=incident,incident_amplitude_units='V*s/m',
+                # The periodic cell's measure: an area, or per unit length of each invariant axis.
+                cell_measure=value.raw['cell_area']*units.length_unit_meters**(2-invariant)/raw.plan.dx**invariant,
+                cell_measure_units=('m^2','m','1')[invariant],wavevector_units='rad/'+units.length)
             common=dict(wavelengths=value.wavelengths,orders_u=tuple(value.orders.orders_u),
                         orders_v=tuple(value.orders.orders_v),k_normal=value.kz*next(v for v in value.raw['outward_normal'] if v),k_parallel=value.raw['k_parallel'],
                         reference_wavelength_fields=('epsilon','mu','incident_amplitude'),
                         metadata={'theta_radians':value.theta_at*math.pi/180,'spectral_axis_retained':True,
                             'source_usable':usable,'source_band_cutoff':declaration.pulse.cutoff,
-                            'measured_reference_floor':floor,'wavevector_units':'rad/'+units.length})
+                            'measured_reference_floor':floor})
             if m.raw:
                 measured.extend((value.raw[k],None) for k in ('raw_s','raw_p','raw_flux'))
                 reference.update(normalization='none (raw pulse transform)',amplitude_units='V*s/m',
@@ -225,24 +232,26 @@ def adapt_result(problem,numerics,execution,raw,metadata):
         if s.kind.startswith('Dipole'):
             magnetic=s.kind=='Dipole(H)'
             drive_scale=units.length_unit_meters**2/(1. if magnetic else Z0)
-            source_references[name]=dict(time=s.t*ts,drive=s.drive*drive_scale,
+            # ``field_units`` names the field the ``field`` series samples, E or H.
+            source_references[name]=dict(times_seconds=s.t*ts,drive=s.drive*drive_scale,
                 drive_units='V*m' if magnetic else 'A*m',field=s.field/(Z0 if magnetic else 1.),
-                field_units='A/m' if magnetic else 'V/m',field_time=s.t_field*ts,
-                delivered_power=s.work*units.length_unit_meters**2/Z0,power_units='W',time_unit='s')
+                field_units={'H':'A/m'} if magnetic else {'E':'V/m'},field_times_seconds=s.t_field*ts,
+                delivered_power=s.work*units.length_unit_meters**2/Z0,power_units='W',time_units='s')
         else:
-            source_references[name]=dict(time=s.t*ts,incident=s.incident,
-                magnetic_time=None if s.t_H is None else s.t_H*ts,
+            source_references[name]=dict(times_seconds=s.t*ts,incident_E=s.incident,
+                magnetic_times_seconds=None if s.t_H is None else s.t_H*ts,
                 incident_H=None if s.incident_H is None else s.incident_H/Z0,
-                plane=s.plane,plane_H=s.plane_H,field_units={'E':'V/m','H':'A/m'},time_unit='s',
-                normalization='measured Yee incident reference',length_unit=units.length)
+                plane_E=s.plane,plane_H=s.plane_H,field_units={'E':'V/m','H':'A/m'},time_units='s',
+                normalization='measured Yee incident reference',length_units=units.length)
     final=None
     if problem.outputs.final_fields:
         # Coordinates are reported per component because Yee offsets differ.
         coordinates={c:_coords(raw,c) for c in ('Ex','Ey','Ez','Hx','Hy','Hz')}
         final=FieldSamples(coordinates=coordinates,values={'E':raw.final.E,'H':raw.final.H/Z0},
-            components=('Ex','Ey','Ez','Hx','Hy','Hz'),units={'E':'V/m','H':'A/m'},sampling='raw Yee components',
-            metadata={'length_unit':units.length,'E_time':raw.plan.steps*raw.plan.dt*ts,
-                      'H_time':(raw.plan.steps-.5)*raw.plan.dt*ts,'allocated_domain':metadata['allocated_domain']})
+            components=('Ex','Ey','Ez','Hx','Hy','Hz'),
+            units=_component_units(('Ex','Ey','Ez','Hx','Hy','Hz'),units.length),sampling='raw Yee components',
+            metadata={'E_time_seconds':raw.plan.steps*raw.plan.dt*ts,
+                      'H_time_seconds':(raw.plan.steps-.5)*raw.plan.dt*ts,'allocated_domain':metadata['allocated_domain']})
     diagnostics=dict(raw.diagnostics)
     if 'stopping' in diagnostics:
         stopping = dict(diagnostics['stopping'])

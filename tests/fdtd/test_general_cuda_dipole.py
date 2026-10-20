@@ -131,8 +131,8 @@ def assert_source_contract(result, problem):
     dt = result.provenance['time_step_seconds']
     times = (np.arange(STEPS) + (0. if magnetic else .5)) * dt
     field_times = (np.arange(STEPS) + (.5 if magnetic else 1.)) * dt
-    np.testing.assert_allclose(host(history['time']), times, rtol=2e-14, atol=0.)
-    np.testing.assert_allclose(host(history['field_time']), field_times, rtol=2e-14, atol=0.)
+    np.testing.assert_allclose(host(history['times_seconds']), times, rtol=2e-14, atol=0.)
+    np.testing.assert_allclose(host(history['field_times_seconds']), field_times, rtol=2e-14, atol=0.)
     tau = 1 / (2 * np.pi * source.pulse.frequency_sigma_hz)
     shifted = times - pulse_peak_seconds() - float(host(source.delay_seconds))
     expected = (float(host(source.current_moment)) * np.exp(-.5 * (shifted / tau) ** 2)
@@ -140,8 +140,8 @@ def assert_source_contract(result, problem):
                          * shifted + float(host(source.phase))))
     np.testing.assert_allclose(host(history['drive']), expected, rtol=1e-13, atol=0.)
     assert history['drive_units'] == ('V*m' if magnetic else 'A*m')
-    assert history['field_units'] == ('A/m' if magnetic else 'V/m')
-    assert history['power_units'] == 'W' and history['time_unit'] == 's'
+    assert history['field_units'] == ({'H': 'A/m'} if magnetic else {'E': 'V/m'})
+    assert history['power_units'] == 'W' and history['time_units'] == 's'
     field = host(history['field'])
     previous = np.concatenate((np.zeros(1, dtype=field.dtype), field[:-1]))
     expected_power = -host(history['drive']) * (field + previous) / 2

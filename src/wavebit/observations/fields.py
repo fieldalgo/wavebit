@@ -6,9 +6,25 @@ from wavebit._common.pytrees import register_dataclass
 from wavebit._common.execution import frozen_mapping
 
 
+def _component_units(components, coordinates, *, electric='V/m', magnetic='A/m', **extra):
+    """The one ``FieldSamples.units`` shape: each component's unit and the coordinates' unit.
+
+    ``components`` are 'Ex'..'Hz'; E components take ``electric`` and H components
+    ``magnetic``. ``extra`` adds a unit for another sampled axis (``time``), only where no
+    attribute name already carries it.
+    """
+    return {**{c: magnetic if c.startswith('H') else electric for c in components},
+            'coordinates': coordinates, **extra}
+
+
 @eager_under_torch_compile
 @dataclass(frozen=True, kw_only=True)
 class FieldSamples(Declaration):
+    """Field values with their sample coordinates and components.
+
+    ``units`` maps each component present ('Ex'..'Hz') to its unit and ``'coordinates'`` to the
+    length unit of the sample coordinates.
+    """
     coordinates: object
     values: object
     components: tuple

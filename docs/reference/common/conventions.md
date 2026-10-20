@@ -15,8 +15,10 @@ The current public solver modules share the following physical conventions. The 
 | Periodic stack coordinates | Bottom-to-top layer order, z=0 at the bottom, +z upward; centered transverse cell |
 | Geometry units | Explicit `Units` for lengths and wavelengths; angles radians |
 | Time and material rates | Seconds, Hz, rad/s, conductivity S/m; Lorentz strength s⁻² |
-| Public field components | `(Ex,Ey,Ez,Hx,Hy,Hz)`, E V/m and H A/m |
-| Diffraction axes | Wavelength, order v, order u; amplitude reference and validity remain in result metadata |
+| Public field components | `(Ex,Ey,Ez,Hx,Hy,Hz)`, E V/m and H A/m; a field observation's `units` maps each component present and `'coordinates'` |
+| Unit labels | Keys ending in `_units`, one spelling per unit (`'V*s/m'`, `'J/Hz'`, `'m^2'`); dimensionless is `'1'` |
+| Diffraction axes | Wavelength, order v, order u; validity remains in the result |
+| Diffraction reference | Every solver's `DiffractionOrders.reference` gives `port` (the face: `'top'`/`'bottom'`, or `'z+'`-style in FDTD), `wave` (`'reflected'`/`'transmitted'`), `plane`, `lateral_origin`, `incident_amplitude`, `cell_measure` and `invariant_axes`, with their `_units` labels; `incident_power` where one is defined |
 
 See [the current lifecycle](../../guide/common/lifecycle.md) and [migration](../../migration/index.md) before transferring old parameters. FDTD current moments (A·m or V·m) differ from RCWA electric dipole moments (C·m).
 

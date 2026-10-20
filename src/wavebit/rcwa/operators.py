@@ -98,7 +98,7 @@ def assemble(problem, *, numerics, backend='numpy', device='cpu', precision='dou
                      metadata={'fourier_origin': 'cell centre (0,0)',
                                'slot_order': ('xx', 'yy', 'inverse_zz', 'xy', 'yx', 'xz', 'yz', 'zx', 'zy'),
                                'off_diagonal_sign': 'negative',
-                               'length_unit': problem.units.length,
+                               'length_units': problem.units.length,
                                'physical_contract': 'stack and vacuum wavelengths fixed; replace arrays explicitly for a different constitutive operator'},
                      _prepared=prepared, _physical_contract=_contract(problem))
 

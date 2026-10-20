@@ -27,7 +27,8 @@ group is discarded just because its absolute amplitude is small. Inspect `reason
 `reached` and the per-group ratios; reaching the cap is not a successful decay.
 
 The returned result describes the executed prefix. `provenance['actual_steps']`,
-`TimeSeriesMonitor` timestamps, final E/H timestamps and Fourier windows use the actual stop,
+`TimeSeriesMonitor` timestamps, final E/H timestamps (`final_fields.metadata['E_time_seconds']`
+and `['H_time_seconds']`) and Fourier windows use the actual stop,
 while `prepared.report.resolved` describes the requested cap. The
 `diagnostics['stopping']` report includes reason, cap and actual step counts,
 `window_seconds`, `eligible_time_seconds`, and separate dimensionless state ratios.

@@ -68,17 +68,22 @@ Unsupported causal models or region-dispersion requests are refused.
 
 Reflected/transmitted `DiffractionOrders` always include a leading wavelength
 axis. Efficiencies are normalized by incident-only power; complex amplitudes
-are in V/m, referenced at the physical interface and cell centre in each order's
-s/p frame. `R` and `T` are convenience views of these efficiencies. Available s/p
-basis observations are retained separately in `result.basis`.
+are in V/m, referenced at the physical interface and cell center in each order's
+s/p frame. Each `reference` names its `port` ('top' or 'bottom'), `wave` ('reflected' or
+'transmitted'), `plane` (the interface z, in `length_units`), `lateral_origin` `(0., 0.)`,
+`incident_amplitude` (V/m), and `cell_measure` with `cell_measure_units` ('m^2' for the
+crossed cell, or 'm' per unit length of an invariant y, whose `invariant_axes` is `('y',)`).
+`R` and `T` are convenience views of these efficiencies. Available s/p basis observations
+are retained separately in `result.basis`.
 
 `Outputs(planes={'name': z})` streams calibrated phasors. E is V/m and H is A/m;
 plane metadata records its calibration. Shared stepping calibrates unit incident
 E at the interface, while reference stepping retains its soft-source-spectrum
 calibration. `plane_power_z` includes the physical integration measure: W for a
 crossed cell, **W/m** for an invariant-y problem. The unit is explicit on each
-plane. Positive power points upward. Dividing a sample by a separate reference
-run is often the appropriate comparison, as in the
+plane, as `metadata['power_units']`, beside its `cell_measure` and `cell_measure_units`.
+Positive power points upward. Dividing a sample by a separate reference run is often
+the appropriate comparison, as in the
 [frequency-plane example](../../../examples/fdtd/fdtd_frequency_planes.py).
 
 `Outputs(snapshots=Snapshots(every=..., components=..., bounds=...))` keeps native

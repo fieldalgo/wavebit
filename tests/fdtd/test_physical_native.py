@@ -39,7 +39,9 @@ def test_uniform_si_conductor_and_current_match_independent_update(backend):
     for _ in range(11): expected=((1-c)*expected-dt*current/(EPSILON0*eps))/(1+c)
     np.testing.assert_allclose(r.E,expected,rtol=2e-14)
     np.testing.assert_allclose(r.H,.03,rtol=2e-14)
-    assert r.diagnostics['magnetic_time_seconds']==pytest.approx(10.5*dt,rel=1e-15,abs=0)
+    assert r.diagnostics['H_time_seconds']==pytest.approx(10.5*dt,rel=1e-15,abs=0)
+    assert r.diagnostics['E_time_seconds']>r.diagnostics['H_time_seconds']
+    assert not {'time_seconds','magnetic_time_seconds'}&set(r.diagnostics)
 
 
 def test_geometry_units_records_and_fourier_integrals_are_invariant():
@@ -57,7 +59,14 @@ def test_geometry_units_records_and_fourier_integrals_are_invariant():
     e,h=a.spectrum.values[...,:3],a.spectrum.values[...,3:]
     expected=.5*np.real(np.cross(e,np.conj(h)))[...,2].sum(axis=(-1,-2))*(.05e-6)**2
     np.testing.assert_allclose(a.spectral_power_z,expected,rtol=2e-14)
-    assert a.spectrum.units['H']=='A s/m'
+    assert a.spectrum.units=={'Ex':'V*s/m','Ey':'V*s/m','Ez':'V*s/m','Hx':'A*s/m','Hy':'A*s/m','Hz':'A*s/m',
+                              'coordinates':'um'}
+    assert b.spectrum.units['coordinates']=='nm'
+    for name,series in a.snapshots.items():
+        assert series.units=={name:'V/m' if name[0]=='E' else 'A/m','coordinates':'um'}
+    units={k:a.provenance[k] for k in ('length_units','E_units','H_units','polarization_units','spectral_power_units')}
+    assert units=={'length_units':'um','E_units':'V/m','H_units':'A/m','polarization_units':'C/m^2',
+                   'spectral_power_units':'W*s^2'}
 
 
 def test_check_does_not_advance_and_job_reuses_only_the_layout(monkeypatch):

@@ -80,14 +80,14 @@ def test_conductive_dipole_one_step_si_moment_centroid_and_work(
     np.testing.assert_allclose(centroid, CENTER, rtol=0., atol=1e-13)
 
     reference = result.source_references['d']
-    assert reference['drive_units'] == 'A*m' and reference['field_units'] == 'V/m'
-    assert reference['power_units'] == 'W' and reference['time_unit'] == 's'
+    assert reference['drive_units'] == 'A*m' and reference['field_units'] == {'E': 'V/m'}
+    assert reference['power_units'] == 'W' and reference['time_units'] == 's'
     for name in ('drive', 'field', 'delivered_power'):
         value = reference[name]
         assert value.device == torch.device(device) and value.dtype == torch.float64
         assert bool(torch.isfinite(value).all())
-    np.testing.assert_allclose(reference['time'], [dt/2], rtol=2e-15, atol=0.)
-    np.testing.assert_allclose(reference['field_time'], [dt], rtol=2e-15, atol=0.)
+    np.testing.assert_allclose(reference['times_seconds'], [dt/2], rtol=2e-15, atol=0.)
+    np.testing.assert_allclose(reference['field_times_seconds'], [dt], rtol=2e-15, atol=0.)
     # The normalized deposited moment supplies independent spatial weights.
     # Source work uses the mean of zero E0 and this E1, not E1 alone.
     sampled_field = float(((deposited/MOMENT)*electric[component]).sum())

@@ -76,11 +76,11 @@ def compare(profile, polarization):
         ports = result['r'], result['t']
         for port, other, z in zip(ports, reference, (THICKNESS, 0.)):
             np.testing.assert_array_equal(port.wavelengths, other.wavelengths)
-            assert port.reference['plane'] == other.reference['z'][0] == z
+            assert port.reference['plane'] == other.reference['plane'][0] == z
             assert port.reference['incident_plane'] == THICKNESS
-            for key in ('lateral_origin', 'outward_normal'):
+            for key in ('wave', 'lateral_origin', 'outward_normal', 'cell_measure_units'):
                 assert port.reference[key] == other.reference[key]
-            for key in ('epsilon', 'mu', 'cell_area_m2'):
+            for key in ('epsilon', 'mu', 'cell_measure'):
                 np.testing.assert_allclose(port.reference[key], other.reference[key])
             assert np.all(port.metadata['source_usable'])
         current = arrays(ports)

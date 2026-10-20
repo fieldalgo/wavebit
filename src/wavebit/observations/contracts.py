@@ -75,8 +75,16 @@ class DiffractionOrders(Declaration):
     amplitude, with a trailing xyz axis.
     Scalar modal arrays have shape (wavelength, order_v, order_u). Missing
     calibrated power or incident normalization is None, never fabricated zero.
-    ``reference`` records the medium, reference plane, lateral origin,
-    polarization frame, propagation convention and incident normalization.
+    ``reference`` records the port and its plane, the medium, lateral origin, polarization
+    frame, propagation convention and incident normalization, with every unit label beside
+    the value it labels. Every producer gives the same core keys: ``port`` (the face, in the
+    solver's own face vocabulary: 'top'/'bottom' or 'z+'/'x-'), ``wave`` ('reflected' or
+    'transmitted'), ``plane`` (the port plane's coordinate along its normal, in
+    ``length_units``), ``lateral_origin`` (coordinates), ``incident_amplitude`` with
+    ``incident_amplitude_units``, and ``cell_measure`` with ``cell_measure_units`` (the
+    periodic cell's measure: 'm^2', or 'm' or '1' across invariant axes) and
+    ``invariant_axes``. ``incident_power`` with ``incident_power_units`` is present where an
+    incident power is defined.
     ``reference_wavelength_fields`` and ``metadata_wavelength_fields`` identify entries with a leading
     wavelength axis; unlisted entries are static, even if their lengths match.
     """
@@ -92,8 +100,8 @@ class DiffractionOrders(Declaration):
     amplitude_xyz: object = None
     k_parallel: object = None
     k_normal: object = None
-    reference_wavelength_fields: tuple = ('z', 'epsilon', 'mu', 'cell_area_m2', 'incident_power_w')
-    metadata_wavelength_fields: tuple = ('theta_radians', 'source_usable', 'incident_amplitude', 'power_defined')
+    reference_wavelength_fields: tuple = ('plane', 'epsilon', 'mu', 'cell_measure', 'incident_power')
+    metadata_wavelength_fields: tuple = ('theta_radians', 'source_usable', 'power_defined')
 
     def __post_init__(self):
         register_dataclass(type(self), static_fields=('orders_u', 'orders_v', 'reference_wavelength_fields', 'metadata_wavelength_fields'))

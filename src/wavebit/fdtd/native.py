@@ -13,6 +13,7 @@ from wavebit._common.execution import Execution, CheckReport, frozen_mapping
 from wavebit._common.pytrees import register_dataclass
 from wavebit.errors import ValidationError, UnsupportedFeatureError, IncompatibleProblemError
 from wavebit.observations import TimeSeries, RawFieldSpectrum, Validity
+from wavebit.observations.fields import _component_units
 from wavebit.units import require_units, Z0, EPSILON0, C0
 from ._numerics import ConductiveAbsorber
 from ._public_names import removed as _removed
@@ -388,7 +389,7 @@ def _adapt(raw, problem, numerics, execution):
         public = component.capitalize()
         snapshots[public] = TimeSeries(values=data['values']/(Z0 if magnetic else 1.),
             coordinates={a: data[a] for a in ('x', 'y', 'z')}, components=(public,),
-            units={'field': 'A/m' if magnetic else 'V/m', 'coordinates': u.length, 'time': 's'},
+            units=_component_units((public,), u.length),
             times_seconds=data['t']*u.time_unit_seconds, sampling='native Yee stagger',
             metadata={'axis_order': ('time', 'z', 'y', 'x')})
     xp = array_namespace(raw['E'])
@@ -403,7 +404,8 @@ def _adapt(raw, problem, numerics, execution):
                          'x': xp.arange(e.shape[3], dtype=e.real.dtype,
                                         device=_device_of(e))*numerics.grid.spacing[2]},
             components=('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'),
-            units={'E': 'V s/m', 'H': 'A s/m', 'coordinates': u.length},
+            units=_component_units(('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'), u.length,
+                                   electric='V*s/m', magnetic='A*s/m'),
             wavelengths=raw['wavelengths'], frequencies_hz=C0/(raw['wavelengths']*u.length_unit_meters),
             sampling='spatially collocated; E/H retain their native Fourier timestamps',
             metadata={'axis_order': ('wavelength', 'plane', 'y', 'x', 'component'),
@@ -418,8 +420,8 @@ def _adapt(raw, problem, numerics, execution):
         decay['material_activity_units'] = 'internal relative norm; not physical energy'
         decay['electric_spectrum_before_window_units'] = 'V*s/m'
         decay['magnetic_spectrum_before_window_units'] = 'A*s/m'
-    diagnostics = dict(time_seconds=raw['time']*u.time_unit_seconds,
-        magnetic_time_seconds=raw['h_time']*u.time_unit_seconds,
+    diagnostics = dict(E_time_seconds=raw['time']*u.time_unit_seconds,
+        H_time_seconds=raw['h_time']*u.time_unit_seconds,
         cfl_time_step_seconds=raw['cfl_dt']*u.time_unit_seconds,
         z_nodes=raw['z_nodes'], z_spacing=raw['z_spacing'], spacing=raw['spacing'],
         bloch_phase=raw['bloch_phase'], dft_subsample=raw['dft_subsample'],
@@ -436,8 +438,8 @@ def _adapt(raw, problem, numerics, execution):
                     'units': u, 'coordinate_frame': _COORDINATE_FRAME,
                     'time_convention': 'exp(-i*omega*t)',
                     'time_step_seconds': numerics.time_step_seconds,
-                    'length_unit': u.length, 'E_unit': 'V/m', 'H_unit': 'A/m',
-                    'polarization_unit': 'C/m²', 'spectral_power_unit': 'W s²',
+                    'length_units': u.length, 'E_units': 'V/m', 'H_units': 'A/m',
+                    'polarization_units': 'C/m^2', 'spectral_power_units': 'W*s^2',
                     'axis_order': ('component', 'z', 'y', 'x'),
                     'sampling': 'native Yee stagger; E at t, H at t-dt/2'})
 

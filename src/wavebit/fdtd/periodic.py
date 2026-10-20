@@ -16,6 +16,7 @@ from wavebit._common.pytrees import register_dataclass
 from wavebit.errors import ValidationError, UnsupportedFeatureError, IncompatibleProblemError
 from wavebit.materials import Material, Drude, Lorentz
 from wavebit.observations import DiffractionOrders, FieldSamples, TimeSeries, Validity
+from wavebit.observations.fields import _component_units
 from wavebit.rcwa import Stack, Layer, Region, Rectangle, Circle, Ellipse, Polygon, Excitation, PlaneWave
 from wavebit.units import require_units, Z0
 from ._public_names import removed as _removed
@@ -493,7 +494,7 @@ class Result:
         amplitude=self.provenance['incident_amplitude']
         return TimeSeries(values=np.concatenate((raw['E'],raw['H']/Z0),axis=-1)*amplitude,
             coordinates={'x':x,'y':y,'z':z},components=('Ex','Ey','Ez','Hx','Hy','Hz'),
-            units={'E':'V/m','H':'A/m','coordinates':self.provenance['length_unit']},
+            units=_component_units(('Ex','Ey','Ez','Hx','Hy','Hz'),self.provenance['length_units']),
             times_seconds=raw['t']*ts,sampling='linear space/time interpolation of Yee records',
             metadata={'region':raw['region'],'axis_order':('time','component')})
 
@@ -504,6 +505,10 @@ def _adapt(raw,diag,problem,numerics,execution):
     wavelengths=xp.asarray(np.atleast_1d(problem.excitation.wavelength))
     source=problem.excitation.sources[0];amplitude=source.amplitude;u=problem.units
     depth=sum(l.thickness for l in problem.stack.layers)
+    # The periodic cell's measure: its area, or its x period per unit length of an invariant y.
+    invariant=('y',) if diag.get('invariant_y') else ()
+    period=problem.stack.period[:2-len(invariant)]
+    cell_measure=float(np.prod(period))*u.length_unit_meters**(2-len(invariant))
     def orders(which,leg):
         subs=[getattr(r,leg) for r in raw]
         if any(s is None for s in subs): return None
@@ -512,13 +517,16 @@ def _adapt(raw,diag,problem,numerics,execution):
         # Engine windows can be offset; retain their explicit integer labels.
         (cu,hu),(cv,hv)=raw[0].order_window
         z=depth if (source.side=='top')==(which=='r') else 0.
+        face=source.side if which=='r' else ('bottom' if source.side=='top' else 'top')
         return DiffractionOrders(wavelengths=wavelengths,
             orders_u=tuple(range(cu-hu,cu+hu+1)),orders_v=tuple(range(cv-hv,cv+hv+1)),
             efficiency=efficiency,amplitude_s=xp.stack([getattr(s,which+'_s') for s in subs])*amplitude,
             amplitude_p=xp.stack([getattr(s,which+'_p') for s in subs])*amplitude,
-            reference={'z':z,'side':source.side if which=='r' else ('bottom' if source.side=='top' else 'top'),
-                'coordinates':u.length,'lateral_origin':'cell_centre','polarization_frame':'per-order s/p',
-                'amplitude_units':'V/m','incident_amplitude':amplitude},
+            reference={'port':face,'wave':'reflected' if which=='r' else 'transmitted',
+                'plane':z,'length_units':u.length,'lateral_origin':(0.,0.),'polarization_frame':'per-order s/p',
+                'amplitude_units':'V/m','incident_amplitude':amplitude,'incident_amplitude_units':'V/m',
+                'cell_measure':cell_measure,'cell_measure_units':'m' if invariant else 'm^2',
+                'invariant_axes':invariant},
             reference_wavelength_fields=(),
             metadata={'theta_radians':diag.get('angles'),'normalization':'incident-only power; unit Jones pair'})
     basis={}
@@ -530,7 +538,7 @@ def _adapt(raw,diag,problem,numerics,execution):
         # The engine keys its records 'ex'..'hz'; the public key is 'Ex'..'Hz'.
         snapshots[name.capitalize()]=TimeSeries(values=data['values']*amplitude/(Z0 if name.startswith('h') else 1.),
             coordinates={a:data[a] for a in ('x','y','z')},components=(name.capitalize(),),
-            units={'field':'A/m' if name.startswith('h') else 'V/m','coordinates':u.length},
+            units=_component_units((name.capitalize(),),u.length),
             times_seconds=data['t']*u.time_unit_seconds,sampling='native Yee stagger',
             metadata={'axis_order':('time','z','y','x'),
                 'calibration':diag.get('field_normalization',diag.get('normalization'))})
@@ -540,10 +548,11 @@ def _adapt(raw,diag,problem,numerics,execution):
         values=xp.stack([data['fields'][c]*amplitude/(Z0 if c.startswith('h') else 1.) for c in components],axis=-1)
         planes[name]=FieldSamples(values=values,components=('Ex','Ey','Ez','Hx','Hy','Hz'),
             coordinates=dict({k:data[k] for k in ('x','y','z') if k in data},wavelength=wavelengths),
-            units={'E':'V/m','H':'A/m','coordinates':u.length},sampling='collocated phasor',
+            units=_component_units(('Ex','Ey','Ez','Hx','Hy','Hz'),u.length),sampling='collocated phasor',
             metadata={'normalization':data.get('normalization'),'axis_order':('wavelength','y','x','component'),
-                      'power_unit':'W/m' if data['per_unit_y'] else 'W',
-                      'integration_measure':data['cell_area']*u.length_unit_meters**(1 if data['per_unit_y'] else 2)})
+                      'power_units':'W/m' if data['per_unit_y'] else 'W',
+                      'cell_measure':data['cell_area']*u.length_unit_meters**(1 if data['per_unit_y'] else 2),
+                      'cell_measure_units':'m' if data['per_unit_y'] else 'm^2'})
         powers[name]=data['power_z']*abs(amplitude)**2*u.length_unit_meters**(1 if data['per_unit_y'] else 2)/Z0
     # Only explicitly physical diagnostics cross the public boundary. The private
     # retained snapshot supports existing offline interpolation, without exporting
@@ -596,9 +605,9 @@ def _adapt(raw,diag,problem,numerics,execution):
             'numerics':numerics,'units':u,'coordinate_frame':'+z up; bottom interface z=0; layers '
             'bottom-to-top; x/y about the cell center','time_convention':'exp(-i*omega*t)',
             'time_step_seconds':diagnostics.get('time_step_seconds'),
-            'length_unit':u.length,'time_unit_seconds':u.time_unit_seconds,
+            'length_units':u.length,'time_unit_seconds':u.time_unit_seconds,
             'incident_amplitude':amplitude,'algorithm':numerics.algorithm,
-            'plane_power_units':{name:plane.metadata['power_unit'] for name,plane in planes.items()}},
+            'plane_power_units':{name:plane.metadata['power_units'] for name,plane in planes.items()}},
         _engine_diagnostics=diag)
 
 

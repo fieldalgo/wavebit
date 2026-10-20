@@ -59,7 +59,7 @@ def test_magnetic_conical_slab_matches_independent_fresnel(side, polarization):
     assert np.all(result.reflection.k_normal.real*sign > 0)
     assert np.all(result.transmission.k_normal.real*sign < 0)
     incident = .5/Z0*np.sqrt(eps[0]/mu[0])*np.cos(.29)*(.7*.8*1e-12)
-    np.testing.assert_allclose(result.reflection.reference['incident_power_w'], incident, rtol=2e-13)
+    np.testing.assert_allclose(result.reflection.reference['incident_power'], incident, rtol=2e-13)
     np.testing.assert_allclose(result.reflection.power[:, 0, 0], incident*expected_r, rtol=3e-12)
     selected = result.transmission.at_wavelength_index(1)
     assert selected.reference['epsilon'] == (eps[2],)
@@ -80,7 +80,8 @@ def test_physical_amplitude_scales_power_and_si_fields_but_not_efficiency():
     e, h = fa.values[..., :3], fa.values[..., 3:]
     np.testing.assert_allclose(np.linalg.norm(e, axis=-1), 1., rtol=2e-12)
     np.testing.assert_allclose(np.linalg.norm(h, axis=-1), np.sqrt(2.25/1.4)/Z0, rtol=2e-12)
-    assert fa.units['H'] == 'A/m'
+    assert dict(fa.units) == {'Ex': 'V/m', 'Ey': 'V/m', 'Ez': 'V/m', 'Hx': 'A/m', 'Hy': 'A/m', 'Hz': 'A/m',
+                            'coordinates': 'um'}
 
 
 @pytest.mark.parametrize('unit,scale', [('nm', 1000.), ('m', 1e-6)])
@@ -152,7 +153,7 @@ def test_jit_result_retains_spectral_calibration_and_marks_invalid_live_waveleng
             return prepared.run(problem.replace(excitation=problem.excitation.replace(wavelength=wavelength)))
         result = jax.jit(evaluate)(jnp.asarray(.8))
         assert result.R.shape == (1, 1, 1)
-        assert result.reflection.reference['incident_power_w'].shape == (1,)
+        assert result.reflection.reference['incident_power'].shape == (1,)
         assert bool(result.validity.checks['positive_wavelength'])
         invalid = jax.jit(evaluate)(jnp.asarray(-.8))
         assert not bool(invalid.validity.checks['positive_wavelength'])
@@ -191,7 +192,7 @@ def test_empty_stack_is_the_single_interface_with_physical_port_labels(side):
     np.testing.assert_allclose(result.R, expected, atol=2e-14)
     np.testing.assert_allclose(result.T, 1-expected, atol=2e-14)
     assert result.reflection.reference['port'] == side
-    assert result.reflection.reference['z'] == (0.,)
+    assert result.reflection.reference['plane'] == (0.,)
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
@@ -208,12 +209,37 @@ def test_each_port_names_its_side_the_lit_side_and_its_medium(side):
     for observation, port in ((result.reflection, side), (result.transmission, other)):
         reference = observation.reference
         assert reference['port'] == port
+        assert reference['wave'] == ('reflected' if observation is result.reflection else 'transmitted')
         assert reference['incident_port'] == side
         assert reference['outward_normal'] == (0., 0., 1. if port == 'top' else -1.)
         epsilon, mu = media[port]
         assert len(reference['epsilon']) == len(result.wavelengths) == 3
         np.testing.assert_array_equal(np.asarray(reference['epsilon'], dtype=complex), epsilon)
         np.testing.assert_array_equal(np.asarray(reference['mu'], dtype=complex), mu)
+
+
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+def test_each_port_reference_carries_the_core_keys_every_solver_shares(side):
+    """The DiffractionOrders.reference core keys rcwa, fdtd and fdtd.periodic all give."""
+    result = rcwa.run(slab(side=side, amplitude=2.), numerics=rcwa.Numerics())
+    other = 'bottom' if side == 'top' else 'top'
+    for observation, port, wave in ((result.reflection, side, 'reflected'),
+                                    (result.transmission, other, 'transmitted')):
+        reference = observation.reference
+        labels = {key: reference[key] for key in (
+            'port', 'wave', 'length_units', 'lateral_origin', 'incident_amplitude_units',
+            'incident_power_units', 'cell_measure_units', 'invariant_axes', 'amplitude_units', 'power_units')}
+        assert labels == {'port': port, 'wave': wave, 'length_units': 'um', 'lateral_origin': (0., 0.),
+                          'incident_amplitude_units': 'V/m', 'incident_power_units': 'W',
+                          'cell_measure_units': 'm^2', 'invariant_axes': (), 'amplitude_units': '1',
+                          'power_units': 'W'}
+        np.testing.assert_allclose(reference['plane'], (.18 if port == 'top' else 0.,)*3, rtol=1e-15)
+        assert complex(reference['incident_amplitude']) == 2.
+        assert reference['incident_power'].shape == (3,)
+        np.testing.assert_allclose(reference['cell_measure'], (.7*.8e-12,)*3, rtol=1e-14)
+        assert not {'z', 'side', 'coordinates', 'incident_power_w', 'incident_electric_amplitude_v_per_m',
+                    'cell_area_m2', 'integration_measure', 'length_unit'} & set(reference)
+        assert not {'amplitude_units', 'power_units', 'length_unit', 'integration_measure'} & set(observation.metadata)
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
