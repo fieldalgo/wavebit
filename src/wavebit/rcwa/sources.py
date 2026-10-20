@@ -1,5 +1,5 @@
 """Monochromatic source declarations in the shared +z-up Cartesian frame."""
-from .._common.declarations import spec
+from .._common.declarations import renamed_attributes, spec
 from ..errors import ValidationError
 
 
@@ -64,6 +64,8 @@ class IncidentOrders:
             raise ValidationError('Order labels must be unique.', code='source.weights_duplicate',
                                   path='source.weights')
 
+    __getattr__ = renamed_attributes({'orders': 'weights'}, prefix='rcwa.')
+
 
 @spec(renamed={'spectral_extent': 'angular_spectrum_extent'})
 class GaussianBeam:
@@ -95,6 +97,8 @@ class GaussianBeam:
         if len(self.focus) != 3 or len(self.sampling) != 2:
             raise ValidationError('focus needs three components and sampling needs two.',
                                   code='source.dimension', path='source')
+
+    __getattr__ = renamed_attributes({'spectral_extent': 'angular_spectrum_extent'}, prefix='rcwa.')
 
 
 @spec

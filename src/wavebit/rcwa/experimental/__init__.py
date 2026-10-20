@@ -194,3 +194,13 @@ class CartesianPairTransmissionGalerkinGapCell:
         return f'{_PREFIX}{type(self).__name__}(orders={self.orders})'
 
     __getattr__ = renamed_attributes(_renamed, prefix=_PREFIX)
+
+
+#: The transmission cell's settings and derived data, read from the engine cell as they were when
+#: the engine class itself was the public one; only ``order`` was renamed (``orders``).
+for _name in ('reference', 'branches', 'quadrature', 'angular_quadrature', 'angular_order',
+              'cutoff_order', 'root_order', 'exponents', 'junctions', 'corner_controls', 'mesh'):
+    setattr(CartesianPairTransmissionGalerkinGapCell, _name,
+            property(lambda self, _n=_name: getattr(self._cell, _n),
+                     doc=f'The engine cell\'s ``{_name}``, read only.'))
+del _name

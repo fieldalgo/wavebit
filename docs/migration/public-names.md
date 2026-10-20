@@ -308,7 +308,7 @@ The constructors refuse the old keywords the same way (`TimeSeries(times=...)` n
 
 | Before | After | Why |
 | --- | --- | --- |
-| `rcwa.OrderExcitation(orders={...})` | `rcwa.IncidentOrders(weights={...})` | Incident orders and the complex weight of each |
+| `rcwa.OrderExcitation(orders=(((m, n), w), ...))` | `rcwa.IncidentOrders(weights=(((m, n), w), ...))` | Incident orders and the complex weight of each |
 | `rcwa.GaussianBeam(spectral_extent=...)` | `rcwa.GaussianBeam(angular_spectrum_extent=...)` | The extent of the beam's angular spectrum, in 1/waist |
 | `rcwa.sample_structure(n=...)` | `rcwa.sample_structure(samples=...)` | The number of samples |
 | `rcwa.operators.Port` fields `kx`, `ky`, `index` | `kx_over_k0`, `ky_over_k0`, `refractive_index` | Normalized wavevector components and the port medium's index |
@@ -323,14 +323,13 @@ The RCWA warnings a solve can raise have one public home, `wavebit.rcwa.diagnost
 `ComplexIncidenceWarning` and `GainCutoffWarning`.
 
 `Port` is a named tuple, so only its attributes can name their replacement: `port.kx` fails
-saying `kx_over_k0`, but `Port(kx=...)` and `port._replace(kx=...)` raise Python's own
-`TypeError` for an unknown field. The tables above give the replacement.
-Because `index` was a field, a `Port` no longer has the tuple method `.index()`: reading
-`port.index` names `refractive_index`.
+saying `kx_over_k0`, but `Port(kx=...)` raises Python's own `TypeError` and
+`port._replace(kx=...)` its own `ValueError` for an unknown field. The tables above give the
+replacement.
 
 `rcwa.check` now refuses a `GaussianBeam(angular_spectrum_extent=...)` that is not a positive,
-finite real number, with code `source.angular_spectrum_extent`; the same values were refused
-before, later and in the engine's words. An `IncidentOrders` refusal has code `source.weights`
+finite real number with code `source.angular_spectrum_extent`; the same values were refused
+before, at check too, as `rcwa.invalid` in the engine's words. An `IncidentOrders` refusal has code `source.weights`
 (it was `source.orders`).
 
 The `rcwa.check` and `rcwa.run` refusals now name the public settings
@@ -350,9 +349,10 @@ their keys.
 Run records stay `wavebit.run/v2`. A record saved from now on stores the new field names
 (`times_seconds`, `frequencies_hz`, `sidedness`, `amplitude_xyz`, `k_normal`, `spectral_energy`,
 `power_region`, the `Port` fields, `extra['source_references']`, the diagnostics key
-`source_group_counts`). A record saved earlier still loads and keeps the names it was saved
-with, since `load_run` returns the stored fields as `RecordedObject` mappings rather than
-rebuilding the classes. The capability manifest is version 25.
+`source_group_counts`). A record saved earlier keeps the names it was saved with, since
+`load_run` returns the stored fields as `RecordedObject` mappings rather than rebuilding the
+classes, but it loads only if its job does: a record whose job holds an `OrderExcitation` or a
+`GaussianBeam` is refused with code `job.encoding`, like that job file. The capability manifest is version 25.
 
 ### Shared, observation and RCWA numbers
 
