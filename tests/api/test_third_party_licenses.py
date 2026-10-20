@@ -88,6 +88,14 @@ def test_wavebit_does_not_import_an_external_tool():
     assert checker.first_party_imports({'numpy'})
 
 
+def test_an_agpl_external_tool_must_be_marked_lab_only():
+    tools = dict(INVENTORY['external_tools'])
+    tools['inkstone'] = {k: v for k, v in tools['inkstone'].items() if k != 'lab_only'}
+    errors, _ = checker.check([], dict(INVENTORY, external_tools=tools), check_docs=False)
+    assert any(error.startswith('inkstone') and 'lab_only' in error for error in errors)
+    assert checker.check([], INVENTORY, check_docs=False)[0] == []
+
+
 def test_both_language_pages_name_every_entry():
     errors, _ = checker.check([], INVENTORY)
     assert errors == []

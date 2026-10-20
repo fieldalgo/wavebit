@@ -13,7 +13,8 @@ Runtime dependencies must be permissive. Weak copyleft (LGPL, MPL) is accepted
 for optional and tool entries that set ``weak_copyleft_review``: such a
 component is installed separately by pip, unmodified, and never bundled. GPL is
 accepted only for ``external_process`` entries, and Wavebit's package code must
-not import them. AGPL and SSPL are always rejected. Installed metadata that names
+not import them. AGPL and SSPL are always rejected; an external tool under them
+may be listed only as a past comparison marked ``lab_only``. Installed metadata that names
 a different expression, or a copyleft family the entry does not record, also fails.
 
 ``--reachable-only`` checks only what Wavebit's requirements reach, so a
@@ -247,6 +248,14 @@ def check(paths, inventory, check_docs=True, reachable_only=False):
     for tool, entry in inventory.get("external_tools", {}).items():
         if offenders := first_party_imports(set(entry.get("forbidden_imports", []))):
             errors.append(f"{tool} runs only as an external tool but is imported by {offenders}")
+        try:
+            tool_ids = identifiers(parse_expression(entry["spdx"]))
+        except (ValueError, IndexError) as error:
+            errors.append(f"{tool}: {error}")
+            continue
+        if tool_ids & never and not str(entry.get("lab_only", "")).strip():
+            errors.append(f"{tool}: {entry['spdx']} is never run here; record it only as a past comparison "
+                          "with a lab_only note")
     if check_docs:
         for doc in DOCS:
             text = doc.read_text(encoding="utf-8")
