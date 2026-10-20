@@ -4508,7 +4508,11 @@ class CoreFactorizationMixin:
         the scattering matrix are not normalized by the incident power and are left alone. A
         ``where``, so a defined solve keeps its bits, a derivative passes through it unchanged,
         and a traced one is marked without a read. Applied after the kernels' ``check_finite``,
-        which the roundoff ratio passes (it is finite); this is what marks it.
+        which the roundoff ratio passes (it is finite); this is what marks it. Where these flags
+        are false and traced, the kernels divided by 1 instead of the power
+        (:func:`~wavebit.observations.power.incident_power`). That power is exactly 0 at a direct
+        ``kx`` past the light line, and the 1 means the branch discarded here holds no NaN for a
+        gradient to pick up.
         """
         s, p = self._incident_power_defined(**media)
         xp = self.xp
