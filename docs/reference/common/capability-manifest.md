@@ -8,7 +8,16 @@
 
 Written: 2026-08-11.
 
-Current version **25** (2026-10-20) records the third public-name change: RCWA, the observation
+Current version **26** (2026-10-20, later) records the fourth public-name change: the keys of
+results and reports are one vocabulary across solvers (`validity.checks['runtime_stability']`,
+`time_step_seconds`, one `DiffractionOrders.reference` key set, `area.item` error codes, `orders=`
+an explicit pair; see the
+[migration guide](../../migration/public-names.md#result-and-report-keys)). Emitted manifest
+values use American spelling: `shape_coordinates.origin` and `lattice.fourier_origin` are
+`'cell_center'` and the key `omitted_centre` is `omitted_center`. `current_lifecycle.job.schema`
+stays `wavebit.job/v2`. Consumers expecting v25 must recognize this version change.
+
+Updated 2026-10-20: manifest version **25** records the third public-name change: RCWA, the observation
 objects and the shared modules say what they are too (`rcwa.OrderExcitation(orders=)` is
 `rcwa.IncidentOrders(weights=)`, `TimeSeries.times` is `times_seconds`, among others; see the
 [migration guide](../../migration/public-names.md#shared-observation-and-rcwa-names)). No

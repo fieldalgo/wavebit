@@ -1273,4 +1273,21 @@ keeps its names, the FDTD plan skeletons are unchanged, and no golden changed. T
 stays `wavebit.job/v2`; an old RCWA tag or field is refused, so the keys of RCWA jobs holding
 `IncidentOrders` or a `GaussianBeam` change. The capability manifest is version 25. The
 [migration guide](../migration/public-names.md#shared-observation-and-rcwa-names) lists every
-change. Result and report keys (§5 of the issue) follow in a separate change.
+change.
+
+A fourth change the same day gave the facts every solver reports one key each (§5 of the
+issue). The checks are `runtime_stability` and `numerical_finite` everywhere (periodic's
+finiteness now covers T as well as R, and its reference algorithm reports stability as not
+assessed, `None`); the time step is `time_step_seconds`; decay evidence sits under
+`convergence['decay']` and `diagnostics['decay']` in every FDTD route; every `provenance` has
+`solver`, `execution`, `numerics`, `units`, `coordinate_frame` and `time_convention`.
+`DiffractionOrders.reference` has one core key set (`port` is the face, `wave` the reflected or
+transmitted role, `plane`, `lateral_origin` as coordinates, `incident_amplitude` and
+`cell_measure` with their `_units`), unit-label keys end in `_units` with one ASCII spelling per
+unit, and `FieldSamples.units` is one mapping keyed by component plus `coordinates`. Every
+public refusal has an `area.item` code, `prepared.structure` in every solver, and native and
+periodic refusals no longer escape as plain `ValueError`. `orders=` is an explicit pair
+`(Mu, Mv)` everywhere. Emitted values use American spelling. Keys are renamed, not aliased;
+numbers, plans and goldens are unchanged, run records stay `wavebit.run/v2`, and the capability
+manifest is version 26. The
+[migration guide](../migration/public-names.md#result-and-report-keys) lists every key.
