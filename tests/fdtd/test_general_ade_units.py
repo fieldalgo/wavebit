@@ -106,7 +106,7 @@ def test_translated_rectangular_full_slab_same_si_units(device, slab_axis, kind,
         problem, policy, expected, dt = fixture(kind, slab_axis, unit_name)
         saved_e, saved_h = problem.initial.E.copy(), problem.initial.H.copy()
         result = run_problem(problem, policy, device=device)
-        np.testing.assert_allclose(result.provenance['dt_seconds'], dt, rtol=2e-15, atol=0.)
+        np.testing.assert_allclose(result.provenance['time_step_seconds'], dt, rtol=2e-15, atol=0.)
         actual = {}
         for field in ('E', 'H'):
             values = result.final_fields.values[field]
@@ -169,7 +169,7 @@ def test_prepared_reuse_concrete_material_constants(device, kind, record_propert
     fresh = run_problem(changed, policy, device=device)
     assert bool(result.validity.checks['runtime_stability'])
     assert prepared.contract['resolved_steps'] == steps
-    np.testing.assert_allclose(result.provenance['dt_seconds'], dt, rtol=2e-15, atol=0.)
+    np.testing.assert_allclose(result.provenance['time_step_seconds'], dt, rtol=2e-15, atol=0.)
     states = matrix_history(transition(dt, discrete_k, omega0, gamma, strength, epsilon, mu),
                             initial, steps)
     errors = {}

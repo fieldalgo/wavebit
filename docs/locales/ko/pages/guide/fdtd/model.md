@@ -122,7 +122,7 @@ E와 H는 번갈아 갱신됩니다(leapfrog). E는 정수 스텝에, H는 반 �
 `dt = courant · dx / (c·√3)`이고 기본값은 `Numerics(courant=0.5)`입니다. `courant`는 진공에서의
 3차원 안정 한계인 `(0, 1)` 안에 있어야 합니다. 재료가 이 한계를 좁힐 수 있습니다. `ε·μ < 1`인
 매질이나 분산 극점은 안정한 최대 스텝을 낮추고, `dt`가 그 한계를 넘는 장면은 메시지에 한계값을
-담아 거절됩니다(그때는 `courant`를 낮추세요). `check`는 `resolved["dt_seconds"]`와
+담아 거절됩니다(그때는 `courant`를 낮추세요). `check`는 `resolved["time_step_seconds"]`와
 `resolved["steps"]`를 보고합니다.
 
 `Duration`은 `steps`, `seconds`, 또는 `source="이름"`과 함께 쓰는 `periods`(이름 붙은 소스의
@@ -447,7 +447,7 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 
 `check(problem, numerics=...)`는 장을 한 스텝도 진행하지 않고 검증하고 추정합니다. 그
 `CheckReport`에는 `issues`(오류, 그리고 `geometry.cell_snapped` 같은 경고. `report.ok`는 오류가
-있을 때만 거짓), `resolved`(격자 모양, 간격, 도메인, 패딩, `dt_seconds`, 스텝 수),
+있을 때만 거짓), `resolved`(격자 모양, 간격, 도메인, 패딩, `time_step_seconds`, 스텝 수),
 `capabilities`(백엔드, 경고), `estimates`(주요 장과 재료 배열의 메모리)가 들어 있습니다.
 
 `prepare(problem, numerics=...)`는 계산 구조를 고정하고, `prepared.run(problem)`은 완전한 문제를
@@ -458,8 +458,14 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 `IncompatibleProblemError`가 납니다. `run`은 `prepare` 후 한 번의 `run`입니다.
 
 `Result`는 `validity.checks`를 가집니다. `admitted`, `runtime_stability`(런타임 가드가 추적된 값을
-거절하면 거짓, 아래 참고), 그리고 `DiffractionMonitor`별 `source_reference`입니다.
-`result.provenance`는 백엔드, 단위, `dt_seconds`, 실제 스텝 수, 모든 도메인을 기록합니다.
+거절하면 거짓, 아래 참고), `numerical_finite`(모든 모니터 출력과 최종 장이 유한한지. `DiffractionOrders`
+출력은 소스가 정규화할 수 있는 파장에서만 판정), 그리고 `DiffractionMonitor`별 `source_reference`입니다.
+`validity.convergence['decay']`와 `diagnostics['decay']`는 모니터별 감쇠 비율을 담습니다.
+`result.provenance`는 `solver`, `execution`(백엔드, 장치, 정밀도), `numerics`, `units`,
+`coordinate_frame`, `time_convention`(`'exp(-i*omega*t)'`), `time_step_seconds`, 실제 스텝 수, 모든
+도메인을 기록합니다. `SpectralFlux.metadata['invariant_axes']`와
+`DiffractionOrders.reference['invariant_axes']`는 `InvariantAxis` 축의 이름(예: `('y',)`)이며, 없으면
+`()`입니다.
 
 `runtime_stability`가 true이면 구현된 런타임 certificate를 통과했다는
 뜻입니다. 모든 출력이나 미분값의 유한성을 스캔한 결과는 아닙니다.

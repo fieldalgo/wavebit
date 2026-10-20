@@ -84,7 +84,7 @@ def check_forward(result, expected, steps, device):
             errors.append(scaled_error(host(actual), expected['records'][name], scale))
     history = result.source_references['d']
     errors.append(scaled_error(host(history['drive']), expected['drive'], reference.MOMENT))
-    dt = result.provenance['dt_seconds']
+    dt = result.provenance['time_step_seconds']
     np.testing.assert_allclose(dt, reference.DT, rtol=2e-14, atol=0.)
     n = np.arange(steps)
     np.testing.assert_allclose(host(history['time']), (n+.5)*dt, rtol=2e-14, atol=0.)

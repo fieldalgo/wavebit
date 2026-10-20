@@ -134,3 +134,38 @@ def test_full_result_crosses_jit_and_keeps_physical_snapshots_and_power_metadata
     np.testing.assert_allclose(result.plane_power_z['outside'],expected.plane_power_z['outside'],rtol=5e-12)
     np.testing.assert_allclose(result.snapshots['Hy'].values,expected.snapshots['Hy'].values,rtol=5e-12,atol=1e-15)
     assert result.planes['outside'].metadata['power_unit']=='W/m'
+    assert result.provenance['numerics'].algorithm=='shared' and result.provenance['numerics'].spacing==n.spacing
+
+
+def test_validity_names_stability_and_finiteness_of_r_and_t(monkeypatch):
+    q,n=case()
+    r=p.run(q,numerics=n)
+    assert set(r.validity.checks)=={'runtime_stability','numerical_finite'}
+    assert r.validity.checks['runtime_stability'] is not None and bool(r.validity.checks['runtime_stability'])
+    assert bool(r.validity.checks['numerical_finite'])
+    assert dict(r.validity.convergence)=={'decay':None,'residual':None} and r.diagnostics['decay'] is None
+    assert r.diagnostics['invariant_axes']==('y',) and 'invariant_y' not in r.diagnostics
+    prov=r.provenance
+    assert prov['solver']=='fdtd.periodic' and prov['numerics'] is n and prov['units'] is q.units
+    assert prov['execution'].backend=='numpy' and prov['time_convention']=='exp(-i*omega*t)'
+    assert prov['time_step_seconds']==r.diagnostics['time_step_seconds'] and 'coordinate_convention' not in prov
+    # Reference stepping assesses no stability: not assessed, never a defaulted True.
+    qr,nr=case('reference')
+    assert p.run(qr,numerics=nr).validity.checks['runtime_stability'] is None
+    # A non-finite transmission alone fails numerical_finite.
+    import wavebit.fdtd._periodic.adapter as adapter
+    solve=adapter.solve_periodic_fdtd
+    class NonfiniteT:
+        def __init__(self,answer):self._answer=answer
+        def __getattr__(self,name):return getattr(self._answer,name)
+        @property
+        def T(self):
+            T=np.array(self._answer.T,dtype=float);T[...,0]=np.nan
+            return T
+    def nonfinite_t(options,backend=None):
+        if options.get('_validate_only'):return solve(options,backend=backend)
+        raw,diag=solve(options,backend=backend)
+        return [NonfiniteT(answer) for answer in (raw if isinstance(raw,list) else [raw])],diag
+    monkeypatch.setattr(adapter,'solve_periodic_fdtd',nonfinite_t)
+    broken=p.run(q,numerics=n)
+    assert np.isfinite(broken.R).all() and not bool(broken.validity.checks['numerical_finite'])

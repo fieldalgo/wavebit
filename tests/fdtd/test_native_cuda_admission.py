@@ -101,7 +101,7 @@ def test_native_observations_share_the_execution_device(torch_device):
         assert all(coordinate.dtype == torch.float64 for coordinate in field.coordinates.values())
     for value in result.validity.checks.values():
         assert value.device == torch_device
-    for value in result.diagnostics['tail'].values():
+    for value in result.diagnostics['decay'].values():
         if isinstance(value, torch.Tensor):
             assert value.device == torch_device
 
@@ -211,8 +211,8 @@ def test_cuda_long_native_wave_preserves_phase_amplitude_and_mode(steps, record_
     assert result.E.device.type == result.H.device.type == 'cuda'
     assert result.E.dtype == result.H.dtype == torch.complex128
     assert not result.E.requires_grad and not result.H.requires_grad
-    assert bool(result.validity.checks['stable']) and bool(result.validity.checks['finite_fields'])
-    assert not result.snapshots and result.spectrum is None and result.diagnostics['tail'] is None
+    assert bool(result.validity.checks['runtime_stability']) and bool(result.validity.checks['numerical_finite'])
+    assert not result.snapshots and result.spectrum is None and result.diagnostics['decay'] is None
     electric, magnetic = result.E.detach().cpu().numpy(), result.H.detach().cpu().numpy()
     budget = _long_wave_budget(steps)
     metrics = _long_wave_metrics(electric, magnetic, initial_e, initial_h, rotation)

@@ -50,7 +50,7 @@ def test_uniform_closed_roots_and_recurrence(execution_device, kind, damped, com
     saved_electric, saved_magnetic = electric.copy(), magnetic.copy()
     problem = make_problem(kind, damped, electric, magnetic, cells)
     result = run_problem(problem, numerics(cells, steps), device=execution_device)
-    dt = result.provenance['dt_seconds']
+    dt = result.provenance['time_step_seconds']
     assert dt == pytest.approx(.5/cells/math.sqrt(3)*UNITS.time_unit_seconds, rel=2e-15)
     parameters = pole_parameters(kind, damped)
     expected = uniform_history(steps, dt, *parameters)
@@ -94,7 +94,7 @@ def test_nonzero_fourier_mode_against_independent_si_matrix(execution_device, ki
     initial_e, initial_h = electric.copy(), magnetic.copy()
     problem = make_problem(kind, damped, electric, magnetic, cells)
     result = run_problem(problem, numerics(cells, steps), device=execution_device)
-    dt = result.provenance['dt_seconds']
+    dt = result.provenance['time_step_seconds']
     assert dt == pytest.approx(.5/cells/math.sqrt(3)*UNITS.time_unit_seconds, rel=2e-15)
     parameters = pole_parameters(kind, damped)
     matrix = transition(dt, discrete_k, *parameters)
@@ -146,7 +146,7 @@ def test_raw_continuum_refinement_diagnostic_without_phase_alignment(kind):
         dt = end_time/steps
         courant = dt/UNITS.time_unit_seconds*cells*math.sqrt(3)
         result = run_problem(problem, numerics(cells, steps, courant), device='cpu')
-        assert result.provenance['dt_seconds'] == pytest.approx(dt, rel=2e-15)
+        assert result.provenance['time_step_seconds'] == pytest.approx(dt, rel=2e-15)
         actual = np.r_[1., host(result['Ey'].values)]
         discrete = uniform_history(steps, dt, *parameters)
         assert scaled_error(actual, discrete) < FIELD_TOL
@@ -189,7 +189,7 @@ def test_magnetic_only_initial_fourier_mode(execution_device, kind, record_prope
                       initial=replace(problem.initial, E=None))
     result = run_problem(problem, numerics(cells, steps), device=execution_device)
     dt = .5/cells/math.sqrt(3)*UNITS.time_unit_seconds
-    np.testing.assert_allclose(result.provenance['dt_seconds'], dt, rtol=2e-15, atol=0.)
+    np.testing.assert_allclose(result.provenance['time_step_seconds'], dt, rtol=2e-15, atol=0.)
     expected = matrix_history(transition(dt, discrete_k, *pole_parameters(kind, True), mu=1.),
                               initial, steps)
     assert np.max(abs(expected[1:, :3])) > .05

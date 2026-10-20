@@ -158,7 +158,7 @@ class Result:
                             units={'E': 'V/m', 'H': 'A/m', 'coordinates': self.provenance['length_unit']},
                             sampling='collocated Cartesian phasor',
                             metadata={'axis_order': ('wavelength', 'z', 'y', 'x', 'component'),
-                                      'time_convention': 'exp(-i omega t)'})
+                                      'time_convention': 'exp(-i*omega*t)'})
 
     def boundary_fields(self, *, side, x, y, part='total'):
         """Collocated boundary phasors from this result's requested field state."""
@@ -202,6 +202,7 @@ def _sum_power(field, xp, sign, area, amplitude):
 
 def pack(problem, numerics, execution, solves, checks, report):
     """Convert solved snapshots without keeping any mutable solver alive."""
+    from .. import __version__
     from ..observations import DiffractionOrders, Validity
     from ..observations.power import transverse_k_is_real
     from .._common.conventions import boundary_kz, half_space_medium
@@ -291,7 +292,7 @@ def pack(problem, numerics, execution, solves, checks, report):
                               'amplitude_units': 'dimensionless electric-field ratio', 'power_units': 'W',
                               'integration_measure': 'periodic cell', 'propagation': 'continuum',
                               'polarization_frame': "each order's outgoing s/p frame",
-                              'time_convention': 'exp(-i omega t)', 'length_unit': problem.units.length})
+                              'time_convention': 'exp(-i*omega*t)', 'length_unit': problem.units.length})
         outputs['power_entering'] = _stack(entering)
         outputs['absorption'] = _stack(absorptions)
     else:
@@ -320,7 +321,7 @@ def pack(problem, numerics, execution, solves, checks, report):
                                          outgoing=_stack([p[1] for p in pairs]),
                                          units='W/m^2' if area is None else 'W',
                                          power_region='infinite-area mean' if area is None else problem.outputs.power_region or 'cell',
-                                         reference={'port': port, 'time_convention': 'exp(-i omega t)'})
+                                         reference={'port': port, 'time_convention': 'exp(-i*omega*t)'})
         if all(a is not None for a in absorption):
             outputs['absorption'] = _stack(absorption)
     # Finiteness is numerical validity, never a declaration of optical convergence.
@@ -355,9 +356,10 @@ def pack(problem, numerics, execution, solves, checks, report):
                                'port_power_defined': xp.stack(power_defined) if power_defined else None,
                                'detuning_relative_step': numerics.detuning,
                                'half_space_merge': tuple(merges) if merges else None},
-                  provenance={'solver': 'rcwa', 'code_version': '0.1.0', 'length_unit': problem.units.length,
+                  provenance={'solver': 'rcwa', 'code_version': __version__, 'length_unit': problem.units.length,
                               'units': problem.units, 'execution': execution, 'numerics': numerics,
                               'coordinate_frame': '+z up; bottom interface z=0; layers bottom-to-top',
+                              'time_convention': 'exp(-i*omega*t)',
                               'source_normalization': 'electric amplitude V/m; dipole moment C m',
                               'requested_wavelengths': ws},
                   _field_records=tuple(records), _field_amplitudes=tuple(amplitudes),

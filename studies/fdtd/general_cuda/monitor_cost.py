@@ -122,7 +122,7 @@ def main():
         if not prepared.report.ok:
             raise RuntimeError('fixture preparation failed')
         report['fixture'] = dict(grid_shape=prepared.report.resolved['grid_shape'],
-            dt_seconds=prepared.report.resolved['dt_seconds'], wavelengths=list(band),
+            dt_seconds=prepared.report.resolved['time_step_seconds'], wavelengths=list(band),
             field_monitors=2, field_components=['Ey'], flux_monitors=2, pml_cells=12,
             checkpoint_steps=prepared.report.resolved['checkpoint_steps'])
 

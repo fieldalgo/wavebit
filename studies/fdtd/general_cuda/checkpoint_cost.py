@@ -48,7 +48,7 @@ def measure(size, steps, block, repeat, parameters='amplitude', record_preflight
     numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05),
         duration=fdtd.Duration(steps=steps), checkpoint_steps=block)
     prepared = fdtd.prepare(problem, numerics=numerics, backend='torch', device='cuda:0')
-    dt = prepared.report.resolved['dt_seconds']
+    dt = prepared.report.resolved['time_step_seconds']
     half = 600.*dt/(2*EPSILON0*2.25)
     decay = (1-half)/(1+half)
     expected = size**3*1.2**2*decay**(2*steps)

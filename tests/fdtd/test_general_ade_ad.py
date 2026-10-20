@@ -114,7 +114,7 @@ def test_homogeneous_material_amplitude_full_hessian(device, block, kind, record
                             numerics=policy, backend='torch', device=device)
     assert prepared.contract['resolved_steps'] == STEPS
     assert prepared.contract['resolved_checkpoint_steps'] == block
-    np.testing.assert_allclose(prepared.contract['resolved_dt_seconds'], dt,
+    np.testing.assert_allclose(prepared.contract['resolved_time_step_seconds'], dt,
                                rtol=2e-15, atol=0.)
     old = None
     for point, (amplitude, parameter) in enumerate(POINTS):

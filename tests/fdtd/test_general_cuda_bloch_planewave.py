@@ -108,7 +108,7 @@ def test_public_oblique_bloch_wave_matches_discrete_closed_form(case, device, re
     with torch.no_grad():
         result = prepared.run(problem)
     assert bool(result.validity.checks['runtime_stability'])
-    dt = prepared.contract['resolved_dt_seconds'] / UNITS.time_unit_seconds
+    dt = prepared.contract['resolved_time_step_seconds'] / UNITS.time_unit_seconds
     plan = SimpleNamespace(dx=DX, dt=dt)
     source = result.source_references['pw']
     assert source['plane'] == pytest.approx(0., abs=1e-14)

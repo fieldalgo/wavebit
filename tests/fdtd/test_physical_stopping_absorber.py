@@ -28,7 +28,7 @@ def test_physical_stopping_matches_an_independent_scalar_recurrence_and_prefix(b
         if backend == 'jax': module.config.update('jax_enable_x64', True)
     p, n = scalar_case()
     result = fdtd.run(p, numerics=n, backend=backend)
-    dt = result.provenance['dt_seconds']
+    dt = result.provenance['time_step_seconds']
     # The uniform periodic field has zero curl: one scalar CN conductor update.
     ratio = p.scene.background.conductivity * dt / (2*EPSILON0*2.)
     a = (1-ratio)/(1+ratio)

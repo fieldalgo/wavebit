@@ -120,7 +120,7 @@ def test_checkpoint_single_step_blocks_and_run_shorter_than_block(cuda,block):
     assert result.provenance['checkpoint_steps']==block
     loss=result.final_fields.values['E'][1].mean()
     gs,ga=cuda.autograd.grad(loss,(sigma,amplitude))
-    factor=result.provenance['dt_seconds']/(2*EPSILON0*2.25)
+    factor=result.provenance['time_step_seconds']/(2*EPSILON0*2.25)
     ratio=(1-600*factor)/(1+600*factor)
     np.testing.assert_allclose(host(loss),1.3*ratio**steps,rtol=2e-14,atol=0.)
     np.testing.assert_allclose(host(ga),ratio**steps,rtol=2e-12,atol=0.)

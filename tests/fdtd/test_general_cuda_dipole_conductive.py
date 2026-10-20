@@ -51,7 +51,7 @@ def test_conductive_dipole_one_step_si_moment_centroid_and_work(
         duration=fdtd.Duration(steps=1), courant=.5)
     with torch.no_grad():
         result = fdtd.run(physical, numerics=numerics, backend='torch', device=device)
-    np.testing.assert_allclose(result.provenance['dt_seconds'], dt, rtol=2e-15, atol=0.)
+    np.testing.assert_allclose(result.provenance['time_step_seconds'], dt, rtol=2e-15, atol=0.)
     assert bool(result.validity.checks['runtime_stability'])
     for name in ('E', 'H'):
         value = result.final_fields.values[name]
