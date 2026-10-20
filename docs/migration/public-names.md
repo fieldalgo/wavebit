@@ -1,4 +1,4 @@
-# Public names in `wavebit.fdtd` (2026-10-19)
+# Public names (2026-10-19, 2026-10-20)
 
 Wavebit is still in alpha, so the general-FDTD declarations were renamed in one clean break.
 Every class is now named for what it is, every monitor for what it records, and every keyword
@@ -12,8 +12,9 @@ skeletons of eight scenes measured before the rename).
 The design and its reasoning are in [issue #57](https://github.com/fieldalgo/wavebit/issues/57).
 This page covers `wavebit.fdtd` and, from a second change the same day, the explicit-grid
 modules `fdtd.native` and `fdtd.periodic`
-([native-grid and periodic-stack names](#native-grid-and-periodic-stack-names)). RCWA and the
-shared namespaces follow in later changes and will be added here.
+([native-grid and periodic-stack names](#native-grid-and-periodic-stack-names)), and, from a
+third change the next day, RCWA, the observation objects and the shared modules
+([shared, observation and RCWA names](#shared-observation-and-rcwa-names)).
 
 ## Classes
 
@@ -258,3 +259,103 @@ changes only the decay diagnostic.
 
 `examples/fdtd/fdtd_record.py` takes periodic snapshots and `examples/fdtd/fdtd_grid_gradient.py`
 differentiates a native Fourier integral at `Spectrum(z_indices=...)`, both with the new names.
+
+## Shared, observation and RCWA names
+
+The third clean break (2026-10-20) covers what both solvers share, the objects a result hands
+back, and RCWA. As before, nothing is aliased: an old name, keyword or attribute fails and names
+its replacement, and nothing numerical changed.
+
+### Shared modules
+
+| Before | After | Why |
+| --- | --- | --- |
+| `Units.length_metres` | `Units.length_unit_meters` | Meters in one length unit; one spelling of "meter" throughout |
+| `Units.time_seconds` | `Units.time_unit_seconds` | Seconds in one internal time unit, not a time in seconds |
+| `Units.to_metres(x)` | `x * units.length_unit_meters` | A multiplication |
+| `Units.time_to_internal`, `time_from_internal`, `rate_to_internal`, `conductivity_to_internal` | private | Conversions the solvers make at their own boundaries |
+| `Lattice.oblique(lx, ly, angle)` | `Lattice.oblique(length_u, length_v, angle)` | The lengths of the two lattice vectors, which are not along x and y |
+| `wavebit.lattice.__all__` with `is_axis_aligned`, `jacobian`, `order_kxy`, `periods_of`, `reduced_basis`, `reduction_transform`, `sample_grid` | `DrawnOn`, `Lattice`, `as_lattice`, `meshgrid_xy` | The others work on the raw basis for the solvers |
+| `Material.is_anisotropic` | `Material.is_tensor` | It says whether epsilon or mu was given as three principal values or a 3x3 tensor, which an isotropic diagonal tensor also is |
+| `TabulatedMaterial.interpolation` | `TabulatedMaterial.interpolated_quantity` | It names the quantity interpolated (`'epsilon'` or `'index'`), not a method |
+| `Execution.scope()` | private | `run`, `check` and `prepare` open it themselves |
+| `wavebit.materials.time_domain`, `wavebit.materials.tabulated` | private | Their classes are the solvers' normalized-unit models; the public materials are in `wavebit.materials` |
+| `NumericalError` was a `ValidationError` (and a `ValueError`) | `NumericalError` is a `WavebitError`, not a `ValidationError` | A failed solve is not a bad input. `WavebitError` is the new root of every Wavebit error |
+
+`except ValueError` no longer catches a `NumericalError`; catch `wavebit.NumericalError` or
+`wavebit.WavebitError`. `ValidationError` is still a `ValueError`.
+
+### Observation objects
+
+| Before | After | Why |
+| --- | --- | --- |
+| `wavebit.SpectralFieldSamples` | `wavebit.RawFieldSpectrum` | Raw Fourier fields, like `RawDiffractionSpectrum` |
+| `TimeSeries.times`, `TimeSeries.time` | `TimeSeries.times_seconds` | One name, with its unit |
+| `RawFieldSpectrum.frequencies`, `fdtd.SpectralFlux.frequencies` | `.frequencies_hz` | With its unit |
+| `RawFieldSpectrum.spectrum`, `RawDiffractionSpectrum.spectrum`, and the `SpectralFlux.metadata` key `spectrum` | `.sidedness` | It holds `'two-sided'`, not a spectrum |
+| `fdtd.SpectralFlux.energy_density` | `.spectral_energy` | Energy per unit frequency through the plane, not a density in space |
+| `fdtd.Result.sources` | `fdtd.Result.source_references` | The recorded source references, not the sources |
+| `DiffractionOrders.cartesian`, `DiffractionOrder.cartesian` | `.amplitude_xyz` | The x, y, z amplitude components |
+| `DiffractionOrders.kz`, `DiffractionOrder.kz` | `.k_normal` | The wavevector component along the port normal (kz for a z-normal port), with its Cartesian sign: an order leaving through a −z port has `Re(k_normal) < 0` |
+| `DiffractionOrders.at_wavelength(i)` | `.at_wavelength_index(i)` | It takes an index, not a wavelength |
+| `wavebit.records.RecordedFields` | `wavebit.records.RecordedObject` | It holds any recorded object, not only fields |
+| `periodic.Result.sample(times=...)` | `sample(times_seconds=...)` | With its unit |
+
+The constructors refuse the old keywords the same way (`TimeSeries(times=...)` names
+`times_seconds=`).
+
+### RCWA
+
+| Before | After | Why |
+| --- | --- | --- |
+| `rcwa.OrderExcitation(orders={...})` | `rcwa.IncidentOrders(weights={...})` | Incident orders and the complex weight of each |
+| `rcwa.GaussianBeam(spectral_extent=...)` | `rcwa.GaussianBeam(angular_spectrum_extent=...)` | The extent of the beam's angular spectrum, in 1/waist |
+| `rcwa.sample_structure(n=...)` | `rcwa.sample_structure(samples=...)` | The number of samples |
+| `rcwa.operators.Port` fields `kx`, `ky`, `index` | `kx_over_k0`, `ky_over_k0`, `refractive_index` | Normalized wavevector components and the port medium's index |
+| `rcwa.experimental` builders `truncation_order=` / `order=` | `orders=` | The same keyword as `rcwa.Numerics(orders=...)` |
+| `rcwa.BoundaryPower.integration_measure` | `rcwa.BoundaryPower.power_region` | The same values as before; the name matches `Outputs(power_region=...)` |
+| `rcwa.Result.diagnostics['source_groups']` | `diagnostics['source_group_counts']` | It counts the coherent source groups |
+| `wavebit.rcwa.layer_thicknesses` | `wavebit.layer_thicknesses` | FDTD uses it too |
+| `wavebit.rcwa.plotting` | private | It takes the engine solver, not a public result |
+
+The RCWA warnings a solve can raise have one public home, `wavebit.rcwa.diagnostics`:
+`RayleighPointWarning`, `AutoDetuneWarning`, `ExceptionalPointWarning`,
+`ComplexIncidenceWarning` and `GainCutoffWarning`.
+
+`Port` is a named tuple, so only its attributes can name their replacement: `port.kx` fails
+saying `kx_over_k0`, but `Port(kx=...)` and `port._replace(kx=...)` raise Python's own
+`TypeError` for an unknown field. The tables above give the replacement.
+Because `index` was a field, a `Port` no longer has the tuple method `.index()`: reading
+`port.index` names `refractive_index`.
+
+`rcwa.check` now refuses a `GaussianBeam(angular_spectrum_extent=...)` that is not a positive,
+finite real number, with code `source.angular_spectrum_extent`; the same values were refused
+before, later and in the engine's words. An `IncidentOrders` refusal has code `source.weights`
+(it was `source.orders`).
+
+The `rcwa.check` and `rcwa.run` refusals now name the public settings
+(`Numerics(orders=...)`, `Numerics(detuning=...)`, `precision=`,
+`GaussianBeam(angular_spectrum_extent=...)`) where they used the engine's keywords. The text of
+the RCWA warnings still uses the engine's keywords; that is a later change.
+
+### Shared, observation and RCWA job files and run records
+
+Saved jobs keep the schema `wavebit.job/v2`. A v2 file with an old RCWA name (a
+`wavebit.rcwa.OrderExcitation` tag, or a `spectral_extent` field) is refused with code
+`job.encoding`: build the Job again from current declarations and save it. The key of every RCWA
+job that holds `IncidentOrders` or a `GaussianBeam` changes; other job keys do not.
+A `TabulatedMaterial` is still saved under the field `interpolation`, so jobs that hold one keep
+their keys.
+
+Run records stay `wavebit.run/v2`. A record saved from now on stores the new field names
+(`times_seconds`, `frequencies_hz`, `sidedness`, `amplitude_xyz`, `k_normal`, `spectral_energy`,
+`power_region`, the `Port` fields, `extra['source_references']`, the diagnostics key
+`source_group_counts`). A record saved earlier still loads and keeps the names it was saved
+with, since `load_run` returns the stored fields as `RecordedObject` mappings rather than
+rebuilding the classes. The capability manifest is version 25.
+
+### Shared, observation and RCWA numbers
+
+The solvers receive the same inputs. The FDTD plan skeletons are unchanged: the materials
+modules that became private are still recorded under their old names. No reference golden or
+solver tolerance changed.

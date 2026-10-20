@@ -4,7 +4,9 @@
 The general-FDTD declarations were renamed on 2026-10-19 (`fdtd.Record` is now
 `fdtd.TimeSeriesMonitor`, `fdtd.Region` is now `fdtd.SnappedBox`, and so on), and the
 `fdtd.native` and `fdtd.periodic` ones the same day (`native.Record` and `periodic.Record` are
-now `Snapshots`, `native.Tail` is now `native.DecayCheck`, and so on). See
+now `Snapshots`, `native.Tail` is now `native.DecayCheck`, and so on). RCWA, the observation
+objects and the shared modules followed on 2026-10-20 (`rcwa.OrderExcitation(orders=)` is now
+`rcwa.IncidentOrders(weights=)`, `TimeSeries.times` is now `times_seconds`, and so on). See
 [public names](public-names.md) for every old and new spelling.
 :::
 
@@ -23,7 +25,7 @@ engines and their scientific regression tests remain; no replacement mutable fac
 | `solver.slice_structure` | `rcwa.sample_structure(problem, quantity='epsilon' or 'mu')` |
 | Experimental NVF and scattering operators | `rcwa.experimental` and `rcwa.operators` |
 | `JobSpec` v10 | `migration.migrate_legacy_jobs(document, units=Units(...))` → tuple of current `Job` objects |
-| Capability manifest v21 | v22: `current_lifecycle` is the public index; detailed `solvers`/result tables explicitly describe private normalized engines. v23 (2026-10-19): the [public names](public-names.md) and `wavebit.job/v2`. v24 (2026-10-19): the [native and periodic names](public-names.md#native-grid-and-periodic-stack-names) |
+| Capability manifest v21 | v22: `current_lifecycle` is the public index; detailed `solvers`/result tables explicitly describe private normalized engines. v23 (2026-10-19): the [public names](public-names.md) and `wavebit.job/v2`. v24 (2026-10-19): the [native and periodic names](public-names.md#native-grid-and-periodic-stack-names). v25 (2026-10-20): the [shared, observation and RCWA names](public-names.md#shared-observation-and-rcwa-names) |
 | Import-time JAX precision change | Configure `jax.config.update('jax_enable_x64', True)` before constructing arrays |
 
 Spatial lengths use `Units`; times, conductivity and material rates use SI. H is A/m.
