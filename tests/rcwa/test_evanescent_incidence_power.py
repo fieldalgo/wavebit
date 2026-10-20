@@ -16,6 +16,11 @@ Only the ratios go. The port powers in W stay: the light tunnels into the glass,
 interference of the incident and reflected waves, and that power is physical. So ``rcwa.run``
 keeps two flags: ``power_defined`` (a cell power integral exists; false for a complex ``kx``)
 and ``efficiency_defined`` (an incident power exists too; false here as well).
+
+Under ``jax.jit`` the mark is a traced ``where``, and a ``where`` does not keep a NaN in the
+branch it discards out of a gradient. Where the incident power is exactly 0 (a direct ``kx``
+beyond the light line, an evanescent lit order, ``theta = pi/2``), the kernels therefore divide
+by 1 instead when the power is traced, and only then.
 """
 import warnings
 
@@ -306,3 +311,119 @@ def test_a_jitted_solve_marks_the_same_values():
         R, T, power_ok, ratio_ok, _, _ = jitted(jnp.asarray(0.4 + 0j))
         assert np.asarray(power_ok).all() and np.asarray(ratio_ok).all()
         assert abs(float(np.sum(R) + np.sum(T)) - 1) < 1e-12
+
+
+def _film_problem(eps, kx, polarization):
+    """A 100 nm film of ``eps`` between air and glass, lit at a direct ``kx``."""
+    return rcwa.Problem(
+        units=Units(length='nm'),
+        stack=rcwa.Stack(period=(1000., 1000.), top=Material(epsilon=EPS_TOP),
+                         bottom=Material(epsilon=EPS_BOTTOM),
+                         layers=(rcwa.Layer(thickness=100., background=Material(epsilon=eps)),)),
+        excitation=rcwa.Excitation(wavelength=1000., sources=(
+            rcwa.PlaneWave(kx=kx, ky=0., polarization=polarization),)))
+
+
+@pytest.mark.parametrize('polarization', ['s', 'p'])
+@pytest.mark.parametrize('algorithm', ['smm', 'etm'])
+def test_a_jitted_gradient_through_the_mark_is_zero_at_the_direct_kx_door(algorithm, polarization):
+    """A loss masking ``T`` with ``efficiency_defined`` differentiates either side of the light line.
+
+    A real ``kx`` beyond the lit medium's light line makes the incident ``kz`` exactly imaginary
+    and the incident power exactly 0. The eager door refuses it; under ``jax.jit`` the refusal
+    cannot run, and the kernels divided by that 0. The mask kept the value right (0), but the
+    ``inf`` and ``0/0`` in the branch it discarded reached the gradient: ``jit(grad)`` returned NaN
+    here, where the same wave written as ``theta = pi/2 + 1j*acosh(1.2)``, whose divisor is the
+    roundoff 6e-17, returned 0. The kernels now divide by 1 there.
+
+    The mask is ``efficiency_defined``, the flag of the ratios. ``power_defined`` stays true here
+    (the cell power integral exists, and the tunnelled watts are kept), so masking ``T`` with it
+    would hand the NaN ``T`` through.
+
+    One compiled function serves both doors, ``kx`` traced. Beyond the light line the value and
+    gradient are 0. At a propagating ``kx`` they are the eager solve's, which never reaches the
+    substitute 1, and the gradient is no masked zero.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    k0 = 2 * np.pi / 1000.
+    with jax.enable_x64(True):
+        prepared = rcwa.prepare(_film_problem(4.0, 0.3 * k0, polarization),
+                                numerics=rcwa.Numerics(orders=(0, 0), algorithm=algorithm),
+                                backend='jax')
+
+        def loss(eps, kx):
+            result = prepared.run(_film_problem(eps, kx, polarization))
+            defined = result.reflection.metadata['efficiency_defined'][0]
+            return jnp.where(defined, result.T.sum(), 0.)
+
+        jitted = jax.jit(jax.value_and_grad(loss))
+        value, gradient = jitted(4.0, 1.2 * k0)
+        assert float(value) == 0. and float(gradient) == 0., (value, gradient)
+
+        value, gradient = jitted(4.0, 0.3 * k0)
+        eager_value, eager_gradient = jax.value_and_grad(loss)(4.0, 0.3 * k0)
+        assert abs(float(eager_gradient)) > 1e-3, eager_gradient
+        np.testing.assert_allclose(float(value), float(eager_value), rtol=1e-13, atol=0)
+        np.testing.assert_allclose(float(gradient), float(eager_gradient), rtol=1e-12, atol=0)
+
+
+@pytest.mark.parametrize('algorithm', ['ETM', 'SMM'])
+@pytest.mark.parametrize('layout', [{'tetm': 'te'}, {'tetm': 'tm'}, {'phi': 0.3, 'psi': np.pi / 3}],
+                         ids=['pure-TE', 'pure-TM', 'conical'])
+def test_every_kernel_divides_by_a_finite_power_under_jit(layout, algorithm):
+    """Each kernel division, reached under ``jax.jit`` with an incident power of exactly 0.
+
+    The pure TE/TM kernels (``solve_1d``, ``smm_1d``) divide by ``incident_power``; the coupled
+    ones (``final_matching``, ``_sp_scattering_result``) by ``sp_incident_power``. Two inputs
+    make that power exactly 0: an excitation lighting order 1, evanescent in air on this 800 nm
+    grating (refused eagerly), and ``theta = pi/2``, whose incident ``kz`` is exactly 0. Both
+    gradients were NaN on every kernel. A propagating angle through the same kernels keeps the
+    eager gradient.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    with jax.enable_x64(True):
+        def loss(excitation):
+            def value(eps, theta):
+                solver = legacy_rcwa(backend='jax', top=EPS_TOP, bot=EPS_BOTTOM, theta=theta,
+                                     wavelength=1000., period=[800.], truncation_order=[3],
+                                     thickness=[150.],
+                                     structure=jnp.array([[[1.0] * 4 + [eps] * 4]]),
+                                     layer_algorithm=algorithm, excitation=excitation, **layout)
+                result = solver.solve()
+                s, p = solver._incident_power_defined()
+                return jnp.where(s & p, jnp.sum(result.incident.T), 0.)
+            return value
+
+        gradient = jax.jit(jax.grad(loss({1: 1.0})))(6.25, 0.3)
+        assert float(gradient) == 0., gradient
+
+        unlit = jax.jit(jax.grad(loss(None)))
+        assert float(unlit(6.25, np.pi / 2)) == 0., unlit(6.25, np.pi / 2)
+        eager = jax.grad(loss(None))(6.25, 0.3)
+        assert abs(float(eager)) > 1e-3, eager
+        np.testing.assert_allclose(float(unlit(6.25, 0.3)), float(eager), rtol=1e-12, atol=0)
+
+
+@pytest.mark.filterwarnings('ignore:invalid value encountered:RuntimeWarning')
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+def test_an_exact_graze_is_still_refused_eagerly(backend):
+    """``theta = pi/2`` gives an incident power of exactly 0, and ``check_finite`` still refuses it.
+
+    The kernels put 1 in place of that power only where nothing can be read, under ``jax.jit``,
+    where ``check_finite`` cannot run either. Doing it everywhere would turn this refusal into a
+    NaN-marked result, which changes an eager answer rather than fixing a gradient.
+    """
+    if backend == 'jax':
+        pytest.importorskip('jax')
+        from wavebit._common.backend import _enable_x64
+        _enable_x64()
+    elif backend == 'torch':
+        pytest.importorskip('torch')
+    solver = legacy_rcwa(backend=backend, top=EPS_TOP, bot=EPS_BOTTOM, theta=np.pi / 2,
+                         phi=0.3, psi=np.pi / 3, wavelength=1000., period=[800.],
+                         truncation_order=[3], thickness=[150.],
+                         structure=np.array([[[1.0] * 4 + [6.25] * 4]]))
+    with pytest.raises(FloatingPointError, match='non-finite value in de_ri'):
+        solver.solve()
