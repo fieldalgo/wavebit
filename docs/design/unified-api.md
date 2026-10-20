@@ -209,9 +209,9 @@ and the current Lorentz numerator strength has units s^-2. These meanings travel
 with serialized models. They are never inferred from the magnitude of a number.
 
 Internally, FDTD may retain c=epsilon0=mu0=1. Its length/time conversion is
-`t_internal = t_seconds * c0 / length_metres`; a rate is multiplied by
-`length_metres / c0`, and electric conductivity becomes
-`sigma_internal = sigma_SI * length_metres / (epsilon0 * c0)`.
+`t_internal = t_seconds * c0 / length_unit_meters`; a rate is multiplied by
+`length_unit_meters / c0`, and electric conductivity becomes
+`sigma_internal = sigma_SI * length_unit_meters / (epsilon0 * c0)`.
 Public H is converted from the existing Z0*H
 storage. Source amplitudes and all physical power outputs must be converted
 consistently; this is an implementation requirement, not a cosmetic label change.
@@ -1255,7 +1255,22 @@ The engine keeps its lowercase names and keywords; the public doors translate th
 engine refusal that names an engine keyword reaches a caller reworded as the declaration that
 set it. Old and new spellings gave bit-identical results in a native and a periodic case. The
 job schema stays `wavebit.job/v2`, a v2 file with an old native or periodic name is refused, and
-the capability manifest is version 24. RCWA and the shared namespaces are reviewed in the same
-issue and follow in separate changes. The
+the capability manifest is version 24. The
 [migration guide](../migration/public-names.md#native-grid-and-periodic-stack-names) lists every
 native and periodic change.
+
+A third change (2026-10-20) applied the same rules to RCWA, the observation objects and the
+shared modules. `rcwa.OrderExcitation(orders=)` is `rcwa.IncidentOrders(weights=)`,
+`GaussianBeam(spectral_extent=)` is `angular_spectrum_extent=`, and `layer_thicknesses` moved to
+the top level; the RCWA warnings have one public home, `wavebit.rcwa.diagnostics`. The
+observation objects name their units and contents: `SpectralFieldSamples` is `RawFieldSpectrum`,
+`times` is `times_seconds`, `frequencies` is `frequencies_hz`, `kz` is `k_normal` and `cartesian`
+is `amplitude_xyz`. `Units` names what one unit is (`length_unit_meters`, `time_unit_seconds`),
+and its kernel conversions are private. `WavebitError` is the root of every Wavebit error, and
+`NumericalError` is no longer a `ValidationError`. RCWA refusals that named an engine keyword
+name the public setting; the text of RCWA warnings is unchanged and follows later. The engine
+keeps its names, the FDTD plan skeletons are unchanged, and no golden changed. The job schema
+stays `wavebit.job/v2`; an old RCWA tag or field is refused, so the keys of RCWA jobs holding
+`IncidentOrders` or a `GaussianBeam` change. The capability manifest is version 25. The
+[migration guide](../migration/public-names.md#shared-observation-and-rcwa-names) lists every
+change. Result and report keys (§5 of the issue) follow in a separate change.

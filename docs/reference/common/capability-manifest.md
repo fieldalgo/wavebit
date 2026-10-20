@@ -8,7 +8,14 @@
 
 Written: 2026-08-11.
 
-Current version **24** (2026-10-19, later) records the second public-name change: the
+Current version **25** (2026-10-20) records the third public-name change: RCWA, the observation
+objects and the shared modules say what they are too (`rcwa.OrderExcitation(orders=)` is
+`rcwa.IncidentOrders(weights=)`, `TimeSeries.times` is `times_seconds`, among others; see the
+[migration guide](../../migration/public-names.md#shared-observation-and-rcwa-names)). No
+manifest key changes and `current_lifecycle.job.schema` stays `wavebit.job/v2`. Consumers
+expecting v24 must recognize this version change.
+
+Updated 2026-10-19 (later): manifest version **24** records the second public-name change: the
 `fdtd.native` and `fdtd.periodic` declarations say what they are too (`Record` is `Snapshots`
 in both, native `Tail` is `DecayCheck`, among others; see the
 [migration guide](../../migration/public-names.md#native-grid-and-periodic-stack-names)). No

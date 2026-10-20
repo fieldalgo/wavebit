@@ -1,4 +1,4 @@
-# `wavebit.fdtd`의 공개 이름 (2026-10-19)
+# 공개 이름 (2026-10-19, 2026-10-20)
 
 Wavebit은 아직 알파 단계이므로 general-FDTD 선언의 이름을 한 번에 바꿨습니다. 이제 모든
 클래스는 그것이 무엇인지로, 모든 모니터는 무엇을 기록하는지로 이름이 붙고, 단위가 분명하지 않은
@@ -11,7 +11,8 @@ Wavebit은 아직 알파 단계이므로 general-FDTD 선언의 이름을 한 �
 설계와 그 이유는 [이슈 #57](https://github.com/fieldalgo/wavebit/issues/57)에 있습니다. 이
 페이지는 `wavebit.fdtd`와, 같은 날의 두 번째 변경으로 이름이 바뀐 명시적 격자 모듈 `fdtd.native`,
 `fdtd.periodic`을 다룹니다([native 격자와 주기 적층의 이름](#native-grid-and-periodic-stack-names)).
-RCWA와 공통 네임스페이스는 이후 변경에서 이어지며 이 페이지에 추가됩니다.
+다음 날의 세 번째 변경으로 이름이 바뀐 RCWA, 관측 객체, 공통 모듈도 다룹니다
+([공통·관측·RCWA 이름](#shared-observation-and-rcwa-names)).
 
 ## 클래스
 
@@ -247,3 +248,101 @@ native 사례(E, H, 분극 밀도, 스냅샷, 스펙트럼, 7단계 감쇠 창)�
 
 `examples/fdtd/fdtd_record.py`는 periodic 스냅샷을 얻고, `examples/fdtd/fdtd_grid_gradient.py`는
 `Spectrum(z_indices=...)`에서 native 푸리에 적분을 미분합니다. 두 예제 모두 새 이름을 씁니다.
+
+## Shared, observation and RCWA names
+
+세 번째 일괄 변경(2026-10-20)은 두 솔버가 함께 쓰는 것, 결과가 돌려주는 객체, RCWA를 다룹니다.
+이전과 같이 별칭은 없습니다. 옛 이름·키워드·속성을 쓰면 실패하고 새 이름을 알려 주며, 수치
+계산은 바뀌지 않았습니다.
+
+### 공통 모듈
+
+| 이전 | 이후 | 이유 |
+| --- | --- | --- |
+| `Units.length_metres` | `Units.length_unit_meters` | 길이 단위 하나가 몇 미터인지; "meter" 철자를 하나로 통일 |
+| `Units.time_seconds` | `Units.time_unit_seconds` | 내부 시간 단위 하나가 몇 초인지이며, 초 단위 시각이 아님 |
+| `Units.to_metres(x)` | `x * units.length_unit_meters` | 곱셈 하나 |
+| `Units.time_to_internal`, `time_from_internal`, `rate_to_internal`, `conductivity_to_internal` | 비공개 | 솔버가 자기 경계에서 하는 변환 |
+| `Lattice.oblique(lx, ly, angle)` | `Lattice.oblique(length_u, length_v, angle)` | x·y 방향이 아닌 두 격자 벡터의 길이 |
+| `is_axis_aligned`, `jacobian`, `order_kxy`, `periods_of`, `reduced_basis`, `reduction_transform`, `sample_grid`가 든 `wavebit.lattice.__all__` | `DrawnOn`, `Lattice`, `as_lattice`, `meshgrid_xy` | 나머지는 솔버를 위해 원시 기저를 다루는 도우미 |
+| `Material.is_anisotropic` | `Material.is_tensor` | epsilon이나 mu를 주값 세 개나 3x3 텐서로 주었는지를 말하며, 등방 대각 텐서도 여기에 해당 |
+| `TabulatedMaterial.interpolation` | `TabulatedMaterial.interpolated_quantity` | 보간 방법이 아니라 보간하는 양(`'epsilon'` 또는 `'index'`) |
+| `Execution.scope()` | 비공개 | `run`, `check`, `prepare`가 직접 엶 |
+| `wavebit.materials.time_domain`, `wavebit.materials.tabulated` | 비공개 | 그 안의 클래스는 솔버의 정규화 단위 모델이며, 공개 재료는 `wavebit.materials`에 있음 |
+| `NumericalError`가 `ValidationError`(그리고 `ValueError`)였음 | `NumericalError`는 `WavebitError`이며 `ValidationError`가 아님 | 풀이 실패는 잘못된 입력이 아님. `WavebitError`가 모든 Wavebit 오류의 새 뿌리 |
+
+`except ValueError`는 더 이상 `NumericalError`를 잡지 않습니다. `wavebit.NumericalError`나
+`wavebit.WavebitError`를 잡으십시오. `ValidationError`는 여전히 `ValueError`입니다.
+
+### 관측 객체
+
+| 이전 | 이후 | 이유 |
+| --- | --- | --- |
+| `wavebit.SpectralFieldSamples` | `wavebit.RawFieldSpectrum` | `RawDiffractionSpectrum`처럼 가공하지 않은 푸리에 필드 |
+| `TimeSeries.times`, `TimeSeries.time` | `TimeSeries.times_seconds` | 단위가 붙은 이름 하나 |
+| `RawFieldSpectrum.frequencies`, `fdtd.SpectralFlux.frequencies` | `.frequencies_hz` | 단위를 붙임 |
+| `RawFieldSpectrum.spectrum`, `RawDiffractionSpectrum.spectrum`, `SpectralFlux.metadata`의 키 `spectrum` | `.sidedness` | 스펙트럼이 아니라 `'two-sided'`를 담음 |
+| `fdtd.SpectralFlux.energy_density` | `.spectral_energy` | 공간 밀도가 아니라 평면을 지나는 주파수당 에너지 |
+| `fdtd.Result.sources` | `fdtd.Result.source_references` | 소스가 아니라 기록된 소스 기준값 |
+| `DiffractionOrders.cartesian`, `DiffractionOrder.cartesian` | `.amplitude_xyz` | x, y, z 진폭 성분 |
+| `DiffractionOrders.kz`, `DiffractionOrder.kz` | `.k_normal` | 포트 법선 방향 파수 성분(z 법선 포트이면 kz). 데카르트 부호를 그대로 쓰므로 −z 포트로 나가는 차수는 `Re(k_normal) < 0` |
+| `DiffractionOrders.at_wavelength(i)` | `.at_wavelength_index(i)` | 파장이 아니라 인덱스를 받음 |
+| `wavebit.records.RecordedFields` | `wavebit.records.RecordedObject` | 필드만이 아니라 기록된 어떤 객체든 담음 |
+| `periodic.Result.sample(times=...)` | `sample(times_seconds=...)` | 단위를 붙임 |
+
+생성자도 옛 키워드를 같은 방식으로 거부합니다(`TimeSeries(times=...)`는 `times_seconds=`를
+알려 줍니다).
+
+### RCWA
+
+| 이전 | 이후 | 이유 |
+| --- | --- | --- |
+| `rcwa.OrderExcitation(orders={...})` | `rcwa.IncidentOrders(weights={...})` | 입사 차수와 각 차수의 복소 가중치 |
+| `rcwa.GaussianBeam(spectral_extent=...)` | `rcwa.GaussianBeam(angular_spectrum_extent=...)` | 빔 각 스펙트럼의 범위(1/waist 단위) |
+| `rcwa.sample_structure(n=...)` | `rcwa.sample_structure(samples=...)` | 표본 수 |
+| `rcwa.operators.Port`의 필드 `kx`, `ky`, `index` | `kx_over_k0`, `ky_over_k0`, `refractive_index` | 정규화한 파수 성분과 포트 매질의 굴절률 |
+| `rcwa.experimental` 빌더의 `truncation_order=` / `order=` | `orders=` | `rcwa.Numerics(orders=...)`와 같은 키워드 |
+| `rcwa.BoundaryPower.integration_measure` | `rcwa.BoundaryPower.power_region` | 값은 그대로이며, 이름이 `Outputs(power_region=...)`와 맞음 |
+| `rcwa.Result.diagnostics['source_groups']` | `diagnostics['source_group_counts']` | 결맞음 소스 묶음의 개수 |
+| `wavebit.rcwa.layer_thicknesses` | `wavebit.layer_thicknesses` | FDTD도 씀 |
+| `wavebit.rcwa.plotting` | 비공개 | 공개 결과가 아니라 엔진 솔버를 받음 |
+
+풀이가 낼 수 있는 RCWA 경고는 공개 경로 하나, `wavebit.rcwa.diagnostics`에 있습니다:
+`RayleighPointWarning`, `AutoDetuneWarning`, `ExceptionalPointWarning`,
+`ComplexIncidenceWarning`, `GainCutoffWarning`.
+
+`Port`는 named tuple이라 속성만 새 이름을 알려 줄 수 있습니다. `port.kx`는 `kx_over_k0`를
+알려 주며 실패하지만, `Port(kx=...)`와 `port._replace(kx=...)`는 알 수 없는 필드에 대한 파이썬
+자체의 `TypeError`를 냅니다. 새 이름은 위 표에 있습니다.
+`index`가 필드였으므로 `Port`에는 이제 튜플 메서드 `.index()`가 없습니다. `port.index`를 읽으면
+`refractive_index`를 알려 줍니다.
+
+`rcwa.check`는 이제 양의 유한 실수가 아닌 `GaussianBeam(angular_spectrum_extent=...)`를 코드
+`source.angular_spectrum_extent`로 거부합니다. 같은 값은 전에도 거부됐지만 더 늦게, 엔진의
+표현으로 거부됐습니다. `IncidentOrders` 거부 코드는 `source.weights`입니다(전에는
+`source.orders`).
+
+`rcwa.check`와 `rcwa.run`의 거부 메시지는 엔진 키워드를 쓰던 곳에서 이제 공개 설정
+(`Numerics(orders=...)`, `Numerics(detuning=...)`, `precision=`,
+`GaussianBeam(angular_spectrum_extent=...)`)을 말합니다. RCWA 경고 문구는 아직 엔진 키워드를
+씁니다. 이는 이후 변경에서 다룹니다.
+
+### 공통·관측·RCWA Job 파일과 실행 기록
+
+저장된 Job은 스키마 `wavebit.job/v2`를 그대로 씁니다. 옛 RCWA 이름(`wavebit.rcwa.OrderExcitation`
+태그, 또는 `spectral_extent` 필드)이 든 v2 파일은 코드 `job.encoding`으로 거부됩니다. 현재
+선언으로 Job을 다시 만들어 저장하십시오. `IncidentOrders`나 `GaussianBeam`이 든 RCWA job의 키가
+바뀌고, 다른 job의 키는 바뀌지 않습니다. `TabulatedMaterial`은 여전히 필드 `interpolation`으로
+저장되므로 이를 담은 job의 키도 그대로입니다.
+
+실행 기록은 `wavebit.run/v2` 그대로입니다. 이제부터 저장하는 기록에는 새 필드 이름
+(`times_seconds`, `frequencies_hz`, `sidedness`, `amplitude_xyz`, `k_normal`, `spectral_energy`,
+`power_region`, `Port` 필드, `extra['source_references']`, 진단 키 `source_group_counts`)이
+들어갑니다. 이전에 저장한 기록도 그대로 읽히며 저장 당시의 이름을 유지합니다. `load_run`은 클래스를
+다시 만들지 않고 저장된 필드를 `RecordedObject` 매핑으로 돌려주기 때문입니다. 기능 매니페스트는
+버전 25입니다.
+
+### 공통·관측·RCWA 수치
+
+솔버는 같은 입력을 받습니다. FDTD 계획 골격은 바뀌지 않았습니다. 비공개가 된 materials 모듈은
+여전히 옛 이름으로 기록됩니다. 기준 골든과 솔버 허용 오차는 하나도 바뀌지 않았습니다.
