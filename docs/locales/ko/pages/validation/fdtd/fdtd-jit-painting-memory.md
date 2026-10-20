@@ -91,7 +91,7 @@ CI 설정 `--xla_cpu_multi_thread_eigen=false`를 더해도 temp는 바뀌지 �
 1,031,495,480바이트). `CPU_SCHEDULER_TYPE_CONCURRENCY_OPTIMIZED`는 기본값의 temp를 바이트까지
 재현하므로, 이 jaxlib에서 기본값은 동시성 최적화 스케줄러입니다.
 
-같은 해상도 6 JVP를 2026-10-20에 2.10 GHz 컨테이너에서 `main`의 `20a9715`로 다시 컴파일했습니다.
+같은 해상도 6 JVP를 2026-10-20에 2.10 GHz 컨테이너에서 `main`의 `b7463c7`로 다시 컴파일했습니다.
 jax/jaxlib 0.12.0에서는 기본 스케줄러 785 MB, 메모리 최적화 197 MB를 요청하며,
 `CPU_SCHEDULER_TYPE_CONCURRENCY_OPTIMIZED`는 이번에도 기본값과 바이트까지 같습니다. 같은 소스를
 jax 0.11.0으로 컴파일하면 여전히 1031 MB와 42 MB이므로, 차이는 소스가 아니라 새 XLA에서
