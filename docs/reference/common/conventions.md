@@ -406,7 +406,11 @@ and it leaves `Re(kz)` near `6e-17*|kx|`; divided by that, `T` once came out nea
 its sign set by the sign of `alpha` ([#84](https://github.com/fieldalgo/wavebit/issues/84)).
 No warning accompanies the NaN, which marks itself, and a `jax.jit` solve, which cannot warn,
 marks the same values. An `excitation` or a direct `kx`/`ky` that lights an order carrying no
-power is refused instead, wherever its value can be read. Light emitted inside a stack, where
+power is refused instead, wherever its value can be read. Under `jax.jit` neither refusal can
+run: the solve is marked the same way, and the kernels divide by 1 in place of the zero incident
+power. A loss that selects with the flag, `jnp.where(efficiency_defined, T, 0)`, therefore has
+a gradient of 0 there rather than NaN, and a solve with incident power keeps its own value and
+gradient. Light emitted inside a stack, where
 this evanescent light matters, is a different calculation
 ([#85](https://github.com/fieldalgo/wavebit/issues/85)).
 

@@ -104,10 +104,14 @@ def incident_power(xp, C, lit, admittance):
     (:meth:`~wavebit.rcwa._engine.engine.CoreFactorizationMixin._incident_power_defined`). With no
     excitation an evanescent incident order is not refused: its amplitudes are a well-posed
     answer, and only the ratios to its power are undefined.
+
+    Every caller divides by the value, so a traced power that carries none comes back as 1
+    (:func:`_divisor`).
     """
     if lit is None:
-        return xp.real(admittance[admittance.shape[0] // 2])
-    total = None
+        incident = admittance[admittance.shape[0] // 2]
+        return _divisor(xp, xp.real(incident), carries_normal_power(xp, incident))
+    total = defined = None
     for one in lit:
         weight = xp.real(admittance[one.index])
         if _concrete(weight > _normal_power_roundoff(xp, admittance[one.index])) is False:
@@ -119,7 +123,32 @@ def incident_power(xp, C, lit, admittance):
         a = as_array(xp, one.amplitude, dtype=C)
         term = xp.real(a * xp.conj(a)) * weight
         total = term if total is None else total + term
-    return total
+        carries = carries_normal_power(xp, admittance[one.index])
+        defined = carries if defined is None else defined & carries
+    return _divisor(xp, total, defined)
+
+
+def _divisor(xp, power, defined):
+    """``power`` as the kernels divide by it: itself if readable, else 1 where not ``defined``.
+
+    ``defined`` is :func:`carries_normal_power` on every order the power sums, the flag the
+    solver marks the ratios with
+    (:meth:`~wavebit.rcwa._engine.engine.CoreFactorizationMixin._incident_power_defined`). The
+    mark is a ``where`` to NaN, and a ``where`` does not stop a NaN in the branch it discards
+    from reaching a gradient. At a direct ``kx`` beyond the lit medium's light line ``kz`` is
+    exactly imaginary and this power exactly 0: the eager door refuses it above, but under
+    ``jax.jit`` the ratios were ``inf`` and ``0/0``, and ``jit(grad)`` of a loss that masked them
+    with that flag returned NaN where the same wave as ``theta = pi/2 + 1j*alpha``, whose
+    roundoff divisor is ``6e-17``, returned 0. A 1 in its place keeps both branches finite.
+
+    Only where nothing can be read, which is also where ``check_finite`` cannot run. A readable
+    power is returned untouched. That keeps every eager solve, and every defined one, the
+    arithmetic it was, and keeps the eager refusal at exact grazing: ``theta = pi/2`` makes this
+    power exactly 0, and the resulting ``0/0`` is what ``check_finite`` reports.
+    """
+    if _concrete(defined) is not None:
+        return power
+    return xp.where(defined, power, xp.ones_like(power))
 
 
 def sp_incident_power(xp, C, lit, kz, n, epsilon, mu):
