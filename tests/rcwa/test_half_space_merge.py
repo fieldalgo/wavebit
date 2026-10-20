@@ -538,6 +538,121 @@ def test_a_traced_angle_merges_and_snaps():
     assert abs(float(jnp.sum(s.solve().incident.R)) - eager) > 1e-6   # the scene asked for
 
 
+def _knife_problem(theta, eps=9.0, regions=True):
+    """``KNIVES[0]`` through ``rcwa.Problem``: 60 um of the substrate under a vacuum cover."""
+    layer = (wavebit.rcwa.Layer(thickness=6e4, background=wavebit.Material(eps)) if regions else
+             wavebit.rcwa.Layer(thickness=6e4, epsilon=eps * np.ones((1, 4))))
+    return wavebit.rcwa.Problem(
+        units=wavebit.Units(length='nm'),
+        stack=wavebit.rcwa.Stack(period=(700., 700.), top=wavebit.Material(1.0),
+                                 bottom=wavebit.Material(9.0), layers=(layer,)),
+        excitation=wavebit.rcwa.Excitation(wavelength=WL, sources=(
+            wavebit.rcwa.PlaneWave(theta=theta, polarization='s'),)))
+
+
+@pytest.mark.parametrize('algo', ['SMM', 'ETM'])
+@pytest.mark.parametrize('tetm,side,theta,d', [k for k in KNIVES if k[0] == 'te'])
+def test_a_solver_built_inside_the_trace_merges(tetm, side, theta, d, algo):
+    """A solver built inside ``jax.jit`` from constant materials merges as one built outside it.
+
+    Inside the trace even ``jnp.asarray`` of a constant is staged, so a solver constructed there
+    held its constant raster as a tracer, the plan read it as a traced material and kept every
+    layer, and the knife edge came back: 0.38 to 1.0 off the closed form here, where the same
+    solver built before the trace is right to 1e-14.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    def answer(t):
+        solver = _legacy_wavebit_rcwa(
+            backend='jax', tetm=tetm, top=1.0, bot=9.0, theta=t, wavelength=WL, period=[700.],
+            truncation_order=[2], thickness=[d], structure=np.full((1, 1, 4), 9.0 + 0j),
+            incidence_side=side, layer_algorithm=algo)
+        sub = solver.solve(auto_detune=False).incident
+        return sub.r_s[0, 2], sub.t_s[0, 2]
+
+    r, t = _interface(tetm, side, theta, d)
+    with jax.enable_x64(True):
+        got = jax.jit(answer)(jnp.asarray(theta))
+    scale = max(abs(r), abs(t))
+    assert max(abs(complex(got[0]) - r), abs(complex(got[1]) - t)) / scale < 1e-12
+
+
+@pytest.mark.parametrize('regions', [True, False], ids=['regions', 'raster'])
+@pytest.mark.parametrize('algorithm', ['smm', 'etm'])
+def test_a_jitted_prepared_run_merges_its_constant_materials(algorithm, regions):
+    """``Prepared.run`` builds its solver inside the trace, so under ``jax.jit`` every material
+    reached the engine staged and nothing merged: on this knife edge the reflection was 0.69 off
+    the eager run's (SMM) or ``NaN`` (ETM). Constant materials now merge as they do eagerly, and
+    the diagnostics say so; a material the caller traces still keeps every layer, since its
+    value cannot be read and a merge would drop its derivative.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    theta = 1.2 + 0.4j
+    numerics = wavebit.rcwa.Numerics(orders=(2, 0), algorithm=algorithm)
+    with jax.enable_x64(True):
+        prepared = wavebit.rcwa.prepare(_knife_problem(theta, regions=regions),
+                                        numerics=numerics, backend='jax')
+        eager = prepared.run(_knife_problem(theta, regions=regions))
+
+        def run(th, eps):
+            result = prepared.run(_knife_problem(th, eps, regions))
+            return (result.reflection.amplitude_s, result.transmission.amplitude_s,
+                    result.diagnostics['half_space_merge'][0])
+
+        r, t, merged = jax.jit(lambda th: run(th, 9.0))(jnp.asarray(theta))
+        traced = jax.jit(lambda eps: run(theta, eps)[2])(9.0)
+    assert eager.diagnostics['half_space_merge'][0]['bottom'] == 1
+    assert int(merged['bottom']) == 1 and int(merged['top']) == 0
+    for got, want in ((r, eager.reflection.amplitude_s), (t, eager.transmission.amplitude_s)):
+        want = np.asarray(want)
+        assert np.max(np.abs(np.asarray(got) - want)) < 1e-12 * np.max(np.abs(want))
+    assert traced is None
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('theta,objective', [(0.0, 'T'), (np.pi / 2, '|t|^2')])
+def test_a_jitted_rayleigh_point_in_a_layer_of_the_lit_medium_is_finite(theta, objective, algo):
+    """A vacuum layer under the vacuum cover with orders on its light line: at normal incidence
+    with ``wavelength == period`` orders +-1, at ``theta = pi/2`` the specular one. In that
+    layer their ``q`` is exactly 0, so ``V = W q`` is singular and the layer's interface 0/0.
+    Eagerly ``check_finite`` refuses and ``auto_detune`` retries; under ``jax.jit`` neither can
+    run, and the value and gradient of a jitted ``value_and_grad`` came back ``NaN``. A solver
+    built in the trace holds its angle traced, which the plan takes as complex, so the layer
+    merges: the jitted answer is the stack with the layer deleted, value and gradient.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    grating = [[1.0] * 4 + [6.25] * 4]
+
+    def loss(vacuum_layer):
+        def value(t):
+            s = _legacy_wavebit_rcwa(
+                backend='jax', tetm='te', top=1.0, bot=2.25, theta=theta, wavelength=800.,
+                period=[800.], truncation_order=[3],
+                thickness=[t, 50.] if vacuum_layer else [t],
+                structure=np.array([grating, [[1.0] * 8]] if vacuum_layer else [grating]),
+                layer_algorithm=algo)
+            sub = s.solve().incident
+            return jnp.sum(sub.T) if objective == 'T' else jnp.sum(jnp.abs(sub.t_s) ** 2)
+        return value
+
+    with jax.enable_x64(True):
+        value, gradient = jax.jit(jax.value_and_grad(loss(True)))(150.)
+        deleted = jax.jit(jax.value_and_grad(loss(False)))(150.)
+    assert np.isfinite(float(value)) and np.isfinite(float(gradient))
+    np.testing.assert_allclose(float(value), float(deleted[0]), rtol=1e-13, atol=1e-15)
+    np.testing.assert_allclose(float(gradient), float(deleted[1]), rtol=1e-12, atol=1e-15)
+    if theta == 0.0:
+        # Eagerly the detune ladder answers a neighbour, ``wavelength * (1 + 1e-8)`` under grad.
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            eager = jax.value_and_grad(loss(True))(150.)
+        assert abs(float(value) - float(eager[0])) < 1e-6
+        assert abs(float(gradient) - float(eager[1])) < 1e-4 * abs(float(eager[1]))
+
+
 def test_unreadable_and_non_finite_materials():
     """A PyTorch conjugate view is read through, as the solve reads it; a NaN is no material and
     so not the half-space's, whatever the tolerance."""

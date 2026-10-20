@@ -3,6 +3,7 @@
 Every call constructs fresh execution state. Prepared objects retain only static
 geometry records, never a solver, material matrix, or result from a previous run.
 """
+import contextlib
 import dataclasses
 from collections.abc import Mapping
 
@@ -91,12 +92,31 @@ def physical_material(model, wavelength, units, execution=None):
     if not hasattr(model, 'at'):
         raise ValidationError('Use a common Material model, not an untyped material number.',
                               code='material.type', path='stack.material')
-    response = model.at(wavelength, units=units)
-    if execution is not None:
-        xp = _namespace(execution)
+    if execution is None:
+        response = model.at(wavelength, units=units)
+        return Material(epsilon=response.epsilon, mu=response.mu)
+    xp = _namespace(execution)
+    with _concrete_materials(execution):
+        response = model.at(wavelength, units=units)
         return Material(epsilon=_array(xp, response.epsilon, execution, True),
                         mu=None if response.mu is None else _array(xp, response.mu, execution, True))
-    return Material(epsilon=response.epsilon, mu=response.mu)
+
+
+def _concrete_materials(execution):
+    """The scope materials are converted in: a concrete one stays concrete inside ``jax.jit``.
+
+    ``jax.ensure_compile_time_eval`` on JAX, nothing elsewhere. Inside ``jax.jit`` even an
+    ``asarray`` of a constant is staged, so every material of a run built in the trace -- which
+    is every run of a jitted ``Prepared.run`` -- reached the engine as a tracer, and the engine
+    then cannot read whether a layer is its half-space's medium: the half-space merge was off
+    for all of them, and a layer of the substrate at a complex angle was solved on its knife
+    edge. A material the caller traces or differentiates is still traced. The engine's
+    setters keep what they are handed the same way (``CoreSolveMixin._eager``).
+    """
+    if execution.backend == 'jax':
+        import jax
+        return jax.ensure_compile_time_eval()
+    return contextlib.nullcontext()
 
 
 def region_recipe(region, wavelength, units, execution):
@@ -188,10 +208,11 @@ def build_solver(problem, numerics, execution, wavelength):
         raise UnsupportedFeatureError('A stack cannot mix sampled layers and region layers. Represent homogeneous layers on the same raster, or use regions throughout.',
                                       code='rcwa.mixed_layer_encoding', path='stack.layers')
     if any(raster):
-        kwargs['structure'] = xp.stack([_array(xp, l.epsilon, execution, True) for l in problem.stack.layers])
-        if any(l.mu is not None for l in problem.stack.layers):
-            kwargs['mu'] = xp.stack([xp.ones_like(_array(xp, l.epsilon, execution, True)) if l.mu is None
-                                    else _array(xp, l.mu, execution, True) for l in problem.stack.layers])
+        with _concrete_materials(execution):
+            kwargs['structure'] = xp.stack([_array(xp, l.epsilon, execution, True) for l in problem.stack.layers])
+            if any(l.mu is not None for l in problem.stack.layers):
+                kwargs['mu'] = xp.stack([xp.ones_like(_array(xp, l.epsilon, execution, True)) if l.mu is None
+                                        else _array(xp, l.mu, execution, True) for l in problem.stack.layers])
     else:
         kwargs['structure'] = [dict(background=physical_material(l.background, wavelength, problem.units, execution),
                                     shapes=[region_recipe(r, wavelength, problem.units, execution) for r in l.regions])

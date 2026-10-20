@@ -835,12 +835,28 @@ magnetic and double-negative half-spaces, the tolerance, and a mutant of every f
   the number of layers solved, which is the program's shape, so it is decided from concrete
   materials. A traced angle is fine -- `jit` or `vmap` over `theta` merges, taking the angle as
   complex -- but a traced material keeps every layer, and so keeps the knife edge an eager solve
-  removes: a gradient with respect to a material, and every door that traces the scene itself --
-  JAX's `solve_field`, a `jax.jit` of a prepared run -- so that on one JAX solver `solve()` and
-  `solve_field()` can differ by O(1) on a knife edge. A positive `half_space_merge_tolerance` is
-  refused there rather than ignored. Deciding the merge before the trace and carrying it as static
-  data, as frozen geometry is, would close it. An `excitation` lights several orders and the face
-  shift carries one, so it solves every layer too.
+  removes: a gradient with respect to a material, a `jax.jit` that takes a material as its
+  argument, and JAX's `solve_field`, which hands the whole solver to its compiled body as
+  arguments -- so that on one JAX solver `solve()` and `solve_field()` can differ by O(1) on a
+  knife edge (0.69 with SMM and 0.30 with ETM on 60 um of the substrate at `theta = 1.2+0.4j`,
+  measured 2026-10-20). A positive `half_space_merge_tolerance` is refused there rather than
+  ignored. Deciding the merge before the trace and carrying it as static data, as frozen geometry
+  is, would close it. An `excitation` lights several orders and the face shift carries one, so it
+  solves every layer too.
+
+  A material only *written* inside a trace is not a traced one, though until 2026-10-20 it was
+  taken for one. Inside `jax.jit` even `jnp.asarray` of a constant is staged, so a solver built in
+  the trace -- every solver of a jitted prepared run, and a legacy solver constructed in the jitted
+  function -- held its constant materials as tracers and merged nothing. On the knife edge above,
+  the legacy solver built that way was 0.38 (ETM) and 0.89 (SMM) off the closed form, and a jitted
+  prepared run 0.69 off the eager run (SMM) or `NaN` (ETM), while the same solver built before the
+  trace was right to 8e-15. The material setters and the prepared run's adapter now keep a concrete
+  material concrete in the trace (`jax.ensure_compile_time_eval`, as the device move already did),
+  so such a run merges as the solver built before the trace does, and a positive tolerance applies
+  there rather than being refused. Under a trace whether `k_par` is real cannot be read, so the
+  merge then also takes a real angle's layers -- which is what turns a Rayleigh point inside a
+  layer of the lit medium from `NaN` into the exact answer under `jit`
+  ([`rayleigh-points.md`](rayleigh-points.md) §5). Eager solves are unchanged, to the bit.
 - *1 mm, and any knife edge in a patterned layer.* The scene that opened this section moved `r0` by
   7.3e-2 (SMM) and 9.3e-2 (ETM) under the nudge at 1 mm and `theta = 0.5+0.3j`. That is the same
   knife edge, in a layer the merge cannot take, since a grating is not its substrate: its

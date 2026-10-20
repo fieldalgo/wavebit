@@ -1192,8 +1192,10 @@ class CoreSolveMixin:
         Material it was worse: ``is_magnetic`` flipped, which selects a different arithmetic
         path entirely.
         """
-        material = self._placed(as_material(self._material_at(value, self.wavelength), 'top'))
-        self._n_top = _half_space_index(material, 'top')
+        with self._eager():                # a concrete material stays one (`_eager`)
+            material = self._placed(as_material(self._material_at(value, self.wavelength), 'top'))
+            n_top = _half_space_index(material, 'top')
+        self._n_top = n_top
         self._top = material
         self._top_dispersion = value if isinstance(value, TabulatedMaterial) else None
 
@@ -1205,8 +1207,10 @@ class CoreSolveMixin:
     @bot.setter
     def bot(self, value):
         """Both, or neither -- see :attr:`top`, which had the same order and the same defect."""
-        material = self._placed(as_material(self._material_at(value, self.wavelength), 'bot'))
-        self._n_bot = _half_space_index(material, 'bot')
+        with self._eager():                # a concrete material stays one (`_eager`)
+            material = self._placed(as_material(self._material_at(value, self.wavelength), 'bot'))
+            n_bot = _half_space_index(material, 'bot')
+        self._n_bot = n_bot
         self._bot = material
         self._bot_dispersion = value if isinstance(value, TabulatedMaterial) else None
 
@@ -2529,15 +2533,18 @@ class CoreSolveMixin:
     def wavelength(self, wavelength):
         wavelength = self._placed(wavelength)
         updates = {}
-        for name in ('top', 'bot'):
-            source = getattr(self, f'_{name}_dispersion', None)
+        # A table read at a concrete wavelength is a concrete material, inside a trace too
+        # (:meth:`_eager`); at a traced one it is traced, as it should be.
+        with self._eager():
+            for name in ('top', 'bot'):
+                source = getattr(self, f'_{name}_dispersion', None)
+                if source is not None:
+                    material = self._placed(self._material_at(source, wavelength))
+                    updates[f'_n_{name}'] = _half_space_index(material, name)
+                    updates[f'_{name}'] = material
+            source = getattr(self, '_structure_dispersion', None)
             if source is not None:
-                material = self._placed(self._material_at(source, wavelength))
-                updates[f'_n_{name}'] = _half_space_index(material, name)
-                updates[f'_{name}'] = material
-        source = getattr(self, '_structure_dispersion', None)
-        if source is not None:
-            updates['_structure'] = self._placed_layers(self._structure_at(source, wavelength))
+                updates['_structure'] = self._placed_layers(self._structure_at(source, wavelength))
         # Resolve every table before changing anything: a range error must leave
         # wavelength, boundary indices and layer values describing the same scene.
         self._wavelength = wavelength
@@ -2573,6 +2580,20 @@ class CoreSolveMixin:
         `jax.ensure_compile_time_eval`. :meth:`_move_to_device` runs under it, because a move
         is a fact about the solver rather than a step of the traced program: staged, it leaves
         a tracer in every slot it touches.
+
+        The material setters run under it for the same reason -- ``structure``, ``mu``,
+        ``top``, ``bot`` and a table's reading at a new wavelength. Inside ``jax.jit`` even
+        ``jnp.asarray`` of a NumPy constant is staged, so a solver *built* inside the trace (as
+        ``rcwa.Prepared.run`` builds every one, and as a legacy solver constructed in a jitted
+        function is) held its constant materials as tracers. Then
+        :meth:`_materials_are_live` could not tell them from traced ones, and the half-space
+        merge was off: measured, a 60 um layer of the substrate at ``theta = 1.2+0.4j`` came back
+        0.38 (ETM) and 0.89 (SMM) off its closed form from a solver built in the trace, and through
+        a jitted ``Prepared.run`` 0.69 off the eager run (SMM) or ``NaN`` (ETM); built before the
+        trace, the same solver is right to 8e-15. Under this context a concrete value stays
+        one, as it would have had the solver been built before the trace; a tracer -- a material
+        the caller traces or differentiates -- still stages, and still keeps the merge off.
+        Eagerly nothing is staged, so nothing changes there.
         """
         return _contextlib.nullcontext()
 
@@ -3828,9 +3849,11 @@ class CoreFactorizationMixin:
                     'the same rule on a commensurate 1D grating and behind NVF everywhere '
                     'else. Write the shapes as dicts for the parametric path, or sample them '
                     'onto a raster.')
-            resolved = self._structure_at(structure, self.wavelength)
+            with self._eager():            # a concrete material stays one (`_eager`)
+                resolved = self._structure_at(structure, self.wavelength)
+                placed = self._placed_layers(resolved)
             dispersion = structure if resolved is not structure else None
-            kind, value = ModelingPath.PARAMETRIC, self._placed_layers(resolved)
+            kind, value = ModelingPath.PARAMETRIC, placed
         elif structure is None:
             kind, value = None, None
         else:
@@ -3887,7 +3910,8 @@ class CoreFactorizationMixin:
             dtype = self.float_dtype
         else:
             raise ValueError(f'{where}: unsupported dtype {grid.dtype}')
-        return as_array(xp, grid, dtype=dtype, device=self._array_device, copy=True)
+        with self._eager():                # a concrete raster stays one (`_eager`)
+            return as_array(xp, grid, dtype=dtype, device=self._array_device, copy=True)
 
     # ------------------------------------------------- the solve, and the field it leaves
     #
@@ -6599,7 +6623,10 @@ class CoreFactorizationMixin:
         An angle (or wavelength) that is traced -- ``jax.jit`` or ``vmap`` over it, with the
         materials concrete -- cannot say whether ``k_par`` is real, and is taken as complex: the
         runs merge, which is the theory value at any angle and costs a real one its last bits
-        only, where solving the layer would leave a complex one on a knife edge.
+        only, where solving the layer would leave a complex one on a knife edge. Under
+        ``jax.jit`` that holds for a concrete angle too, since ``k_par`` is computed in the
+        trace. Materials written as constants inside the trace are concrete: the setters keep
+        them so (:meth:`_eager`).
 
         ``None`` -- solve every layer -- for an ``excitation`` (the face shift takes one
         incident order; a direct ``kx`` / ``ky`` lights the specular order alone, as an angle
