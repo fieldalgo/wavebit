@@ -31,9 +31,9 @@ def test_same_source_leaf_nan_refused_or_reported_invalid_then_recovers(device, 
     first = prepared.run(problem(*leaves))
     assert bool(first.validity.checks['runtime_stability'])
     assert bool(torch.isfinite(first.final_fields.values['E']).all())
-    assert bool((first.sources['d']['field'] != 0).any())
+    assert bool((first.source_references['d']['field'] != 0).any())
     held = (first.final_fields.values['E'].detach().clone(),
-            first.sources['d']['field'].detach().clone())
+            first.source_references['d']['field'].detach().clone())
 
     with torch.no_grad():
         leaves[invalid_leaf].fill_(float('nan'))
@@ -58,9 +58,9 @@ def test_same_source_leaf_nan_refused_or_reported_invalid_then_recovers(device, 
     assert all(leaf.is_leaf and leaf.grad is None for leaf in leaves)
     assert bool(recovered.validity.checks['runtime_stability'])
     torch.testing.assert_close(recovered.final_fields.values['E'], held[0], rtol=0, atol=0)
-    torch.testing.assert_close(recovered.sources['d']['field'], held[1], rtol=0, atol=0)
+    torch.testing.assert_close(recovered.source_references['d']['field'], held[1], rtol=0, atol=0)
     torch.testing.assert_close(first.final_fields.values['E'], held[0], rtol=0, atol=0)
-    torch.testing.assert_close(first.sources['d']['field'], held[1], rtol=0, atol=0)
+    torch.testing.assert_close(first.source_references['d']['field'], held[1], rtol=0, atol=0)
     assert refused or (invalid_has_nan and invalid_stable is False), (
         'nonfinite source reached the solver without a failed runtime validity verdict',
         invalid_has_nan, invalid_stable)

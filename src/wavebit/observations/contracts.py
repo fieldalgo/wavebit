@@ -2,7 +2,7 @@
 from wavebit._common.backend import eager_under_torch_compile
 from dataclasses import dataclass, field
 from operator import index as integer_index
-from wavebit._common.declarations import Declaration
+from wavebit._common.declarations import Declaration, renamed_attributes, spec
 from wavebit._common.pytrees import register_dataclass
 from wavebit._common.execution import frozen_mapping
 from wavebit.errors import ValidationError
@@ -23,9 +23,25 @@ class Validity(Declaration):
         object.__setattr__(self, 'issues', tuple(self.issues))
 
 
-@eager_under_torch_compile
-@dataclass(frozen=True, kw_only=True)
+#: DiffractionOrder(s) fields that were renamed (fieldalgo/wavebit#57), and their replacements.
+_ORDER_RENAMED = {'cartesian': 'amplitude_xyz', 'kz': 'k_normal'}
+#: DiffractionOrders attributes that were renamed: its fields and a method.
+_ORDERS_RENAMED = {**_ORDER_RENAMED, 'at_wavelength': 'at_wavelength_index'}
+#: RawDiffractionSpectrum adds its own renamed field to those of DiffractionOrders.
+_RAW_RENAMED = {**_ORDER_RENAMED, 'spectrum': 'sidedness'}
+
+#: The per-order arrays that ``order`` and ``at_wavelength_index`` select from.
+_ORDER_ARRAYS = ('amplitude_s', 'amplitude_p', 'power', 'efficiency', 'amplitude_xyz', 'k_parallel',
+                 'k_normal')
+
+
+@spec(renamed=_ORDER_RENAMED)
 class DiffractionOrder(Declaration):
+    """One diffraction order of :class:`DiffractionOrders`, with the same per-order fields.
+
+    ``amplitude_xyz`` is the Cartesian field amplitude (trailing xyz axis); ``k_normal`` is the
+    wavevector component along the port's normal axis (see :class:`DiffractionOrders`).
+    """
     wavelengths: object
     order_u: int
     order_v: int
@@ -33,9 +49,9 @@ class DiffractionOrder(Declaration):
     amplitude_p: object = None
     power: object = None
     efficiency: object = None
-    cartesian: object = None
+    amplitude_xyz: object = None
     k_parallel: object = None
-    kz: object = None
+    k_normal: object = None
     reference: object = field(default_factory=dict)
     metadata: object = field(default_factory=dict)
 
@@ -44,14 +60,19 @@ class DiffractionOrder(Declaration):
         for name in ('reference', 'metadata'):
             object.__setattr__(self, name, frozen_mapping(getattr(self, name)))
 
+    __getattr__ = renamed_attributes(_ORDER_RENAMED)
 
-@eager_under_torch_compile
-@dataclass(frozen=True, kw_only=True)
+
+@spec(renamed=_ORDER_RENAMED)
 class DiffractionOrders(Declaration):
     """Outgoing orders at one port and one Bloch group, always with a wavelength axis.
 
     k_parallel has a trailing two-dimensional tangent axis, named by the port
-    reference (xy for z-normal ports).
+    reference (xy for z-normal ports). ``k_normal`` is each order's wavevector component along
+    the port's normal axis, signed along that axis as a Cartesian component: it holds kz for a
+    z-normal port and kx for an x-normal one, so a propagating order leaving through a port whose
+    outward normal is -z has Re(k_normal) < 0. ``amplitude_xyz`` is the Cartesian field
+    amplitude, with a trailing xyz axis.
     Scalar modal arrays have shape (wavelength, order_v, order_u). Missing
     calibrated power or incident normalization is None, never fabricated zero.
     ``reference`` records the medium, reference plane, lateral origin,
@@ -68,9 +89,9 @@ class DiffractionOrders(Declaration):
     efficiency: object = None
     reference: object = field(default_factory=dict)
     metadata: object = field(default_factory=dict)
-    cartesian: object = None
+    amplitude_xyz: object = None
     k_parallel: object = None
-    kz: object = None
+    k_normal: object = None
     reference_wavelength_fields: tuple = ('z', 'epsilon', 'mu', 'cell_area_m2', 'incident_power_w')
     metadata_wavelength_fields: tuple = ('theta_radians', 'source_usable', 'incident_amplitude', 'power_defined')
 
@@ -96,27 +117,30 @@ class DiffractionOrders(Declaration):
         expected = (nw, len(self.orders_v), len(self.orders_u))
         if nw < 1 or not self.orders_u or not self.orders_v:
             raise ValidationError('spectral and order axes must be nonempty', code='empty_observation', path='outputs')
-        for name in ('amplitude_s', 'amplitude_p', 'power', 'efficiency', 'kz'):
+        for name in ('amplitude_s', 'amplitude_p', 'power', 'efficiency', 'k_normal'):
             value = getattr(self, name)
             if value is not None and tuple(getattr(value, 'shape', ())) != expected:
                 raise ValidationError(f'expected shape {expected}', code='observation_shape', path=name, expected=expected, actual=getattr(value, 'shape', None))
         if self.k_parallel is not None and tuple(self.k_parallel.shape) != expected + (2,):
             raise ValidationError('Parallel wave vectors require a trailing two-dimensional tangent axis', code='observation_shape', path='k_parallel', expected=expected+(2,), actual=self.k_parallel.shape)
-        if self.cartesian is not None and tuple(self.cartesian.shape) != expected + (3,):
-            raise ValidationError('Cartesian amplitudes require a trailing xyz axis', code='observation_shape', path='cartesian', expected=expected+(3,), actual=self.cartesian.shape)
+        if self.amplitude_xyz is not None and tuple(self.amplitude_xyz.shape) != expected + (3,):
+            raise ValidationError('amplitude_xyz requires a trailing xyz axis', code='observation_shape', path='amplitude_xyz', expected=expected+(3,), actual=self.amplitude_xyz.shape)
+
+    __getattr__ = renamed_attributes(_ORDERS_RENAMED)
 
     def order(self, m, n=0):
         try:
             i, j = self.orders_u.index(integer_index(m)), self.orders_v.index(integer_index(n))
         except ValueError as exc:
             raise KeyError((m,n)) from exc
-        data = {name: None if getattr(self, name) is None else getattr(self, name)[:,j,i] for name in ('amplitude_s','amplitude_p','power','efficiency','cartesian','k_parallel','kz')}
+        data = {name: None if getattr(self, name) is None else getattr(self, name)[:,j,i] for name in _ORDER_ARRAYS}
         return DiffractionOrder(wavelengths=self.wavelengths, order_u=m, order_v=n, reference=self.reference, metadata=self.metadata, **data)
 
-    def at_wavelength(self, index):
+    def at_wavelength_index(self, index):
+        """These orders at the wavelength in position ``index`` of ``wavelengths``, as a length-1 axis."""
         i = integer_index(index)
         if not 0 <= i < len(self.wavelengths): raise IndexError(i)
-        data = {name: None if getattr(self, name) is None else getattr(self, name)[i:i+1] for name in ('amplitude_s','amplitude_p','power','efficiency','cartesian','k_parallel','kz')}
+        data = {name: None if getattr(self, name) is None else getattr(self, name)[i:i+1] for name in _ORDER_ARRAYS}
         # Reference coordinates and media can vary spectrally. The explicit
         # declaration prevents a static xyz vector being sliced merely because
         # its length happens to equal the number of wavelengths.
@@ -135,12 +159,16 @@ class DiffractionOrders(Declaration):
         return self.replace(wavelengths=self.wavelengths[i:i+1], **data)
 
 
-@eager_under_torch_compile
-@dataclass(frozen=True, kw_only=True)
+@spec(renamed=_RAW_RENAMED)
 class RawDiffractionSpectrum(DiffractionOrders):
-    """Raw pulse Fourier amplitudes, not calibrated monochromatic fields or power."""
+    """Raw pulse Fourier amplitudes, not calibrated monochromatic fields or power.
+
+    ``sidedness`` says which spectrum convention the values follow ('two-sided').
+    """
     transform: str = 'integral exp(+i 2 pi f t) dt'
     window: object = None
-    spectrum: str = 'two-sided'
+    sidedness: str = 'two-sided'
     amplitude_units: object = 'V*s/m'
     spectral_energy: object = None
+
+    __getattr__ = renamed_attributes({**_ORDERS_RENAMED, **_RAW_RENAMED})

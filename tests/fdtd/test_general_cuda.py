@@ -155,8 +155,8 @@ def test_cuda_slab_cpml_records_dft_flux_and_prepared_live_reuse(cuda):
     for field in ('Ey','Hx'):
         assert result['field'].values[field].device.type=='cuda'
         parity(result['field'].values[field],reference['field'].values[field])
-    assert result['flux'].energy_density.device.type=='cuda'
-    parity(result['flux'].energy_density,reference['flux'].energy_density)
+    assert result['flux'].spectral_energy.device.type=='cuda'
+    parity(result['flux'].spectral_energy,reference['flux'].spectral_energy)
     saved=result['e'].values.clone()
     changed=slab_problem(epsilon=2.5,amplitude=1.5)
     assert prepared.validate(changed).ok
@@ -239,7 +239,7 @@ def test_cuda_axis_permuted_slab_cpml_and_spectral_outputs(cuda,axis):
         parity(result.final_fields.values[field],reference.final_fields.values[field])
     for component in reference['field'].values:
         parity(result['field'].values[component],reference['field'].values[component])
-    parity(result['flux'].energy_density,reference['flux'].energy_density)
+    parity(result['flux'].spectral_energy,reference['flux'].spectral_energy)
 
 
 def open_pulse_problem():
@@ -266,7 +266,7 @@ def test_cuda_three_dimensional_open_pulse_and_closed_flux_faces(cuda):
     for face,expected in reference['box'].faces.items():
         assert np.max(np.abs(expected))>0
         parity(result['box'].faces[face],expected)
-    parity(result['box'].energy_density,reference['box'].energy_density)
+    parity(result['box'].spectral_energy,reference['box'].spectral_energy)
 
 
 @pytest.mark.parametrize('conductivity',[None,600.])

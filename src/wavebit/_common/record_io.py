@@ -15,8 +15,8 @@ def record_error(message, path='record'):
 
 
 @dataclass(frozen=True)
-class RecordedFields(Mapping):
-    """Named fields of an archived declaration, without its executable methods."""
+class RecordedObject(Mapping):
+    """An archived object: its type name and named fields, without its executable methods."""
     type_name: str
     fields: Mapping
 
@@ -140,7 +140,7 @@ def decode(value, arrays, used, path='observations'):
     if kind == 'record' and set(value) == {'kind', 'type', 'fields'}:
         if not isinstance(value['type'], str) or not isinstance(value['fields'], dict):
             raise record_error('Invalid data record.', path)
-        return RecordedFields(value['type'], {k: decode(v, arrays, used, f'{path}.{k}')
+        return RecordedObject(value['type'], {k: decode(v, arrays, used, f'{path}.{k}')
                                              for k, v in value['fields'].items()})
     if kind in ('list', 'tuple') and set(value) == {'kind', 'items'} and isinstance(value['items'], list):
         items = [decode(v, arrays, used, f'{path}[{i}]') for i, v in enumerate(value['items'])]

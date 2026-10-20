@@ -158,7 +158,7 @@ def test_checkpoint_tail_observable_gradients_and_independent_prepared_reuse(cud
         for field in ('E','H'):parity(result.final_fields.values[field],expected.final_fields.values[field])
         parity(result['e'].values,expected['e'].values)
         for component in ('Ey','Hx'):parity(result['field'].values[component],expected['field'].values[component])
-        parity(result['flux'].energy_density,expected['flux'].energy_density)
+        parity(result['flux'].spectral_energy,expected['flux'].spectral_energy)
         np.testing.assert_allclose(actual_values,values,rtol=5e-13,atol=0.)
         np.testing.assert_allclose(actual_gradients,gradients,rtol=1e-12,atol=0.)
         if saved is None:
@@ -188,8 +188,8 @@ def test_checkpoint_forward_context_then_live_gradient_reuse(cuda,forward_contex
     def arrays(result):
         return (result.final_fields.values['E'],result.final_fields.values['H'],
                 result['e'].values,result['field'].values['Ey'],result['field'].values['Hx'],
-                result['flux'].energy_density,result.sources['pw']['incident'],
-                result.sources['pw']['incident_H'])
+                result['flux'].spectral_energy,result.source_references['pw']['incident'],
+                result.source_references['pw']['incident_H'])
 
     # Live leaves created outside the disabled-grad context remain caller-owned.
     epsilon=cuda.tensor(2.25,dtype=cuda.float64,device='cuda:0',requires_grad=True)

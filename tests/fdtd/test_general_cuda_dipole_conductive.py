@@ -79,7 +79,7 @@ def test_conductive_dipole_one_step_si_moment_centroid_and_work(
     centroid = [(deposited*coordinate).sum()/moment for coordinate in (x, y, z)]
     np.testing.assert_allclose(centroid, CENTER, rtol=0., atol=1e-13)
 
-    reference = result.sources['d']
+    reference = result.source_references['d']
     assert reference['drive_units'] == 'A*m' and reference['field_units'] == 'V/m'
     assert reference['power_units'] == 'W' and reference['time_unit'] == 's'
     for name in ('drive', 'field', 'delivered_power'):

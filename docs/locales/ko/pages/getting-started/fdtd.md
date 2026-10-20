@@ -34,10 +34,10 @@ result = fdtd.run(problem, numerics=numerics)
 ## 2. 기록한 신호 읽기
 
 ```python
-print("samples:", len(result["probe"].time), "time unit: s; field unit:", result["probe"].units)
+print("samples:", len(result["probe"].times_seconds), "time unit: s; field unit:", result["probe"].units)
 ```
 
-`result["probe"].time`은 초 단위의 시간 배열입니다. 전기장 Ey의 단위는 V/m이며, 자기장을 기록하면 A/m를 사용합니다. `TimeSeriesMonitor`는 선택한 성분의 가장 가까운 Yee 격자점에서 샘플링합니다. 임의 좌표의 보간값은 아닙니다.
+`result["probe"].times_seconds`는 초 단위의 시간 배열입니다. 전기장 Ey의 단위는 V/m이며, 자기장을 기록하면 A/m를 사용합니다. `TimeSeriesMonitor`는 선택한 성분의 가장 가까운 Yee 격자점에서 샘플링합니다. 임의 좌표의 보간값은 아닙니다.
 
 ## 선택: 준비한 계산 재사용하기
 

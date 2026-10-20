@@ -50,7 +50,7 @@ def test_geometry_unit_changes_keep_fields_times_and_jobs(algorithm):
     for component in a.snapshots:
         x,y=a.snapshots[component],b.snapshots[component]
         np.testing.assert_allclose(x.values,y.values,rtol=1e-9,atol=1e-12)
-        np.testing.assert_allclose(x.time,y.time,rtol=2e-14)
+        np.testing.assert_allclose(x.times_seconds,y.times_seconds,rtol=2e-14)
         np.testing.assert_allclose(x.coordinates['z']*1000,y.coordinates['z'],rtol=1e-13,atol=1e-10)
     np.testing.assert_allclose(a.plane_power_z['outside'],b.plane_power_z['outside'],rtol=2e-11)
 
@@ -118,7 +118,7 @@ def test_crossed_cell_power_is_watts_and_sampled_fields_are_si():
     raw=sample_fdtd_fields(result._engine_diagnostics,z=.05)
     np.testing.assert_allclose(sample.values[:,:3],raw['E'],rtol=1e-13)
     np.testing.assert_allclose(sample.values[:,3:],raw['H']/Z0,rtol=1e-13)
-    np.testing.assert_allclose(sample.time,raw['t']*q.units.time_unit_seconds,rtol=1e-13)
+    np.testing.assert_allclose(sample.times_seconds,raw['t']*q.units.time_unit_seconds,rtol=1e-13)
 
 
 def test_full_result_crosses_jit_and_keeps_physical_snapshots_and_power_metadata():

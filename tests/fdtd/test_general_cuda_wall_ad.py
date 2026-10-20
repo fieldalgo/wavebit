@@ -204,7 +204,7 @@ def dipole_problem(kind, axis, moment=1.3e-16, phase=.4, open_padding=False):
 
 def dipole_loss(result, kind):
     scale = Z0 if kind == 'magnetic' else 1.
-    return field_loss(result) + scale ** 2 * (result.sources['d']['field'] ** 2).sum()
+    return field_loss(result) + scale ** 2 * (result.source_references['d']['field'] ** 2).sum()
 
 
 @pytest.mark.parametrize('kind,axis,open_padding', [
@@ -252,15 +252,15 @@ def test_wall_interior_dipole_fields_source_work_and_live_gradients(
                 np.testing.assert_allclose(actual, expected, rtol=1e-7, atol=1e-10 * value)
             reference = fdtd.run(physical(moment, phase), numerics=settings())
             compare_fields(result, reference, device)
-            history = result.sources['d']
+            history = result.source_references['d']
             for key in ('drive', 'field', 'delivered_power'):
-                parity(history[key], reference.sources['d'][key])
+                parity(history[key], reference.source_references['d'][key])
                 assert history[key].device == torch.device(device)
             fresh = fdtd.run(physical(moment, phase), numerics=settings(block),
                              backend='torch', device=device)
             compare_fields(result, fresh, device)
             for key in ('drive', 'field', 'delivered_power'):
-                parity(history[key], fresh.sources['d'][key])
+                parity(history[key], fresh.source_references['d'][key])
             field = host(history['field'])
             previous = np.concatenate((np.zeros(1), field[:-1]))
             np.testing.assert_allclose(host(history['delivered_power']),
@@ -271,6 +271,6 @@ def test_wall_interior_dipole_fields_source_work_and_live_gradients(
                          result.final_fields.values['E'].detach().clone())
             else:
                 for key, copy in saved[1].items():
-                    assert torch.equal(saved[0].sources['d'][key], copy)
+                    assert torch.equal(saved[0].source_references['d'][key], copy)
                 assert torch.equal(saved[0].final_fields.values['E'], saved[2])
                 assert not torch.equal(history['drive'], saved[1]['drive'])

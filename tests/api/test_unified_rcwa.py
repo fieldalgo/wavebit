@@ -56,12 +56,12 @@ def test_magnetic_conical_slab_matches_independent_fresnel(side, polarization):
     np.testing.assert_allclose(result.T[:, 0, 0], expected_t, rtol=2e-12, atol=2e-14)
     np.testing.assert_allclose(result.absorption, 0., atol=3e-14)
     sign = 1 if side == 'top' else -1
-    assert np.all(result.reflection.kz.real*sign > 0)
-    assert np.all(result.transmission.kz.real*sign < 0)
+    assert np.all(result.reflection.k_normal.real*sign > 0)
+    assert np.all(result.transmission.k_normal.real*sign < 0)
     incident = .5/Z0*np.sqrt(eps[0]/mu[0])*np.cos(.29)*(.7*.8*1e-12)
     np.testing.assert_allclose(result.reflection.reference['incident_power_w'], incident, rtol=2e-13)
     np.testing.assert_allclose(result.reflection.power[:, 0, 0], incident*expected_r, rtol=3e-12)
-    selected = result.transmission.at_wavelength(1)
+    selected = result.transmission.at_wavelength_index(1)
     assert selected.reference['epsilon'] == (eps[2],)
     assert selected.k_parallel.shape == (1, 1, 1, 2)
     assert selected.reference['outward_normal'] == (0., 0., -float(sign))
@@ -239,7 +239,7 @@ def test_amplitudes_are_linear_in_the_normalized_jones_pair(side):
     a_s, a_p = np.asarray(pair) / np.linalg.norm(pair)
     s, p, both, brighter = run('s'), run('p'), run(pair), run(pair, amplitude=3.)
     for port in ('reflection', 'transmission'):
-        for name in ('amplitude_s', 'amplitude_p', 'cartesian'):
+        for name in ('amplitude_s', 'amplitude_p', 'amplitude_xyz'):
             got = np.asarray(getattr(getattr(both, port), name))
             np.testing.assert_allclose(got, a_s*np.asarray(getattr(getattr(s, port), name))
                                        + a_p*np.asarray(getattr(getattr(p, port), name)),

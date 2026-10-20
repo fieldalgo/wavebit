@@ -72,7 +72,7 @@ def solve(device, physical, numerics):
     with torch.no_grad():
         result = fdtd.run(physical, numerics=numerics, backend='torch', device=name)
     assert bool(result.validity.checks['runtime_stability'])
-    reference = result.sources['d']
+    reference = result.source_references['d']
     assert reference['drive_units'] == ('A*m' if source.kind == 'electric' else 'V*m')
     assert reference['field_units'] == ('V/m' if source.kind == 'electric' else 'A/m')
     assert reference['power_units'] == 'W' and reference['time_unit'] == 's'

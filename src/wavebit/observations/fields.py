@@ -1,7 +1,7 @@
 """Fields with explicit sample coordinates, components, units and staggering."""
 from wavebit._common.backend import eager_under_torch_compile
 from dataclasses import dataclass, field
-from wavebit._common.declarations import Declaration
+from wavebit._common.declarations import Declaration, renamed_attributes, spec
 from wavebit._common.pytrees import register_dataclass
 from wavebit._common.execution import frozen_mapping
 
@@ -25,24 +25,33 @@ class FieldSamples(Declaration):
             object.__setattr__(self, 'units', frozen_mapping(self.units))
 
 
-@eager_under_torch_compile
-@dataclass(frozen=True, kw_only=True)
-class SpectralFieldSamples(FieldSamples):
-    """Raw Fourier fields; units and transform normalization remain explicit."""
-    frequencies: object = None
+#: RawFieldSpectrum fields that were renamed (fieldalgo/wavebit#57), and their replacements.
+_SPECTRUM_RENAMED = {'frequencies': 'frequencies_hz', 'spectrum': 'sidedness'}
+
+
+@spec(renamed=_SPECTRUM_RENAMED)
+class RawFieldSpectrum(FieldSamples):
+    """Raw Fourier fields; units and transform normalization remain explicit.
+
+    ``frequencies_hz`` are the frequencies of the wavelength axis, in Hz; ``sidedness`` says
+    which spectrum convention the values follow ('two-sided').
+    """
+    frequencies_hz: object = None
     wavelengths: object = None
     transform: str = 'integral exp(+i 2 pi f t) dt'
     window: object = None
-    spectrum: str = 'two-sided'
+    sidedness: str = 'two-sided'
+
+    __getattr__ = renamed_attributes(_SPECTRUM_RENAMED)
 
 
-@eager_under_torch_compile
-@dataclass(frozen=True, kw_only=True)
+#: TimeSeries fields and properties that were renamed, and their replacements.
+_TIME_RENAMED = {'times': 'times_seconds', 'time': 'times_seconds'}
+
+
+@spec(renamed={'times': 'times_seconds'})
 class TimeSeries(FieldSamples):
-    """Time-domain samples with an explicit time axis measured in seconds."""
-    times: object = None
+    """Time-domain samples with an explicit time axis, ``times_seconds``, in seconds."""
+    times_seconds: object = None
 
-    @property
-    def time(self):
-        """Canonical public time axis, in seconds."""
-        return self.times
+    __getattr__ = renamed_attributes(_TIME_RENAMED)

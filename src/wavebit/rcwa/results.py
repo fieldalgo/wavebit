@@ -195,10 +195,10 @@ def pack(problem, numerics, execution, solves, checks, report):
                     longitudinal = -longitudinal
                 per_port[name].append(dict(amplitude_s=getattr(result, prefix+'_s'),
                                            amplitude_p=getattr(result, prefix+'_p'),
-                                           cartesian=getattr(result, prefix+'_xyz'),
+                                           amplitude_xyz=getattr(result, prefix+'_xyz'),
                                            efficiency=xp.where(physical_power, result.R if name == 'reflected' else result.T, xp.nan),
                                            power=xp.where(physical_power, outgoing, xp.nan),
-                                           k_parallel=k_parallel, kz=longitudinal,
+                                           k_parallel=k_parallel, k_normal=longitudinal,
                                            epsilon=material.epsilon, mu=material.mu_value,
                                            reference_z=xp.sum(solver.thickness) if port == 'top' else 0.,
                                            area=area))
@@ -215,11 +215,11 @@ def pack(problem, numerics, execution, solves, checks, report):
                     wavelengths=effective_ws, orders_u=solves[0][1].orders_u, orders_v=solves[0][1].orders_v,
                     amplitude_s=_stack([e['amplitude_s'] for e in entries]),
                     amplitude_p=_stack([e['amplitude_p'] for e in entries]),
-                    cartesian=_stack([e['cartesian'] for e in entries]),
+                    amplitude_xyz=_stack([e['amplitude_xyz'] for e in entries]),
                     efficiency=_stack([e['efficiency'] for e in entries]),
                     power=_stack([e['power'] for e in entries]),
                     k_parallel=_stack([e['k_parallel'] for e in entries]),
-                    kz=_stack([e['kz'] for e in entries]),
+                    k_normal=_stack([e['k_normal'] for e in entries]),
                     reference={'port': port, 'z': tuple(e['reference_z'] for e in entries),
                                'lateral_origin': (0., 0.), 'outward_normal': (0., 0., 1. if port == 'top' else -1.),
                                'incident_port': side, 'incident_power_w': _stack(incident_powers),
@@ -277,7 +277,7 @@ def pack(problem, numerics, execution, solves, checks, report):
             if name in outputs:
                 o = outputs[name]
                 outputs[name] = o.replace(**{key: xp.where(combined, getattr(o, key), xp.nan)
-                                            for key in ('amplitude_s', 'amplitude_p', 'cartesian', 'power', 'efficiency')
+                                            for key in ('amplitude_s', 'amplitude_p', 'amplitude_xyz', 'power', 'efficiency')
                                             if getattr(o, key) is not None})
         for name in ('power_entering', 'absorption'):
             outputs[name] = xp.where(combined, outputs[name], xp.nan)

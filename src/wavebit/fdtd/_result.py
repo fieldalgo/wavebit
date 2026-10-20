@@ -3,21 +3,29 @@ from wavebit._common.backend import eager_under_torch_compile
 from dataclasses import dataclass, field
 import math
 import numpy as np
-from wavebit._common.declarations import Declaration
+from wavebit._common.declarations import Declaration, renamed_attributes, spec
 from wavebit._common.execution import frozen_mapping
 from wavebit._common.pytrees import register_dataclass
-from wavebit.observations import (TimeSeries, FieldSamples, SpectralFieldSamples,
+from wavebit.observations import (TimeSeries, FieldSamples, RawFieldSpectrum,
                                  DiffractionOrders, RawDiffractionSpectrum, Validity)
 from wavebit.units import C0, Z0
 from . import _monitors as monitors, _boundaries as boundaries
 
 
-@eager_under_torch_compile
-@dataclass(frozen=True, kw_only=True)
+#: SpectralFlux fields that were renamed (fieldalgo/wavebit#57), and their replacements.
+_FLUX_RENAMED = {'frequencies': 'frequencies_hz', 'energy_density': 'spectral_energy'}
+
+
+@spec(renamed=_FLUX_RENAMED)
 class SpectralFlux(Declaration):
+    """The two-sided pulse spectral energy through a flux monitor, per wavelength.
+
+    ``spectral_energy`` is in ``units`` (J/Hz, or per metre of each invariant axis);
+    ``frequencies_hz`` are the frequencies of ``wavelengths``, in Hz.
+    """
     wavelengths: object
-    frequencies: object
-    energy_density: object
+    frequencies_hz: object
+    spectral_energy: object
     units: str
     faces: object = None
     metadata: object = field(default_factory=dict)
@@ -26,24 +34,36 @@ class SpectralFlux(Declaration):
         register_dataclass(type(self))
         object.__setattr__(self,'metadata',frozen_mapping(self.metadata))
 
+    __getattr__ = renamed_attributes(_FLUX_RENAMED, prefix='fdtd.')
 
-@eager_under_torch_compile
-@dataclass(frozen=True, kw_only=True)
+
+#: Result fields that were renamed, and their replacements.
+_RESULT_RENAMED = {'sources': 'source_references'}
+
+
+@spec(renamed=_RESULT_RENAMED)
 class Result(Declaration):
+    """The outputs of one FDTD run by monitor name, with validity, diagnostics and provenance.
+
+    ``source_references`` maps each source name to its measured reference (the incident or
+    drive time series the run injected), in SI units.
+    """
     outputs: object
     validity: Validity
     diagnostics: object
     provenance: object
-    sources: object = field(default_factory=dict)
+    source_references: object = field(default_factory=dict)
     final_fields: object = None
 
     def __post_init__(self):
         register_dataclass(type(self))
-        for name in ('outputs','diagnostics','provenance','sources'):
+        for name in ('outputs','diagnostics','provenance','source_references'):
             object.__setattr__(self,name,frozen_mapping(getattr(self,name)))
 
     def __getitem__(self,name):
         return self.outputs[name]
+
+    __getattr__ = renamed_attributes(_RESULT_RENAMED, prefix='fdtd.')
 
 
 def _measure(problem, raw):
@@ -83,7 +103,7 @@ def adapt_result(problem,numerics,execution,raw,metadata):
     outputs={}
     source_usable={}
     transform=dict(transform='integral exp(+i 2 pi f t) dt',window='rectangular finite run',
-                   spectrum='two-sided',sampling='raw staggered Yee samples',
+                   sidedness='two-sided',sampling='raw staggered Yee samples',
                    duration_seconds=raw.plan.steps*raw.plan.dt*ts)
     requests={m.name:m for m in problem.outputs.monitors}
     for name,m in requests.items():
@@ -95,20 +115,20 @@ def adapt_result(problem,numerics,execution,raw,metadata):
             coordinates={'requested':m.at,'sample':tuple(axes[a][index] for a,index in enumerate((observer.i,observer.j,observer.k)))}
             for key in ('index','indices','at'):
                 if hasattr(observer,key):coordinates['sample_'+key]=getattr(observer,key)
-            outputs[name]=TimeSeries(times=value.t*ts,coordinates=coordinates,values=value.values*scale,
+            outputs[name]=TimeSeries(times_seconds=value.t*ts,coordinates=coordinates,values=value.values*scale,
                 components=(m.component,),units='A/m' if scale!=1 else 'V/m',sampling='raw Yee component',
                 metadata={'time_unit':'s','length_unit':units.length,'component_time_level':m.component[0]})
         elif isinstance(m,monitors.FieldMonitor):
             values={c:v*(ts/Z0 if c.startswith('H') else ts) for c,v in value.fields.items()}
-            outputs[name]=SpectralFieldSamples(coordinates=value.coords,values=values,
+            outputs[name]=RawFieldSpectrum(coordinates=value.coords,values=values,
                 components=tuple(value.fields),units={c:'A*s/m' if c.startswith('H') else 'V*s/m' for c in value.fields},
                 sampling='raw Yee components',wavelengths=value.wavelengths,
-                frequencies=np.asarray([C0/(w*units.length_unit_meters) for w in value.wavelengths]),
+                frequencies_hz=np.asarray([C0/(w*units.length_unit_meters) for w in value.wavelengths]),
                 window=transform['window'],metadata={'length_unit':units.length,'duration_seconds':transform['duration_seconds']})
         elif isinstance(m,monitors.FluxMonitor):
             outputs[name]=SpectralFlux(wavelengths=value.wavelengths,
-                frequencies=np.asarray([C0/(w*units.length_unit_meters) for w in value.wavelengths]),
-                energy_density=value.flux*spectral_factor,units=flux_units,
+                frequencies_hz=np.asarray([C0/(w*units.length_unit_meters) for w in value.wavelengths]),
+                spectral_energy=value.flux*spectral_factor,units=flux_units,
                 faces=None if value.faces is None else {f:v*spectral_factor for f,v in value.faces.items()},
                 metadata=dict(transform,orientation='positive plane normal or outward closed surface',invariant_axes=invariant))
         elif isinstance(m,monitors.FarFieldMonitor):
@@ -143,7 +163,7 @@ def adapt_result(problem,numerics,execution,raw,metadata):
                 reference['integration_measure']=value.raw['cell_area']*units.length_unit_meters**(2-invariant)/raw.plan.dx**invariant
                 reference['integration_measure_units']='m' if invariant==1 else '1'
             common=dict(wavelengths=value.wavelengths,orders_u=tuple(value.orders.orders_u),
-                        orders_v=tuple(value.orders.orders_v),kz=value.kz*next(v for v in value.raw['outward_normal'] if v),k_parallel=value.raw['k_parallel'],
+                        orders_v=tuple(value.orders.orders_v),k_normal=value.kz*next(v for v in value.raw['outward_normal'] if v),k_parallel=value.raw['k_parallel'],
                         reference_wavelength_fields=('epsilon','mu','incident_amplitude'),
                         metadata={'theta_radians':value.theta_at*math.pi/180,'spectral_axis_retained':True,
                             'source_usable':usable,'source_band_cutoff':declaration.pulse.cutoff,
@@ -159,7 +179,7 @@ def adapt_result(problem,numerics,execution,raw,metadata):
                 valid=usable[:,None,None]
                 outputs[name]=DiffractionOrders(**common,amplitude_s=xp.where(valid,a,complex('nan')),
                     amplitude_p=xp.where(valid,b,complex('nan')),efficiency=xp.where(valid,efficiency,float('nan')),
-                    cartesian=xp.where(valid[...,None],getattr(order,side+'_xyz'),complex('nan')),
+                    amplitude_xyz=xp.where(valid[...,None],getattr(order,side+'_xyz'),complex('nan')),
                     reference=reference)
     source_references={}
     for name,s in raw.sources.items():
@@ -198,4 +218,4 @@ def adapt_result(problem,numerics,execution,raw,metadata):
         actual_steps=raw.plan.steps,dt_seconds=raw.plan.dt*ts,source_normalization={s.name:('current moment in A*m' if s.kind=='electric' else 'equivalent magnetic current moment in V*m')
             if hasattr(s,'current_moment') else 'electric field amplitude in V/m' for s in problem.sources},**metadata)
     return Result(outputs=outputs,validity=validity,diagnostics=diagnostics,provenance=provenance,
-                  sources=source_references,final_fields=final)
+                  source_references=source_references,final_fields=final)

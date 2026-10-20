@@ -57,7 +57,7 @@ Physical materials and units are shared by both solvers. A common declaration do
 .. autoclass:: wavebit.FieldSamples
    :members:
 
-.. autoclass:: wavebit.SpectralFieldSamples
+.. autoclass:: wavebit.RawFieldSpectrum
    :members:
 
 .. autoclass:: wavebit.RawDiffractionSpectrum
@@ -104,6 +104,6 @@ load contract, explicit field sampling and source-provenance scope.
 .. autoclass:: wavebit.records.RunRecord
    :members:
 
-.. autoclass:: wavebit.records.RecordedFields
+.. autoclass:: wavebit.records.RecordedObject
    :members:
 ```

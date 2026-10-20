@@ -34,7 +34,7 @@ def verify(result, expected, steps):
     for c, label in enumerate(LABELS):
         errors.append(scaled(host(result[label].values)*(Z0 if c >= 3 else 1), expected['records'][c]))
         times = (np.arange(steps)+(1. if c < 3 else .5))*DT
-        np.testing.assert_allclose(host(result[label].times), times, rtol=2e-14, atol=0)
+        np.testing.assert_allclose(host(result[label].times_seconds), times, rtol=2e-14, atol=0)
     np.testing.assert_allclose(result.provenance['dt_seconds'], DT, rtol=2e-14, atol=0)
     assert max(errors) < TOL, errors
     return max(errors)

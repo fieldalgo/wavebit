@@ -255,6 +255,48 @@ def removed(owner, name, replacement, note=None):
                           f'docs/migration/public-names.md.', name=name, obj=Answered())
 
 
+def renamed_attributes(renamed, prefix=''):
+    """A class ``__getattr__`` that refuses each removed attribute in ``renamed`` by name.
+
+    ``renamed`` maps an old attribute to the one that replaced it, or to ``(new, note)``. The
+    messages name ``prefix`` plus ``type(self).__name__``, so a subclass's old name is refused
+    under its own class. Python calls ``__getattr__`` only when normal lookup fails, so it never
+    shadows a field, property or method. It reads ``name`` and the class and nothing else: pickle,
+    ``copy`` and a pytree's unflatten ask a half-built object for dunders, and every name that is
+    not a tombstone, a dunder included, gets the plain ``AttributeError``.
+    """
+    table = dict(renamed)
+
+    def __getattr__(self, name):
+        owner = prefix + type(self).__name__
+        if name in table:
+            new, note = table[name] if isinstance(table[name], tuple) else (table[name], None)
+            raise removed(owner, name, f'{owner}.{new}', note)
+        raise AttributeError(f'{type(self).__name__!r} object has no attribute {name!r}')
+
+    return __getattr__
+
+
+def renamed_keywords(where, renamed):
+    """Decorate a function or method so each removed keyword in ``renamed`` is refused by name.
+
+    The keyword counterpart of :func:`spec`'s ``renamed=`` for a call that is not a spec's
+    constructor, such as ``periodic.Result.sample``: the old spelling raises ``TypeError`` naming
+    the new one, and every other call goes through unchanged, with its own signature.
+    """
+    import functools
+
+    def decorate(fn):
+        @functools.wraps(fn)
+        def call(*args, **kwargs):
+            gone = [k for k in kwargs if k in renamed]
+            if gone:
+                raise TypeError(renamed_keyword_message(where, gone, renamed))
+            return fn(*args, **kwargs)
+        return call
+    return decorate
+
+
 def _signature(cls, leading):
     """The signature ``inspect`` and the API reference show for a spec's ``__init__``.
 

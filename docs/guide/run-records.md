@@ -103,7 +103,7 @@ The manifest's schema is `wavebit.run/v2`. A `wavebit.run/v1` record, written be
 `load_run(path)` verifies the manifest, Job identity, source inventory and payloads.
 It never executes archived Python, calls the solver, imports a type name from the
 record, or loads pickle/object arrays. Loaded numerical arrays are owned,
-read-only NumPy arrays. Dataclass observations become `RecordedFields` mappings:
+read-only NumPy arrays. Dataclass observations become `RecordedObject` mappings:
 use `observation["values"]`, not a live observation method. Their `type_name`
 retains the original type as descriptive text.
 

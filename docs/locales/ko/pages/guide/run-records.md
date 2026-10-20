@@ -103,7 +103,7 @@ manifest의 schema는 `wavebit.run/v2`입니다. [공개 이름이 바뀌기](..
 `load_run(path)`는 manifest, Job 식별값, 소스 목록과 payload를 검사합니다.
 보관된 Python을 실행하거나, 솔버를 호출하거나, 기록에 적힌 타입 이름을 import하거나,
 pickle/object 배열을 읽지 않습니다. 읽어 온 수치 배열은 독립적으로 소유하는
-읽기 전용 NumPy 배열입니다. dataclass 관측량은 `RecordedFields` mapping으로
+읽기 전용 NumPy 배열입니다. dataclass 관측량은 `RecordedObject` mapping으로
 바뀝니다. 실행 중인 관측 객체의 메서드 대신 `observation["values"]`처럼 접근하세요.
 `type_name`에는 원래 타입을 설명용 문자열로 남깁니다.
 

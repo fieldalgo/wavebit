@@ -51,7 +51,7 @@ def test_geometry_units_records_and_fourier_integrals_are_invariant():
     for name in a.snapshots:
         x,y=a.snapshots[name],b.snapshots[name]
         np.testing.assert_allclose(x.values,y.values,rtol=1e-12,atol=1e-20)
-        np.testing.assert_allclose(x.time,y.time,rtol=2e-15)
+        np.testing.assert_allclose(x.times_seconds,y.times_seconds,rtol=2e-15)
         np.testing.assert_allclose(x.coordinates['z']*1000,y.coordinates['z'],rtol=2e-15)
     np.testing.assert_allclose(a.spectrum.coordinates['z'],np.cumsum(nums.grid.z_spacing)[:10][-1:])
     e,h=a.spectrum.values[...,:3],a.spectrum.values[...,3:]

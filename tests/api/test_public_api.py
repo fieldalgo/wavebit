@@ -27,7 +27,7 @@ PUBLIC = {
  'wavebit': ('Backend', 'CheckReport', 'ConductiveMaterial', 'Debye', 'DiffractionOrders',
              'DispersiveMaterial', 'Drude', 'Execution', 'FieldSamples', 'IncompatibleProblemError',
              'Issue', 'Job', 'Lattice', 'Lorentz', 'Material', 'MaterialResponse', 'NumericalError',
-             'RawDiffractionSpectrum', 'SpectralFieldSamples', 'TabulatedMaterial', 'TimeSeries',
+             'RawDiffractionSpectrum', 'RawFieldSpectrum', 'TabulatedMaterial', 'TimeSeries',
              'Units', 'UnsupportedFeatureError', 'ValidationError', 'Validity', 'WavebitError',
              'eps_from_refractive_index', 'fdtd', 'materials', 'rcwa', 'refractive_index_from_eps',
              'run'),
@@ -57,7 +57,7 @@ PUBLIC = {
  'wavebit.materials.catalog': ('available', 'load'),
  'wavebit.migration': ('migrate_legacy_jobs',),
  'wavebit.observations': ('DiffractionOrder', 'DiffractionOrders', 'FieldSamples', 'ModeFit',
-                          'RawDiffractionSpectrum', 'SpectralFieldSamples', 'TimeSeries',
+                          'RawDiffractionSpectrum', 'RawFieldSpectrum', 'TimeSeries',
                           'Validity', 'fit_modes'),
  'wavebit.observations.modes': ('ModeFit', 'fit_modes'),
  'wavebit.rcwa': ('BoundaryPower', 'Circle', 'ElectricDipole', 'Ellipse', 'Excitation',
@@ -69,7 +69,7 @@ PUBLIC = {
                                'CartesianRectanglePairNVF', 'ConformingNVF'),
  'wavebit.rcwa.operators': ('ConvMatrices', 'Operators', 'Port', 'ScatteringMatrix',
                             'TensorConvMatrices', 'assemble', 'solve'),
- 'wavebit.records': ('RecordedFields', 'RunRecord', 'load_run', 'run_recorded', 'save_run')
+ 'wavebit.records': ('RecordedObject', 'RunRecord', 'load_run', 'run_recorded', 'save_run')
 }
 
 #: Objects reachable from more than one public path today. This list may only shrink.
@@ -83,7 +83,7 @@ KNOWN_DUPLICATES = (('wavebit.ConductiveMaterial', 'wavebit.materials.Conductive
  ('wavebit.Material', 'wavebit.materials.Material'),
  ('wavebit.MaterialResponse', 'wavebit.materials.MaterialResponse'),
  ('wavebit.RawDiffractionSpectrum', 'wavebit.observations.RawDiffractionSpectrum'),
- ('wavebit.SpectralFieldSamples', 'wavebit.observations.SpectralFieldSamples'),
+ ('wavebit.RawFieldSpectrum', 'wavebit.observations.RawFieldSpectrum'),
  ('wavebit.TabulatedMaterial', 'wavebit.materials.TabulatedMaterial'),
  ('wavebit.TimeSeries', 'wavebit.observations.TimeSeries'),
  ('wavebit.Validity', 'wavebit.observations.Validity'),
@@ -465,3 +465,170 @@ def test_a_former_materials_module_is_not_a_public_path(name):
     assert 'Did you mean' not in ''.join(traceback.format_exception(caught.value))
     with pytest.raises(ModuleNotFoundError):
         importlib.import_module(f'wavebit.materials.{name}')
+
+
+# ---------------------------------------------------------------------------------------------
+# Observation and result objects (#57 section 4)
+# ---------------------------------------------------------------------------------------------
+
+#: (module, removed name, its replacement in the same module).
+OBSERVATION_MODULE_RENAMED = [('wavebit', 'SpectralFieldSamples', 'RawFieldSpectrum'),
+                              ('wavebit.observations', 'SpectralFieldSamples', 'RawFieldSpectrum'),
+                              ('wavebit.records', 'RecordedFields', 'RecordedObject')]
+
+
+@pytest.mark.parametrize('module, old, new', OBSERVATION_MODULE_RENAMED,
+                         ids=[f'{module}.{old}' for module, old, _ in OBSERVATION_MODULE_RENAMED])
+def test_a_removed_observation_name_fails_naming_its_replacement(module, old, new):
+    namespace = importlib.import_module(module)
+    assert not hasattr(namespace, old)
+    with pytest.raises(AttributeError, match=rf'{module}\.{old} is now {module}\.{new}\b') as caught:
+        getattr(namespace, old)
+    shown = ''.join(traceback.format_exception(caught.value))
+    assert 'public-names.md' in shown and 'Did you mean' not in shown, shown
+    assert new in namespace.__all__
+    with pytest.raises(AttributeError, match="has no attribute 'unrelated'"):
+        getattr(namespace, 'unrelated')
+
+
+def _time_series(**kw):
+    from wavebit.observations import TimeSeries
+    return TimeSeries(coordinates={}, values=np.zeros(2), components=('Ex',), units='V/m',
+                      sampling='raw', **kw)
+
+
+def _field_spectrum(**kw):
+    from wavebit.observations import RawFieldSpectrum
+    return RawFieldSpectrum(coordinates={}, values=np.zeros(1), components=('Ex',), units='V*s/m',
+                            sampling='raw', wavelengths=(1.,), **kw)
+
+
+def _orders(**kw):
+    from wavebit.observations import DiffractionOrders
+    return DiffractionOrders(**{'wavelengths': (1.,), 'orders_u': (0,), 'orders_v': (0,), **kw})
+
+
+def _order(**kw):
+    from wavebit.observations import DiffractionOrder
+    return DiffractionOrder(wavelengths=(1.,), order_u=0, order_v=0, **kw)
+
+
+def _raw_orders(**kw):
+    from wavebit.observations import RawDiffractionSpectrum
+    return RawDiffractionSpectrum(wavelengths=(1.,), orders_u=(0,), orders_v=(0,), **kw)
+
+
+def _flux(**kw):
+    kw = {'frequencies_hz': np.ones(1), 'spectral_energy': np.ones(1), **kw}
+    return fdtd.SpectralFlux(wavelengths=(1.,), units='J/Hz', **kw)
+
+
+def _fdtd_result(**kw):
+    from wavebit.observations import Validity
+    return fdtd.Result(outputs={}, validity=Validity(), diagnostics={}, provenance={}, **kw)
+
+
+#: (builder, removed attribute, the replacement its message names).
+OBSERVATION_RENAMED = [
+    (_time_series, 'times', 'TimeSeries.times_seconds'),
+    (_time_series, 'time', 'TimeSeries.times_seconds'),
+    (_field_spectrum, 'frequencies', 'RawFieldSpectrum.frequencies_hz'),
+    (_field_spectrum, 'spectrum', 'RawFieldSpectrum.sidedness'),
+    (_orders, 'cartesian', 'DiffractionOrders.amplitude_xyz'),
+    (_orders, 'kz', 'DiffractionOrders.k_normal'),
+    (_orders, 'at_wavelength', 'DiffractionOrders.at_wavelength_index'),
+    (_order, 'cartesian', 'DiffractionOrder.amplitude_xyz'),
+    (_order, 'kz', 'DiffractionOrder.k_normal'),
+    (_raw_orders, 'cartesian', 'RawDiffractionSpectrum.amplitude_xyz'),
+    (_raw_orders, 'kz', 'RawDiffractionSpectrum.k_normal'),
+    (_raw_orders, 'spectrum', 'RawDiffractionSpectrum.sidedness'),
+    (_raw_orders, 'at_wavelength', 'RawDiffractionSpectrum.at_wavelength_index'),
+    (_flux, 'frequencies', 'fdtd.SpectralFlux.frequencies_hz'),
+    (_flux, 'energy_density', 'fdtd.SpectralFlux.spectral_energy'),
+    (_fdtd_result, 'sources', 'fdtd.Result.source_references'),
+]
+
+
+@pytest.mark.parametrize('build, old, replacement', OBSERVATION_RENAMED,
+                         ids=[f'{row[2].rsplit(".", 1)[0]}.{row[1]}' for row in OBSERVATION_RENAMED])
+def test_a_renamed_observation_member_fails_naming_its_replacement(build, old, replacement):
+    value = build()
+    assert not hasattr(value, old)
+    with pytest.raises(AttributeError, match=rf'\.{old} is now {replacement}\b') as caught:
+        getattr(value, old)
+    shown = ''.join(traceback.format_exception(caught.value))
+    assert 'public-names.md' in shown and 'Did you mean' not in shown, shown
+    assert hasattr(value, replacement.rsplit('.', 1)[1])
+    with pytest.raises(AttributeError) as caught:
+        value.unrelated
+    assert str(caught.value) == f"'{type(value).__name__}' object has no attribute 'unrelated'"
+
+
+#: (builder, removed keyword, a value it took, its replacement). Each class of a hierarchy is
+#: listed on its own: a subclass regenerates its constructor, so each must refuse by itself.
+OBSERVATION_RENAMED_KEYWORDS = [
+    (_time_series, 'times', np.arange(2.), 'times_seconds'),
+    (_field_spectrum, 'frequencies', np.ones(1), 'frequencies_hz'),
+    (_field_spectrum, 'spectrum', 'two-sided', 'sidedness'),
+    (_orders, 'cartesian', np.zeros((1, 1, 1, 3)), 'amplitude_xyz'),
+    (_orders, 'kz', np.ones((1, 1, 1)), 'k_normal'),
+    (_order, 'cartesian', np.zeros((1, 3)), 'amplitude_xyz'),
+    (_order, 'kz', np.ones(1), 'k_normal'),
+    (_raw_orders, 'cartesian', np.zeros((1, 1, 1, 3)), 'amplitude_xyz'),
+    (_raw_orders, 'kz', np.ones((1, 1, 1)), 'k_normal'),
+    (_raw_orders, 'spectrum', 'two-sided', 'sidedness'),
+    (_flux, 'frequencies', np.ones(1), 'frequencies_hz'),
+    (_flux, 'energy_density', np.ones(1), 'spectral_energy'),
+    (_fdtd_result, 'sources', {}, 'source_references'),
+]
+
+
+@pytest.mark.parametrize('build, old, value, new', OBSERVATION_RENAMED_KEYWORDS,
+                         ids=[f'{row[0].__name__}:{row[1]}->{row[3]}'
+                              for row in OBSERVATION_RENAMED_KEYWORDS])
+def test_a_renamed_observation_keyword_fails_naming_its_replacement(build, old, value, new):
+    owner = type(build()).__name__
+    with pytest.raises(TypeError, match=rf'{owner}\({old}=\.\.\.\) is now {owner}\({new}=\.\.\.\)') as caught:
+        build(**{old: value})
+    shown = _shown(caught.value)
+    assert 'public-names.md' in shown and 'did you mean' not in shown.lower(), shown
+    assert getattr(build(**{new: value}), new) is not None
+
+
+def test_periodic_sample_names_its_seconds_keyword():
+    result = _empty_result('periodic')
+    with pytest.raises(TypeError, match=r'periodic\.Result\.sample\(times=\.\.\.\) is now '
+                                        r'periodic\.Result\.sample\(times_seconds=\.\.\.\)') as caught:
+        result.sample(z=0., times=(0.,))
+    assert 'public-names.md' in _shown(caught.value)
+    import inspect
+    assert 'times_seconds' in inspect.signature(periodic.Result.sample).parameters
+
+
+def test_the_renamed_observation_members_answer_what_they_did():
+    orders = _orders(wavelengths=(1., 2.), k_normal=np.arange(2.).reshape(2, 1, 1),
+                     amplitude_xyz=np.arange(6.).reshape(2, 1, 1, 3))
+    selected = orders.at_wavelength_index(1)
+    assert selected.wavelengths == (2.,) and selected.k_normal.tolist() == [[[1.]]]
+    order = orders.order(0)
+    assert order.k_normal.tolist() == [0., 1.] and order.amplitude_xyz.shape == (2, 3)
+    assert _raw_orders().sidedness == _field_spectrum().sidedness == 'two-sided'
+    assert _time_series(times_seconds=np.arange(2.)).times_seconds.tolist() == [0., 1.]
+    assert 'times_seconds=' in repr(_time_series()) and 'times=' not in repr(_time_series())
+
+
+@pytest.mark.parametrize('build', [_time_series, _field_spectrum, _orders, _order, _raw_orders,
+                                   _flux, _fdtd_result], ids=lambda build: build.__name__)
+def test_a_tombstoned_observation_survives_a_jit_round_trip(build):
+    """The class ``__getattr__`` reads no instance state, so flatten/unflatten (which build an
+    object field by field) and ``jit`` see the fields only, and the tombstones still answer."""
+    jax = pytest.importorskip('jax')
+    value = build()                   # built after JAX is imported, so it is a registered pytree
+    leaves, tree = jax.tree_util.tree_flatten(value)
+    assert type(jax.tree_util.tree_unflatten(tree, leaves)) is type(value)
+    out = jax.jit(lambda v: v)(value)
+    assert type(out) is type(value)
+    assert [f.name for f in dataclasses.fields(out)] == [f.name for f in dataclasses.fields(value)]
+    old = next(old for b, old, _ in OBSERVATION_RENAMED if b is build)
+    with pytest.raises(AttributeError, match='is now'):
+        getattr(out, old)

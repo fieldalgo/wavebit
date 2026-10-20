@@ -299,7 +299,7 @@ def main(argv=None):
             residual = series[2:]-(expected['g']-expected['drive']/EPSILON)*series[1:-1] + expected['h']*series[:-2] - AMPLITUDE*(1-expected['g']+expected['h'])
             recurrence = float(np.max(abs(residual)))
             assert recurrence < 1e-12
-            np.testing.assert_allclose(host(result['probe'].times), np.arange(1, STEPS+1)*dt, rtol=2e-14, atol=0.)
+            np.testing.assert_allclose(host(result['probe'].times_seconds), np.arange(1, STEPS+1)*dt, rtol=2e-14, atol=0.)
             actual = float(host(value))
             gradients = [float(host(v)) for v in derivatives]
             np.testing.assert_allclose(actual, expected['value'], rtol=2e-12, atol=0.)

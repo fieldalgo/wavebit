@@ -41,7 +41,7 @@ def numerics(block=None):
 def vector(result, kind):
     fields = result.final_fields.values
     return (fields['E'], Z0 * fields['H'],
-            (Z0 if kind == 'magnetic' else 1.) * result.sources['d']['field'])
+            (Z0 if kind == 'magnetic' else 1.) * result.source_references['d']['field'])
 
 
 def objective(result, kind):
@@ -101,6 +101,6 @@ def test_public_cpml_amplitude_phase_hessian(device, block, kind):
                 assert leaf.grad is None
         if old is not None:
             assert torch.equal(old[0].final_fields.values['E'], old[1])
-            assert torch.equal(old[0].sources['d']['field'], old[2])
+            assert torch.equal(old[0].source_references['d']['field'], old[2])
         old = (result, result.final_fields.values['E'].detach().clone(),
-               result.sources['d']['field'].detach().clone())
+               result.source_references['d']['field'].detach().clone())

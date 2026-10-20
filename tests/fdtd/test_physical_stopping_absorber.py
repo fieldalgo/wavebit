@@ -46,7 +46,7 @@ def test_physical_stopping_matches_an_independent_scalar_recurrence_and_prefix(b
     for component in ('E', 'H'):
         np.testing.assert_array_equal(result.final_fields.values[component], fixed.final_fields.values[component])
     np.testing.assert_array_equal(result['E'].values, fixed['E'].values)
-    np.testing.assert_array_equal(result['E'].time, fixed['E'].time)
+    np.testing.assert_array_equal(result['E'].times_seconds, fixed['E'].times_seconds)
 
 
 def test_stopping_is_invariant_under_geometry_unit_changes_and_portable_jobs():

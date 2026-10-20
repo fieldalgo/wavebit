@@ -110,7 +110,7 @@ def test_public_oblique_bloch_wave_matches_discrete_closed_form(case, device, re
     assert bool(result.validity.checks['runtime_stability'])
     dt = prepared.contract['resolved_dt_seconds'] / UNITS.time_unit_seconds
     plan = SimpleNamespace(dx=DX, dt=dt)
-    source = result.sources['pw']
+    source = result.source_references['pw']
     assert source['plane'] == pytest.approx(0., abs=1e-14)
     assert source['plane_H'] == pytest.approx(oracle.sign * DX / 2, abs=1e-14)
     incident = (host(source['incident']), Z0 * host(source['incident_H']))
@@ -130,7 +130,7 @@ def test_public_oblique_bloch_wave_matches_discrete_closed_form(case, device, re
         expected = incident[index // 3][:, index % 3]
         entry_error = max(entry_error, np.max(np.abs(values - expected)) / reference_peak)
         expected_times = host(source['magnetic_time' if component[0] == 'H' else 'time'])
-        np.testing.assert_array_equal(host(entry.times), expected_times)
+        np.testing.assert_array_equal(host(entry.times_seconds), expected_times)
         for name in ('entry', 'forward', 'backward', 'xnext', 'ynext'):
             actual = result[name + '_' + component].values
             assert actual.device == torch.device(device) and actual.dtype == torch.complex128
@@ -158,7 +158,7 @@ def test_public_oblique_bloch_wave_matches_discrete_closed_form(case, device, re
         sample = result['forward_' + component]
         np.testing.assert_allclose(sample.coordinates['sample'][2], oracle.sign * .8, atol=1e-14, rtol=0.)
         expected = polarisation[c] * waveform * np.exp(1j * _discrete_kz(oracle, plan, omega) * distance)
-        actual = _dft(host(sample.times) / UNITS.time_unit_seconds, host(sample.values), omega)
+        actual = _dft(host(sample.times_seconds) / UNITS.time_unit_seconds, host(sample.values), omega)
         error = max(error, float(np.max(np.abs(actual - expected)) / normalization))
     record_property('closed_form_peak_relative_error', error)
     record_property('backward_over_forward', float(backward / forward))

@@ -48,7 +48,7 @@ def numerics(block=None):
 
 def groups(result):
     """Fixed SI rescalings only; each tuple contains complex linear outputs."""
-    source = result.sources['pw']
+    source = result.source_references['pw']
     return (
         (result.final_fields.values['E'],),
         (Z0 * result.final_fields.values['H'],),
@@ -66,7 +66,7 @@ def norm2(values):
 def losses(result):
     record = norm2(groups(result)[2])
     field = norm2(groups(result)[3])
-    flux = result['flux'].energy_density.sum() / (
+    flux = result['flux'].spectral_energy.sum() / (
         2 * UNITS.time_unit_seconds ** 2 * UNITS.length_unit_meters ** 2 / Z0)
     return record, field, flux
 
@@ -112,10 +112,10 @@ def ownership(torch, leaves, originals, derivatives):
 
 def snapshot(result):
     # Snapshot the public buffers themselves, not rescaled temporary tensors.
-    source = result.sources['pw']
+    source = result.source_references['pw']
     values = (*result.final_fields.values.values(), result['e'].values, result['h'].values,
               *result['field'].values.values(), source['incident'], source['incident_H'],
-              result['flux'].energy_density)
+              result['flux'].spectral_energy)
     return [(v, v.detach().clone()) for v in values]
 
 
