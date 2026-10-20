@@ -379,8 +379,9 @@ Both pieces must sit on the **same order grid**. This API derives `kx` from
 
 Ten percent out, with no NaN, no negative power, and nothing to notice. It is the same
 "`theta` is measured in the incidence medium" trap as backside illumination, in a new place.
-So `ScatteringMatrix` carries its `Port` at each end — the retained `kx`/`ky`, the
-half-space and the polarization channel — and `cascade` refuses a mismatch by name, with the
+So `ScatteringMatrix` carries its `Port` at each end — the retained in-plane wavevectors
+`kx_over_k0`/`ky_over_k0`, the half-space (`refractive_index`, `mu`) and the polarization
+channel — and `cascade` refuses a mismatch by name, with the
 conversion in the message:
 
 ```

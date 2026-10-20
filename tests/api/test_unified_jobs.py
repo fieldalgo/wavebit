@@ -156,7 +156,8 @@ def test_the_execution_tag_names_its_public_path():
 @pytest.mark.parametrize('module, old', [('wavebit.fdtd', 'Flux'),
                                          ('wavebit.fdtd.native', 'Record'),
                                          ('wavebit.fdtd.native', 'Tail'),
-                                         ('wavebit.fdtd.periodic', 'Record')])
+                                         ('wavebit.fdtd.periodic', 'Record'),
+                                         ('wavebit.rcwa', 'OrderExcitation')])
 def test_an_allowlisted_name_that_does_not_resolve_is_an_error(monkeypatch, module, old):
     """A removed name is a tombstone; listed by mistake, it fails here, not when a job is read."""
     import re
@@ -217,3 +218,52 @@ def test_every_public_fdtd_declaration_has_a_tag_and_round_trips():
     original = Job(solver='fdtd', problem=problem, numerics=numerics)
     restored = Job.from_json(original.to_json())
     assert restored == original and restored.key == original.key
+
+
+def _coherent_job():
+    sources = (rcwa.IncidentOrders(weights=(((0, 0), 1.), ((1, 0), .5j)), theta=.1),
+               rcwa.GaussianBeam(waist=1., angular_spectrum_extent=3., sampling=(5, 5)))
+    problem = rcwa.Problem(units=Units(length='um'), stack=rcwa.Stack(period=(.8, .9), layers=(
+        rcwa.Layer(thickness=.2, background=Material(2.25)),)),
+        excitation=rcwa.Excitation(wavelength=.6, sources=sources),
+        outputs=rcwa.Outputs(diffraction=False, power_region=((-.4, .4), (-.45, .45))))
+    return Job(solver='rcwa', problem=problem, numerics=rcwa.Numerics(orders=(1, 1)))
+
+
+def test_incident_orders_and_a_gaussian_beam_round_trip_under_their_public_names():
+    original = _coherent_job()
+    text = original.to_json()
+    assert 'wavebit.rcwa.IncidentOrders' in text and '"weights"' in text
+    assert '"angular_spectrum_extent"' in text
+    assert 'OrderExcitation' not in text and 'spectral_extent' not in text
+    restored = Job.from_json(text)
+    assert restored == original and restored.key == original.key
+    orders, beam = restored.problem.excitation.sources
+    assert orders.weights == (((0, 0), 1.), ((1, 0), .5j))
+    assert beam.angular_spectrum_extent == 3.
+    for port in ('top', 'bottom'):
+        np.testing.assert_array_equal(run(restored).outputs[port].outgoing,
+                                      run(original).outputs[port].outgoing)
+
+
+@pytest.mark.parametrize('old, new', [('"wavebit.rcwa.OrderExcitation"', '"wavebit.rcwa.IncidentOrders"'),
+                                      ('"orders"', '"weights"'),
+                                      ('"spectral_extent"', '"angular_spectrum_extent"')])
+def test_a_v2_job_with_an_old_rcwa_name_is_refused(old, new):
+    """An old tag or field is refused, never converted; the refusal names the migration guide."""
+    text = _coherent_job().to_json()
+    assert text.count(new) == 1
+    with pytest.raises(ValidationError, match='public-names.md') as caught:
+        Job.from_json(text.replace(new, old))
+    assert caught.value.code == 'job.encoding'
+
+
+def test_every_public_rcwa_declaration_has_a_tag():
+    import dataclasses
+    from wavebit import jobs
+    registry = jobs._registry()
+    for name in rcwa.__all__:
+        obj = getattr(rcwa, name)
+        if (isinstance(obj, type) and dataclasses.is_dataclass(obj)
+                and name not in ('Prepared', 'Result', 'BoundaryPower')):
+            assert f'wavebit.rcwa.{name}' in registry, name

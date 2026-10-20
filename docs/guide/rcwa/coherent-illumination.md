@@ -7,10 +7,11 @@
 
 
 :::{note}
-Every example below uses the current `rcwa` lifecycle. Two quantities are still reported only by
-the earlier `wavebit.compat.legacy` interface, because the current result does not carry them
-yet: the number of calculation groups (`group_count`) and a finite region's net flux with its
-incoming/outgoing interference (`net_into_stack`). The examples say where.
+Every example below uses the current `rcwa` lifecycle. The number of calculation groups is
+`result.diagnostics['source_group_counts']`, one count per wavelength. One quantity is still
+reported only by the earlier `wavebit.compat.legacy` interface, because the current result does
+not carry it yet: a finite region's net flux with its incoming/outgoing interference
+(`net_into_stack`). The examples say where.
 :::
 
 Put several sources in `rcwa.Excitation(sources=...)` when plane waves need their own direction,
@@ -170,16 +171,16 @@ See the observation-area section below for finite-window power and absorption.
 
 ### PlaneWave lists and illuminated orders
 
-Use separate sources for independently chosen directions and polarizations. Use `orders`
-within an `OrderExcitation` for directions offset from a reference by integer reciprocal
+Use separate sources for independently chosen directions and polarizations. Use `weights`
+within an `IncidentOrders` for directions offset from a reference by integer reciprocal
 lattice vectors, all with the same s/p coefficients:
 
 ```python
 order_problem = same_side.replace(
     excitation=same_side.excitation.replace(sources=(
-        rcwa.OrderExcitation(
+        rcwa.IncidentOrders(
             side='top', theta=0., phi=0., polarization='s', amplitude=1.,
-            orders=(((0, 0), 1.), ((1, 0), 0.5 * np.exp(1j * np.deg2rad(90.))))),
+            weights=(((0, 0), 1.), ((1, 0), 0.5 * np.exp(1j * np.deg2rad(90.))))),
     )),
     outputs=rcwa.Outputs(diffraction=False, power_region='cell'),
 )
@@ -190,7 +191,7 @@ Here the labels `(m, 0)` are x orders: `kx_m = kx_reference + m*2*pi/Px`, with `
 At wavelength 600 nm and period 900 nm in air, the +1 input has angle about 41.81°,
 not the 20° angle of the earlier list. In 2D the labels `(m, n)` multiply the first
 and second reciprocal lattice vectors. The full electric s/p amplitude is
-`amplitude * weight * normalized_polarization`, with each order's weight from `orders`.
+`amplitude * weight * normalized_polarization`, with each order's weight from `weights`.
 Specify separate plane waves to assign different polarizations to different orders. Order
 labels must fit `Numerics(orders=...)`, and each input must carry positive inward normal power.
 
@@ -209,21 +210,21 @@ two_angles = problem.replace(
     outputs=rcwa.Outputs(diffraction=False, fields=True, power_region='infinite'),
 )
 result = rcwa.run(two_angles, numerics=rcwa.Numerics(orders=(0, 0)))
-# Two calculation groups here; only the earlier interface reports the count (group_count).
+assert result.diagnostics['source_group_counts'] == (2,)   # two calculation groups
 ```
 
 The solver first evaluates each beam's physical transverse wavevector. Two inputs
 can share a diffraction grid when their difference equals `m*b1+n*b2`, with integer
 m,n and reciprocal lattice vectors b1,b2. Such inputs form a **Bloch sector**, or
 calculation group. Inputs that do not satisfy this relation require separate RCWA
-matrices. The earlier interface's `group_count` reports their number; the current result does
-not yet.
+matrices. `result.diagnostics['source_group_counts']` reports their number, one count per
+wavelength.
 
 ![PlaneWave directions are grouped, scattering matrices produce complex boundary amplitudes, and summed E/H fields determine observation-area power.](../../_static/coherent-illumination.svg)
 
 Within each group, the solver builds one two-port scattering matrix. The retained
 rectangular order window includes `Numerics(orders=...)` neighbours about every input
-in that group. `OrderExcitation.orders` labels must be within the declared order range;
+in that group. `IncidentOrders.weights` labels must be within the declared order range;
 separate PlaneWave directions can widen the combined window further. Widely separated
 inputs can therefore cost more than a single normally incident solve.
 
@@ -472,10 +473,10 @@ common parameter point if the matching becomes singular.
 
 The earlier interface's order-keyed map, `excitation={0: 1., 1: .5j}`, runs the ordinary
 single-sided solver. Its complex weights use the centre reference stated
-above, exactly as `OrderExcitation.orders` does, so the two forms take the same
+above, exactly as `IncidentOrders.weights` does, so the two forms take the same
 weights and light the same light (since 2026-09-27; until then the ordinary weights
 were referenced at the cell corner). That door also answers per-order `R`,
-`T` and amplitudes, which a current `OrderExcitation` run does not yet; its fields and
+`T` and amplitudes, which a current `IncidentOrders` run does not yet; its fields and
 boundary waves equal this path's for the same weights on the same side.
 
 Validation covers independent four-equation slab matching for both polarizations,
@@ -485,12 +486,12 @@ field superposition on oblique patterned cells, reciprocal-order grouping,
 finite-area integration, and a thick absorber without growing exponentials.
 See [the tests](../../../tests/rcwa/test_coherent_illumination.py) and
 [the executable example](../../../examples/rcwa/coherent_illumination.py), which uses the
-earlier interface.
+current `rcwa` lifecycle and reads the group count from `source_group_counts`.
 
 ## Source objects
 
 `rcwa.Excitation(sources=...)` takes a nonempty tuple of sources. A `PlaneWave`
-represents exactly one incident plane wave. `OrderExcitation` represents several
+represents exactly one incident plane wave. `IncidentOrders` represents several
 plane waves via reciprocal-order weights. A `GaussianBeam` describes a localized
 external incident field; an `ElectricDipole` describes a prescribed internal current.
 Every source in one run shares the wavelength and is combined coherently.
@@ -543,7 +544,7 @@ whose phase and power travel together. A `PlaneWave` from a negative-index side 
 with `theta` and `phi` meaning what they mean to a single plane wave -- the light's direction
 ([`negative-index-media.md`](../../theory/rcwa/negative-index-media.md) §7) -- so such a beam can be built from
 `PlaneWave` sources lit from that side. `sampling` gives the midpoint grid
-sizes; `spectral_extent` (default 4) covers +/-spectral_extent/waist in each beam
+sizes; `angular_spectrum_extent` (default 4) covers +/-angular_spectrum_extent/waist in each beam
 transverse direction. Converge both parameters. A finite k spacing produces
 spatial replicas, so increase sampling to move them away from the observation area.
 

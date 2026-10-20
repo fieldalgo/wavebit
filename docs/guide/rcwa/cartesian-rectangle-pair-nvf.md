@@ -21,7 +21,7 @@ structure = [dict(background=1., shapes=[
 builder = experimental.CartesianRectanglePairNVF((1, 2), refinement=1)
 plan = builder.plan(structure, lattice)
 conv = builder.conv_matrices(structure, lattice, plan=plan)
-numerics = rcwa.Numerics(orders=builder.truncation_order)
+numerics = rcwa.Numerics(orders=builder.orders)
 transmitted = []
 for polarization in ('p', 's'):
     problem = rcwa.Problem(
@@ -49,7 +49,7 @@ refinement and optical Fourier order are distinct resolutions; the
 
 | Input | Contract |
 | --- | --- |
-| `truncation_order` | Nonnegative integer or `(x, y)` pair, default 1. Either or both axes may be zero. The exact original difference-mode set is selected before closure. |
+| `orders` | Nonnegative integer or `(x, y)` pair, default 1. Either or both axes may be zero. The exact original difference-mode set is selected before closure. |
 | `refinement` | Integer 0 through 3, default 0. Separated pairs have 8/35/143/575 free potential unknowns; contacts have 6/27/111/447. See the [refinement controls and optical limits](../../validation/rcwa/nvf-pair-refinement.md). |
 | `lattice` | A `Lattice` or finite real 2-by-2 matrix whose columns are physical basis vectors, with positive finite determinant. No lattice reduction is performed. |
 | `structure` | Nonempty list or tuple of dictionaries with only `background` and `shapes`. Background defaults to vacuum. |

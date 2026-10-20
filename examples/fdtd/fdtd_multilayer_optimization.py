@@ -11,7 +11,7 @@ import numpy as np
 
 from wavebit import Units, Material
 from wavebit.fdtd import periodic as fdtd
-from wavebit.rcwa import layer_thicknesses
+from wavebit import layer_thicknesses
 
 DEPTH = .8
 MINIMUM = .04

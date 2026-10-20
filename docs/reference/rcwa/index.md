@@ -41,7 +41,7 @@ See the [runnable first calculation](../../getting-started/rcwa.md) and [common 
 .. autoclass:: wavebit.rcwa.PlaneWave
    :members:
 
-.. autoclass:: wavebit.rcwa.OrderExcitation
+.. autoclass:: wavebit.rcwa.IncidentOrders
    :members:
 
 .. autoclass:: wavebit.rcwa.GaussianBeam
@@ -64,5 +64,17 @@ See the [runnable first calculation](../../getting-started/rcwa.md) and [common 
 
 .. autoclass:: wavebit.rcwa.BoundaryPower
    :members:
+
+.. automodule:: wavebit.rcwa.diagnostics
+
+.. autoclass:: wavebit.rcwa.diagnostics.RayleighPointWarning
+
+.. autoclass:: wavebit.rcwa.diagnostics.AutoDetuneWarning
+
+.. autoclass:: wavebit.rcwa.diagnostics.ExceptionalPointWarning
+
+.. autoclass:: wavebit.rcwa.diagnostics.ComplexIncidenceWarning
+
+.. autoclass:: wavebit.rcwa.diagnostics.GainCutoffWarning
 
 ```

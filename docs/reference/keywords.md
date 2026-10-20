@@ -143,7 +143,7 @@ Explained in [Declaring RCWA illumination](../guide/rcwa/light.md) and
 | Field | Default | Accepts | Refuses |
 | --- | --- | --- | --- |
 | `wavelength` | required | the vacuum wavelength: a positive, finite, real scalar, or a nonempty one-dimensional array or tuple of them. Results keep a leading wavelength axis either way | complex or not positive: `wavelength.value`; two-dimensional: `wavelength.shape`; empty: `wavelength.empty`, all at check |
-| `sources` | required | a nonempty tuple of `PlaneWave`, `OrderExcitation`, `GaussianBeam` and `ElectricDipole`. One `PlaneWave` is the diffraction problem; anything else is a coherent-source run, which reports boundary power and requested fields | empty, or anything else (a side-keyed `dict` included): `excitation.sources`, at construction |
+| `sources` | required | a nonempty tuple of `PlaneWave`, `IncidentOrders`, `GaussianBeam` and `ElectricDipole`. One `PlaneWave` is the diffraction problem; anything else is a coherent-source run, which reports boundary power and requested fields | empty, or anything else (a side-keyed `dict` included): `excitation.sources`, at construction |
 
 A coherent-source run takes `Outputs(diffraction=False)`, `algorithm='smm'`, no `detuning`, no
 `scattering`, and values PyTorch or eager `jax.grad` can read: an input traced under `jax.jit`
@@ -160,14 +160,14 @@ or `jax.vmap` is refused with `rcwa.coherent_transform`.
 | `phi` | `None`, read as `0.` | azimuth of the incident light's direction, radians | beside `kx` or `ky`: `source.direction_ambiguous` |
 | `kx`, `ky` | `None` | the transverse angular wavenumbers in the inverse length unit, an alternative to `theta`/`phi`. These are physical values, not divided by `2π/λ`; an omitted component is zero | beside `theta` or `phi`: `source.direction_ambiguous` |
 
-### `rcwa.OrderExcitation`
+### `rcwa.IncidentOrders`
 
 Several diffraction orders lit coherently around one reference direction. It is a coherent-source
 run, so it reports boundary power rather than per-order efficiencies.
 
 | Field | Default | Accepts | Refuses |
 | --- | --- | --- | --- |
-| `orders` | required | `(((m, n), weight), ...)`: integer order pairs, each with a complex weight, its relative electric amplitude at `x = y = 0` on the lit boundary. A 1D order `m` is written `(m, 0)` | a `dict`, an empty tuple, or a label that is not two Python integers: `source.orders` (a bare integer label raises a plain `TypeError`); a repeated label: `source.orders_duplicate`, all at construction; an evanescent or grazing order: `rcwa.invalid`, at run |
+| `weights` | required | `(((m, n), weight), ...)`: integer order pairs, each with a complex weight, its relative electric amplitude at `x = y = 0` on the lit boundary. A 1D order `m` is written `(m, 0)` | a `dict`, an empty tuple, or a label that is not two Python integers: `source.weights` (a bare integer label raises a plain `TypeError`); a repeated label: `source.weights_duplicate`, all at construction; an order outside `Numerics(orders=...)`, or an evanescent or grazing one: `rcwa.invalid`, at run |
 | `side`, `polarization`, `amplitude`, `theta`, `phi`, `kx`, `ky` | as `PlaneWave` | the reference plane wave whose orders are lit | as `PlaneWave` |
 
 ### `rcwa.GaussianBeam`
@@ -180,7 +180,7 @@ A propagating Gaussian angular spectrum. It needs a finite rectangle
 | `waist` | required | the 1/e amplitude radius of the envelope, a positive length | not positive: `rcwa.invalid`, at check |
 | `focus` | `(0., 0., 0.)` | `(x, y, z)` of the focus | not three components: `source.dimension`, at construction |
 | `sampling` | `(9, 9)` | midpoint-quadrature points on the two axes transverse to the central direction | not two components: `source.dimension` |
-| `spectral_extent` | `4.` | the half-width of that quadrature, in units of `1/waist` | not positive: `rcwa.invalid`, at check |
+| `angular_spectrum_extent` | `4.` | the half-width of that quadrature, in units of `1/waist` | not a positive, finite, real number: `source.angular_spectrum_extent`, at check |
 | `side`, `polarization`, `amplitude`, `theta`, `phi`, `kx`, `ky` | as `PlaneWave` | the central plane wave; `amplitude` is the field at the focus | as `PlaneWave` |
 
 ### `rcwa.ElectricDipole`
@@ -324,7 +324,7 @@ amplitudes and scattering matrices agree to round-off (3e-13 or better). The
 | `polarization` | `PlaneWave(polarization=...)` | also `'s'` and `'p'` |
 | `psi`, `chi` | **none** | the same light is the Jones pair `polarization=(sin ψ cos χ + i cos ψ sin χ, cos ψ cos χ − i sin ψ sin χ)` (`chi = 0` is `(sin ψ, cos ψ)`), which agrees to round-off; the two-angle chart itself, without the pair's redundant scale and phase, has no field |
 | `tetm` | **none** | no field declares the polarization away, so a one-row raster always solves on the conical path. The numbers are the same (to 3e-13), but in one measurement at `orders=(10, 0)` to `(30, 0)` the run was 2.2 to 2.9 times slower than the earlier pure TE/TM path |
-| `excitation`, an order map | `OrderExcitation(orders=(((m, n), weight), ...))` | `{0: 1.0}` on 1D becomes `((0, 0), 1.0)`. A coherent-source run: its total boundary power agrees with the earlier per-order sums, but **per-order efficiencies have no current form** (`rcwa.coherent_diffraction`) |
+| `excitation`, an order map | `IncidentOrders(weights=(((m, n), weight), ...))` | `{0: 1.0}` on 1D becomes `((0, 0), 1.0)`. A coherent-source run: its total boundary power agrees with the earlier per-order sums, but **per-order efficiencies have no current form** (`rcwa.coherent_diffraction`) |
 | `excitation`, a side-keyed map or a source list | `Excitation(sources=(...))` | |
 | `stack=`, `incidence=` | `rcwa.Stack`, `rcwa.PlaneWave` | |
 | `truncation_order` | `Numerics(orders=...)` | the pair of Python `int`s only; the `dict` spellings are refused |

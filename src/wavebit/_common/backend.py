@@ -1089,31 +1089,36 @@ class PrecisionLossWarning(UserWarning):
 class ExceptionalPointWarning(UserWarning):
     """A 2D or first-order layer retains an unresolved defective mode cluster.
 
-    Isolated exceptional-point pairs are rebuilt in a regular basis. The eager cluster
-    screen (:func:`wavebit.rcwa._engine.solve_2d._unresolved_defective_cluster`) warns when the
-    final basis still contains a nearly dependent cluster with a non-normal restriction
-    of the layer operator. Ordinary diagonalizable degeneracies do not trigger it.
+    Public path: ``wavebit.rcwa.diagnostics.ExceptionalPointWarning``.
 
-    The result may be inaccurate. ``auto_detune`` does not act on this warning: its
-    Rayleigh detuning ladder is too small to leave a coincident exceptional-point band.
-    The screen cannot run under an abstract trace, where the unresolved cluster remains
-    silent; see ``docs/theory/rcwa/rayleigh-points.md`` for the measured limits.
+    Isolated exceptional-point pairs are rebuilt in a regular basis. An eager screen of each
+    layer's final mode basis warns when it still contains a nearly dependent cluster with a
+    non-normal restriction of the layer operator. Ordinary diagonalizable degeneracies do not
+    trigger it.
+
+    The result may be inaccurate. Detuning, ``rcwa.Numerics(detuning=...)``, does not act on
+    this warning: its Rayleigh detuning ladder is too small to leave a coincident
+    exceptional-point band. The screen cannot run under an abstract trace (``jax.jit`` or
+    ``jax.vmap``), where the unresolved cluster remains silent; see
+    ``docs/theory/rcwa/rayleigh-points.md`` for the measured limits.
     """
 
 
 class RayleighPointWarning(UserWarning):
     """A layer eigenmode sits numerically on its light line, on a path that loses it there.
 
-    Fired by :func:`check_mode_cutoff` from the 2D mode builder — since the coupled-cluster
-    rebuild (see :func:`wavebit.rcwa._engine.solve_2d._rebuild_grazing_cluster`) only on its
-    fallback paths: a grazing cluster whose E- and H-side sizes disagree, or eigenvalues
-    that are concrete but not materializable (a tensor carrying grad, an un-jitted
-    ``jax.grad`` tracer). There the old product construction is what ships, and the result
-    it annotates is finite, in range, and possibly wrong with no other sign — see the
-    caller for the mechanism and :func:`check_finite`'s message for the remedy (a one-ULP
-    detune, which ``solve``'s default ladder applies on seeing this warning). Its own
-    category so a sweep that knowingly steps across a Rayleigh anomaly can silence or
-    escalate it on its own.
+    Public path: ``wavebit.rcwa.diagnostics.RayleighPointWarning``.
+
+    Fired by the 2D mode builder, and since the coupled-cluster rebuild of grazing modes only
+    on its fallback paths: a grazing cluster whose E- and H-side sizes disagree, or
+    eigenvalues that are concrete but not materializable (a tensor carrying grad, an
+    un-jitted ``jax.grad`` tracer). There the earlier product construction is what runs, and
+    the result it annotates is finite, in range, and possibly wrong with no other sign. The
+    remedy is to move off the condition: one ULP of wavelength, period or angle is enough.
+    ``rcwa.Numerics(detuning=...)`` makes that retry and reports it with
+    :class:`AutoDetuneWarning`; it is off by default (``detuning=None``). Its own category so
+    a sweep that knowingly steps across a Rayleigh anomaly can silence or escalate it on its
+    own. See ``docs/theory/rcwa/rayleigh-points.md``.
     """
 
 
@@ -1141,6 +1146,8 @@ class AxisNameWarning(UserWarning):
 class ComplexIncidenceWarning(UserWarning):
     """The incident wave's transverse wavevector is complex, so R and T are formal ratios.
 
+    Public path: ``wavebit.rcwa.diagnostics.ComplexIncidenceWarning``.
+
     Only a complex ``theta`` / ``phi`` reaches one -- a direct ``kx`` / ``ky`` must be real --
     through the formal ``kx/k0 = n*sin(theta)*cos(phi)`` parameterization. Such a wave's
     intensity varies along the surface, and in the exit medium no root of ``kz`` both carries
@@ -1163,6 +1170,8 @@ class ComplexIncidenceWarning(UserWarning):
 class GainCutoffWarning(UserWarning):
     """An order of a gain half-space sits near grazing, where no plane-wave value is the answer.
 
+    Public path: ``wavebit.rcwa.diagnostics.GainCutoffWarning``.
+
     A half-space with gain (``Im(eps) < 0`` or ``Im(mu) < 0``) takes Maystre's root, which is
     the root of switching the gain on from zero at this frequency
     (:func:`~wavebit._common.conventions.boundary_kz`). Away from grazing a smooth (Gaussian)
@@ -1176,33 +1185,34 @@ class GainCutoffWarning(UserWarning):
     is ``|Re(kz**2)| < 2*|Im(kz**2)|`` per order, which for weak gain is an in-plane
     wavevector within about ``2*k0*|Im(n)|`` of grazing. It holds the window where a Gaussian
     beam's response grows with its width (a ratio below about 1) and the zone beyond it where a
-    beam a few gain lengths wide has not yet converged;
-    :meth:`~wavebit.rcwa._engine.engine.CoreFactorizationMixin.gain_cutoff_band` names the orders, and
-    ``docs/theory/rcwa/branch-cuts.md`` ("Gain near grazing") gives the measurements behind it.
+    beam a few gain lengths wide has not yet converged; ``docs/theory/rcwa/branch-cuts.md``
+    ("Gain near grazing") gives the measurements behind it.
 
     A warning rather than a refusal: the value is the exact answer to a stated problem, the
     band has no provable edge, and a refusal would stop a sweep and NaN a traced solve, which
     is the history of the Rayleigh-band refusals (``docs/theory/rcwa/rayleigh-points.md``). Constant text,
-    so the default filter shows it once per sweep. Not an ``auto_detune`` trigger: a one-ULP
-    nudge cannot leave a band this wide. A traced solve cannot check and stays silent; call
-    :meth:`~wavebit.rcwa._engine.engine.CoreFactorizationMixin.gain_cutoff_band`, which traces.
-    ``ScatteringMatrix.cascade`` does not re-check a joined stack: each piece was checked by
-    its own solve, against its own half-spaces. ``CoherentSolver`` runs the same test on its
-    own ports for the sectors a ``PlaneWave``, ``GaussianBeam`` or ``OrderExcitation`` lights,
-    once per side per solve. It skips dipole sources: a point source is sharp-edged, the case
-    the band does not describe.
+    so the default filter shows it once per sweep. Not a ``rcwa.Numerics(detuning=...)``
+    trigger: a one-ULP nudge cannot leave a band this wide. A traced run cannot check and
+    stays silent. ``rcwa.operators.ScatteringMatrix.cascade`` does not re-check a joined
+    stack: each piece was checked by its own run, against its own half-spaces. A
+    coherent-source run applies the same test on its own ports for the sectors a
+    ``PlaneWave``, ``GaussianBeam`` or ``IncidentOrders`` lights, once per side per run. It
+    skips dipole sources: a point source is sharp-edged, the case the band does not describe.
     """
 
 
 class AutoDetuneWarning(UserWarning):
-    """An ``auto_detune`` retry moved the solve off the requested point — this is the record.
+    """A detuning retry moved the run off the requested point — this is the record.
 
-    Fired once per ``solve(auto_detune=...)`` that actually retried; the message carries
-    the relative step and the wavelength the returned result was evaluated at, and the solver
-    keeps that wavelength so everything downstream (field reconstruction included) describes
-    one consistent problem. Its own category so a sweep can silence the notices while keeping
-    :class:`RayleighPointWarning` escalated, or the reverse. This is the loud replacement for
-    the silent ``perturbation`` knob that was removed — what changed is always said.
+    Public path: ``wavebit.rcwa.diagnostics.AutoDetuneWarning``.
+
+    Fired once per run with ``rcwa.Numerics(detuning=...)`` that actually retried; detuning
+    is off by default (``detuning=None``). The message carries the relative step and the
+    wavelength the returned result was evaluated at, and the result keeps that wavelength
+    (``Result.diagnostics['effective_wavelengths']``) so everything downstream, field
+    reconstruction included, describes one consistent problem. Its own category so a sweep can
+    silence the notices while keeping :class:`RayleighPointWarning` escalated, or the reverse.
+    What changed is always said; nothing is moved silently.
     """
 
 

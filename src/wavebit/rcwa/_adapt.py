@@ -12,7 +12,7 @@ from .._common.backend import as_array
 from ..materials import Material, TabulatedMaterial
 from ..errors import ValidationError, UnsupportedFeatureError, IncompatibleProblemError
 from .problem import Rectangle, Circle, Ellipse, Polygon
-from .sources import PlaneWave
+from .sources import PlaneWave, IncidentOrders, GaussianBeam, ElectricDipole
 
 
 def leaves(value):
@@ -161,9 +161,33 @@ def single_plane(problem):
     return len(problem.excitation.sources) == 1 and type(problem.excitation.sources[0]) is PlaneWave
 
 
+def _engine_source(source, xp, execution):
+    """The engine declaration of one public source, field by field.
+
+    An explicit map, not a lookup by class name: a public name that differs from the engine's
+    (``IncidentOrders(weights=)`` lowers to ``OrderExcitation(orders=)``) is translated here,
+    and a source type this map does not know is refused, never lowered by a guess.
+    """
+    from ._engine import sources as engine
+    if type(source) is ElectricDipole:
+        return engine.ElectricDipole(position=source.position, moment=source.moment,
+                                     repetition=source.repetition, bloch_k=source.bloch_k,
+                                     sampling=source.sampling)
+    wave = dict(side=source.side, polarization=polarization(source, xp, execution),
+                amplitude=source.amplitude, theta=source.theta, phi=source.phi,
+                kx=source.kx, ky=source.ky)
+    if type(source) is PlaneWave:
+        return engine.PlaneWave(**wave)
+    if type(source) is IncidentOrders:
+        return engine.OrderExcitation(orders=dict(source.weights), **wave)
+    if type(source) is GaussianBeam:
+        return engine.GaussianBeam(waist=source.waist, focus=source.focus, sampling=source.sampling,
+                                   spectral_extent=source.angular_spectrum_extent, **wave)
+    raise TypeError(f'rcwa has no engine lowering for {type(source).__name__}.')
+
+
 def build_solver(problem, numerics, execution, wavelength):
     from ._factory import rcwa as legacy_rcwa
-    from ._engine import sources as legacy_sources
     xp = _namespace(execution)
     kwargs = numerics._engine_kwargs()
     device = execution.device
@@ -206,15 +230,8 @@ def build_solver(problem, numerics, execution, wavelength):
         kwargs.update(incidence_side=source.side, polarization=polarization(source, xp, execution))
         kwargs.update({k: getattr(source, k) for k in ('theta', 'phi', 'kx', 'ky') if getattr(source, k) is not None})
     else:
-        adapted = []
-        for source in problem.excitation.sources:
-            values = {f.name: getattr(source, f.name) for f in dataclasses.fields(source)}
-            if 'polarization' in values:
-                values['polarization'] = polarization(source, xp, execution)
-            if 'orders' in values:
-                values['orders'] = dict(values['orders'])
-            adapted.append(getattr(legacy_sources, type(source).__name__)(**values))
-        kwargs.update(excitation=tuple(adapted), power_region=problem.outputs.power_region,
+        adapted = tuple(_engine_source(source, xp, execution) for source in problem.excitation.sources)
+        kwargs.update(excitation=adapted, power_region=problem.outputs.power_region,
                       length_unit=problem.units.length_unit_meters)
     if single_plane(problem):
         formulation = kwargs.pop('formulation', 'auto')
@@ -255,7 +272,7 @@ def structure_key(problem):
     # Period, shape values, and thickness can vary eagerly if the original
     # topology record still validates. Units and source grouping stay fixed.
     key = structure(problem)
-    order_labels = tuple(tuple(k for k, _ in s.orders) if hasattr(s, 'orders') else None
+    order_labels = tuple(tuple(k for k, _ in s.weights) if isinstance(s, IncidentOrders) else None
                          for s in problem.excitation.sources)
     sampling = tuple(tuple(s.sampling) if hasattr(s, 'sampling') else None
                      for s in problem.excitation.sources)
@@ -339,6 +356,17 @@ def check_structure(problem, expected):
                                        code='prepared.structure', path='problem')
 
 
+#: The fields of each source type that the engine's source grouping and order window read, and
+#: which a coherent preparation therefore fixes. Named per type, and read with ``getattr``, so a
+#: renamed field fails here instead of silently dropping out of the replay guard.
+_GROUPING_FIELDS = {
+    PlaneWave: ('theta', 'phi', 'kx', 'ky'),
+    IncidentOrders: ('theta', 'phi', 'kx', 'ky'),
+    GaussianBeam: ('theta', 'phi', 'kx', 'ky', 'waist', 'sampling', 'angular_spectrum_extent'),
+    ElectricDipole: ('sampling', 'bloch_k'),
+}
+
+
 def coherent_dependencies(problem):
     """Concrete dependencies of the engine's source grouping and order window.
 
@@ -358,10 +386,9 @@ def coherent_dependencies(problem):
             return tuple(exact(v) for v in value)
         a = host(value, 'excitation.source_grouping')
         return a.shape, tuple(a.reshape(-1).tolist())
-    fields = ('theta', 'phi', 'kx', 'ky', 'waist', 'sampling', 'spectral_extent', 'bloch_k')
     return (exact(problem.stack.lattice if problem.stack.lattice is not None else problem.stack.period),
             exact(problem.excitation.wavelength),
-            tuple(tuple((name, exact(getattr(source, name))) for name in fields if hasattr(source, name))
+            tuple(tuple((name, exact(getattr(source, name))) for name in _GROUPING_FIELDS[type(source)])
                   for source in problem.excitation.sources),
             tuple((exact(physical_material(model, w, problem.units).epsilon),
                    exact(physical_material(model, w, problem.units).mu))
@@ -397,3 +424,18 @@ def validate_values(problem):
             if a.shape or not np.isfinite(a) or (single_plane(problem) and abs(a) == 0):
                 raise ValidationError('Source amplitude must be finite; a single incident plane wave must be nonzero.',
                                       code='source.amplitude', path=f'excitation.sources[{i}].amplitude')
+        if isinstance(source, GaussianBeam) and not _positive_real(source.angular_spectrum_extent):
+            # The engine refuses the same values under its own keyword name; the public
+            # declaration is named here, at check, before the engine ever sees them.
+            raise ValidationError('GaussianBeam(angular_spectrum_extent=...) must be a positive, finite, real '
+                                  'number: the half-width of the angular-spectrum quadrature, in 1/waist.',
+                                  code='source.angular_spectrum_extent',
+                                  path=f'excitation.sources[{i}].angular_spectrum_extent')
+
+
+def _positive_real(value):
+    """Whether ``value`` is one positive, finite, real scalar, as the engine requires."""
+    try:
+        return bool(np.isscalar(value) and np.isrealobj(value) and np.isfinite(value) and value > 0)
+    except TypeError:
+        return False

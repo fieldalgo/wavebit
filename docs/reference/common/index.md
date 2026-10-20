@@ -31,6 +31,8 @@ Physical materials and units are shared by both solvers. A common declaration do
 
 .. autofunction:: wavebit.refractive_index_from_eps
 
+.. autofunction:: wavebit.layer_thicknesses
+
 .. autoclass:: wavebit.Units
    :members:
 

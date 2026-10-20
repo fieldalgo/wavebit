@@ -14,24 +14,60 @@ from .numerics import Numerics
 from . import _adapt
 
 
+#: Engine wording a public caller never wrote, and its public spelling, applied in order (the
+#: whole-sentence advice first). The engine keeps its own wording for its own callers and tests;
+#: only the public door rewords. The detuning advice is not only a spelling: the engine's
+#: ``solve`` retries by default, a public run only with ``Numerics(detuning=...)``.
+_SPELLING = (
+    (r'solve\(auto_detune=True\), the default, does that retry for you, so seeing this means it '
+     r'was disabled or the retry failed too\.',
+     'rcwa.Numerics(detuning=...) makes that retry for a single plane wave; it is off by '
+     'default (detuning=None), so seeing this means it was not set or the retry failed too.'),
+    (r'solve\(auto_detune=True\), the default, does that retry for you\.',
+     'rcwa.Numerics(detuning=...) makes that retry for a single plane wave; it is off by '
+     'default (detuning=None).'),
+    (r'\buse auto_detune\b', 'set rcwa.Numerics(detuning=...)'),
+    (r'\bauto_detune\b', 'Numerics(detuning=...)'),
+    (r'\btruncation_order=\[([^\]]*)\]', r'Numerics(orders=(\1))'),
+    (r'\btruncation_order=\(([^)]*)\)', r'Numerics(orders=(\1))'),
+    (r'\btruncation_order=(\d+)', r'Numerics(orders=(\1, \1))'),
+    (r'(\d)\*truncation_order\b', r'\1*orders'),
+    (r'\btruncation_order\b', 'Numerics(orders=...)'),
+    (r'\bcomplex_dtype=0\b', "precision='double'"),
+    (r'\bcomplex_dtype=1\b', "precision='single'"),
+    (r'\bcomplex_dtype\b', 'precision'),
+    (r'\bspectral_extent\b', 'GaussianBeam(angular_spectrum_extent=...)'),
+    (r"\blayer_algorithm='(SMM|ETM)'", lambda m: f"Numerics(algorithm='{m.group(1).lower()}')"),
+    (r'\bexcitation names order\b', 'IncidentOrders(weights=...) names order'),
+)
+
+
+def _public(text):
+    """``text`` in the spelling of the public declarations."""
+    import re
+    for engine, public in _SPELLING:
+        text = re.sub(engine, public, text)
+    return text
+
+
 def _issue(error, path='problem'):
     if isinstance(error, WavebitError):
         return error.issue
     return Issue(code='rcwa.unsupported' if isinstance(error, NotImplementedError) else 'rcwa.invalid',
-                 path=path, message=str(error))
+                 path=path, message=_public(str(error)))
 
 
 @contextmanager
 def _normalize_errors():
-    """Translate legacy admission failures at the public API boundary."""
+    """Translate legacy admission failures at the public API boundary, in public spelling."""
     try:
         yield
     except WavebitError:
         raise
     except NotImplementedError as error:
-        raise UnsupportedFeatureError(str(error), code='rcwa.unsupported', path='problem') from error
+        raise UnsupportedFeatureError(_public(str(error)), code='rcwa.unsupported', path='problem') from error
     except (TypeError, ValueError) as error:
-        raise ValidationError(str(error), code='rcwa.invalid', path='problem') from error
+        raise ValidationError(_public(str(error)), code='rcwa.invalid', path='problem') from error
 
 
 def _engine_scene(solver):
@@ -297,7 +333,7 @@ class Prepared:
             try:
                 _engine_scene(solver)._refuse_a_stale_geometry_record(geometry)
             except (ValueError, RuntimeError) as error:
-                raise IncompatibleProblemError(str(error), code='prepared.topology', path='stack') from error
+                raise IncompatibleProblemError(_public(str(error)), code='prepared.topology', path='stack') from error
         return solvers
 
     def validate(self, problem):
@@ -337,7 +373,7 @@ class Prepared:
                     else:
                         result = solver.solve(geometry=geometry)
                 except (np.linalg.LinAlgError, FloatingPointError) as error:
-                    raise NumericalError(str(error), code='rcwa.singular', path='problem') from error
+                    raise NumericalError(_public(str(error)), code='rcwa.singular', path='problem') from error
                 solved.append((solver, result))
             result = pack(problem, self.numerics, self.execution, solved, checks, self.report)
             finite = result.validity.checks['numerical_finite']

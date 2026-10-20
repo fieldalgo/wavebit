@@ -122,7 +122,7 @@ from wavebit.rcwa.experimental import (
 )
 
 cell = CartesianPairTransmissionGalerkinGapCell(
-    CartesianPairOpeningPlan(0), order=(1, 1), degree=3,
+    CartesianPairOpeningPlan(0), orders=(1, 1), degree=3,
     reference=(12.25, -10.0+1.0j, 1.0), branches=2,
     quadrature=80, angular_quadrature=80, coercivity_angle=1.53,
 )

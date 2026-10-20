@@ -200,9 +200,9 @@ See [Materials and wavelength sweeps](../guide/common/materials.md) for assignme
 ## Plotting
 
 ```{eval-rst}
-.. autofunction:: wavebit.rcwa.plotting.plot_structure
+.. autofunction:: wavebit.rcwa._plotting.plot_structure
 
-.. autofunction:: wavebit.rcwa.plotting.slice_structure
+.. autofunction:: wavebit.rcwa._plotting.slice_structure
 
 .. autofunction:: wavebit.fdtd._periodic.plotting.plot_fdtd_field
 

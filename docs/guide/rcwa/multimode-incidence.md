@@ -7,13 +7,13 @@
 
 
 :::{note}
-The current API lights several orders with `rcwa.OrderExcitation`, whose run reports boundary
+The current API lights several orders with `rcwa.IncidentOrders`, whose run reports boundary
 power and fields but not per-order efficiencies. The per-order `R`, `T` and amplitudes this page
 measures come from the earlier `wavebit.compat.legacy` interface's `excitation=` keyword, so the
 blocks that need them use that interface and say so.
 :::
 
-**Code**: `src/wavebit/rcwa/sources.py` — `OrderExcitation`;
+**Code**: `src/wavebit/rcwa/sources.py` — `IncidentOrders`;
 `src/wavebit/_common/conventions.py` — `lit_orders`, `incident_column`;
 `src/wavebit/rcwa/_engine/solve_1d.py` — the two matchings; `src/wavebit/observations/power.py` —
 `incident_power`; `src/wavebit/rcwa/_engine/scattering.py` — the SMM twins;
@@ -23,7 +23,7 @@ blocks that need them use that interface and say so.
 ```python
 from wavebit import rcwa
 
-source = rcwa.OrderExcitation(orders=(((0, 0), 1.0), ((1, 0), 0.6 - 0.8j)))  # by the (x, y) pair
+source = rcwa.IncidentOrders(weights=(((0, 0), 1.0), ((1, 0), 0.6 - 0.8j)))  # by the (x, y) pair
 ```
 
 ```python
@@ -43,7 +43,7 @@ along `-y`. The earlier interface's pure 1D `tetm` path has meant the same since
 (before, it multiplied `+y` into every lit order, which is different light once the lit set
 straddles `kx = 0`: `sum(R)` 0.4933 against 0.3701 on `tests/rcwa/test_excitation.py`'s scene).
 Each weight is its beam's amplitude at `x = y = 0` on the lit face, the cell centre -- the
-same weights `OrderExcitation(orders=...)` takes, and the same light. That too dates from 2026-09-27: until then the weights were
+same weights `IncidentOrders(weights=...)` takes, and the same light. That too dates from 2026-09-27: until then the weights were
 referenced at the cell corner, which lit every order with `m + n` odd negated relative to the
 rest, and the same scene's `sum(R)` moved a second time, 0.3701 -> 0.1953 (§6).
 
@@ -98,7 +98,7 @@ the excitation lights order 5, which is evanescent or carries no positive incide
 this medium; a zero-power near-field excitation cannot be normalized as an incident plane wave.
 ```
 
-An `OrderExcitation` lighting such an order raises `ValidationError` (code `rcwa.invalid`):
+An `IncidentOrders` lighting such an order raises `ValidationError` (code `rcwa.invalid`):
 `top input carries no positive incident normal power (evanescent or grazing).`
 
 This is not fussiness. Every efficiency is `outgoing power / incident power`, and an evanescent
@@ -181,7 +181,7 @@ value; the amplitudes beside them are ordinary design variables and carry a grad
 
 ## 6. Per-order polarization: through the matrix, not through this keyword
 
-`OrderExcitation`, like the earlier `excitation=`, carries an amplitude per order and **one
+`IncidentOrders`, like the earlier `excitation=`, carries an amplitude per order and **one
 polarization for all of them** — whatever `polarization` says, each order in its own s/p frame.
 That is a scope decision, not a limitation of the formulation, and the capability is already
 reachable another way.
@@ -216,7 +216,7 @@ efficiencies — it hands back amplitudes and the caller normalizes — and it i
 p-p (TM) block of this, in the same variables, and its ports say which (`S.entry_port.channel`
 is `'te'` / `'tm'` there, `'sp'` here).
 
-**The two doors agree (since 2026-09-27).** `excitation`'s weights and `OrderExcitation`'s on
+**The two doors agree (since 2026-09-27).** `excitation`'s weights and `IncidentOrders`'s on
 the coherent-source path are both referenced at `x = y = 0`, the cell **centre** the public API
 measures from, so one dict lights both doors with one light. On `tests/rcwa/test_excitation.py`'s
 scene at `phi = 0`, `polarization=(1, 0)`, `{0: 1, 1: 0.6-0.8j}` gives `sum(R)` 0.151782
@@ -226,7 +226,7 @@ which lit order `(m, n)` with an extra `(-1)**(m + n)` relative to the rest -- d
 once two orders of opposite parity are lit, not a global phase: the same dict gave 0.452653
 there. Pinned in `tests/rcwa/test_centre_reference.py` (and, as the reciprocal-shift identity, in
 `tests/rcwa/test_coherent_illumination.py`); the record is `docs/theory/rcwa/amplitude-sp-frame.md` §7.
-The current `rcwa.OrderExcitation` is that coherent-source door: on the same scene its top
+The current `rcwa.IncidentOrders` (`rcwa.OrderExcitation` when this was measured) is that coherent-source door: on the same scene its top
 outgoing over incoming power is the same 0.151782, 4.6e-15 from the earlier `excitation=`
 door's `sum(R)` (0.241294 lit from the glass, 8.9e-15; measured 2026-10-15).
 
@@ -251,18 +251,18 @@ Surveyed against local copies of RETICOLO V10, S4 and fmmax.
 | **fmmax** | yes | yes | no incidence concept at all — it ships the S matrix and the caller fills a `(2n, k)` amplitude array. `amplitude_poynting_flux` computes flux *from the supplied amplitudes*, so the normalization question never arises |
 | **S4** | yes | yes (`'x'` / `'y'`) | `SetExcitationExterior{{G-index, pol, {re, im}}, ...}`, documented as a **"low level"** escape hatch beside `SetExcitationPlanewave`. One list covers front-forward and back-backward, so it spans both sides |
 | **RETICOLO** | no | no | enumerates fixed incidences (TE/TM x top/bottom) and reports each; `einc = [a_TE, a_TM]` is one wave's polarization |
-| **wavebit** | yes, `OrderExcitation` | through `result.scattering` | a source for the common case, the matrix for the rest |
+| **wavebit** | yes, `IncidentOrders` | through `result.scattering` | a source for the common case, the matrix for the rest |
 
 Three things follow.
 
 **Both peers that support it reached it through the matrix**, and one of them has no incidence
 concept at all. That is the same conclusion this repo arrived at from the other direction: the
-scattering matrix is the general answer, and `OrderExcitation` is the convenience on top of it
+scattering matrix is the general answer, and `IncidentOrders` is the convenience on top of it
 for the case where power is wanted back (per-order efficiencies through the earlier
 `excitation=`).
 
 **S4 calls its version low level and keeps a plane-wave call beside it.** The split here is the
-same shape — `OrderExcitation` is the high-level door and returns power; the matrix is the low
+same shape — `IncidentOrders` is the high-level door and returns power; the matrix is the low
 one and returns amplitudes.
 
 **RETICOLO cannot be the oracle for any of this**, which matters because it is the oracle this

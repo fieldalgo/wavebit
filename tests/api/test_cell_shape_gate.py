@@ -86,7 +86,7 @@ _ALLOWED = {
         "order-frame and cell-centre phase arithmetic. "
         "test_periodic_fdtd_rejects_a_skewed_lattice_before_result_conversion checks "
         "both incidence sides with backend omitted and NumPy/JAX/Torch selected."),
-    ('src/wavebit/rcwa/plotting.py', 'slice_structure'): (
+    ('src/wavebit/rcwa/_plotting.py', 'slice_structure'): (
         2,
         "one sample grid, behind a raise rather than behind a declaration: the `mt == 2` pair "
         "sits after an explicit `if not solver.lattice_is_axis_aligned: raise "

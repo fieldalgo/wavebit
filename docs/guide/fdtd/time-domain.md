@@ -1812,7 +1812,7 @@ Here the first, bottom layer is a substrate spacer. Its changing length keeps
 the bottom output face at z=0 and the top illuminated face at z=0.4. For more layers, normalize positive design
 fractions to a fixed total. Gradients are defined along constant-total paths;
 they do not represent independent changes to the total stack depth.
-The shared [`layer_thicknesses`](../../migration/autodiff-v1.md#constraining-several-layer-thicknesses)
+The shared [`wavebit.layer_thicknesses`](../../reference/common/index.md)
 function performs this normalization while enforcing specified minimum
 lengths. The [multilayer optimization example](../../../examples/fdtd/fdtd_multilayer_optimization.py)
 combines three independent thickness coordinates with three permittivities;

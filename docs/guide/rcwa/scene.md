@@ -177,13 +177,13 @@ complex NumPy array, with rows along y and columns along x. For an existing
 `problem`, inspect relative constitutive values with:
 
 ```python
-epsilon = rcwa.sample_structure(problem, layer=0, n=192)
-mu = rcwa.sample_structure(problem, layer=0, n=192, quantity='mu')
+epsilon = rcwa.sample_structure(problem, layer=0, samples=192)
+mu = rcwa.sample_structure(problem, layer=0, samples=192, quantity='mu')
 ```
 
 No `prepare` or `run` is needed, and no scattering or Fourier operator is
-computed. `layer=0` is the bottom finite layer. Region samples are cell-centred
-along the two lattice vectors; sampled layers keep their native resolution.
+computed. `layer=0` is the bottom finite layer. Region layers take `samples` cell-centered samples
+along each of the two lattice vectors; sampled layers keep their native resolution.
 Use `wavelength_index` for a spectrum: material tables are evaluated in the
 problem's explicit length unit. Tensor material pictures require a component,
 for example `component='xy'`; scalar pictures do not take a component. Values

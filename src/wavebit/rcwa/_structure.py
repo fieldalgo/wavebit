@@ -12,8 +12,8 @@ from .sources import PlaneWave
 
 
 @eager_under_torch_compile
-def sample_structure(problem, *, layer=0, n=512, wavelength_index=0,
-                     quantity='epsilon', component=None):
+def sample_structure(problem, *, layer=0, samples=512, wavelength_index=0,
+                     quantity='epsilon', component=None, **removed):
     """Sample one layer's relative permittivity or permeability without a solve.
 
     ``problem`` is an :class:`Problem`; ``layer`` is its nonnegative bottom-to-top
@@ -23,7 +23,7 @@ def sample_structure(problem, *, layer=0, n=512, wavelength_index=0,
     pair such as ``component='xy'``. Scalar values do not take a component.
 
     Returns an owned complex NumPy array with axes ``(y, x)``. Row zero is the
-    negative-y edge. Region layers use ``n`` cell-centred samples along each lattice
+    negative-y edge. Region layers use ``samples`` cell-centered samples along each lattice
     vector; sampled layers retain their original resolution. Later regions paint
     over earlier ones. Sampling reuses the engine's geometry renderer, including
     its curved-painting approximation and refusal of painted skewed cells. It
@@ -35,13 +35,21 @@ def sample_structure(problem, *, layer=0, n=512, wavelength_index=0,
     No incident source or half-space value participates in the picture. Missing
     permeability means scalar one. Use a separate call for each spectral sample.
     """
+    if removed:
+        from .._common.declarations import renamed_keyword_message
+        gone = [k for k in removed if k == 'n']
+        if gone:
+            raise TypeError(renamed_keyword_message('sample_structure', gone, {'n': 'samples'}))
+        raise TypeError(f'sample_structure() does not take {sorted(removed)}. It takes problem, '
+                        f'layer=, samples=, wavelength_index=, quantity= and component=.')
     if not isinstance(problem, Problem):
         raise ValidationError('Supply an rcwa.Problem.', code='problem.type', path='problem')
     if type(layer) is not int or not 0 <= layer < len(problem.stack.layers):
         raise ValidationError('layer must index a finite layer from zero.',
                               code='structure.layer', path='layer')
-    if type(n) is not int or n < 1:
-        raise ValidationError('n must be a positive integer.', code='structure.samples', path='n')
+    if type(samples) is not int or samples < 1:
+        raise ValidationError('samples must be a positive integer.', code='structure.samples',
+                              path='samples')
     if quantity not in ('epsilon', 'mu'):
         raise ValidationError("quantity must be 'epsilon' or 'mu'.",
                               code='structure.quantity', path='quantity')
@@ -78,8 +86,8 @@ def sample_structure(problem, *, layer=0, n=512, wavelength_index=0,
     execution = Execution()
     with execution._scope():
         solver = _adapt.build_solver(sampled, Numerics(), execution, wavelength)
-        from .plotting import slice_structure
-        values = np.array(slice_structure(solver, layer=0, n=n, component=component), copy=True)
+        from ._plotting import slice_structure
+        values = np.array(slice_structure(solver, layer=0, n=samples, component=component), copy=True)
     if not np.isfinite(values).all():
         raise ValidationError('Sampled material values must be finite.',
                               code='structure.nonfinite', path='stack.layers')

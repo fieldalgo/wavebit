@@ -961,8 +961,8 @@ def test_the_joined_matrix_keeps_the_outer_ports():
     theta_lower = float(np.arcsin(np.sin(0.3) * 2.0 / 3.0))
     lower = _piece(WHOLE[2:], WHOLE_TH[2:], 9.0, 2.25, theta_lower)
     joined = upper.cascade(lower)
-    assert np.abs(complex(joined.entry_port.index) - 2.0) < 1e-12      # sqrt(4.0)
-    assert np.abs(complex(joined.exit_port.index) - 1.5) < 1e-12       # sqrt(2.25)
+    assert np.abs(complex(joined.entry_port.refractive_index) - 2.0) < 1e-12      # sqrt(4.0)
+    assert np.abs(complex(joined.exit_port.refractive_index) - 1.5) < 1e-12       # sqrt(2.25)
 
 
 def test_cascading_across_a_shifted_order_grid_is_refused():
@@ -989,7 +989,7 @@ def test_cascading_onto_a_different_joint_medium_is_refused():
     """
     upper = _piece(WHOLE[:2], WHOLE_TH[:2], 4.0, 4.0, 0.0)
     lower = _piece(WHOLE[2:], WHOLE_TH[2:], 1.0, 2.25, 0.0)
-    assert np.allclose(np.asarray(upper.exit_port.kx), np.asarray(lower.entry_port.kx))
+    assert np.allclose(np.asarray(upper.exit_port.kx_over_k0), np.asarray(lower.entry_port.kx_over_k0))
     with pytest.raises(ValueError, match='different half-spaces'):
         upper.cascade(lower)
 
@@ -1108,9 +1108,9 @@ def test_cascading_across_a_respelt_oblique_cell_is_refused():
     # (b) the same lower half on the other spelling of the same lattice: kx to the bit, ky not.
     respelt = _hex_piece(CUT_HEX[1:], CUT_HEX_TH[1:], 4.0, 2.25, lattice=HEX_RESPELT)
     exit_port, entry_port = upper.exit_port, respelt.entry_port
-    assert np.array_equal(np.asarray(exit_port.kx), np.asarray(entry_port.kx))
-    assert np.max(np.abs(np.asarray(exit_port.ky) - np.asarray(entry_port.ky))) > 1.0
-    assert exit_port.index == entry_port.index and exit_port.mu == entry_port.mu
+    assert np.array_equal(np.asarray(exit_port.kx_over_k0), np.asarray(entry_port.kx_over_k0))
+    assert np.max(np.abs(np.asarray(exit_port.ky_over_k0) - np.asarray(entry_port.ky_over_k0))) > 1.0
+    assert exit_port.refractive_index == entry_port.refractive_index and exit_port.mu == entry_port.mu
     with pytest.raises(ValueError, match='in-plane wavevectors'):
         upper.cascade(respelt)
 
@@ -1168,8 +1168,9 @@ def test_cascading_a_te_matrix_onto_a_tm_one_is_refused(first, second):
     upper = _piece(WHOLE[:2], WHOLE_TH[:2], 4.0, 1.0, 0.3, tetm=first)
     lower = _piece(WHOLE[2:], WHOLE_TH[2:], 1.0, 2.25, THETA_IN_AIR, tetm=second)
     a, b = upper.exit_port, lower.entry_port
-    assert np.abs(np.asarray(a.kx) - np.asarray(b.kx)).max() < 1e-12
-    assert a.ky is None and b.ky is None and a.index == b.index and a.mu == b.mu
+    assert np.abs(np.asarray(a.kx_over_k0) - np.asarray(b.kx_over_k0)).max() < 1e-12
+    assert (a.ky_over_k0 is None and b.ky_over_k0 is None
+            and a.refractive_index == b.refractive_index and a.mu == b.mu)
     assert np.asarray(upper.S22).shape == np.asarray(lower.S11).shape
     upper.cascade(_piece(WHOLE[2:], WHOLE_TH[2:], 1.0, 2.25, THETA_IN_AIR, tetm=first))
 
@@ -1230,7 +1231,7 @@ def test_the_channel_crosses_a_jit_boundary_as_aux_data(kw, channel):
     It could be returned before the channel existed -- a ``NamedTuple`` is a pytree, every field
     a child -- and a string child cannot cross the boundary (``... is not a valid JAX type``).
     So the channel is aux data: part of the treedef, never a leaf. The leaves keep the paths the
-    unregistered ``NamedTuple`` gave them, ``.entry_port.kx`` and so on, so a JAX message that
+    unregistered ``NamedTuple`` gave them, ``.entry_port.kx_over_k0`` and so on, so a JAX message that
     names a bad leaf names its field rather than a flat index.
     """
     jax = pytest.importorskip('jax')
@@ -1249,7 +1250,7 @@ def test_the_channel_crosses_a_jit_boundary_as_aux_data(kw, channel):
         assert np.abs(np.asarray(got) - np.asarray(want)).max() < 1e-12
     paths = {jax.tree_util.keystr(path)
              for path, _ in jax.tree_util.tree_flatten_with_path(traced)[0]}
-    fields = ('kx', 'index', 'mu') + (('ky',) if channel == 'sp' else ())
+    fields = ('kx_over_k0', 'refractive_index', 'mu') + (('ky_over_k0',) if channel == 'sp' else ())
     assert {f'.{end}.{name}' for end in ('entry_port', 'exit_port') for name in fields} <= paths
 
 

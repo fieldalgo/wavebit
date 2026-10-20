@@ -196,7 +196,7 @@ transmissions. The existence of an adjoint gradient does not establish its
 finite-grid or continuum accuracy.
 
 
-The shared `layer_thicknesses` helper now supplies positive, fixed-total
+The shared `wavebit.layer_thicknesses` helper now supplies positive, fixed-total
 lengths with individual minima for NumPy, JAX and Torch. A
 [six-variable coating example](../../validation/fdtd/fdtd-multilayer-optimization.md) jointly
 optimizes three lengths and three dielectric permittivities, with finer-grid,

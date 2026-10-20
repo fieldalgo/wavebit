@@ -19,7 +19,7 @@ structure = [dict(background=1., shapes=[dict(
 builder = experimental.CartesianRectangleNVF((1, 2), refinement=1)
 plan = builder.plan(structure, lattice)
 conv = builder.conv_matrices(structure, lattice, plan=plan)
-numerics = rcwa.Numerics(orders=builder.truncation_order)
+numerics = rcwa.Numerics(orders=builder.orders)
 transmitted = []
 for polarization in ('p', 's'):
     problem = rcwa.Problem(
@@ -47,7 +47,7 @@ what has been verified.
 
 | Input | Contract |
 | --- | --- |
-| `truncation_order` | Nonnegative integer or `(x, y)` pair, default 1. Zero along either axis is allowed. The exact original difference-mode set is selected before closure. |
+| `orders` | Nonnegative integer or `(x, y)` pair, default 1. Zero along either axis is allowed. The exact original difference-mode set is selected before closure. |
 | `refinement` | 0, 1 or 2, default 0. These give 4, 19 or 79 free scalar potential unknowns. This is independent of the optical Fourier order. |
 | `lattice` | A `Lattice` or finite real 2-by-2 array with positive finite determinant, with physical basis vectors in columns. No lattice reduction is performed. |
 | `structure` | Nonempty list or tuple of layer dictionaries containing only `background` and `shapes`. Background defaults to vacuum. |

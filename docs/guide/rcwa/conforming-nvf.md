@@ -32,7 +32,7 @@ structure = [
             ]
 builder = experimental.ConformingNVF((2, 1), rows=4, body_degree=2, gap_degree=4)
 conv = builder.conv_matrices(structure, lattice)
-numerics = rcwa.Numerics(orders=builder.truncation_order)
+numerics = rcwa.Numerics(orders=builder.orders)
 transmitted = []
 for polarization in ('p', 's'):
     problem = rcwa.Problem(
@@ -65,7 +65,7 @@ explain the distinction.
 
 | Input | Contract |
 | --- | --- |
-| `truncation_order` | Nonnegative integer or `(u, v)` integer pair, matching the consuming `rcwa.Numerics(orders=...)`. Projection uses this order set before closing the energy matrices. |
+| `orders` | Nonnegative integer or `(u, v)` integer pair, matching the consuming `rcwa.Numerics(orders=...)`. Projection uses this order set before closing the energy matrices. |
 | `lattice` | A `wavebit.Lattice` or 2-by-2 array with basis vectors in columns. A right-handed basis that reduces to an orthogonal basis by an integer unimodular change is supported. The two reduced periods are positive and may vary independently. |
 | `structure` | Nonempty list or tuple of layer dictionaries, each with `background` and/or `shapes`. A layer with no shapes is uniform. |
 | `cx`, `cy` | Cartesian offsets from the original supplied cell center, in the lattice's length units. Default zero. Periodic translation is unrestricted; coordinates must describe one ordered profile with span below one period, rather than separately wrapped pieces. |
