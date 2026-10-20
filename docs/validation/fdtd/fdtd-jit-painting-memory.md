@@ -94,7 +94,7 @@ reproduces the default's temp to the byte, so on this jaxlib the default is the
 concurrency-optimized scheduler.
 
 The same JVP at resolution 6 was compiled again on 2026-10-20, in the 2.10 GHz container, from
-`main` at `20a9715`. With jax/jaxlib 0.12.0 it asks for 785 MB with the default scheduler and
+`main` at `b7463c7`. With jax/jaxlib 0.12.0 it asks for 785 MB with the default scheduler and
 197 MB with the memory-optimized one, and `CPU_SCHEDULER_TYPE_CONCURRENCY_OPTIMIZED` again
 matches the default to the byte. With jax 0.11.0, the same source still gives 1031 and 42 MB, so
 the change comes from the newer XLA, not from the source. On 0.12.0 the effect is smaller (about
