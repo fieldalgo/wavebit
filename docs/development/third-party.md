@@ -111,12 +111,17 @@ Version floors are in `pyproject.toml`; the table names what CI installs.
 ### Native libraries inside third-party wheels
 
 Some wheels carry separate shared libraries (`.so`, `.dylib`, `.dll`) beside
-their own extension modules. They load into the Python process that runs
-Wavebit, keep their own terms, and are installed by pip as part of that wheel;
-Wavebit does not modify, relink or redistribute them. Each one is recorded under
-the owning distribution's `bundled_files` in the inventory, per operating
-system, and the check fails on a library that no record covers for the OS it
-runs on.
+their own extension modules. They keep their own terms and are installed by pip
+as part of that wheel; Wavebit does not modify, relink or redistribute them.
+A wheel's declared license does not show them: a wheel can declare a permissive
+license and still carry a GPL library that loads into the process running
+Wavebit, which the policy above keeps out of what Wavebit requires or offers as
+an extra. So for every runtime and optional distribution, that is, everything
+installing Wavebit brings along, each such library is recorded under the
+owning distribution's `bundled_files` in the inventory, per operating system,
+and the check fails on a library that no record covers for the OS it runs on.
+Tools (test runners, linters, build and upload tools) are not matched, because
+they never reach a user's installation.
 
 | Distribution | Linux | macOS | Windows |
 | --- | --- | --- | --- |
@@ -188,13 +193,13 @@ python tools/check_licenses.py --reachable-only   # only what Wavebit's requirem
 The check reads installed metadata with `importlib.metadata`. It fails when an
 installed distribution has no reviewed entry, when its declared license differs
 from the entry, when a component's license is not allowed for the way Wavebit
-reaches it, when a wheel installs a shared library that no `bundled_files`
-record covers for the current OS, when Wavebit's own distribution contains a
-native file, when Wavebit's package code imports an external tool, when an AGPL
-tool has no recorded review or AGPL is reached as a requirement, when an SSPL or
-other non-AGPL network-copyleft component appears, or when this page or its
-Korean translation does not name an entry. CI runs it in the full
-backends environment, in the docs environment and, for the installed
+reaches it, when a runtime or optional wheel installs a shared library that no
+`bundled_files` record covers for the current OS, when Wavebit's own
+distribution contains a native file, when Wavebit's package code imports an
+external tool, when an AGPL tool has no recorded review or AGPL is reached as a
+requirement, when an SSPL or other non-AGPL network-copyleft component appears,
+or when this page or its Korean translation does not name an entry. CI runs it
+in the full backends environment, in the docs environment and, for the installed
 `wavebit[plot]` wheel, in the `distribution` job on Linux, macOS and Windows;
 `tests/api/test_third_party_licenses.py` runs the reachable-only form in every
 test environment.
