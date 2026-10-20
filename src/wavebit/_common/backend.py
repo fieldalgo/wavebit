@@ -1490,8 +1490,8 @@ def as_array(xp, v, dtype=None, device=None, copy=False):
 # instead; the same response reads -0.71978335. A direct A@A derivative independently
 # checks nearby distinct modes over sixteen decades of operator scale.
 #
-# The gauge term (the third one in `rhs`) is theirs too; grcwa carries it, meent and
-# torcwa drop it. It is kept here on their authority rather than on evidence: for a
+# The gauge term (the third one in `rhs`) is theirs too. It is kept here on their
+# authority rather than on evidence: for a
 # gauge-invariant loss — which every physical loss is — it provably contributes nothing, and
 # no measurement made here separates it from its absence. It costs one matmul.
 #
