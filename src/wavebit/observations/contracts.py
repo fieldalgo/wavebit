@@ -74,7 +74,13 @@ class DiffractionOrders(Declaration):
     outward normal is -z has Re(k_normal) < 0. ``amplitude_xyz`` is the Cartesian field
     amplitude, with a trailing xyz axis.
     Scalar modal arrays have shape (wavelength, order_v, order_u). Missing
-    calibrated power or incident normalization is None, never fabricated zero.
+    calibrated power or incident normalization is None, never fabricated zero,
+    where its absence is structural. Where a value decides it, per wavelength
+    and under a trace too, the entry is NaN and a metadata flag is false:
+    ``power_defined`` for ``power`` (a complex transverse wavevector has no
+    cell power integral) and ``efficiency_defined`` for ``efficiency`` and
+    ``reference['incident_power']`` (there is no incident power to divide
+    by). ``efficiency_defined`` implies ``power_defined``.
     ``reference`` records the port and its plane, the medium, lateral origin, polarization
     frame, propagation convention and incident normalization, with every unit label beside
     the value it labels. Every producer gives the same core keys: ``port`` (the face, in the
@@ -101,7 +107,7 @@ class DiffractionOrders(Declaration):
     k_parallel: object = None
     k_normal: object = None
     reference_wavelength_fields: tuple = ('plane', 'epsilon', 'mu', 'cell_measure', 'incident_power')
-    metadata_wavelength_fields: tuple = ('theta_radians', 'source_usable', 'power_defined')
+    metadata_wavelength_fields: tuple = ('theta_radians', 'source_usable', 'power_defined', 'efficiency_defined')
 
     def __post_init__(self):
         register_dataclass(type(self), static_fields=('orders_u', 'orders_v', 'reference_wavelength_fields', 'metadata_wavelength_fields'))

@@ -374,9 +374,33 @@ given whatever the lit medium; at `kx = ky = 0` its s/p basis uses azimuth zero.
 **Evanescent incidence** has a real `kx = n*cosh(alpha)` beyond the lit medium's light line.
 In a lossless lit medium its `kz` is imaginary, so the incident wave carries no normal power
 and nothing can be divided by it: `R`, `T` and their s/p parts, `power_entering` and
-`absorption` are NaN, and an `rcwa.run` result also has NaN port powers and
-`metadata['power_defined']` false, as for a complex `kx`. The amplitudes and fields are
-returned unchanged. The test is a roundoff floor, not an exact zero: `cos(pi/2)` is `6.1e-17`
+`absorption` are NaN. The amplitudes and fields are returned unchanged.
+
+Its port powers in W are not ratios, and an `rcwa.run` result keeps them. The light does reach
+the far side: the incident and specular reflected waves each carry no normal power, but their
+interference does, and on a lossless stack the net flux through the lit face equals the
+transmitted power, as in frustrated total internal reflection. Two per-wavelength flags in
+`metadata` say which values exist. `diagnostics` carries them too, as `port_power_defined`
+and `efficiency_defined`, for a run without diffraction outputs.
+
+| | `power_defined` | `efficiency_defined` |
+| --- | --- | --- |
+| real `kx`, propagating incidence | true | true |
+| evanescent incidence | true | false |
+| complex `kx` | false | false |
+
+`power_defined` gates the port powers: a complex `kx` has no uniform-intensity cell integral.
+`efficiency_defined` gates `efficiency`, `reference['incident_power']`, `power_entering` and
+`absorption`, and implies `power_defined`. `incident_power` is NaN rather than the incident
+wave's true 0, because the port powers are per wave and omit the interference that carries the
+tunnelled power: `incident - reflected - transmitted` would read it as a negative absorption.
+The W values are per unit amplitude at the lit face of the stack. Declaring that amplitude a
+distance `d` farther from the stack scales them by `exp(-2*Im(kz)*d)`, with `kz` the lit
+medium's normal wavenumber. For p light, `|E|` is
+`sqrt(cosh(2*alpha))` times the amplitude. True efficiencies need a propagating incident wave,
+for example from a prism medium as the lit half-space, which this solves exactly.
+
+The test is a roundoff floor, not an exact zero: `cos(pi/2)` is `6.1e-17`
 in double precision, so `kx` keeps an imaginary part the transverse test accepts as roundoff,
 and it leaves `Re(kz)` near `6e-17*|kx|`; divided by that, `T` once came out near `1e16`, with
 its sign set by the sign of `alpha` ([#84](https://github.com/fieldalgo/wavebit/issues/84)).
