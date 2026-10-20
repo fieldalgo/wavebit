@@ -88,10 +88,13 @@ and `result.reflection.metadata['power_defined']` is false, because the uniform-
 normalization does not hold there (see
 [Real-angle incidence](../../reference/common/conventions.md#real-angle-incidence)); the earlier
 interface returned formal `R` and `T` instead. Evanescent incidence, `theta = pi/2 + 1j*alpha`
-from a lossless half-space, keeps `kx` real but its incident wave carries no power, so it is
-marked the same way: `R`, `T` and the port powers are NaN and `power_defined` is false, with
-the amplitudes returned (the earlier interface's `R`, `T` and `power_entering` are NaN there
-too). Direct components carry no
+from a lossless half-space, keeps `kx` real but its incident wave carries no power. Its `R`,
+`T`, `incident_power`, `power_entering` and `absorption` are NaN and
+`metadata['efficiency_defined']` is false. `power_defined` stays true and the port powers in W
+are returned, because the light that tunnels through to the far side carries real power (see
+[Real-angle incidence](../../reference/common/conventions.md#real-angle-incidence) for the
+flags). The amplitudes are returned too. The earlier interface's `R`, `T` and `power_entering`
+are NaN there as well. Direct components carry no
 angle, so they are taken as given in any medium, a negative-index one included. With
 `kx=ky=0`, the s/p basis uses azimuth zero (s along y, p in xz); choose `polarization` to
 orient the field.
@@ -174,7 +177,10 @@ convention](../../reference/common/conventions.md#real-angle-incidence) state th
 Power is referenced to the incident wave at its interface with the finite stack.
 `result.outputs['power_entering']` includes incident/reflected interference;
 `result.absorption`, equal to `result.outputs['power_entering'] - result.T.sum(axis=(1, 2))`,
-is the absorption in all finite layers. It excludes absorption in either half-space.
+is the absorption in all finite layers. It excludes absorption in either half-space. The port
+powers in W are per wave and leave that interference out, so a budget of incident minus
+reflected minus transmitted watts misses it. Under evanescent incidence it carries everything
+that reaches the far side.
 
 ## The polarization comes in three kinds
 

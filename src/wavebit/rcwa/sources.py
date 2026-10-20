@@ -10,6 +10,10 @@ class PlaneWave:
     amplitude is in V/m. polarization is 's', 'p', or a complex (s,p) Jones
     pair, normalized to unit electric magnitude. Its phase remains meaningful.
     Use either theta/phi (radians) or kx/ky (inverse scene lengths).
+
+    Under evanescent incidence, theta = pi/2 + 1j*alpha, the p unit vector is
+    complex: ``E.E = 1`` but ``|E| = sqrt(cosh(2*alpha)) * amplitude``. Port powers in W
+    are then per this bilinear amplitude at the stack interface.
     """
     side: str = 'top'
     polarization: object = 's'

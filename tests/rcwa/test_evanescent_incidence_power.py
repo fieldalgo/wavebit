@@ -11,6 +11,11 @@ interface they are Fresnel's, in closed form.
 ``alpha = +-1e-6`` sits just past the light line, where ``|kz| = sinh(alpha)`` is 1e-6 while
 the roundoff in ``Re(kz)`` stays near 6e-17. A tolerance relative to ``|kz|`` lets that point
 through (it returned ``T = -4.2e4``), so these two values pin the floor's absolute part.
+
+Only the ratios go. The port powers in W stay: the light tunnels into the glass, through the
+interference of the incident and reflected waves, and that power is physical. So ``rcwa.run``
+keeps two flags: ``power_defined`` (a cell power integral exists; false for a complex ``kx``)
+and ``efficiency_defined`` (an incident power exists too; false here as well).
 """
 import warnings
 
@@ -19,7 +24,9 @@ import pytest
 
 from wavebit import Material, Units, rcwa
 from wavebit._common.backend import ComplexIncidenceWarning
+from wavebit.observations.power import net_power
 from wavebit.rcwa._factory import rcwa as legacy_rcwa
+from wavebit.units import Z0
 
 ALPHAS = [np.arccosh(1.2), -np.arccosh(1.2), 1e-6, -1e-6]
 EPS_TOP, EPS_BOTTOM = 1.0, 2.25
@@ -42,13 +49,18 @@ def _fresnel(theta, polarization):
             2 * np.sqrt(EPS_TOP * EPS_BOTTOM) * k1 / denominator)
 
 
-def _problem(theta, polarization='s'):
+def _problem(theta, polarization='s', outputs=None):
     return rcwa.Problem(
         units=Units(length='nm'),
         stack=rcwa.Stack(period=(1000., 1000.), top=Material(epsilon=EPS_TOP),
                          bottom=Material(epsilon=EPS_BOTTOM), layers=()),
         excitation=rcwa.Excitation(wavelength=1000., sources=(
-            rcwa.PlaneWave(theta=theta, polarization=polarization),)))
+            rcwa.PlaneWave(theta=theta, polarization=polarization),)),
+        **({} if outputs is None else {'outputs': outputs}))
+
+
+def _first(value):
+    return np.ravel(np.asarray(value))[0]
 
 
 def _solve_quietly(run):
@@ -61,23 +73,23 @@ def _solve_quietly(run):
 @pytest.mark.parametrize('polarization', ['s', 'p'])
 @pytest.mark.parametrize('alpha', ALPHAS, ids=lambda a: f'{a:+.4g}')
 def test_evanescent_efficiencies_are_undefined_and_amplitudes_are_kept(alpha, polarization):
-    """The issue's repro, on ``rcwa.run``: marked as a complex ``kx`` is, with no warning.
+    """The issue's repro, on ``rcwa.run``: every ratio NaN, every amplitude kept, no warning.
 
-    Everything divided by the incident power is NaN and ``power_defined`` is false, the port
-    powers included, since they share that flag. The amplitudes are Fresnel's to roundoff, as
-    they were before the fix. No warning: the NaN is the mark.
+    ``efficiency_defined`` is false and everything divided by the incident power is NaN, with
+    ``incident_power`` itself. ``power_defined`` stays true: the cell power integral exists.
+    The amplitudes are Fresnel's to roundoff, as they were before the fix. No warning: the NaN
+    is the mark.
     """
     theta = np.pi / 2 + 1j * alpha
     result, warned = _solve_quietly(
         lambda: rcwa.run(_problem(theta, polarization), numerics=rcwa.Numerics(orders=(0, 0))))
     assert not warned, [str(w.message) for w in warned]
 
-    assert not np.asarray(result.reflection.metadata['power_defined']).any()
+    assert np.asarray(result.reflection.metadata['power_defined']).all()
+    assert not np.asarray(result.reflection.metadata['efficiency_defined']).any()
     for name, value in (('R', result.R), ('T', result.T),
                         ('power_entering', result.outputs['power_entering']),
                         ('absorption', result.outputs['absorption']),
-                        ('reflected power', result.reflection.power),
-                        ('transmitted power', result.transmission.power),
                         ('incident power', result.reflection.reference['incident_power'])):
         assert np.isnan(np.asarray(value)).all(), (name, value)
 
@@ -86,6 +98,90 @@ def test_evanescent_efficiencies_are_undefined_and_amplitudes_are_kept(alpha, po
     got_t = complex(np.ravel(getattr(result.transmission, 'amplitude_' + polarization))[0])
     assert abs(got_r - want_r) < 1e-14, (got_r, want_r)
     assert abs(got_t - want_t) < 1e-14, (got_t, want_t)
+
+
+@pytest.mark.parametrize('polarization', ['s', 'p'])
+@pytest.mark.parametrize('alpha', ALPHAS, ids=lambda a: f'{a:+.4g}')
+def test_the_tunnelled_power_is_kept_in_watts(alpha, polarization):
+    """The port powers stay, because the light that tunnels into the glass carries real power.
+
+    The incident wave alone carries no normal power, and neither does the specular reflected
+    wave. Their interference does: on a lossless interface the net flux through the lit face is
+    what the glass receives. So the transmitted power in W equals ``|t|**2 * Re(kz)`` and the
+    interference term, in the cell's watts. The specular reflected power is roundoff of zero,
+    bounded on the cell's absolute scale (at ``alpha = 1e-6`` the transmitted power is itself
+    only 5e-27 W). The per-wave budget ``incident - reflected - transmitted`` cannot see the
+    interference and would read the tunnelled power as a negative absorption, so it comes back
+    NaN with ``incident_power``.
+    """
+    theta = np.pi / 2 + 1j * alpha
+    result = rcwa.run(_problem(theta, polarization), numerics=rcwa.Numerics(orders=(0, 0)))
+    reference = result.reflection.reference
+    scale = (float(_first(reference['cell_measure'][0]))
+             * abs(complex(_first(reference['incident_amplitude'])))**2 / (2 * Z0))
+    r = complex(_first(getattr(result.reflection, 'amplitude_' + polarization)))
+    t = complex(_first(getattr(result.transmission, 'amplitude_' + polarization)))
+    kx = np.sin(theta).real
+    k1, k2 = 1j * np.sqrt(kx**2 - EPS_TOP), np.sqrt(EPS_BOTTOM - kx**2)
+
+    transmitted = float(_first(result.transmission.power))
+    assert transmitted > 0
+    assert transmitted == pytest.approx(scale * abs(t)**2 * k2, rel=1e-12)
+    # The interference term: (1 + r) against (1 - r) with r near -1 near the light line.
+    admittance = k1 if polarization == 's' else k1 / EPS_TOP
+    assert transmitted == pytest.approx(scale * net_power(np, 1.0, r, admittance), rel=1e-8)
+    assert abs(float(_first(result.reflection.power))) < 1e-14 * scale
+
+    budget = (np.asarray(reference['incident_power']) - np.sum(np.asarray(result.reflection.power))
+              - np.sum(np.asarray(result.transmission.power)))
+    assert np.isnan(budget).all()
+
+
+@pytest.mark.parametrize('diffraction', [True, False])
+def test_each_flag_marks_exactly_its_own_values(diffraction):
+    """Three regimes, two flags, one meaning each.
+
+    ``(power_defined, efficiency_defined)`` is ``(T, T)`` at a real angle, ``(T, F)`` under
+    evanescent incidence and ``(F, F)`` for a complex ``kx``. The port powers are finite exactly
+    where ``power_defined`` holds; the efficiencies, ``incident_power``, ``power_entering``
+    and ``absorption`` exactly where ``efficiency_defined`` does. With no diffraction output the
+    diagnostics carry both flags, so a NaN ``power_entering`` is still explained.
+    """
+    cases = [(0.4, True, True), (np.pi / 2 + 1j * ALPHAS[0], True, False), (0.5 + 0.3j, False, False)]
+    for theta, power_ok, ratio_ok in cases:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', ComplexIncidenceWarning)
+            result = rcwa.run(_problem(theta, outputs=rcwa.Outputs(diffraction=diffraction)),
+                              numerics=rcwa.Numerics(orders=(0, 0)))
+        where = f'theta={theta}'
+        assert bool(_first(result.diagnostics['port_power_defined'])) == power_ok, where
+        assert bool(_first(result.diagnostics['efficiency_defined'])) == ratio_ok, where
+        for name in ('power_entering', 'absorption'):
+            assert np.isfinite(np.asarray(result.outputs[name])).all() == ratio_ok, (where, name)
+        if not diffraction:
+            continue
+        for port in (result.reflection, result.transmission):
+            assert bool(_first(port.metadata['power_defined'])) == power_ok, where
+            assert bool(_first(port.metadata['efficiency_defined'])) == ratio_ok, where
+            assert np.isfinite(np.asarray(port.power)).all() == power_ok, where
+            assert np.isfinite(np.asarray(port.efficiency)).all() == ratio_ok, where
+            assert np.isfinite(np.asarray(port.reference['incident_power'])).all() == ratio_ok, where
+
+
+def test_selecting_a_wavelength_slices_the_new_flag_with_the_rest():
+    """``efficiency_defined`` is a per-wavelength entry, so a selection slices it like its twin.
+
+    Undeclared in ``metadata_wavelength_fields``, ``at_wavelength_index`` would hand back the whole
+    two-wavelength flag beside a one-wavelength ``power_defined``.
+    """
+    problem = _problem(np.pi / 2 + 1j * ALPHAS[0])
+    problem = problem.replace(excitation=problem.excitation.replace(wavelength=(1000., 1100.)))
+    result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(0, 0)))
+    for port in (result.reflection, result.transmission):
+        assert np.shape(port.metadata['efficiency_defined']) == (2,)
+        selected = port.at_wavelength_index(1).metadata
+        assert np.shape(selected['efficiency_defined']) == np.shape(selected['power_defined']) == (1,)
+        assert not np.asarray(selected['efficiency_defined']).any()
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
@@ -156,6 +252,7 @@ def test_a_propagating_wave_keeps_its_efficiencies(theta):
         lambda: rcwa.run(_problem(theta), numerics=rcwa.Numerics(orders=(0, 0))))
     assert not warned, [str(w.message) for w in warned]
     assert np.asarray(result.reflection.metadata['power_defined']).all()
+    assert np.asarray(result.reflection.metadata['efficiency_defined']).all()
     total = float(np.sum(result.R) + np.sum(result.T))
     assert abs(total - 1) < 1e-12, total
 
@@ -178,10 +275,11 @@ def test_a_complex_transverse_wavevector_keeps_its_formal_ratios():
 
 
 def test_a_jitted_solve_marks_the_same_values():
-    """Under ``jax.jit`` nothing is read: the flag is traced, and the same values come back NaN.
+    """Under ``jax.jit`` nothing is read: the flags are traced, and the same values come back.
 
-    The amplitudes agree with the eager solve's, and a propagating angle through the same
-    compiled function is still normalized, so the mark follows the value, not the trace.
+    The ratios are NaN, the transmitted watts and the amplitudes agree with the eager solve's,
+    and a propagating angle through the same compiled function is still normalized, so the
+    mark follows the value, not the trace.
     """
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -191,17 +289,20 @@ def test_a_jitted_solve_marks_the_same_values():
 
         def evaluate(theta):
             result = prepared.run(_problem(theta))
-            return (result.R, result.T, result.reflection.metadata['power_defined'],
-                    result.transmission.amplitude_s)
+            metadata = result.reflection.metadata
+            return (result.R, result.T, metadata['power_defined'], metadata['efficiency_defined'],
+                    result.transmission.amplitude_s, result.transmission.power)
 
         jitted = jax.jit(evaluate)
         for alpha in ALPHAS[:2]:
             theta = jnp.asarray(np.pi / 2 + 1j * alpha)
-            R, T, defined, t_s = jitted(theta)
+            R, T, power_ok, ratio_ok, t_s, watts = jitted(theta)
             assert np.isnan(np.asarray(R)).all() and np.isnan(np.asarray(T)).all()
-            assert not np.asarray(defined).any()
-            eager_t_s = evaluate(theta)[3]
-            np.testing.assert_allclose(np.asarray(t_s), np.asarray(eager_t_s), atol=1e-14, rtol=0)
-        R, T, defined, _ = jitted(jnp.asarray(0.4 + 0j))
-        assert np.asarray(defined).all()
+            assert np.asarray(power_ok).all() and not np.asarray(ratio_ok).any()
+            eager = evaluate(theta)
+            np.testing.assert_allclose(np.asarray(t_s), np.asarray(eager[4]), atol=1e-14, rtol=0)
+            np.testing.assert_allclose(np.asarray(watts), np.asarray(eager[5]), rtol=1e-12)
+            assert np.isfinite(np.asarray(watts)).all()
+        R, T, power_ok, ratio_ok, _, _ = jitted(jnp.asarray(0.4 + 0j))
+        assert np.asarray(power_ok).all() and np.asarray(ratio_ok).all()
         assert abs(float(np.sum(R) + np.sum(T)) - 1) < 1e-12
