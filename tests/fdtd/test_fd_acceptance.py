@@ -83,7 +83,7 @@ def test_qualification_only_still_enforces_fixed_uncertainty():
 
 @pytest.mark.parametrize('kind,n', [('planar', 20), ('planar', 40), ('planar', 80),
                                   ('conical', 20), ('conical', 40)])
-@pytest.mark.parametrize('protocol', ['original', 'stabilized'])
+@pytest.mark.parametrize('protocol', ['original', 'stabilized', 'spectral'])
 def test_boundary_controls_preserve_the_physical_experiment(kind, n, protocol):
     from tests.fdtd.check_planewave_acceptance import fixture
 
@@ -106,3 +106,17 @@ def test_boundary_controls_preserve_the_physical_experiment(kind, n, protocol):
         low = lambda scene: scene.domain.center[2]-scene.domain.size[2]/2
         shift = (low(changed)-low(base))*n
         assert shift == pytest.approx(round(shift))
+
+
+@pytest.mark.parametrize('control,valid,issue', [(.11, True, 'bandwidth_uncertainty'),
+                                               (0., False, 'invalid_run_diagnostics')])
+def test_bandwidth_control_cannot_borrow_a_good_time_or_boundary_result(control, valid, issue):
+    result = assess(rows((0.,)*5), rows((0.,)*2), [0.], [0.], [1.],
+                    bandwidth_row=rows((control,), valid)[0])
+    assert result['status'] == 'BLOCKED' and issue in result['issues']
+
+
+def test_bandwidth_control_is_also_subject_to_absolute_accuracy():
+    result = assess(rows((.99,)*5), rows((.99,)*2), [0.], [0.], [1.],
+                    bandwidth_row=rows((1.01,))[0])
+    assert result['status'] == 'FAIL' and result['issues'] == ['accuracy']

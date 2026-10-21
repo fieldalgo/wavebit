@@ -48,9 +48,9 @@ def write(path, data):
 
 
 def fixture(kind, n, factor=1., variant='base', protocol='original'):
-    if protocol not in ('original', 'stabilized'):
+    if protocol not in ('original', 'stabilized', 'spectral'):
         raise ValueError(f'unknown acceptance protocol: {protocol}')
-    revised = protocol == 'stabilized'
+    revised = protocol != 'original'
     periods = (80 if kind == 'planar' else 320) if revised else (20 if kind == 'planar' else 160)
     cells = (48 if revised else 12) * (2 if variant == 'thick' else 1)
     args = dict(cells_per_wavelength=n, polarization='p',
@@ -62,6 +62,10 @@ def fixture(kind, n, factor=1., variant='base', protocol='original'):
     if revised:
         scene = replace(scene, boundaries=replace(scene.boundaries,
                                                    z=fd.PML(cells=cells, stabilize=3e-3)))
+    if protocol == 'spectral':
+        source = scene.sources[0]
+        scene = replace(scene, sources=(replace(source, band=replace(
+            source.band, df=.07 if variant == 'bandwidth' else .05, cutoff=1e-6)),))
     if variant == 'far':
         # Double the clearances from the structure to each inner PML face.
         # Source, monitors, reference planes and material interfaces stay fixed.
@@ -76,10 +80,10 @@ def fixture(kind, n, factor=1., variant='base', protocol='original'):
     return scene, info
 
 
-def run(scene):
+def run(scene, backend='numpy'):
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
-        result = fd.run(scene, backend='numpy')
+        result = fd.run(scene, backend=backend, device='cpu' if backend == 'jax' else None)
     diagnostics = result.diagnostics
     period = _scene_period(scene, result.plan)
     basis = diagnostic_basis(diagnostics, result.plan.steps*result.plan.dt, period,
@@ -131,31 +135,41 @@ def observations(result, scene, info, kind, n):
     return np.array(values), expected, check, limits, labels
 
 
-def campaign(output, kind, n, protocol='original'):
+def campaign(output, kind, n, protocol='original', backend='numpy'):
     rows = []
     controls = [(factor, 'base') for factor in TIME_FACTORS] + [(2., 'thick'), (2., 'far')]
+    if protocol == 'spectral':
+        controls.append((2., 'bandwidth'))
     for index, (factor, variant) in enumerate(controls):
         scene, info = fixture(kind, n, factor, variant, protocol)
-        result, row = run(scene)
+        result, row = run(scene, backend)
         values, expected, check, limits, labels = observations(result, scene, info, kind, n)
-        row.update(values=values, factor=factor, variant=variant)
+        row.update(values=values, factor=factor, variant=variant, backend=backend)
+        if protocol == 'spectral':
+            incident = np.asarray(result.sources['pw'].incident_amplitude(scene.monitors[0].wavelengths))
+            magnitude = np.abs(incident)
+            good = bool(np.isfinite(magnitude).all() and magnitude.max() > 0)
+            ratio = float(magnitude.min()/magnitude.max()) if good else 0.
+            row.update(incident_amplitude=incident, incident_ratio=ratio)
+            row['valid'] = bool(row['valid'] and good and ratio >= .05)
         rows.append(row)
         write(output/f'{kind}-{n}-{index}.json', row)
         print(f'{kind} n={n} factor={factor} variant={variant} valid={row["valid"]}', flush=True)
     # Coarse planar accuracy is judged by the existing grid-convergence test.
     # The same fixed budget still bounds uncertainty at that resolution.
-    verdict = assess(rows[:5], rows[5:], expected, check, limits,
+    verdict = assess(rows[:5], rows[5:7], expected, check, limits,
+                     bandwidth_row=rows[7] if protocol == 'spectral' else None,
                      qualification_only=(kind == 'planar' and n == 20))
     verdict.update(labels=labels, limits=limits, reference=expected, reference_check=check)
     write(output/f'{kind}-{n}-verdict.json', verdict)
     return verdict
 
 
-def residual(output):
+def residual(output, backend='numpy'):
     rows = []
     for periods in (60, 90, 120):
         scene = contact(n=80, periods=periods)
-        result, row = run(scene)
+        result, row = run(scene, backend)
         row['values'] = np.array([getattr(result[side].orders.order(0, 0), side+'_p')
                                   for side in ('r', 't')])
         rows.append(row)
@@ -171,7 +185,8 @@ def residual(output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--protocol', choices=('original', 'stabilized'), default='original')
+    parser.add_argument('--protocol', choices=('original', 'stabilized', 'spectral'), default='original')
+    parser.add_argument('--backend', choices=('numpy', 'jax'), default='numpy')
     parser.add_argument('--workers', type=int, choices=range(1, 6), default=1,
                         help='Independent CPU processes; each record remains a separate run.')
     args = parser.parse_args()
@@ -187,24 +202,39 @@ def main():
     write(args.output/'inputs.json', dict(python=platform.python_version(),
           source=wavebit.__file__, commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root).decode().strip(),
           versions={p: importlib.metadata.version(p) for p in ('numpy', 'scipy', 'jax', 'torch')},
-          sha256=inputs, protocol=args.protocol, workers=args.workers, time_factors=TIME_FACTORS, uncertainty_fractions=dict(time=.1, boundary=.1, reference=.05)))
+          sha256=inputs, protocol=args.protocol, backend=args.backend, workers=args.workers, time_factors=TIME_FACTORS, uncertainty_fractions=dict(time=.1, boundary=.1, reference=.05, bandwidth=.1)))
     verdicts = {}
     cases = [(kind, n) for kind, ns in (('planar', (20, 40, 80)), ('conical', (20, 40))) for n in ns]
     if args.workers == 1:
         for kind, n in cases:
-            verdicts[f'{kind}-{n}'] = campaign(args.output, kind, n, args.protocol)
+            verdicts[f'{kind}-{n}'] = campaign(args.output, kind, n, args.protocol, args.backend)
     else:
         with ProcessPoolExecutor(max_workers=args.workers,
                                  mp_context=multiprocessing.get_context('spawn')) as pool:
-            tasks = [(f'{kind}-{n}', pool.submit(campaign, args.output, kind, n, args.protocol))
+            tasks = [(f'{kind}-{n}', pool.submit(campaign, args.output, kind, n, args.protocol, args.backend))
                      for kind, n in cases]
             for name, task in tasks:
                 verdicts[name] = task.result()
-    verdicts['contact'] = residual(args.output)
-    status = overall(v['status'] for v in verdicts.values())
+    verdicts['contact'] = residual(args.output, args.backend)
+    convergence = None
+    states = [v['status'] for v in verdicts.values()]
+    if args.protocol == 'spectral':
+        amplitudes = []
+        for n in (20, 40):
+            verdict = verdicts[f'conical-{n}']
+            amplitudes.append(max(ratio * limit for ratio, limit, label in
+                                  zip(verdict['accuracy_ratio'], verdict['limits'], verdict['labels'])
+                                  if label.rsplit(':', 1)[-1] in ('r_s', 'r_p', 't_s', 't_p')))
+        qualified = all(verdicts[f'conical-{n}']['status'] == 'PASS' for n in (20, 40))
+        state = ('BLOCKED' if not qualified else
+                 'PASS' if amplitudes[0] >= 1.8 * amplitudes[1] else 'FAIL')
+        convergence = dict(status=state, coarse_error=amplitudes[0], fine_error=amplitudes[1],
+                           required_improvement=1.8)
+        states.append(state)
+    status = overall(states)
     write(args.output/'result.json', dict(status=status,
           scope='measurement qualification only; source, accuracy/convergence, backend, AD and regression gates are separate',
-          verdicts=verdicts))
+          verdicts=verdicts, convergence=convergence))
     raise SystemExit(0 if status == 'PASS' else 1)
 
 
