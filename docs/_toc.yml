@@ -235,6 +235,7 @@ subtrees:
               - file: validation/fdtd/fd-debye-stack
               - file: validation/fdtd/fd-debye-sum-film
               - file: validation/fdtd/fd-decay-stopping
+              - file: validation/fdtd/fd-planewave-acceptance
               - file: validation/fdtd/fd-source-decay
               - file: validation/fdtd/native-cuda
               - file: validation/fdtd/general-cuda
