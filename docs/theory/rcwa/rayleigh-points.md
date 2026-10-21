@@ -178,6 +178,24 @@ produces a problem whose parts disagree. A perturbation is only safe when it is 
 to the *inputs*, consistently, which is precisely what the ladder does and the shortcut
 did not.
 
+**Under `jax.jit` neither the refusal nor the ladder runs** (added 2026-10-20). `check_finite`
+has no value to read there, so such a layer returns `NaN` -- value and gradient -- with no
+notice. One family is answered: a layer of a half-space's own medium, which the half-space
+merge deletes ([`connecting-algorithms.md`](connecting-algorithms.md) §10). Under a trace
+whether `k_par` is real cannot be read, so the merge takes the layer at any angle, as long as
+its materials can be read. Measured on a TE grating at normal incidence with
+`wavelength == period`, so orders ±1 sit on the vacuum light line, under a 50 nm vacuum layer
+beneath a vacuum cover: a jitted `value_and_grad` of `T` over the grating's thickness returned
+`NaN` for both when the solver was built inside the jitted function, because its constant
+materials were held as tracers and nothing merged; built before the trace, the same solver
+merged and answered. Both now return the stack with that layer deleted (`T = 0.9943095000422952`,
+ETM and SMM alike, and its gradient to the last bit), where the eager ladder answers its `1e-8`
+neighbour, 3.2e-7 away. At `theta = pi/2` with the same layer the specular order grazes, and
+the value and gradient of `|t_s|**2` were `NaN` the same way; they are now the deleted stack's.
+`tests/rcwa/test_half_space_merge.py` pins both. A uniform layer whose medium is not the
+half-space's beside it -- the same vacuum layer moved down onto the `eps = 2.25` substrate --
+still returns `NaN` under `jit` where the eager ladder answers; that gap is open.
+
 ## 6. The 2D coupled-cluster rebuild — what solved it, and the wall that remains
 
 `solve_2d._rebuild_grazing_cluster`, engaged by `layer_modes_2d` below
