@@ -140,9 +140,11 @@ give `BLOCKED`. A qualified measurement outside its accuracy limit gives
 `FAIL`. Only qualified measurements within fixed limits give `PASS`. An
 observed failure takes precedence over blocked evidence in an aggregate.
 
-Run the manual campaign from a configured source checkout:
+Run the frequency-focused campaign from a configured source checkout. The
+default protocol remains `original` for historical reproduction:
 
 ```sh
+PYTHONPATH=src:. python -m tests.fdtd.check_planewave_acceptance --protocol spectral --backend jax --workers 2 --output artifacts/planewave-spectral
 PYTHONPATH=src:. python -m tests.fdtd.check_planewave_acceptance --output artifacts/planewave-acceptance
 PYTHONPATH=src:. python -m tests.fdtd.check_planewave_acceptance --protocol stabilized --workers 5 --output artifacts/planewave-stabilized
 python -m pytest tests/fdtd/test_fd_acceptance.py
@@ -195,3 +197,41 @@ NumPy stage 0–3 capture changed 60 of 573 arrays, confined to the three intend
 scenes; the other 513 arrays were byte-identical and both captures reproduced
 themselves. No committed golden changed. Linux CPU evidence does not establish
 GPU, other-OS, full-CI or independent-review acceptance.
+
+## Physical-depth protocol CPU result (2026-10-22)
+
+The frequency-focused protocol passed all 43 required records: 27 new runs and
+16 reused records from the two completed 20-cell cases with identical inputs.
+Reuse was checked against scene representations, solver and fixture hashes,
+versions and recording/scoring functions; every verdict was recomputed. The
+stabilized and fixed-cell-depth candidates remain incomplete failed experiments,
+with their completed rows preserved. They are not counted as complete passes.
+
+| Fixture | Time/cap | Boundary/cap | Bandwidth/cap | Accuracy/limit | Result |
+|---|---:|---:|---:|---:|---|
+| Planar 20 | .000169 | .009242 | .0000344 | qualification only | PASS |
+| Planar 40 | .000399 | .023732 | .000164 | .6620 | PASS |
+| Planar 80 | .000641 | .032761 | .000288 | .6563 | PASS |
+| Conical 20 | .020356 | .004375 | .047166 | .9697 | PASS |
+| Conical 40 | .021398 | .005024 | .033646 | .3882 | PASS |
+
+Each entry is the largest channel ratio. Planar 20-cell accuracy remains the
+original convergence test's responsibility, as specified before execution.
+The conical worst complex error fell from .03442459 to .01378228, a factor of
+2.498 against the required 1.8. The fresh contact residual was 5.672528e-8
+against 2e-7. Its JAX/previous NumPy observations agreed within 1.5e-15.
+Four additional prescribed-input source tests cover both pulse bandwidths
+and both launch geometries at the unchanged 2e-6 limit. All 163 decay/grazing
+regressions passed with the explicit historical-drive diagnostic fixtures and
+the converged grazing record. The unchanged solver's earlier source, original
+accuracy/convergence and derivative results remain earlier evidence, not new runs.
+
+These results qualify the requested-frequency measurement and the intended
+source change. They do not establish broad-pulse PML stability, repair the
+contact fixture's historical spatial-order failure, or certify GPU, other
+operating systems, full CI or independent review.
+
+The scoped refreeze retains the 300/500-step scenes and 1e-12 pin tolerance.
+Only `plane_wave`, `bloch_stack` and `conical` receive fresh values; all unrelated
+array bytes are retained. Both full captures reproduced twice per CPU backend.
+Archive metadata preserves the separate provenance of fresh and retained scenes.

@@ -275,6 +275,26 @@ polarisation, and the incident field carries no trace of the other one at `phi =
 leak tests of `tests/fdtd/test_fd_axis1d.py` and `tests/fdtd/test_fd_diffraction.py` (1e-16 where they read
 1e-3 to 1e-2).
 
+**Scoped differentiated-current refreeze (2026-10-22 KST; archive date UTC).**
+The stage-2 `plane_wave` and stage-3 `bloch_stack` / `conical` scenes now pin
+the centre-normalized differentiated-current launch. Their 300/500-step inputs,
+keys, shapes and `1e-12` comparison budget are unchanged. Independent prescribed-input
+source tests, existing accuracy/convergence and derivative tests, and the
+43-record qualified scattering campaign support the change; see
+[the acceptance evidence](../../docs/validation/fdtd/fd-planewave-acceptance.md).
+The short goldens themselves remain drift detectors.
+
+Fresh captures reproduced byte for byte twice on each of NumPy, JAX CPU and
+Torch CPU. Only the three named scenes were selected into the archives.
+Unrelated scenes retain their old bytes: fresh captures differ from those old
+values by at most 2.14e-14 relative to peak, below the existing 1e-12 budget.
+Metadata `scoped_refreeze` identifies selected scenes, old and fresh archive
+hashes, the selection script hash and the original provenance for retained
+scenes. The top-level producer versions describe the fresh selected scenes.
+A full generator capture may therefore differ in unrelated last bits while
+still reproducing these pins within the unchanged budget. This update does
+not certify broad-pulse PML stability or repair the contact spatial-order failure.
+
 `interface/freeze_fd_stage2.py` writes it under exactly the stage-0 and stage-1 rules: this
 checkout only, twice in one process, LF-normalised source digests (its own, its case list's,
 and the stage-0 case list it imports its capture from), a content digest the test recomputes,
