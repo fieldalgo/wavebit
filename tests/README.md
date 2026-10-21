@@ -18,6 +18,7 @@ in [`../studies/`](../studies) with a [`../docs/`](../docs) write-up instead. Se
 |---|---|
 | `tests/fdtd/test_fd_acceptance.py`, `tests/fixtures/fdtd/acceptance.py` | Do fixed per-observable limits reject unstable, incomplete or inaccurate evidence without enlarging the budget? |
 | `tests/fdtd/check_planewave_acceptance.py` | Do all p-wave refinement runs satisfy the registered time, boundary and reference uncertainty caps? [Criteria](../docs/validation/fdtd/fd-planewave-acceptance.md). |
+| `tests/fdtd/test_fd_acceptance_diagnostics.py`, `tests/fixtures/fdtd/acceptance_diagnostics.py` | Can a missing growth ratio be distinguished from a complete measured quiet window without accepting missing or corrupt evidence? |
 
 `tests/api/test_ci_runner_diagnostics.py` checks memory/cgroup evidence, signal-sender identity,
 secret exclusion and Linux sidecar signal shutdown without running a solver.

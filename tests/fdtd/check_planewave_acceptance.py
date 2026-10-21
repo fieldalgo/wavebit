@@ -16,9 +16,11 @@ import warnings
 import numpy as np
 import wavebit
 import wavebit.fdtd._legacy as fd
+from wavebit.fdtd._assemble import _scene_period
 from tests.fixtures.fdtd.fd_helpers import bloch_stack, conical_grating
 from tests.fixtures.fdtd.conductive_contact import build as contact
 from tests.fixtures.fdtd.acceptance import TIME_FACTORS, assess, maximum_gap, overall
+from tests.fixtures.fdtd.acceptance_diagnostics import diagnostic_basis
 
 
 def serial(value):
@@ -70,13 +72,11 @@ def run(scene):
         warnings.simplefilter('always')
         result = fd.run(scene, backend='numpy')
     diagnostics = result.diagnostics
-    energy = np.asarray(diagnostics['interior_energy'][1])
-    valid = bool(diagnostics.get('stable') and energy.size and np.isfinite(energy).all()
-                 and diagnostics.get('interior_growth') is not None
-                 and diagnostics.get('sources_end') is not None
-                 and result.plan.steps*result.plan.dt > diagnostics['sources_end']
-                 and not any(issubclass(w.category, fd.GrowingFieldWarning) for w in caught))
-    report = dict(valid=valid, diagnostics=diagnostics,
+    period = _scene_period(scene, result.plan)
+    basis = diagnostic_basis(diagnostics, result.plan.steps*result.plan.dt, period,
+                             any(issubclass(w.category, fd.GrowingFieldWarning) for w in caught))
+    report = dict(valid=basis is not None, diagnostic_basis=basis, diagnostic_period=period,
+                  diagnostics=diagnostics,
                   warnings=[dict(category=w.category.__name__, message=str(w.message)) for w in caught],
                   steps=result.plan.steps, dt=result.plan.dt, shape=result.plan.shape,
                   scene=repr(scene))
@@ -169,7 +169,8 @@ def main():
     inputs = {name: hashlib.sha256((root/name).read_bytes()).hexdigest()
               for name in tracked if name and (root/name).is_file() and
               (name.startswith(('src/', 'tests/fixtures/')) or name == 'pyproject.toml')}
-    for name in ('tests/fixtures/fdtd/acceptance.py', 'tests/fdtd/check_planewave_acceptance.py'):
+    for name in ('tests/fixtures/fdtd/acceptance.py', 'tests/fixtures/fdtd/acceptance_diagnostics.py',
+                 'tests/fdtd/check_planewave_acceptance.py'):
         inputs[name] = hashlib.sha256((root/name).read_bytes()).hexdigest()
     write(args.output/'inputs.json', dict(python=platform.python_version(),
           source=wavebit.__file__, commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root).decode().strip(),

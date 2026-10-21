@@ -52,8 +52,14 @@ manual campaign is supplemental and cannot substitute for those tests.
    Compute the angle from the prescribed fixed transverse wavevector, without
    taking an angle from the measured FDTD result.
 4. Require finite observables and interior energy, a stable run, a known
-   source end before the record end, an available interior-growth diagnostic,
-   and no growth warning. Instantaneous energy need not decrease monotonically.
+   source end before the record end, complete interior-energy evidence,
+   and no growth warning. A finite interior-growth ratio qualifies the diagnostic.
+   A missing ratio also qualifies when the complete post-source window spans
+   at least four of the scene's longest declared periods, all four late eighths have samples, the original
+   signal is nonzero and the last-quarter energy peak is at most 1e-7 of the
+   full-run peak. This is the engine's documented quiet-floor case; missing,
+   short or nonfinite traces still block acceptance. Instantaneous energy need
+   not decrease monotonically.
 
 The 10% and 5% allocations are explicit engineering acceptance choices. They
 do not prove asymptotic stability. Measured grid/time differences never enlarge
@@ -91,3 +97,39 @@ of changed keys, unchanged unrelated scenes and successful reproduction at the
 existing golden tolerance. Never widen a limit just because a new algorithm
 misses it. Historical external-solver measurements retain their original
 input/version scope; consuming a stored reference is not a fresh external run.
+
+## Recorded CPU result (2026-10-21)
+
+The 38 independent runs did not qualify a refreeze. The table reports the
+largest channel ratio to each uncertainty cap; values above one block acceptance.
+
+| Fixture | Time/cap | Boundary/cap | Qualification |
+|---|---:|---:|---|
+| Planar 20 | .265 | 5.732 | BLOCKED: source-end/growth evidence and boundary sensitivity |
+| Planar 40 | .219 | 2.616 | BLOCKED: source-end/growth evidence and boundary sensitivity |
+| Planar 80 | .681 | .800 | BLOCKED: source-end/growth evidence |
+| Conical 20 | 6.115 | 3.914 | BLOCKED: time and boundary sensitivity |
+| Conical 40 | 10.175 | 8.466 | BLOCKED: growth warnings, time and boundary sensitivity |
+
+The planar source-end diagnostic stays at the record end. The conical 40-cell
+160-period run already warns about growth (interior ratio 1.109, threshold 1.1).
+All reference-convergence caps passed. The contact residual passed: maximum
+pairwise complex r/t change 5.673e-8 against 2e-7, with complete quiet-floor
+energy evidence at all three durations. This is a residual result only.
+
+The initial classifier treated every missing growth ratio as missing evidence.
+Inspection of the documented diagnostic semantics exposed that error: a fully
+sampled field below its existing energy floor also has no growth ratio. The
+corrected classifier was checked with 11 counterexample tests, then applied to
+the saved traces. All physical values, reference values, numerical ratios and
+accuracy limits stayed identical; the initial blocked contact verdict was kept.
+
+Source checks passed 120 tests, original planar/conical accuracy and convergence
+passed 9, and the public Torch CPU source oracle passed 5. Stage-2/3 backend,
+gradient, decay and grazing tests gave 452 passed and 18 failed: 14 old-golden
+mismatches and four old-drive fixture/pin failures (three holding-column tests
+and the `adds-p` grazing pin). Both gradient modules passed all 136 tests.
+NumPy stage 0–3 capture changed 60 of 573 arrays, confined to the three intended
+scenes; the other 513 arrays were byte-identical and both captures reproduced
+themselves. No committed golden changed. Linux CPU evidence does not establish
+GPU, other-OS, full-CI or independent-review acceptance.
