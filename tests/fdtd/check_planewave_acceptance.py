@@ -4,6 +4,8 @@ Use ``PYTHONPATH=src:. python -m tests.fdtd.check_planewave_acceptance
 --output NEW_DIRECTORY``. Partial campaigns cannot produce an overall PASS.
 """
 import argparse
+from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
 from dataclasses import replace
 import hashlib
 import importlib.metadata
@@ -45,14 +47,21 @@ def write(path, data):
         stream.write('\n')
 
 
-def fixture(kind, n, factor=1., variant='base'):
+def fixture(kind, n, factor=1., variant='base', protocol='original'):
+    if protocol not in ('original', 'stabilized'):
+        raise ValueError(f'unknown acceptance protocol: {protocol}')
+    revised = protocol == 'stabilized'
+    periods = (80 if kind == 'planar' else 320) if revised else (20 if kind == 'planar' else 160)
+    cells = (48 if revised else 12) * (2 if variant == 'thick' else 1)
     args = dict(cells_per_wavelength=n, polarization='p',
-                periods=(20 if kind == 'planar' else 160)*factor,
-                pml=24 if variant == 'thick' else 12)
+                periods=periods*factor, pml=cells)
     if kind == 'planar':
         scene, info = bloch_stack(**args, substrate=1.44**2, transverse=(2/n, 2/n))
     else:
         scene, info = conical_grating(**args)
+    if revised:
+        scene = replace(scene, boundaries=replace(scene.boundaries,
+                                                   z=fd.PML(cells=cells, stabilize=3e-3)))
     if variant == 'far':
         # Double the clearances from the structure to each inner PML face.
         # Source, monitors, reference planes and material interfaces stay fixed.
@@ -122,11 +131,11 @@ def observations(result, scene, info, kind, n):
     return np.array(values), expected, check, limits, labels
 
 
-def campaign(output, kind, n):
+def campaign(output, kind, n, protocol='original'):
     rows = []
     controls = [(factor, 'base') for factor in TIME_FACTORS] + [(2., 'thick'), (2., 'far')]
     for index, (factor, variant) in enumerate(controls):
-        scene, info = fixture(kind, n, factor, variant)
+        scene, info = fixture(kind, n, factor, variant, protocol)
         result, row = run(scene)
         values, expected, check, limits, labels = observations(result, scene, info, kind, n)
         row.update(values=values, factor=factor, variant=variant)
@@ -162,6 +171,9 @@ def residual(output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--protocol', choices=('original', 'stabilized'), default='original')
+    parser.add_argument('--workers', type=int, choices=range(1, 6), default=1,
+                        help='Independent CPU processes; each record remains a separate run.')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     root = Path(__file__).resolve().parents[2]
@@ -175,11 +187,19 @@ def main():
     write(args.output/'inputs.json', dict(python=platform.python_version(),
           source=wavebit.__file__, commit=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root).decode().strip(),
           versions={p: importlib.metadata.version(p) for p in ('numpy', 'scipy', 'jax', 'torch')},
-          sha256=inputs, time_factors=TIME_FACTORS, uncertainty_fractions=dict(time=.1, boundary=.1, reference=.05)))
+          sha256=inputs, protocol=args.protocol, workers=args.workers, time_factors=TIME_FACTORS, uncertainty_fractions=dict(time=.1, boundary=.1, reference=.05)))
     verdicts = {}
-    for kind, resolutions in (('planar', (20, 40, 80)), ('conical', (20, 40))):
-        for n in resolutions:
-            verdicts[f'{kind}-{n}'] = campaign(args.output, kind, n)
+    cases = [(kind, n) for kind, ns in (('planar', (20, 40, 80)), ('conical', (20, 40))) for n in ns]
+    if args.workers == 1:
+        for kind, n in cases:
+            verdicts[f'{kind}-{n}'] = campaign(args.output, kind, n, args.protocol)
+    else:
+        with ProcessPoolExecutor(max_workers=args.workers,
+                                 mp_context=multiprocessing.get_context('spawn')) as pool:
+            tasks = [(f'{kind}-{n}', pool.submit(campaign, args.output, kind, n, args.protocol))
+                     for kind, n in cases]
+            for name, task in tasks:
+                verdicts[name] = task.result()
     verdicts['contact'] = residual(args.output)
     status = overall(v['status'] for v in verdicts.values())
     write(args.output/'result.json', dict(status=status,

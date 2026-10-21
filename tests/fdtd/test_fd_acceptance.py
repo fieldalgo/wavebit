@@ -83,12 +83,13 @@ def test_qualification_only_still_enforces_fixed_uncertainty():
 
 @pytest.mark.parametrize('kind,n', [('planar', 20), ('planar', 40), ('planar', 80),
                                   ('conical', 20), ('conical', 40)])
-def test_boundary_controls_preserve_the_physical_experiment(kind, n):
+@pytest.mark.parametrize('protocol', ['original', 'stabilized'])
+def test_boundary_controls_preserve_the_physical_experiment(kind, n, protocol):
     from tests.fdtd.check_planewave_acceptance import fixture
 
-    base, _ = fixture(kind, n, 2.)
+    base, _ = fixture(kind, n, 2., protocol=protocol)
     for variant in ('thick', 'far'):
-        changed, _ = fixture(kind, n, 2., variant)
+        changed, _ = fixture(kind, n, 2., variant, protocol)
         assert changed.sources == base.sources
         assert changed.monitors == base.monitors
         assert changed.resolution == base.resolution

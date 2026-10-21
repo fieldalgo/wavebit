@@ -496,12 +496,12 @@ def test_mutant_the_total_return_held_to_tau_refuses_normal_incidence(monkeypatc
 #: The four cases where the loss's own return and the face's total disagree about ``tau``,
 #: each measured on the column run (20 cells per wavelength, vacuum, the incidence's own
 #: polarisation): ``(cos, cells, reflection, rho, polarization, verdict, measured, model,
-#: loss alone)``. The loss part-cancels the stretch's return in the first (the total is below
+#: loss alone, periods)``. The loss part-cancels the stretch's return in the first (the total is below
 #: ``tau`` although ``|r - r_pure|`` is above it) and adds to it in the other two (the total is
 #: 1.28x / 1.37x ``tau`` although ``|r - r_pure|`` is below it).
-DISAGREE = [(0.69, 12, 1e-16, 3e-3, 'p', 'ok', 7.961e-4, 7.961e-4, 1.032e-3),
-            (0.43, 32, 1e-8, 5e-3, 's', 'lossy', 1.278e-3, 1.277e-3, 9.34e-4),
-            (0.28, 32, 1e-12, 5e-4, 'p', 'lossy', 1.390e-3, 1.370e-3, 9.62e-4)]
+DISAGREE = [(0.69, 12, 1e-16, 3e-3, 'p', 'ok', 7.961e-4, 7.961e-4, 1.032e-3, 160),
+            (0.43, 32, 1e-8, 5e-3, 's', 'lossy', 1.278e-3, 1.277e-3, 9.34e-4, 160),
+            (0.28, 32, 1e-12, 5e-4, 'p', 'lossy', 1.370e-3, 1.370e-3, 9.62e-4, 320)]
 
 
 @pytest.mark.parametrize('case', DISAGREE, ids=['cancels', 'adds-s', 'adds-p'])
@@ -509,8 +509,8 @@ def test_the_face_is_held_to_what_it_returns_not_to_the_loss_alone(case, monkeyp
     """The verdict is on ``|r| <= max(tau, |r_pure|)``, and the run measures that total: an
     order the loss part-cancels on is accepted though ``|r - r_pure| > tau``, and one it adds
     to is refused though ``|r - r_pure| < tau``."""
-    cos, cells, R, rho, pol, verdict, measured, model, loss = case
-    scene = _stabilized(cos, cells, reflection=R, rho=rho, polarization=pol)
+    cos, cells, R, rho, pol, verdict, measured, model, loss, periods = case
+    scene = _stabilized(cos, cells, reflection=R, rho=rho, polarization=pol, periods=periods)
     rows = _survey(scene)
     assert {(r['verdict'], r['pure_verdict'], r['polarisation']) for r in rows} == {
         (verdict, 'ok', 'TE' if pol == 's' else 'TM')}
@@ -522,6 +522,17 @@ def test_the_face_is_held_to_what_it_returns_not_to_the_loss_alone(case, monkeyp
     got = _return(_run_unenforced(scene, monkeypatch), cos)
     assert got == pytest.approx(measured, rel=1e-3) and abs(got / model - 1) < 2e-2
     assert bool(got > TAU) is (verdict == 'lossy')
+    if periods == 320:
+        # The oblique p current's cutoff tail biases a 160-period record. The
+        # 320/640 pair must agree within the unchanged measured-value tolerance;
+        # both still face the independent layer-return model and refusal bound.
+        longer = _stabilized(cos, cells, reflection=R, rho=rho, polarization=pol,
+                             periods=2 * periods)
+        settled = _return(_run_unenforced(longer, monkeypatch), cos)
+        assert settled == pytest.approx(got, rel=1e-3)
+        assert settled == pytest.approx(measured, rel=1e-3)
+        assert abs(settled / model - 1) < 2e-2
+        assert bool(settled > TAU) is (verdict == 'lossy')
 
 
 def test_mutant_the_loss_alone_held_to_tau_inverts_a_pair():
