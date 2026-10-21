@@ -18,23 +18,29 @@ against something the engine did not compute itself:
   per wavelength; predicted 9.2e-6 and 4.77e-4), and exactly 0 at theta 0, where the 1-D Yee
   impedance is exactly the continuum's (``Z0 H = -E`` at the staggered points).
 * **The forward field is the closed form at every frequency in the band.** The DFT of E at a
-  probe plane downstream equals ``e_t A W(w) exp(i kz(w) d)``, ``e_t`` the stored tangential E
-  of the grid's own s or p wave (transverse to the discrete ``K_par``, each component with its
-  half-cell stagger phase ``exp(i k_c dx/2)``, written out in ``_grid_polarisation``; the
-  continuum ``e`` missed by 4e-2 to 6e-2 off normal incidence): ``W`` the DFT of the waveform
-  written out here from ``fd.Band``'s definition at the hard source's times ``(n + 1) dt``, ``d``
-  the distance from the column's hard-source plane to the probe, and ``kz`` the **discrete**
-  propagation constant of the fixed-k Bloch wave, ``(2/dx) sin(kz dx/2) = sqrt(W^2 - Kx^2 -
-  Ky^2)`` with ``W = (2/dt) sin(w dt/2)`` and ``K = (2/dx) sin(k_par dx/2)``. At real
-  frequencies (theta 0 and 20, a 24-cell PML) it holds to 2e-6 of the peak over ``f0 +- k df``
-  (measured <= 6e-7; the 12-cell default layer's reflection puts 2e-4 there instead, which is
-  why the layer is 24 cells here). At 40 degrees the band crosses the fixed-k cutoff
-  ``f = sin(40) f0 = 0.64 f0``, where the group velocity is zero and the field never leaves:
-  a real-frequency DFT over any window leaks that ring-down into the band (1e-3 at 1100 steps,
-  still 3e-5 at 4000). So every case is also checked on the contour ``w + i gamma``
-  (``gamma = 0.4``, a Laplace transform: the linear relation holds there exactly and the
-  window's truncation is damped by ``exp(-gamma T)``), where it holds to 3e-6 over the whole
-  band, the evanescent part below the cutoff included (measured <= 5.2e-7).
+  probe plane downstream equals ``e_t A W(w) D(w) exp(i kz(w) d)``, ``e_t`` the stored
+  tangential E of the grid's own s or p wave (transverse to the discrete ``K_par``, each
+  component with its half-cell stagger phase ``exp(i k_c dx/2)``, written out in
+  ``_grid_polarisation``; the continuum ``e`` missed by 4e-2 to 6e-2 off normal incidence):
+  ``W`` the DFT of the waveform written out here from ``fd.Band``'s definition at the drive's
+  times ``(n + 1) dt``, ``d`` the distance from the column's drive node ``ks`` to the probe,
+  ``D`` the column drive's transfer -- 1 for the hard source (s, normal incidence), and for an
+  oblique p wave, whose column is driven by a two-node current, the closed form written out in
+  ``_drive_transfer`` (1 at the band centre; at real frequencies ``|D|`` is 0.30 to 1.62 over
+  the 20-degree band, 0.045 to 1.70 at 30 and 0.094 to 1.85 at 40, where the band reaches the
+  cutoff) -- and ``kz`` the
+  **discrete** propagation constant of the fixed-k Bloch wave,
+  ``(2/dx) sin(kz dx/2) = sqrt(W^2 - Kx^2 - Ky^2)`` with ``W = (2/dt) sin(w dt/2)`` and
+  ``K = (2/dx) sin(k_par dx/2)``. At real frequencies (theta 0 and 20, a 24-cell PML) it
+  holds to 2e-6 of the peak over ``f0 +- k df`` (measured <= 6e-7; the 12-cell default
+  layer's reflection puts 2e-4 there instead, which is why the layer is 24 cells here). At 40
+  degrees the band crosses the fixed-k cutoff ``f = sin(40) f0 = 0.64 f0``, where the group
+  velocity is zero and the field never leaves: a real-frequency DFT over any window leaks that
+  ring-down into the band (1e-3 at 1100 steps, still 3e-5 at 4000). So every case is also
+  checked on the contour ``w + i gamma`` (``gamma = 0.4``, a Laplace transform: the linear
+  relation holds there exactly and the window's truncation is damped by ``exp(-gamma T)``),
+  where it holds to 3e-6 over the whole band, the evanescent part below the cutoff included
+  (measured <= 5.2e-7).
 * **The reference series is the grid's incident field.** In an empty cell the full grid's
   total field at cell (0, 0) of the entry plane -- the tangential E on the node plane, the
   normal E on the half cell inside, every H at that half cell's index -- equals
@@ -72,17 +78,29 @@ reference-equals-grid gate at O(1) (0.2 to 2). The backward-wave gate alone woul
 column flip -- the tangential impedance depends on ``K_par^2`` only -- which is why both gates
 exist.
 
+* **Which drive each column has, and what the current leaves behind.** s, normal incidence and
+  TFSF columns are hard-driven; an oblique p column carries the current's gain, which is the
+  closed form's ``1/G(w0)`` written out here. Its column holds no static field after the pulse
+  (late mean of every E component <= 1e-6 of its peak; measured 5.8e-8 at 20 degrees, the band's
+  default cutoff 1e-3), where a one-node current with no difference leaves 4.5e-4 and the hard
+  source of the same scene 3.5e-6 (measured 2026-10-19 with the hard drive at main 20a9715). The
+  current's second node lies one cell further upstream, so a sheet one cell from the layer that
+  the hard drive's clearance allows is refused for an oblique p wave (and only for it).
+
 Every run is NumPy (the three-backend comparison and the gradients are gate 6), one to four
 thousand steps on 5 x 4 x ~100 cells, under a second each.
 """
 import dataclasses
 import functools
 import math
+import re
+import warnings
 
 import numpy as np
 import pytest
 
 import wavebit.fdtd._legacy as fd
+from wavebit.fdtd._kernel.sources import ColumnTerm
 from tests.fixtures.fdtd.fd_helpers import bloch_plane_wave, peak_of, ring_monitors, run_mutated, to_numpy
 
 #: Backward over forward peak, and the reference against the grid: round-off.
@@ -313,6 +331,44 @@ def _grid_polarisation(pw, plan):
     return t * np.exp(0.5j * dx * np.array([kx, ky]))
 
 
+def _drive_transfer(pw, plan, w):
+    """``D(w)``: the column's tangential E at ``ks`` per unit of the hard drive's ``W(w) e_t``.
+
+    1 for the hard source, which sets ``E_t(ks) = w_n e_t`` at ``(n + 1) dt``. An oblique p wave's
+    column is driven by a current: after the E update it **adds** ``a_n = g (w_n - w_{n-1}) e_t /
+    2`` (``w_{-1} = 0``) to ``E_t`` at ``ks`` and at the node one cell upstream of it. Written out
+    from the column's own update, independently of the engine:
+
+    * On the 1-D column the p wave is a Yee line for ``E_t`` whose effective permeability, with
+      ``E_P`` eliminated by ``K . E = 0``, is ``mu' = Kz^2/(Omega^2 eps)``; ``(2/dx) sin(kz dx/2) =
+      Kz``. An add ``a`` after the update at ``(n + 1) dt`` is the current ``(eps/dt) a`` of the
+      update centred half a step earlier, ``S = (eps/dt) exp(-i w dt/2) A(w)``, and a node current
+      on that line makes ``E(ks) = S Omega mu' dx^2 / (2 sin(kz dx))`` -- so, with ``eps``
+      cancelling, ``T_J(w) = exp(-i w dt/2) tan(kz dx/2) / (Omega dt)`` per unit add.
+    * ``w_n - w_{n-1}``: the second sample is the first delayed by ``dt``, ``(1 - exp(i w dt))``.
+    * Half at ``ks`` and half one cell further from the probe: ``(1 + exp(i kz dx)) / 2``,
+      downstream of both.
+
+    ``G = (1 - exp(i w dt)) T_J (1 + exp(i kz dx))/2`` and ``D = G(w)/G(w0)`` at the band centre
+    ``w0``, which is how the drive keeps the hard source's amplitude there. Vacuum, as every
+    scene here; ``kz`` is ``_discrete_kz``'s outgoing root.
+    """
+    w = np.asarray(w)
+    if pw.polarization != 'p' or np.linalg.norm(_k_par(pw)) == 0.0:
+        return np.ones(w.shape, dtype=complex)
+    return _column_G(pw, plan, w) / _column_G(pw, plan, 2.0 * math.pi / pw.band.wavelength)
+
+
+def _column_G(pw, plan, w):
+    """``G(w)`` of :func:`_drive_transfer`: the current's E at ``ks`` per unit ``g W e_t``."""
+    dx, dt = plan.dx, plan.dt
+    w = np.asarray(w, dtype=complex)
+    Om = 2.0 * np.sin(w * dt / 2.0) / dt
+    kz = _discrete_kz(pw, plan, w)
+    T_J = np.exp(-0.5j * w * dt) * np.tan(kz * dx / 2.0) / (Om * dt)
+    return (1.0 - np.exp(1j * w * dt)) * T_J * (1.0 + np.exp(1j * kz * dx)) / 2.0
+
+
 def _closed_form_error(theta, pol, phi, direction, steps, gamma, offset=0.8):
     scene, pw = _scene(theta, pol, phi, direction, monitors=_probe_monitors(offset),
                        steps=steps, pml=24, amplitude=A, phase=PHASE, delay=DELAY)
@@ -323,14 +379,15 @@ def _closed_form_error(theta, pol, phi, direction, steps, gamma, offset=0.8):
     k = math.sqrt(2.0 * math.log(1.0 / b.cutoff))
     f0 = 1.0 / b.wavelength
     w = 2.0 * math.pi * np.linspace(f0 - k * b.df, f0 + k * b.df, 41) + 1j * gamma
-    t = (np.arange(plan.steps) + 1.0) * plan.dt          # the hard source's and E's times
+    t = (np.arange(plan.steps) + 1.0) * plan.dt          # the drive's and E's times
     W = _dft(t, _waveform(pw, t), w)
     probe = int(round((pw.position + pw.sign * offset - plan.grid.low[2]) / plan.dx))
     distance = abs(probe - term.ks) * plan.dx
     e = _grid_polarisation(pw, plan)
+    D = _drive_transfer(pw, plan, w)
     worst = 0.0
     for c in (0, 1):
-        want = e[c] * W * np.exp(1j * _discrete_kz(pw, plan, w) * distance)
+        want = e[c] * W * D * np.exp(1j * _discrete_kz(pw, plan, w) * distance)
         got = _dft(res[f'f:E{"xyz"[c]}'].t, res[f'f:E{"xyz"[c]}'].values, w)
         assert np.all(np.isfinite(got))
         scale = max(np.abs(e[0] * W).max(), np.abs(e[1] * W).max())
@@ -367,6 +424,86 @@ def test_closed_form_sees_a_wrong_propagation_constant():
     continuum = abs(got - W * np.exp(1j * kz_continuum * d))[0] / abs(W[0])
     assert discrete <= CLOSED_TOL
     assert continuum > 1e3 * CLOSED_TOL
+
+
+# ---------------------------------------------------------------------------------------------
+# The drive: hard, or the two-node current of an oblique p wave
+# ---------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize('direction', ['-z', '+z'])
+@pytest.mark.parametrize('case', CASES, ids=_id)
+def test_only_an_oblique_p_column_is_current_driven(case, direction):
+    """s and normal incidence keep the hard source; oblique p carries ``1/G(w0)`` as its gain."""
+    scene, pw = _scene(*case, direction, steps=10)
+    plan = fd.plan(scene)
+    (term,) = plan.terms
+    if pw.polarization == 'p' and pw.theta > 0.0:
+        w0 = 2.0 * math.pi / pw.band.wavelength
+        assert isinstance(term.current_gain, complex)
+        assert term.current_gain == pytest.approx(1.0 / _column_G(pw, plan, w0), rel=1e-12)
+        assert term.upstream == term.ks + (1 if pw.sign < 0 else -1)
+    else:
+        assert term.current_gain is None
+
+
+def test_tfsf_columns_keep_the_hard_drive():
+    """A TFSF box (vacuum, and over a substrate with its driver column) is never current-driven."""
+    from tests.fixtures.fdtd.fd_helpers import tfsf_box
+    for substrate in (None, (2.25, -0.3)):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            plan = fd.plan(tfsf_box(substrate=substrate, steps=10))
+        (term,) = plan.terms
+        assert term.kind == 'TFSF' and term.current_gain is None
+        assert (term.driver is not None) == (substrate is not None)
+
+
+def _late_static(res):
+    """max over E components of |mean over the last 10% of steps| / peak, of the reference."""
+    inc = np.asarray(to_numpy(res.sources['pw'].incident))
+    tail = inc[int(0.9 * len(inc)):]
+    return max(abs(tail[:, c].mean()) / np.abs(inc[:, c]).max()
+               for c in range(3) if np.abs(inc[:, c]).max() > 0.0)
+
+
+class _OneNodeCurrent(ColumnTerm):
+    """Mutant: the current at ``ks`` alone, ``g w_n weight``, no difference: it leaves charge."""
+
+    def _current(self, Ec, w, n, params, crt):
+        for c, weight in self.drive:
+            Ec = crt.slab_add(Ec, self._drive_slab(c), w * (self.current_gain * weight))
+        return Ec
+
+
+def test_the_current_drive_leaves_no_static_field():
+    """After the pulse the oblique p column holds no static E; a one-node current would."""
+    scene, pw = _scene(20.0, 'p', 0.0, '-z', steps=2200, pml=24)
+    plan = fd.plan(scene)
+    assert _late_static(run_mutated(scene, plan)) <= 1e-6            # measured 5.8e-8
+    (term,) = plan.terms
+    mutant = _OneNodeCurrent(**{f.name: getattr(term, f.name) for f in dataclasses.fields(term)})
+    assert _late_static(run_mutated(scene, plan.with_static(terms=(mutant,)))) > 1e-4
+    # measured 4.5e-4: the charge the band's truncated start leaves (cutoff 1e-3)
+
+
+@pytest.mark.parametrize('direction', ['+z', '-z'])
+def test_the_current_drive_needs_one_more_cell_of_clearance(direction):
+    """A sheet as close to the PML as the hard drive allows is refused for an oblique p wave."""
+    base, _ = _scene(20.0, 'p', 0.0, direction)
+    grid = fd.plan(base).grid
+    n, cells = grid.n[2], 12
+    # The hard drive's clearance, met with no cell to spare: '+z' writes k0 - 1 .. k0, '-z'
+    # k0 .. k0 + 1, and the current's second node is one further upstream.
+    k0 = cells + 1 if direction == '+z' else n - 1 - cells - 1
+    at = grid.low[2] + k0 * grid.dx
+    for pol, theta in (('s', 20.0), ('p', 0.0)):
+        fd.plan(_scene(theta, pol, 0.0, direction, at=at)[0])          # accepted, as before
+    lo, hi = (k0 - 2, k0) if direction == '+z' else (k0, k0 + 2)
+    face = 'z-' if direction == '+z' else 'z+'
+    with pytest.raises(ValueError, match=(
+            rf"two-node current drive of an oblique p wave .* writes indices {lo}\.\.{hi} "
+            rf"along z \(of {n}\) and reaches into the PML on {re.escape(repr(face))}")):
+        fd.plan(_scene(20.0, 'p', 0.0, direction, at=at)[0])
 
 
 # ---------------------------------------------------------------------------------------------

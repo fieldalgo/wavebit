@@ -71,22 +71,53 @@ phase per cell reproduces exactly (the same discrete transverse derivative, ``(e
 1)/dx``; on a stage-3 ``Axis1D`` axis the column carries the scene's own ``Axis1D`` face, so
 the derivative there is the same exact ``i k``). So each ``PlaneWave`` and ``TFSF`` term carries a column in its memory -- a
 sub-plan along the propagation axis stepped by the kernel's own curl, update, masks, CPML
-and pole terms -- driven by a hard source one cell upstream of the surface, so every value
-the corrections read lies in the column's forward region. The hard source fixes the tangential
-E, and the column radiates whatever discrete waves carry it; a PlaneWave's drive is therefore
-the grid's own s or p wave -- transverse to the discrete ``K_par`` and with each stored
-component's stagger phase -- or the column launches both
-(``src/wavebit/fdtd/_prepare/sources.py::plane_wave_drive``). For ``TFSF`` the column has the scene's own (absorbing) faces on that axis and every structure that is a slab across it (the
-layered background). For ``PlaneWave`` it has the uniform background, so waves reflected
-back through the sheet by the scene's layers pass it as scattered field, and its two ends
-absorb whatever the scene's do: a PEC, PMC, Symmetry or periodic face along the axis is
-replaced in the column by a PML on cells padded past the scene's
-(``src/wavebit/fdtd/_prepare/sources.py::column_pads``), because a column that reflects is a cavity
-behind a hard source. The column's field is the reference series each returns. At a
+and pole terms -- driven one cell upstream of the surface (and, for the current drive below,
+on the node upstream of that too), so every value the corrections read lies in the column's
+forward region. The drive's weights are the grid's own s or p wave -- transverse to the
+discrete ``K_par`` and with each stored component's stagger phase -- or the column launches
+both (``src/wavebit/fdtd/_prepare/sources.py::plane_wave_drive``).
+
+**The column's drive is one of two.** The **hard source** (``ColumnTerm._hard``) sets the
+tangential E at ``ks`` to ``w * weight`` after the column's E update, and the column radiates
+whatever discrete waves carry it. Every TFSF column (and a layered TFSF's driver), every s
+PlaneWave and every PlaneWave at normal incidence is hard-driven. A **p PlaneWave with a
+nonzero transverse wavevector** is driven instead by a DC-free two-node current
+(``ColumnTerm._current``, "dJ2"): after the E update it *adds* ``g (w_n - w_{n-1}) * weight``,
+half at ``ks`` and half at its upstream neighbour, with ``w_{-1} = 0`` and ``g`` the static
+complex gain ``current_gain``. Why: a column with a fixed ``K_par`` is a PEC-backed 1-D
+waveguide (every absorbing face is PEC-backed) with one undamped mode, the axially uniform TM
+mode at the cutoff ``Omega^2 eps mu = |K_par|^2``, whose tangential E is zero and which the
+CPML (acting through the axial derivative only) cannot damp. A hard tangential-E node excites
+it through H, and after the pulse the node is itself an ``E_t = 0`` wall holding it; a current
+couples to a mode through the mode's tangential E at the drive, which is zero there, so the
+current drive does not excite it (review of 2026-10-19; s has no such mode, the walls forbid
+a uniform ``E_t``). The difference ``w_n - w_{n-1}`` removes the static field a plain current
+sheet leaves (its ``1/Omega`` pole at zero frequency), and the half/half split over two nodes
+removes the grid-edge pole of the one-node form. On the column, with ``kappa`` the discrete
+axial wavenumber, ``(2/dx) sin(kappa dx/2) = sqrt(Omega^2 eps mu - |K_par|^2)``, the tangential
+E downstream of the drive, referred to ``ks``, is ``g W(w) G(w)`` with
+
+    G(w) = (1 - exp(i w dt)) * exp(-i w dt/2) tan(kappa dx/2)/(Omega dt) * (1 + exp(i kappa dx))/2
+         = -i sin(kappa dx/2) exp(i kappa dx/2),
+
+and ``g = 1/G(w0)`` at the band centre, so at ``w0`` the column's tangential E is the hard
+drive's to round-off and elsewhere in the band it differs by ``G(w)/G(w0)``
+(``src/wavebit/fdtd/_prepare/sources.py::plane_wave_current_gain``). The reference series is
+the column's own field either way, so nothing downstream reads ``G``.
+
+For ``TFSF`` the column has the scene's own (absorbing) faces on that axis and every structure
+that is a slab across it (the layered background). For ``PlaneWave`` it has the uniform
+background, so waves reflected back through the sheet by the scene's layers pass it as
+scattered field, and its two ends absorb whatever the scene's do: a PEC, PMC, Symmetry or
+periodic face along the axis is replaced in the column by a PML on cells padded past the
+scene's (``src/wavebit/fdtd/_prepare/sources.py::column_pads``), because a column that reflects
+is a cavity behind a hard source. The column's field is the reference series each returns. At a
 concrete ``theta = 0`` the discrete impedance is exactly 1 (``Z0 H = -E`` at the staggered
-points), so the column is not needed to find it there -- but the sheet is not a closed form
-at any other angle, because with a fixed ``k_par`` the ratio depends on frequency, and the
-column is what carries it at every frequency at once.
+points), so the column is not needed to find it there -- but the sheet is not a closed form at
+any other angle, because with a fixed ``k_par`` the ratio depends on frequency, and the column
+is what carries it at every frequency at once. A padded PML is kept for the
+current-driven column too: its drive does not reflect, but a reflecting end would return the
+wave through the entry plane, where it would be counted as incident.
 
 **A layered TFSF column is fed through a sheet, not driven by a hard source.** A hard source
 is a perfect mirror (``r = -1``) for a wave coming back up the column, and over a layered
@@ -112,7 +143,10 @@ hard-driven column is kept, so a vacuum TFSF is what it was to the bit.
 ``before_E`` needs its ``H(n+1/2)``, but a term's memory changes only in ``advance``, once per
 step and after the E update. So the column runs half a step ahead: at the start of step ``n``
 its memory holds ``E(n)`` and ``H(n+1/2)``, and ``advance`` does the E half of step ``n`` (to
-``E(n+1)``, then the hard source) followed by the H half of step ``n+1``. It starts from rest
+``E(n+1)``, then the drive: the hard source, or the current's add) followed by the H half of
+step ``n+1``. The current reads the table row at ``n`` and ``n - 1`` -- the samples at
+``(n + 1) dt`` and ``n dt`` -- so it needs no state of its own; ``n - 1`` is masked at
+``n = 0``, where ``n`` may be a traced scan index. It starts from rest
 (all zeros), which satisfies the invariant because the first H half acts on a zero field.
 A driver runs on the same shift, and the layered column reads it at the level the main grid
 would: its E half (``before_E``) reads the driver's ``H(n+1/2)``, before the driver's H half
@@ -314,10 +348,18 @@ class ColumnTerm:
     """A PlaneWave sheet or a TFSF box: its correction rectangles, and its incident column.
 
     ``sub`` is the column's own plan (1 x 1 across, the scene's cells along ``axis``);
-    ``drive`` is ``((component, weight), ...)`` -- the tangential E the hard source imposes
-    at column index ``ks``; a PlaneWave's weights are the grid's own s or p wave, each with
+    ``drive`` is ``((component, weight), ...)`` -- the tangential E the hard source sets at
+    column index ``ks``; a PlaneWave's weights are the grid's own s or p wave, each with
     its component's half-cell stagger phase, so complex off normal incidence
-    (``src/wavebit/fdtd/_prepare/sources.py::plane_wave_drive`` derives them) -- and ``entry_E``/``entry_H`` the column indices the reference
+    (``src/wavebit/fdtd/_prepare/sources.py::plane_wave_drive`` derives them).
+    ``current_gain`` is ``None`` for that hard drive; for an oblique p PlaneWave it is the
+    static complex ``g`` of the two-node current drive (the module docstring), which adds
+    ``g (w_n - w_{n-1}) weight / 2`` at ``ks`` and at its upstream neighbour, so the column's
+    tangential E at the band centre is what the hard drive would set there. It is left out of
+    the skeleton while ``None`` (``src/wavebit/fdtd/_prepare/plan.py``), so every hard-driven
+    column encodes as it did before it existed.
+
+    ``entry_E``/``entry_H`` are the column indices the reference
     series is read at: ``entry_E`` is the node plane where the total field begins (the
     tangential E there) and ``entry_H`` the index of the half plane just inside it (the
     tangential H, and the normal E; the normal H sits on that index's node). ``kind`` is
@@ -343,6 +385,7 @@ class ColumnTerm:
     plane_H: float
     driver: object = None
     sheet: tuple = ()
+    current_gain: object = dataclasses.field(default=None, metadata={'skeleton': 'omit-none'})
 
     rows = (1.0,)
 
@@ -357,11 +400,18 @@ class ColumnTerm:
         idx[AX['xyz'[self.axis]]] = slice(p0, p1)
         return tuple(idx)
 
-    def _drive_slab(self, c):
+    def _drive_slab(self, c, index=None):
+        """Component ``c`` at the column node ``index`` along the axis (``ks`` by default)."""
         from wavebit.fdtd._kernel.masks import Slab
+        index = self.ks if index is None else index
         spans = {0: (0, 1), 1: (0, 1), 2: (0, 1)}
-        spans[self.axis] = (self.ks, self.ks + 1)
+        spans[self.axis] = (index, index + 1)
         return Slab(c=c, z=spans[2], y=spans[1], x=spans[0])
+
+    @property
+    def upstream(self):
+        """The node next to ``ks`` away from the entry plane: the current drive's second node."""
+        return self.ks - 1 if self.entry_E > self.ks else self.ks + 1
 
     @staticmethod
     def _column_state(sub, rt):
@@ -424,6 +474,24 @@ class ColumnTerm:
             Ec = crt.slab_add(Ec, slab, w * weight)
         return Ec
 
+    def _current(self, Ec, w, n, params, crt):
+        """The two-node current: ``g (w_n - w_{n-1}) weight / 2`` added at ``ks`` and upstream.
+
+        ``w`` is the row's sample at ``(n + 1) dt``; the one before is the same row at ``n - 1``,
+        and ``w_{-1} = 0``. The mask is a multiplication by ``n > 0`` rather than a branch, so
+        it holds where ``n`` is a traced scan index (JAX); at ``n = 0`` the index ``-1`` reads
+        the row's last sample, which the mask zeroes. Nothing is overwritten: the column's own
+        E update stands, and the drive is the add.
+        """
+        previous = params['waveform'][self.row, n - 1] * (n > 0)
+        step = w - previous
+        up = self.upstream
+        for c, weight in self.drive:
+            v = step * (0.5 * self.current_gain * weight)
+            Ec = crt.slab_add(Ec, self._drive_slab(c), v)
+            Ec = crt.slab_add(Ec, self._drive_slab(c, up), v)
+        return Ec
+
     def advance(self, mem, E, H, n, params, rt):
         sub = self.sub
         own = params['sources'][self.name]
@@ -433,9 +501,13 @@ class ColumnTerm:
         w = params['waveform'][self.row, n]
         feed_H = None
         if self.driver is None:
-            # The E half of step n: E(n) -> E(n+1), with the hard source at (n+1) dt.
+            # The E half of step n: E(n) -> E(n+1), then the drive at (n+1) dt: the hard
+            # source, or (an oblique p PlaneWave) the two-node current.
             Ec, psi = _half_E(sub, sp, col, n, crt)
-            Ec = self._hard(Ec, w, crt)
+            if self.current_gain is None:
+                Ec = self._hard(Ec, w, crt)
+            else:
+                Ec = self._current(Ec, w, n, params, crt)
         else:
             # The driver's E half and hard source, then the layered column's E half, fed
             # from the driver's H(n+1/2) -- read before the driver's H half moves it on.
@@ -481,7 +553,7 @@ class ColumnTerm:
 
 
 def _half_E(sub, sp, col, n, crt, feed=None):
-    """The E half of step ``n`` of column ``col``: ``E(n) -> E(n+1)``, before any hard source."""
+    """The E half of step ``n`` of column ``col``: ``E(n) -> E(n+1)``, before the drive."""
     Ec, Hc, cmem = col['E'], col['H'], col['mem']
     cH, psi = curl(Hc, 'H', sub, sp, col['psi'], crt)
     for t in sub.terms:
