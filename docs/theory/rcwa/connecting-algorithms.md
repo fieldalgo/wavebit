@@ -851,7 +851,7 @@ magnetic and double-negative half-spaces, the tolerance, and a mutant of every f
   `solve_field` path, which passes the whole solver as separate compiled arguments. A positive
   `half_space_merge_tolerance` still refuses live materials; sharing supports exact equality,
   not approximate snapping. Coherent `excitation` solves keep every layer too. See the
-  [JAX input-sharing contract](../../guide/common/backends.md#shared-materials-under-jax-transformations).
+  [JAX input-sharing contract](../../guide/common/backends.md).
 
   A material only *written* inside a trace is not a traced one, though until 2026-10-20 it was
   taken for one. Inside `jax.jit` even `jnp.asarray` of a constant is staged, so a solver built in
