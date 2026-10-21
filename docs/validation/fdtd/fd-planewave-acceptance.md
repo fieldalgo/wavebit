@@ -104,8 +104,13 @@ and accept/refuse threshold remain unchanged.
 
 ## Frequency-focused measurement protocol
 
-`--protocol spectral` keeps the stabilized geometry and durations, but uses
-`df=.05, cutoff=1e-6` for the validation pulse. Requested wavelengths, material
+`--protocol spectral` keeps the stabilized inner geometry and durations, but
+uses `df=.05, cutoff=1e-6` for the validation pulse and preserves a physical
+PML depth of 2.4: 48/96/192 cells at 20/40/80 cells per wavelength, doubled
+for the thickness control. Holding 48 cells at every refinement halved the
+physical depth at each step and left the 40-cell planar boundary difference
+at 1.532 times its fixed uncertainty cap. That failed experiment is retained;
+the physical-depth control does not relax the cap. Requested wavelengths, material
 interfaces, transverse wavevector, observation planes and all reference values
 and tolerances remain unchanged. A smaller start cutoff suppresses the spectral
 leakage from abruptly starting a Gaussian; a narrower pulse reduces excitation

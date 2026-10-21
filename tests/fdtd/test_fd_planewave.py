@@ -369,9 +369,11 @@ def _column_G(pw, plan, w):
     return (1.0 - np.exp(1j * w * dt)) * T_J * (1.0 + np.exp(1j * kz * dx)) / 2.0
 
 
-def _closed_form_error(theta, pol, phi, direction, steps, gamma, offset=0.8):
+def _closed_form_error(theta, pol, phi, direction, steps, gamma, offset=0.8,
+                       src_band=None, pml=24):
     scene, pw = _scene(theta, pol, phi, direction, monitors=_probe_monitors(offset),
-                       steps=steps, pml=24, amplitude=A, phase=PHASE, delay=DELAY)
+                       steps=steps, pml=pml, amplitude=A, phase=PHASE, delay=DELAY,
+                       src_band=src_band)
     plan = fd.plan(scene)
     res = run_mutated(scene, plan)
     term = plan.terms[0]
@@ -406,6 +408,15 @@ def test_forward_field_is_the_closed_form_at_real_frequencies(case, direction):
 def test_forward_field_is_the_closed_form_on_the_damped_contour(case):
     """Every case, the grazing and evanescent part of the 40-degree band included."""
     assert _closed_form_error(*case, '-z', steps=1600, gamma=GAMMA) <= DAMPED_TOL
+
+
+@pytest.mark.parametrize('df', [.05, .07])
+@pytest.mark.parametrize('theta,phi', [(25., 0.), (15., 60.)])
+def test_frequency_focused_pulses_keep_the_independent_source_transfer(theta, phi, df):
+    """The validation pulse must obey the prescribed-input oracle without self-normalization."""
+    error = _closed_form_error(theta, 'p', phi, '-z', steps=6000, gamma=0.,
+                               src_band=fd.Band(wavelength=1., df=df, cutoff=1e-6), pml=48)
+    assert error <= CLOSED_TOL
 
 
 def test_closed_form_sees_a_wrong_propagation_constant():
