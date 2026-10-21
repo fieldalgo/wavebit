@@ -4886,11 +4886,14 @@ class CoreFactorizationMixin:
         three components and no incidence axis, the coupled paths' six behind one.
         """
         from wavebit.rcwa._engine.fields import incidence_indices
+        from wavebit.rcwa._engine.fields import is_count
         from wavebit.rcwa._engine.fields import refuse_extra_incidences
         state = self._merged_field_state
         if self._grating_type == 0:
             refuse_extra_incidences(incidences)
-            sample_y = 1
+            # A pure 1D field has no y variation. Match x's sampling kind so a
+            # traced lattice never sees a mixed count/coordinate request.
+            sample_y = 1 if is_count(sample_x) else (0.,)
         else:
             incidence_indices(incidences)
         grid = self._door_grid(state.data['lattice'], sample_x, sample_y)
@@ -6566,6 +6569,11 @@ class CoreFactorizationMixin:
         one asks for a different scene -- a near material taken to be the half-space's -- so
         answering the unsnapped scene instead would be a silent wrong answer.
         """
+        # The compiled field wrapper already checked this exact scene, before JAX
+        # turned its concrete material values into leaves. This attribute exists only
+        # on the ephemeral compiled solver, never on the mutable caller.
+        if hasattr(self, '_compiled_half_space_plan'):
+            return
         tolerance = self._half_space_merge_tolerance
         if tolerance == 0:
             return
@@ -6641,6 +6649,8 @@ class CoreFactorizationMixin:
         from wavebit.observations.power import transverse_k_is_real
         from wavebit.rcwa._engine.half_space_merge import MergePlan
         from wavebit.rcwa._engine.half_space_merge import material_match
+        if hasattr(self, '_compiled_half_space_plan'):
+            return self._compiled_half_space_plan
         self._reject_unread_merge_tolerance()
         structure = self._structure
         if structure is None or self._excitation is not None:

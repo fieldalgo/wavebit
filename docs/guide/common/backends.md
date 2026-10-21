@@ -34,10 +34,23 @@ This proof is made afresh on each run, before array conversions. Equal values at
 time do not freeze a merge. Separate inputs remain independent, even if they happen to have
 the same value; `eps + 0` is a separate expression, and passing an entire `Problem` as a JIT
 argument creates separate leaves. Those cases, raster materials, dispersive models, PyTorch
-material gradients and the internal `solve_field` path retain their existing merge limits.
+material gradients retain their existing merge limits.
 A positive `half_space_merge_tolerance` still refuses live materials.
 
 The benefit matters at complex incidence, where explicitly solving a thick layer of its own
 half-space's medium can amplify round-off to an order-one error. It does not claim stability
 for a genuinely different or patterned layer. Ordinary eager runs with concrete materials keep
 their existing path. See [the numerical explanation](../../theory/rcwa/connecting-algorithms.md#10-etms-labels-at-a-complex-in-plane-wavevector).
+
+## Compiled compatibility field solves
+
+The internal compatibility method `solver.solve_field(..., geometry=g)` checks concrete
+materials before compiling the solver. It carries that call's merge plan into the solve and
+field reconstruction, including a concrete `half_space_merge_tolerance`. The plan is recomputed
+after each keyword update; it is not frozen with `g`. Angle and thickness sweeps retain their
+derivatives. Use a count for `sample_z` in compiled calls, as required by that interface.
+
+An outer transformation over independent material inputs still keeps those layers; a positive
+tolerance still refuses live materials. This change does not infer shared material dependencies
+from the separate leaves of a solver passed as a JIT argument. Public field observations use
+`Prepared.run` and result-owned reconstruction; they do not require this compatibility method.

@@ -263,8 +263,13 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
                 sample_z = _static_field_samples(sample_z, 'sample_z')
                 incidences = tuple(_fields.INCIDENCE_NAMES[i]
                                    for i in _fields.incidence_indices(incidences))
+                # Decide on this call's materials before flattening turns even constants
+                # into independent traced leaves. Never retain the decision on the caller:
+                # a later material assignment (or an outer material derivative) must be
+                # checked again. Thickness and angle remain live compiled arguments.
+                merge = self._half_space_merge_plan()
                 return self._solve_field_compiled(sample_x, sample_y, sample_z, incidences,
-                                                  geometry)
+                                                  geometry, merge)
         finally:
             after = self._scene_as_the_compiled_call_reads_it()
             if before is None or after is None or not _same_scene(before, after):
@@ -287,15 +292,16 @@ class RCWAJax(CoreFactorizationMixin, _BaseRCWA):
             return None
         return treedef, leaves
 
-    @partial(jax.jit, static_argnums=(1, 2, 3, 4, 5))
+    @partial(jax.jit, static_argnums=(1, 2, 3, 4, 5, 6))
     @device_scoped
-    def _solve_field_compiled(self, sample_x, sample_y, sample_z, incidences, geometry):
+    def _solve_field_compiled(self, sample_x, sample_y, sample_z, incidences, geometry, merge):
         """:meth:`solve_field`'s compiled body. The conditions are already on ``self``.
 
         This, not :meth:`solve_field`, is what ``jax.jit`` wraps with ``self`` at argnum 0: every
         call flattens the solver (:meth:`SolverJax._tree_flatten`) and runs on the solver
         :meth:`SolverJax._tree_unflatten` rebuilds inside the trace.
         """
+        self._compiled_half_space_plan = merge
         return self._solve_and_field(sample_x, sample_y, sample_z, incidences, geometry)
 
 

@@ -827,3 +827,124 @@ def test_a_job_that_does_not_use_the_tolerance_keeps_its_key():
     other = Job(solver='rcwa', problem=problem, numerics=snapped)
     assert other.key != job.key
     assert Job.from_json(other.to_json()).numerics.half_space_merge_tolerance == 1e-6
+
+
+def _compiled_field_solver(algorithm, side, **kw):
+    top, bot = (9., 1.) if side == 'top' else (1., 9.)
+    return _legacy_wavebit_rcwa(
+        backend='jax', tetm='te', top=top, bot=bot, theta=.9+.2j,
+        wavelength=WL, period=[700.], truncation_order=[2], thickness=[20000.],
+        structure=np.full((1, 1, 4), 9.+0j), incidence_side=side,
+        layer_algorithm=algorithm, answers='field', **kw)
+
+
+def _compiled_field_exact(side, d=20000., angle=.9+.2j):
+    """Fresnel's interface and Faraday's law, with z measured upward."""
+    kx = 3*np.sin(angle)
+    a, b = _maystre(9-kx*kx), _maystre(1-kx*kx)
+    r = (a-b)/(a+b)
+    z = np.linspace(0., d, 4)
+    distance = d-z if side == 'top' else z
+    incoming = np.exp(1j*2*np.pi/WL*a*distance)
+    reflected = r*np.exp(1j*2*np.pi/WL*a*(2*d-distance))
+    ey = incoming+reflected
+    hx = (1 if side == 'top' else -1)*a*(incoming-reflected)
+    return np.stack([ey, hx, kx*ey], axis=-1)
+
+
+@pytest.mark.parametrize('algorithm', ['ETM', 'SMM'])
+@pytest.mark.parametrize('side', ['bottom', 'top'])
+def test_compiled_field_merges_concrete_materials_and_preserves_derivatives(algorithm, side):
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    with jax.enable_x64(True):
+        solver = _compiled_field_solver(algorithm, side)
+        geometry = solver.freeze_geometry()
+
+        def run(d, angle):
+            result, field = solver.solve_field(
+                sample_x=[0.], sample_y=[0.], sample_z=4, geometry=geometry,
+                thickness=jnp.reshape(d, (1,)), theta=angle)
+            return result.incident.r_s.ravel()[2], field[:, 0, 0]
+
+        reflection, field = jax.jit(run)(20000., .9+.2j)
+        want = _compiled_field_exact(side)
+        assert _relative(field, want) < 1e-12
+        expected_r = _interface('te', 'bottom', .9+.2j, 20000.)[0]
+        np.testing.assert_allclose(reflection, expected_r, rtol=1e-12)
+        assert not hasattr(solver, '_compiled_half_space_plan')
+        # Both compiled parameters stay live; field E and H use the moved plane.
+        def objective(d, a):
+            return jnp.real(jnp.sum(run(d, a+.2j)[1]))/1e52
+        gradients = jax.jit(jax.grad(objective, argnums=(0, 1)))(20000., .9)
+        def exact(d, a):
+            return np.real(np.sum(_compiled_field_exact(side, d, a+.2j)))/1e52
+        for got, h, axis in zip(gradients, (1e-3, 1e-6), (0, 1)):
+            plus, minus = [20000., .9], [20000., .9]
+            plus[axis] += h
+            minus[axis] -= h
+            fd = (exact(*plus)-exact(*minus))/(2*h)
+            np.testing.assert_allclose(got, fd, rtol=1e-7)
+
+
+@pytest.mark.parametrize('algorithm', ['ETM', 'SMM'])
+def test_compiled_field_rechecks_material_changes_and_does_not_freeze_tangents(algorithm):
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    with jax.enable_x64(True):
+        solver = _compiled_field_solver(algorithm, 'bottom')
+        solver.thickness = [100.]
+        geometry = solver.freeze_geometry()
+        samples = dict(sample_x=2, sample_y=1, sample_z=3, geometry=geometry)
+        solver.solve_field(**samples)
+        changed, field = solver.solve_field(structure=np.full((1, 1, 4), 8.+0j), **samples)
+        eager, eager_field = solver.solve_field_eager(**samples)
+        assert _relative(field, eager_field) < 1e-12
+        assert _relative(changed.incident.r_s, eager.incident.r_s) < 1e-12
+
+        def run(eps):
+            result, _ = solver.solve_field(structure=jnp.full((1, 1, 4), eps+0j), **samples)
+            return jnp.real(result.incident.r_s.ravel()[2])
+        gradient = jax.jit(jax.grad(run))(9.)
+        def slab(e):
+            kx = 3*np.sin(.9+.2j)
+            a, b, c = [_maystre(v-kx*kx) for v in (9., e, 1.)]
+            r1, r2 = (a-b)/(a+b), (b-c)/(b+c)
+            phase = np.exp(2j*2*np.pi/WL*b*100.)
+            return ((r1+r2*phase)/(1+r1*r2*phase)).real
+        h = 1e-5
+        fd = (slab(9+h)-slab(9-h))/(2*h)
+        assert abs(fd) > 1e-3
+        np.testing.assert_allclose(gradient, fd, rtol=1e-7)
+        assert not hasattr(solver, '_compiled_half_space_plan')
+
+
+def test_compiled_field_tolerance_is_checked_before_the_trace():
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    with jax.enable_x64(True):
+        solver = _compiled_field_solver('ETM', 'bottom', half_space_merge_tolerance=1e-6)
+        solver.structure = np.full((1, 1, 4), 9*(1+1e-8)+0j)
+        geometry = solver.freeze_geometry()
+        _, field = solver.solve_field(sample_x=[0.], sample_z=4, geometry=geometry)
+        assert _relative(field[:, 0, 0], _compiled_field_exact('bottom')) < 1e-12
+        def live(eps):
+            return solver.solve_field(structure=jnp.full((1, 1, 4), eps+0j), geometry=geometry)[1]
+        with pytest.raises(NotImplementedError, match='needs materials it can read'):
+            jax.jit(live)(9.)
+
+
+@pytest.mark.parametrize('kind', KINDS)
+@pytest.mark.parametrize('algorithm', ['ETM', 'SMM'])
+def test_compiled_field_keeps_the_pattern_between_merged_faces(kind, algorithm):
+    jax = pytest.importorskip('jax')
+    with jax.enable_x64(True):
+        solver = _grating(kind, 'top', _raster(kind, [2.25, None, 1.0]),
+                         [700., 220., 400.], theta=.9+.25j, backend='jax',
+                         answers='field', layer_algorithm=algorithm)
+        samples = dict(sample_x=3, sample_y=2, sample_z=3, geometry=solver.freeze_geometry())
+        eager, expected = solver.solve_field_eager(**samples)
+        compiled, field = solver.solve_field(**samples)
+        assert _relative(field, expected) < 1e-12
+        for name in ('r_s', 'r_p', 't_s', 't_p'):
+            assert _relative(getattr(compiled.incident, name), getattr(eager.incident, name)) < 1e-12

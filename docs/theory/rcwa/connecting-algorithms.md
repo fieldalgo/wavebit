@@ -847,8 +847,11 @@ magnetic and double-negative half-spaces, the tolerance, and a mutant of every f
 
   Distinct traced inputs stay independent even when their values coincide. Expressions such as
   `eps + 0`, separate leaves of a traced `Problem`, raster values and dispersive models do not
-  establish this sharing proof. Their knife-edge limitation remains, as does JAX's internal
-  `solve_field` path, which passes the whole solver as separate compiled arguments. A positive
+  establish this sharing proof. Their knife-edge limitation remains. JAX's internal
+  `solve_field` now decides a merge
+  from concrete materials before flattening the solver and carries that per-call plan into
+  the compiled solve and field reconstruction. Outer material transformations still keep
+  independent inputs separate; the plan is never frozen with geometry. A positive
   `half_space_merge_tolerance` still refuses live materials; sharing supports exact equality,
   not approximate snapping. Coherent `excitation` solves keep every layer too. See the
   [JAX input-sharing contract](../../guide/common/backends.md).
