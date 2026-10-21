@@ -1374,7 +1374,20 @@ def _growing(caught):
     return [str(w.message) for w in caught if w.category is fd.GrowingFieldWarning]
 
 
-def test_a_plane_wave_whose_column_holds_is_judged_from_its_envelope():
+@pytest.fixture
+def hard_column(monkeypatch):
+    """Inject the historical hard drive to exercise trapped-column diagnostics.
+
+    The default oblique p current does not excite the same holding mode. Keep
+    this diagnostic regression explicit instead of changing its growth bounds.
+    The patch is scoped to each test and never changes the production selector.
+    """
+    from wavebit.fdtd._kernel.sources import ColumnTerm
+    monkeypatch.setattr(ColumnTerm, '_current',
+                        lambda self, E, w, n, params, rt: self._hard(E, w, rt))
+
+
+def test_a_plane_wave_whose_column_holds_is_judged_from_its_envelope(hard_column):
     """The review's regression: the growing slab column driven by a PlaneWave. Its column (the
     uniform background under the same pure-stretch faces) never goes quiet -- the stretch
     holds an evanescent field at its entry plane, 1.5e-4 in amplitude, whose one-step change
@@ -1395,7 +1408,23 @@ def test_a_plane_wave_whose_column_holds_is_judged_from_its_envelope():
     assert res.diagnostics['sources_end'] > 30.0, res.diagnostics['sources_end']
 
 
-def test_mutant_a_holding_column_kept_driving_hides_the_growth(monkeypatch):
+def test_the_current_driven_column_leaves_a_post_source_quiet_window():
+    """The current drive releases the column instead of trapping the hard-source mode.
+
+    Keep the production selector active here. The matched-loss slab has a
+    complete quiet window at 33 time units, while the explicit hard-drive
+    regression above exercises the holding and growing diagnostic paths.
+    """
+    from tests.fixtures.fdtd.acceptance_diagnostics import diagnostic_basis
+    scene = _slab_plane_wave(time=33.0, stabilize=3e-3)
+    res, caught = _run_collecting(scene)
+    assert not _growing(caught), caught
+    assert diagnostic_basis(res.diagnostics, res.plan.steps * res.plan.dt,
+                            _assemble._scene_period(scene, res.plan), False) == 'quiet_floor'
+    assert res.diagnostics['sources_end'] < 33.0 - 4.0
+
+
+def test_mutant_a_holding_column_kept_driving_hides_the_growth(monkeypatch, hard_column):
     """The column's state ignored (its end kept even when it holds): the end is the run's, the
     interior is never judged, and the growing scene warns nothing but "run longer" -- the gate
     above fails."""
@@ -1504,7 +1533,7 @@ def test_a_holding_column_holds_to_the_growth_line_and_not_to_a_factor_of_two():
     assert GROWTH_THRESHOLD * min(means) < max(means) <= GROWTH_STEADY * min(means), means
 
 
-def test_a_growing_column_warns_naming_the_source(monkeypatch):
+def test_a_growing_column_warns_naming_the_source(monkeypatch, hard_column):
     """A column that grows is a growing scene on its own, whatever the interior reads: made to
     say so (``_column_state`` returning ``'growing'`` for whatever it judged) on the stabilized
     slab PlaneWave, whose interior falls, the run warns ``GrowingFieldWarning`` naming the
