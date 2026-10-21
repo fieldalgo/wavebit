@@ -28,14 +28,15 @@ the *rise* of the grazing tail as a defect in the layer.)
        24    2.2e-08    1.4e-07    1.2e-04    4.4e-02
 
 **This is what re-measures the 12-cell refusal line**, and it says something the row labels
-alone do not. The reflection is the larger of two things: the *discretization* of the
-conductivity grading, which falls about a decade every two cells, and the layer's own
-**design target at that angle**, which is ``reflection ** cos(theta)`` and does not depend on
-the depth at all -- the grading is normalised to hit the target whatever the thickness is. At
-the default target those floors are 1.0e-8 / 1.2e-7 / 1.0e-4 / 4.1e-2 for the four columns,
-and every saturated entry above sits within a factor of 2.2 of one.
-:func:`test_the_floor_is_the_targets_own_angular_law` measures that law directly, over three
-decades of target, and it is the gate's oracle: a self-captured table cannot say a layer
+alone do not. The reflection is set by two things: the *discretization* of the conductivity
+grading, which falls about a decade every two cells, and the layer's own **round trip at that
+angle**, ``R_c = reflection ** (g cos(theta))``, which does not depend on the depth at all --
+the grading is normalised to the target whatever the thickness is, and the CFS pole gives back
+a fixed part of the exponent (``g = 0.919``, :func:`_round_trip`). At the default target those
+round trips are 4.5e-8 / 4.3e-7 / 2.1e-4 / 5.3e-2 for the four columns, and the grid
+approaches them from below: the 24-cell row sits at 0.49 / 0.32 / 0.58 / 0.84 of them.
+:func:`test_the_floor_is_the_round_trip_approached_from_below` measures that law directly, over
+three decades of target, and it is the gate's oracle: a self-captured table cannot say a layer
 absorbs, and this law can.
 
 **Both z faces are measured, because they are different code.** ``_lower/cpml.profiles`` has a
@@ -45,10 +46,11 @@ low branch was reached only by the frozen golden -- which is a pin and not an or
 mirrored (``fd_helpers.doubling_pair(toward='-')``) and puts the low branch under the table.
 
 So: below 12 cells the grading is under-resolved and the number is the grid's. From 12 on,
-the columns that have reached their target stay there, and **more cells buy accuracy near
-normal incidence while a lower ``reflection=`` is what buys it at grazing**. Twelve is the
-line because it is the first depth at which no column is limited by the grid rather than by
-what was asked for.
+the grazing columns sit below their round trip and stay there (60 degrees at 0.54 / 0.60 /
+0.58 of ``R_c`` for 12 / 16 / 24 cells, 80 degrees rising from 0.65 to 0.84), and **more cells
+buy accuracy near normal incidence while a lower ``reflection=`` is what buys it at grazing**.
+Twelve is the line because it is the first depth at which no grazing column is limited by the
+grid rather than by what was asked for: at 8 cells the 60-degree entry is 4.2x its ``R_c``.
 
 **Two things the plan expected of this gate that the measurement contradicts.** The stage-1
 design names ``kappa = 1`` and ``alpha = 0`` as the mutants that must raise the grazing number
@@ -76,7 +78,7 @@ It sits on the component normal to the face, which a normally incident wave lack
 (:func:`test_at_normal_incidence_the_stabilized_layer_is_the_pure_stretch`). At an angle it
 reflects in proportion to its strength
 (:func:`test_the_stabilizing_loss_reflects_in_proportion_to_its_strength`), and that replaces
-the target's law as the oblique floor. Measured 2026-09-19, :data:`STABILIZED`:
+the round trip ``R_c`` as the oblique floor. Measured 2026-09-19, :data:`STABILIZED`:
 
     cells      0 deg     30 deg     60 deg     80 deg
         6    2.6e-02    2.1e-02    1.8e-02    1.7e-01
@@ -104,8 +106,10 @@ import numpy as np
 import pytest
 
 import wavebit.fdtd._legacy as fd
+from wavebit.fdtd._prepare import cpml
+from wavebit.fdtd._prepare.layer_return import grid_k, layer_return
 from wavebit.fdtd._prepare.params import _cpml, _cpml_loss
-from tests.fixtures.fdtd.fd_helpers import backends, doubling_reflection, to_numpy
+from tests.fixtures.fdtd.fd_helpers import backends, doubling_reflection, packet_layout, to_numpy
 
 #: What this file measured, at the default ``reflection=1e-8``. Rows are cells, columns are
 #: the nominal angle of incidence, values the amplitude ratio at the carrier.
@@ -170,36 +174,70 @@ def test_the_doubling_table_is_what_this_kernel_measures(cells, angle):
 @pytest.mark.parametrize('angle', [pytest.param(a, marks=() if a == 60 else pytest.mark.slow)
                                    for a in (0, 30, 60, 80)])
 @pytest.mark.parametrize('target', [1e-4, 1e-8, 1e-12])
-def test_the_floor_is_the_targets_own_angular_law(angle, target):
-    """``R = reflection ** cos(theta)`` wherever the target is above the grid's own floor.
+def test_the_floor_is_the_round_trip_approached_from_below(angle, target):
+    """``R_c = reflection ** (g cos(theta))`` bounds the return from above; where ``R_c`` is
+    below the grid's own floor, the return saturates at that floor.
 
     The gate's oracle, and the reason the table is not merely a self-captured golden. The
-    conductivity grading is normalised so that the *continuous* profile attenuates a normally
-    incident wave to ``reflection`` on a round trip; at angle ``theta`` the path through the
-    layer carries a factor ``cos(theta)`` in the exponent, so the layer's design reflection is
-    ``reflection ** cos(theta)``, independent of the depth. Measured at 24 cells over three
-    decades of target and four angles, every point where that law is above the 24-cell
-    discretization floor (~2e-8) lands within a factor of 2.2 of it -- and every point where
-    it is *below* saturates at that floor instead, which is the other half of the statement.
+    conductivity grading is normalised so that ``sigma`` alone attenuates a normally incident
+    round trip to ``reflection``; at angle ``theta`` the path through the layer carries a factor
+    ``cos(theta)`` in the exponent, and the CFS pole divides the attenuation at each depth by
+    ``1 + (alpha / omega)^2``, which takes the exponent down to ``g = 0.919`` of it
+    (:func:`_round_trip`, from ``cpml.ORDER`` and ``cpml.ALPHA_RELATIVE``). So the continuum
+    layer returns ``R_c``, independent of the depth. (This test once compared with
+    ``reflection ** cos(theta)``, without ``g``, within 2.5x both ways, and passed only because
+    ``g`` raises ``R_c`` 1.1-3.1x above that law at the points it checked -- 2.1x at the default
+    target and 60 degrees -- which happened to offset the grid's deficit and the default
+    window's cut, both below.)
 
-    **Both branches are two-sided, and the saturating one has to be.** ``measured`` is a ratio
-    of two runs, so an identity kernel -- fields frozen, observers still recording -- returns
-    exactly 0.0 from it, and ``measured < floor`` on its own is a check that cannot fail.
-    Measured with such a kernel patched in, the four cases whose law falls below the floor all
-    passed while the eight two-sided ones failed. Round-off between the two boxes of a real run
-    is ~1e-14 of the peak, so zero separates cleanly; the reference amplitude is checked
-    besides, which is what tells "the layer absorbed everything" from "nothing was launched".
+    **The law is one-sided on a grid.** The discrete layer approaches ``R_c`` from below as the
+    grading is resolved (``tests/fdtd/test_fd_layer_return.py``, gate (c)), and at 20 cells per
+    wavelength it is well below: measured at 24 cells over three decades of target and four
+    angles, every point where ``R_c`` is above the 24-cell discretization floor (~2e-8) lands at
+    0.35 .. 0.95 of it, and every point where it is *below* saturates at that floor instead. The
+    deficit acts like an exponent about 4-13% too large, so it grows with the target's strength
+    and no fixed factor below ``R_c`` holds (at 60 degrees, 0.85 / 0.53 / 0.41 of it at 1e-4 /
+    1e-8 / 1e-12). ``R_c`` is taken at the design wavelength; the probe's carrier is 0.2-0.4%
+    off it, under 0.5% on ``R_c`` where ``R_c`` is compared.
+
+    **The other side is the exact layer's.** The same run is held within 2.5x of the layer's
+    exact return at the probe's carrier (:func:`_layer_model`) -- the factor this test held
+    against the old law, now against the exact layer -- measured 0.96 .. 1.74 of it. Both high
+    ratios are at 1e-12, the smallest carrier returns beside the rest of the band: 1.74 at 30
+    degrees, at the grid's floor of ~2e-8, and 1.60 at 60. At 0 degrees, where the band has no
+    angular spread, and at 80, where the carrier's own return is large, the same target reads
+    0.99. That model reads the same ``cpml.profiles`` as the kernel, so it cannot judge the
+    grading on its own; what does is ``tests/fdtd/test_fd_layer_return.py``, which holds it to
+    the kernel's steady state to 1e-9 (gate (a)) and to within 6% of ``R_c`` from below at 640
+    cells per wavelength (gate (c)). That pair catches a grading that absorbs too much; the law
+    here catches one that absorbs too little.
+
+    **The window is the settled one** (``test_fd_layer_return.SETTLED``). The default ends ``2 W``
+    after the carrier's return from the inner face, and the echo from the PEC wall, which has a
+    further 2.4 wavelengths to travel through 24 cells and back, is cut: 0.40 of the exact layer
+    at 1e-4 and normal incidence.
+
+    **The saturating branch has to be two-sided.** ``measured`` is a ratio of two runs, so an
+    identity kernel -- fields frozen, observers still recording -- returns exactly 0.0 from it,
+    and ``measured < floor`` on its own is a check that cannot fail; the exact layer's lower
+    bound refuses that zero. Round-off between the two boxes of a real run is ~1e-14 of the
+    peak, so zero separates cleanly; the reference amplitude is checked besides, which is what
+    tells "the layer absorbed everything" from "nothing was launched".
     """
+    from tests.fdtd.test_fd_layer_return import SETTLED
     measured, _, layout = doubling_reflection(24, float(angle),
-                                              mutate_params=_retarget(target))
+                                              mutate_params=_retarget(target), **SETTLED)
     assert layout['reference_peak'] > 100 * layout['reference_initial'], \
         'nothing reached the probe: the measurement below would be zero for that reason'
-    law = target ** math.cos(math.radians(angle))
+    grid = _layer_model(24, angle, target, **SETTLED)
+    assert grid / 2.5 < measured < grid * 2.5, (angle, target, measured, grid)
+    law = _round_trip(target, math.cos(math.radians(angle)))
     #: The 24-cell layer's own discretization floor, with room for the angle: measured
-    #: 1.0e-8 at 0 degrees and 7.7e-8 at 30 when the target is far below it.
+    #: 1.6e-8 at 0 degrees and 1.9e-8 at 30 when the target is far below it.
     floor = 2e-7
     if law > floor:
-        assert law / 2.5 < measured < law * 2.5, (angle, target, measured, law)
+        assert measured < law, (angle, target, measured, law,
+                                'the grid approaches the round trip from below')
     else:
         assert 0.0 < measured < floor, (angle, target, measured,
                                         'saturates at the grid floor; it does not vanish')
@@ -302,6 +340,35 @@ def _retarget(reflection):
         return {**params, 'cpml': _cpml(moved, plan, rt),
                 'cpml_loss': _cpml_loss(moved, plan, rt)}
     return mutate
+
+
+def _round_trip(reflection, cos):
+    """``R_c = reflection ** (g cos theta)``: the continuum round trip of a PEC-backed CFS-PML.
+
+    ``g = (m + 1) int_0^1 f^m / (1 + (a (1 - f))^2) df``, with ``m = cpml.ORDER`` the grading's
+    power and ``a = cpml.ALPHA_RELATIVE`` the CFS pole over the design frequency at the inner
+    face (``f = 0``). Integrated here by Gauss-Legendre rather than read from the grazing rule,
+    so the law this gate holds the kernel to is stated in this file.
+    """
+    x, w = np.polynomial.legendre.leggauss(64)
+    f = 0.5 * (x + 1.0)
+    m, a = cpml.ORDER, cpml.ALPHA_RELATIVE
+    g = (m + 1.0) * 0.5 * float(np.sum(w * f ** m / (1.0 + (a * (1.0 - f)) ** 2)))
+    return reflection ** (g * cos)
+
+
+def _layer_model(cells, angle, reflection, **layout):
+    """The exact return of a pure-stretch ``z+`` layer at the doubling probe's own carrier --
+    its dx, dt, discrete omega and Bloch kx (``src/wavebit/fdtd/_prepare/layer_return.py``).
+
+    The larger of ``|r_TE|`` and ``|r_TM|``, because the packet carries s and p equally and
+    :func:`doubling_reflection` reports the largest of its components' ratios (``Ey`` is s,
+    ``Ex`` and ``Ez`` are p).
+    """
+    L = packet_layout(cells, angle, **layout)
+    K = grid_k(2 * math.pi / L['wavelength'] * math.sin(math.radians(angle)), L['dx'])
+    return max(abs(r) for r in layer_return(cells, L['dx'], L['dt'], L['wavelength'], 1.0, '+',
+                                            reflection, 0.0, 2 * math.pi / L['omega'], K))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -482,11 +549,18 @@ def test_the_thin_pml_refusal_quotes_this_files_table():
 
 
 def test_the_refusal_is_about_the_default_target_and_says_so():
-    """The message has to carry the second half of the finding, or the reader raises cells."""
+    """The message has to carry the second half of the finding, or the reader raises cells.
+
+    Its last row is the layer's round trip at the default target, recomputed here from the
+    constants (:func:`_round_trip`), so the law a user is shown is the one this file holds.
+    """
     with pytest.raises(ValueError) as e:
         fd.PML(cells=11, wavelength=0.55)
     message = str(e.value)
-    assert 'reflection**cos(theta)' in message
+    assert 'reflection**(0.919 cos(theta))' in message
+    for angle in (0, 30, 60, 80):
+        value = _round_trip(1e-8, math.cos(math.radians(angle)))
+        assert f'{value:.1e}' in message, (angle, value)
     assert 'lower reflection=' in message and 'not more cells' in message
 
 
