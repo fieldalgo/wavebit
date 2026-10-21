@@ -129,8 +129,10 @@ def _report(problem, numerics, execution, solvers):
                    'one_dense_material_matrix_bytes': modes*modes*cbytes,
                    'one_first_order_matrix_bytes': (4*modes)**2*cbytes,
                    'scope': 'individual dense matrix storage only; excludes temporaries, layer copies, source groups, and backend runtime; not a peak-memory bound'},
-        # A merge tolerance is decided from concrete materials: a run that traces them -- any
-        # jit of a prepared run, any material gradient -- refuses it.
+        # A merge tolerance is decided from concrete materials: a run that traces them -- a jit
+        # or vmap that takes a material as its argument, any material gradient -- refuses it.
+        # Materials written as constants inside a jitted function stay concrete and are read,
+        # but a preparation cannot know which a later jit will do, so jit is not claimed.
         capabilities={'eager': True, 'material_gradients': (execution.backend != 'numpy' and single
                                                             and not numerics.half_space_merge_tolerance),
                       'jit': execution.backend == 'jax' and single and not numerics.half_space_merge_tolerance,
