@@ -959,13 +959,27 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
             ux = xp.where(off, (p[:, None, 0]-foot[:, :, 0])*inverse, n_edge[None, :, 0])
             uy = xp.where(off, (p[:, None, 1]-foot[:, :, 1])*inverse, n_edge[None, :, 1])
             tx, ty = ux[rows, nearest], uy[rows, nearest]
+            floor2 = xp.asarray(_SAME_DIRECTION**2, dtype=dtype)
             # |u - t|**2 for two unit vectors, under the floor `bisector` puts on it.
-            turn2 = xp.maximum(2. - 2.*(ux*tx[:, None] + uy*ty[:, None]),
-                               xp.asarray(_SAME_DIRECTION**2, dtype=dtype))
+            turn2 = xp.maximum(2. - 2.*(ux*tx[:, None] + uy*ty[:, None]), floor2)
+            # Each interval is weighed by its distance past its bisector with the nearest *and*
+            # with the second nearest, whichever is larger. Against the nearest alone, a third
+            # interval's weight depended on which of two tied intervals `argmin` returned: on a
+            # square's diagonal the opposite and the perpendicular edge traded weights with the
+            # last bit of the vertices, and a rigid shift stepped sum(T) (issue #36). The two
+            # nearest are one set whichever comes first, and away from a tie the second term
+            # never exceeds the first for the nearest two, so their weights are unchanged.
+            masked = xp.where(xp.arange(dist2.shape[1])[None, :] == nearest[:, None],
+                              xp.asarray(float('inf'), dtype=dtype), dist2)
+            second = xp.argmin(masked, axis=1)
+            sx, sy = ux[rows, second], uy[rows, second]
+            turn2b = xp.maximum(2. - 2.*(ux*sx[:, None] + uy*sy[:, None]), floor2)
+            past = xp.maximum((length - length[rows, nearest][:, None])/xp.sqrt(turn2),
+                              (length - length[rows, second][:, None])/xp.sqrt(turn2b))
             # On the pair's own interface only the intervals through the sample count: the
             # pole that leaves the exact normal there.
             weight = xp.where((distance <= threshold2)[:, None], xp.astype(~off, dtype), xp.exp(
-                -(length - length[rows, nearest][:, None])/(xp.sqrt(turn2)*width)))
+                -past/width))
             weight = xp.where(live, weight, xp.zeros_like(weight))
             total = xp.sum(weight, axis=1)
             total = xp.where(total > 0., total, xp.ones_like(total))
