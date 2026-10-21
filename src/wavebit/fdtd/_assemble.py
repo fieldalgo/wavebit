@@ -550,11 +550,13 @@ def sources_end(scene, sources=None, rt=None):
     the box and a layer below it, by the reflector's transmission. *Why the change and not the
     level.* A column's static residue is injected at constant energy -- it feeds nothing -- and
     it never ends: an oblique PlaneWave's column holds H at 1e-7 .. 1.3e-7 of its peak for good
-    (``fd_helpers.bloch_plane_wave`` at 30 degrees, ``bloch_stack``), so a level would never
-    let those scenes be judged. The change of a wave at frequency ``f`` is ``2 sin(pi f dt)``
-    times its amplitude, so an echo at the carrier is read at its energy, and one inside the
-    band (``f0 +- 2 df``, where nearly all of an echo is) at ``((f0 - 2 df)/f0)^2`` or more of
-    it: 0.36 at ``df = 0.2 f0``, 0.25 at ``df = 0.25 f0``.
+    (``fd_helpers.bloch_plane_wave`` at 30 degrees, ``bloch_stack``; measured with the hard
+    tangential-E drive, before an oblique p column was current-driven -- ``bloch_stack`` is p
+    and was not measured again), so a level would never let those scenes be judged. The change
+    of a wave at frequency ``f`` is ``2 sin(pi f dt)`` times its amplitude, so an echo at the
+    carrier is read at its energy, and one inside the band (``f0 +- 2 df``, where nearly all of
+    an echo is) at ``((f0 - 2 df)/f0)^2`` or more of it: 0.36 at ``df = 0.2 f0``, 0.25 at
+    ``df = 0.25 f0``.
 
     **A column that never goes quiet** (``_column_state``). The change after the envelope's end
     is judged with the interior's statistic (``_post.growth_ratio``, floor
