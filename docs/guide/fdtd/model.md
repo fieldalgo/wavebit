@@ -408,6 +408,24 @@ a scalar `.5` does not specify an axis. `check` reports invalid types at
 same path before reading any plane coordinates. A valid Plane must still lie
 inside the physical domain.
 
+For oblique p polarization, the auxiliary incident column uses a two-node
+current proportional to consecutive pulse differences. Its gain matches the
+hard electric-field drive at the centre frequency. Away from that frequency,
+the tangential incident field carries the discrete transfer ratio
+`G(omega)/G(omega0)`, where
+`G(omega) = -i sin(kappa dx/2) exp(i kappa dx/2)` and `kappa` is the column's
+Yee longitudinal wavenumber. Raw broadband fields therefore depend on this
+source transfer. Diffraction amplitudes use the measured incident field.
+The centre frequency must propagate along the column on the selected grid;
+preparation refuses a centre at cutoff or longitudinal Nyquist.
+
+The s and exactly normal-incidence drives retain the hard electric-field
+prescription. Consequently, the broadband raw p field need not approach the
+exactly normal-incidence waveform continuously as the angle tends to zero.
+When combining separate s and p runs, equal declared amplitudes specify their
+relative excitation at the centre frequency; compensate their frequency
+dependent transfers to prescribe a broadband polarization mixture.
+
 ## Outputs
 
 Monitors are declared by name in `Outputs(monitors=...)` and read with `result[name]`; each

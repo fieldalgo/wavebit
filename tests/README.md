@@ -14,6 +14,11 @@ in [`../studies/`](../studies) with a [`../docs/`](../docs) write-up instead. Se
 
 ## Recorded runs
 
+| Entry | Question |
+|---|---|
+| `tests/fdtd/test_fd_acceptance.py`, `tests/fixtures/fdtd/acceptance.py` | Do fixed per-observable limits reject unstable, incomplete or inaccurate evidence without enlarging the budget? |
+| `tests/fdtd/check_planewave_acceptance.py` | Do all p-wave refinement runs satisfy the registered time, boundary and reference uncertainty caps? [Criteria](../docs/validation/fdtd/fd-planewave-acceptance.md). |
+
 `tests/api/test_ci_runner_diagnostics.py` checks memory/cgroup evidence, signal-sender identity,
 secret exclusion and Linux sidecar signal shutdown without running a solver.
 
