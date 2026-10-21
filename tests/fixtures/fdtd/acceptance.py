@@ -19,13 +19,15 @@ def maximum_gap(values):
     return np.maximum.reduce([np.abs(a - b) for a, b in combinations(values, 2)])
 
 
-def assess(time_rows, boundary_rows, reference, reference_check, limits, *, qualification_only=False):
+def assess(time_rows, boundary_rows, reference, reference_check, limits, *, qualification_only=False, bandwidth_row=None):
     """Grade one geometry/resolution with fixed per-observable absolute limits.
 
     Rows contain ``values`` and a bool ``valid`` established by the runner.
     All five times and both boundary controls are mandatory. Boundary rows are
     compared with the longest baseline time. All rows must be valid before an
     accuracy verdict can be made; failures of qualification are BLOCKED.
+    An optional bandwidth row must also be valid and accurate, and its gap
+    from the longest baseline is bounded by the same 10% uncertainty cap.
     ``qualification_only`` reserves accuracy for a separate convergence gate;
     it does not change any uncertainty cap.
     """
@@ -33,6 +35,8 @@ def assess(time_rows, boundary_rows, reference, reference_check, limits, *, qual
     checked = np.asarray(reference_check, complex)
     budget = np.asarray(limits, float)
     rows = list(time_rows) + list(boundary_rows)
+    if bandwidth_row is not None:
+        rows.append(bandwidth_row)
     result = dict(status='BLOCKED', issues=[])
     if len(time_rows) != len(TIME_FACTORS) or len(boundary_rows) != 2:
         result['issues'].append('missing_runs')
@@ -49,7 +53,7 @@ def assess(time_rows, boundary_rows, reference, reference_check, limits, *, qual
     if any(row.get('valid') is not True for row in rows):
         result['issues'].append('invalid_run_diagnostics')
     time_gap = maximum_gap(values[:len(time_rows)])
-    boundary_gap = maximum_gap([values[len(time_rows) - 1]] + values[len(time_rows):])
+    boundary_gap = maximum_gap([values[len(time_rows) - 1]] + values[len(time_rows):len(time_rows)+len(boundary_rows)])
     reference_gap = np.abs(expected - checked)
     errors = np.maximum.reduce([np.abs(v - expected) for v in values])
     for name, gap, fraction in (('time', time_gap, TIME_FRACTION),
@@ -58,6 +62,11 @@ def assess(time_rows, boundary_rows, reference, reference_check, limits, *, qual
         result[name + '_ratio'] = (gap / (fraction * budget)).tolist()
         if np.any(gap > fraction * budget):
             result['issues'].append(name + '_uncertainty')
+    if bandwidth_row is not None:
+        gap = np.abs(values[-1] - values[len(time_rows)-1])
+        result['bandwidth_ratio'] = (gap / (TIME_FRACTION * budget)).tolist()
+        if np.any(gap > TIME_FRACTION * budget):
+            result['issues'].append('bandwidth_uncertainty')
     result['accuracy_ratio'] = (errors / budget).tolist()
     if result['issues']:
         return result

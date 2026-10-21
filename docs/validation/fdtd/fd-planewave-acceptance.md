@@ -72,6 +72,14 @@ The maximum pairwise complex r/t difference must be at most 2e-7. This checks
 residual time dependence; it does not overturn that fixture's historical
 failed spatial-order campaign.
 
+The previous-source goldens remain historical behavior records. For an intended
+source change, their affected-scene mismatches establish what changed; they do
+not independently establish a physical error. Before a refreeze, require the
+independent source/accuracy/qualification checks, cross-backend agreement,
+derivatives and unaffected-scene pins. After a justified refreeze, require the
+new affected-scene pins and their deliberate-error mutants as well. This order
+avoids requiring the new source to reproduce the old source's transient field.
+
 ## Stabilized measurement protocol
 
 The original broad-pulse campaign below is retained as historical evidence.
@@ -93,6 +101,32 @@ is 0.001369600 and 0.001369955 versus the independent layer model 0.001370.
 The old 160-period current-driven measurement was 0.001349794. The longer pair
 must agree within the existing relative 1e-3 pin tolerance; the model comparison
 and accept/refuse threshold remain unchanged.
+
+## Frequency-focused measurement protocol
+
+`--protocol spectral` keeps the stabilized geometry and durations, but uses
+`df=.05, cutoff=1e-6` for the validation pulse. Requested wavelengths, material
+interfaces, transverse wavevector, observation planes and all reference values
+and tolerances remain unchanged. A smaller start cutoff suppresses the spectral
+leakage from abruptly starting a Gaussian; a narrower pulse reduces excitation
+of the conical grating's long-lived modes outside the requested frequencies.
+This qualifies the requested-frequency linear scattering measurement. It does
+not certify the original broad pulse or eliminate its documented PML limitations.
+The broad-pulse source transfer and original accuracy tests remain separate.
+
+Each refinement also runs at 2T with `df=.07, cutoff=1e-6`. Its observations must
+agree with the baseline 2T within 0.1 tau, with valid diagnostics and the same
+absolute accuracy bounds. Every requested incident amplitude must be finite,
+and the smallest magnitude must be at least 5% of the largest. A weak incident
+signal blocks acceptance instead of buying a looser normalized-error bound.
+The complete protocol therefore has 43 independent runs, including the three
+unchanged contact residual runs. The conical fine-grid worst complex error must
+improve on the coarse-grid error by at least the original factor of 1.8.
+
+`--backend jax` runs on CPU; NumPy remains the default. The stabilized conical
+40-cell, 320-period control agreed between NumPy and JAX CPU to 8.9e-16 in every
+observed channel (preselected absolute comparison bound 5e-10). Each campaign
+records the actual backend and input hashes. This is not GPU validation.
 
 ## Outcomes and reproduction
 
@@ -121,7 +155,7 @@ existing golden tolerance. Never widen a limit just because a new algorithm
 misses it. Historical external-solver measurements retain their original
 input/version scope; consuming a stored reference is not a fresh external run.
 
-## Recorded CPU result (2026-10-21)
+## Original protocol CPU result (2026-10-21)
 
 The 38 independent runs did not qualify a refreeze. The table reports the
 largest channel ratio to each uncertainty cap; values above one block acceptance.
