@@ -15,6 +15,7 @@ import functools
 import json
 import math
 import warnings
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -100,22 +101,30 @@ def campaign_entry(name, n, pol):
 
 
 def repeat_campaign_run(name, n, pol):
-    """Solve the campaign's scene ``name`` at ``n`` cells per wavelength on NumPy, through the
-    public path, and hold it to the campaign's row and to its distance from RCWA."""
+    """Replay the original hard-drive row and hold the production drive to its RCWA distance."""
     h = study()
     entry = campaign_entry(name, n, pol)
     scene, _ = h.build(name, n, pol, periods=entry['periods'])
     got = amplitudes(quiet(fd.run, scene, 'numpy'))
+    historical = got
+    if pol == 'p':
+        # Replay immutable campaign numbers with their original drive. Keep the
+        # production drive for the independent RCWA distance checks below.
+        from wavebit.fdtd._prepare import sources
+        with patch.object(sources, 'plane_wave_current_gain', lambda *args: None):
+            historical = amplitudes(quiet(fd.run, scene, 'numpy'))
     amp, eff = [], []
     for key, values in entry['values'].items():
         side, m, k, q = key.split('|')
         value = got[(side, int(m), int(k), q)]
+        old_value = historical[(side, int(m), int(k), q)]
         # The immutable campaign predates the public move from the cell corner to its
         # centre. Convert only amplitudes back to that archived reference for this replay.
         if q not in ('R', 'T') and (int(m) + int(k)) % 2:
             value = -value
+            old_value = -old_value
         # the campaign's own numbers, every cell
-        np.testing.assert_allclose(value, [complex(*v) for v in values], rtol=0, atol=1e-10,
+        np.testing.assert_allclose(old_value, [complex(*v) for v in values], rtol=0, atol=1e-10,
                                    err_msg=key)
         ref = np.array([complex(*v) for v in entry['reference'][key]])
         if q in ('R', 'T'):
