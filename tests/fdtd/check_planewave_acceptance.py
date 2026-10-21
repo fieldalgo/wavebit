@@ -52,7 +52,8 @@ def fixture(kind, n, factor=1., variant='base', protocol='original'):
         raise ValueError(f'unknown acceptance protocol: {protocol}')
     revised = protocol != 'original'
     periods = (80 if kind == 'planar' else 320) if revised else (20 if kind == 'planar' else 160)
-    cells = (48 if revised else 12) * (2 if variant == 'thick' else 1)
+    base_cells = round(2.4 * n) if protocol == 'spectral' else (48 if revised else 12)
+    cells = base_cells * (2 if variant == 'thick' else 1)
     args = dict(cells_per_wavelength=n, polarization='p',
                 periods=periods*factor, pml=cells)
     if kind == 'planar':
