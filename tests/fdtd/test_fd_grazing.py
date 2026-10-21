@@ -9,12 +9,14 @@ layer's continuum round trip is ``R_c = reflection ** (0.919 cos theta)``, a fac
 and its accepted spelling). This gate holds the rule to the measurement it stands on:
 
 * **Each verdict is what the run measures.** A PlaneWave leaving at exit ``cos theta`` toward
-  a PML face, in a 1 x 1 x nz cell whose two transverse axes are ``fd.Axis1D`` (the public
-  spelling of the study's one-cell column), both z faces the same ``PML(cells, reflection)``,
-  160 periods, 20 cells per wavelength. The up-going wave the face returns is read at two
-  probes 5 and 6 cells in front of it (a Tukey-tapered DFT at the band centre, split with the
-  Yee ``kz`` of the Axis1D dispersion -- ``studies/fdtd/grazing_return/fdtd_grazing_return.py``'s ``R_taper``, read
-  off the run itself). Measured (NumPy):
+  a PML face, in a 1 x 1 x nz cell whose two transverse axes are ``fd.Axis1D``: the study's
+  one-cell column in geometry, but with the exact transverse derivative ``i k`` where the
+  study's Bloch cell has ``2 sin(k dx/2)/dx``, so its returns are its own and not the
+  study's. Both z faces are the same ``PML(cells, reflection)``, 160 periods, 20 cells per
+  wavelength. The up-going wave the face returns is read at two probes 5 and 6 cells in front
+  of it (a Tukey-tapered DFT at the band centre, split with the Yee ``kz`` of the Axis1D
+  dispersion -- the ``R_taper`` reading of ``studies/fdtd/grazing_return/fdtd_grazing_return.py``,
+  read off the run itself). Measured (NumPy):
 
       cos    face              verdict   return    R_c
       0.26   PML(12, 1e-8)     weak      6.1e-3    1.2e-2
