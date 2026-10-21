@@ -9,12 +9,14 @@ monitor is built on top: does the return survive the PEC backing, does it conver
 must a scene declare before an order below some ``cos theta`` may be reported.
 
 **The probe.** An ``fd.PlaneWave`` (``Band(wavelength=1, df=0.15)``, the gates' band: the
-spectrum spans 0.44-1.56 f0 at the 1e-3 cutoff) in a 1 x 1 x nz Bloch cell
-(``fd.Bloch.from_source``), launched toward ``-z`` at the angle whose band-centre exit cosine is
-0.15 / 0.2 / 0.26 / 0.3 / 0.4 / 0.5 / 0.7, in vacuum, so the exit angle is the incidence
-angle. The sheet sits 1 wavelength above the swept ``z-`` PML; the ``z+`` face is the default
-12-cell PML and is never swept. Two ``Record`` probes 5 and 6 cells in front of the swept layer
-read the tangential E (``Ey`` for s; ``Ex`` for p). Everything is at courant 0.5, NumPy, CPU.
+spectrum spans 0.44-1.56 f0 at the 1e-3 cutoff) in a Bloch cell uniform in x and y
+(``fd.Bloch.from_source``; measured on a 1 x 1 x nz column, run now with a ``BLOCH_CELLS``-cell
+x period -- see "Running it" below), launched toward ``-z`` at the angle whose band-centre
+exit cosine is 0.15 / 0.2 / 0.26 / 0.3 / 0.4 / 0.5 / 0.7, in vacuum, so the exit angle is the
+incidence angle. The sheet sits 1 wavelength above the swept ``z-`` PML; the ``z+`` face is
+the default 12-cell PML and is never swept. Two ``Record`` probes 5 and 6 cells in front of
+the swept layer read the tangential E (``Ey`` for s; ``Ex`` for p). Everything is at courant
+0.5, NumPy, CPU.
 
 **The doubling method.** The reference is the same run on the same cells with the ``z-`` face
 moved ``ext`` cells further down, ``2 ext dx >= 1.1 T`` for the longest window ``T`` (640
@@ -37,8 +39,8 @@ DFTs are split into the wave travelling toward the layer and the wave leaving it
 - ``total_user``: ``|DFT(test)(T) - ideal| / |ideal|`` at the probe itself, both directions.
 - worst in time: ``max|test - ref| / max|ref|`` at the probe.
 
-Measured 2026-09-19, NumPy, CPU, 8 workers x 2 threads, 294 test runs, 32871 s of worker
-time, 4399 s wall (``studies/fdtd/grazing_return/records/fdtd_grazing_return.log``, every table in full).
+Measured 2026-09-19 on the one-cell column, NumPy, CPU, 294 test runs
+(``studies/fdtd/grazing_return/records/fdtd_grazing_return.log``, every table in full).
 
 **1. The return survives the PEC backing, and it converges -- to the layer's designed round
 trip, from below.** A PEC-backed graded CFS-PML has a continuum reflection at f0 of
@@ -182,13 +184,38 @@ beyond 1e-16 and layers beyond 144 cells (1.8 wavelengths at 80 cpw) are not mea
 tolerance ``tau`` is a choice; ``cos_min`` for another one is the formula above (``tau = 1e-2``:
 0.27 at the default face; ``tau = 1e-4``: 0.54).
 
-Run from the repository root::
+**Running it.** The tables were measured on a one-cell Bloch column. Two product checks added
+since refuse that scene; the script works round both without changing what it measures.
 
-    python studies/fdtd/grazing_return/fdtd_grazing_return.py [--workers 8] > studies/fdtd/grazing_return/records/fdtd_grazing_return.log
+- ``checks.check_one_cell_bloch`` refuses a Bloch phase on a one-cell axis in a scene with a
+  source. The script gives x a ``BLOCH_CELLS``-cell period instead. Every cell of a periodic
+  grid applies the one-cell difference, ``K = 2 sin(k dx/2)/dx``, to the PlaneWave's single
+  Bloch mode, so each probe series is the one-cell column's times one unit-modulus phase (equal
+  to round-off), and every number read here is a ratio that cancels it. ``fd.InvariantAxis``
+  (``Axis1D``), which that refusal names, is a different column: its derivative is ``i k``
+  exactly, not ``K``, and the grazing return moves with it.
+- The grazing rule (``src/wavebit/fdtd/_prepare/grazing.py``), set from this study, refuses
+  every scene here at ``cos <= 0.4``, references included: the PlaneWave's incidence on the
+  default ``z+`` face alone is below that face's ``cos_min`` of 0.41. Inside the script's own
+  runs the rule records instead of refusing (``_rule_recorded``). It checks the scene and
+  changes no coefficient.
 
-NumPy, CPU, about 33000 s of worker time; each worker is given two BLAS/OpenMP threads.
+Rerun this way on 2026-10-21, the script reproduced every ``GRAZING_TABLE`` entry it was
+checked on, to the printed two digits: the three 20 cpw rows and both window rows at all seven
+cosines, and the 80 cpw row at ``cos 0.26`` and 0.7 (37 entries). The continuum row needs no
+run.
+
+Run from the repository root. The committed log is the 2026-09-19 measurement that
+``GRAZING_TABLE`` is checked against; write a rerun elsewhere::
+
+    mkdir -p artifacts/studies
+    python studies/fdtd/grazing_return/fdtd_grazing_return.py [--workers 8] > artifacts/studies/fdtd_grazing_return.log
+
+NumPy, CPU, 356 solves (56 references and controls, 294 tests, 6 truncation runs); each worker
+is given two BLAS/OpenMP threads.
 """
 import argparse
+import contextlib
 import json
 import math
 import os
@@ -206,6 +233,7 @@ sys.path.insert(0, '.')
 sys.path.insert(0, 'src')
 import wavebit.fdtd._legacy as fd                                 # noqa: E402
 from wavebit.fdtd._prepare import cpml as cpml_module       # noqa: E402
+from wavebit.fdtd._prepare import grazing as grazing_rule   # noqa: E402
 
 COSINES = (0.15, 0.2, 0.26, 0.3, 0.4, 0.5, 0.7)        # exit cos(theta) at the band centre
 CELLS = (12, 24, 36)
@@ -219,6 +247,11 @@ ABOVE = 4                                               # cells between the z+ l
 DISTANCE = 1.0                                          # sheet to the z- layer, wavelengths
 PROBE = 5                                               # probe cells in front of the z- layer
 CONTROL_GROWTH = 1.25                                   # the longer control's extension factor
+# The x period, in cells ("Running it" above): ``checks.check_one_cell_bloch`` refuses the
+# one-cell column the tables were measured on, and its own docstring states the equivalence --
+# every cell of a periodic grid applies the one-cell difference ``(exp(i k dx) - 1)/dx`` to the
+# PlaneWave's single Bloch mode ``exp(i k x)``.
+BLOCH_CELLS = 4
 
 # (cells per wavelength, polarisation, layer cells). 20 and 40 carry the task's grid; 40
 # adds 48 and 72 and 80 carries 48 / 96 / 144, so 0.6 / 1.2 / 1.8 wavelengths of layer are
@@ -259,7 +292,7 @@ def theta_of(cos):
 
 
 def scene(cpw, cos, pol, cells, target, ext, steps):
-    """A 1 x 1 x nz Bloch cell: the sheet near the top, the swept PML at the bottom."""
+    """A ``BLOCH_CELLS x 1 x nz`` Bloch cell: the sheet near the top, the swept PML below."""
     dx, _ = grid(cpw)
     D = int(round(DISTANCE * cpw))
     nz = TOP + ABOVE + D + cells + ext
@@ -270,7 +303,8 @@ def scene(cpw, cos, pol, cells, target, ext, steps):
     comp = 'Ey' if pol == 's' else 'Ex'
     monitors = tuple(fd.Record(f'p{i}', at=(0.0, 0.0, z_face + (PROBE + i) * dx),
                                component=comp) for i in (0, 1))
-    return fd.Scene(domain=fd.Domain(size=(dx, dx, nz * dx), center=(0.0, 0.0, -nz * dx / 2)),
+    return fd.Scene(domain=fd.Domain(size=(BLOCH_CELLS * dx, dx, nz * dx),
+                                     center=(0.0, 0.0, -nz * dx / 2)),
                     boundaries=fd.Boundaries(**fd.Bloch.from_source(pw),
                                              z=(fd.PML(cells=cells, reflection=target,
                                                        allow_thin=True),
@@ -279,8 +313,28 @@ def scene(cpw, cos, pol, cells, target, ext, steps):
                     sources=(pw,), monitors=monitors)
 
 
+@contextlib.contextmanager
+def _rule_recorded():
+    """The grazing rule surveys instead of refusing, for this probe's own runs only.
+
+    The rule (``src/wavebit/fdtd/_prepare/grazing.py``, set from this measurement) refuses a
+    PlaneWave whose incidence a face cannot absorb to ``tau`` -- below ``cos 0.41`` on the
+    default ``z+`` face -- and that return is what this study measures. The rule checks the
+    scene and changes no coefficient, so the run is the same; ``res.diagnostics['grazing']``
+    still records its verdicts. ``tests/fdtd/test_fd_grazing.py`` measures refused faces the
+    same way (``_run_unenforced``, ``_plan_unenforced``). Scoped, so nothing that imports this
+    module inherits a disabled rule.
+    """
+    enforce = grazing_rule.enforce
+    grazing_rule.enforce = grazing_rule.survey
+    try:
+        yield
+    finally:
+        grazing_rule.enforce = enforce
+
+
 def series(sc):
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(), _rule_recorded():
         warnings.simplefilter('ignore')
         res = fd.run(sc)
     t = np.asarray(res['p0'].t, dtype=float)
@@ -400,7 +454,8 @@ def main():
     b = band()
     print(f'Band(wavelength={WAVELENGTH:g}, df={DF:g}): f0 = 1, spectrum {1 - b.sigmas * DF:.3f}'
           f'..{1 + b.sigmas * DF:.3f} f0 at the 1e-3 cutoff; courant 0.5')
-    print(f'cell 1 x 1 x nz, Bloch k at the band centre; z+ PML {TOP} cells (default), '
+    print(f'cell {BLOCH_CELLS} x 1 x nz, Bloch k at the band centre; '
+          f'z+ PML {TOP} cells (default), '
           f'{ABOVE} cells, the sheet, {DISTANCE:g} wavelength, the probes {PROBE} and '
           f'{PROBE + 1} cells in front of the swept z- PML')
     print(f'windows {WINDOWS} periods = steps ' + ', '.join(
