@@ -235,3 +235,38 @@ The scoped refreeze retains the 300/500-step scenes and 1e-12 pin tolerance.
 Only `plane_wave`, `bloch_stack` and `conical` receive fresh values; all unrelated
 array bytes are retained. Both full captures reproduced twice per CPU backend.
 Archive metadata preserves the separate provenance of fresh and retained scenes.
+
+## Original-bandwidth contact convergence follow-up
+
+A separate 36-record CPU campaign with the current source and original contact
+pulse (`df=.1`) passed the registered asymptotic criterion on s/p polarization
+and grid phases .375/.125. It includes an additional fine-grid doubled-time and
+doubled-PML check. The finest reflection-order intervals span 1.891–2.175;
+complex h² coefficient changes are at most 1.470% against 5%. Fine-grid
+time-plus-boundary uncertainty consumes at most .148 of its fixed budget.
+The original coarse-pair failure remains unchanged. The new evidence supports
+the pre-asymptotic cancellation explanation within this fixture; it is not a
+general support decision. Full criteria and results are in
+[the contact follow-up](fd-conductive-contact.md#original-bandwidth-follow-up-2026-10-22).
+
+
+### Original broadband PML follow-up (2026-10-22)
+
+Sixteen additional conical-p controls retained `df=.15`, `n=40` and the
+original observation planes. Each boundary choice was run for 160 and 320
+periods. A deeper PML (96 cells), optionally with `stabilizing_loss=.003`,
+reduced the measured late-time interior growth ratio below one. Doubling its
+width or moving the inner boundary passed the fixed boundary-sensitivity cap.
+However, the time differences still exceeded `0.1 tau` by factors 4.54–4.86.
+Increasing stabilizing loss to `.03` gave time ratios 3.94 and 4.47 for 96 and
+192 cells, respectively; its boundary ratio was 0.628 (pass requires at most
+one). Absolute reference errors below `tau` do not override these time failures.
+
+Four separate source-free slab eigenvalue controls support the known pure-PML
+bound-mode growth mechanism: growth rates were 0.01590 and 0.00845 for 12 and
+24 cells with zero stabilizing loss, versus below 4e-13 with loss `.003`
+(the existing stability threshold is 1e-9). This small source-free case does
+not prove stability or settling of every driven broadband scene. The original
+broadband case remains unqualified; these two-time controls do not replace the
+five-time acceptance protocol above. No solver, golden or tolerance was changed
+for this follow-up.

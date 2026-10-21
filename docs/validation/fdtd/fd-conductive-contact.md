@@ -133,7 +133,7 @@ Reading the table:
 - **Wide-band residual.** The df = .1 late-time change is 5–12× larger in
   Wavebit. The external runs inject a soft current sheet while Wavebit uses its
   plane-wave source. Whether this is a solver defect or a property of the
-  source is unresolved.
+  source was unresolved in that original comparison; see the follow-up below.
 
 These comparisons were measured by the maintainers and have not been
 independently reviewed.
@@ -142,3 +142,55 @@ independently reviewed.
 tracked in [issue #51](https://github.com/fieldalgo/wavebit/issues/51). Until it
 is resolved, validate spatial, time and boundary convergence for your own case.
 No tolerance, golden value or acceptance window was changed for this route.
+
+## Original-bandwidth follow-up (2026-10-22)
+
+The current differentiated-current p launch was tested at the original
+`df=.1, cutoff=1e-6`, using the same films, fixed transverse wavevector and
+continuum reference. A separately registered asymptotic criterion passed on
+both s/p polarizations and both grid phases .375/.125. This does not rewrite
+the original coarse-grid failure or establish general wave support.
+
+Each group used 40/80/160/320 cells at 60 periods, plus an n80 120-period
+record, doubled PML and halved time step. Two additional n320 controls used
+120 periods with 24 and 48 PML cells: 36 new CPU records in total. All retained
+the original fixture and numerical budgets.
+
+The asymptotic criterion requires a stable complex h² coefficient (within 5%
+between the 80/160 and 160/320 h²+h³ fits), a resolved finest-pair order interval
+inside [1.8, 2.3], and separate time/boundary uncertainty and half-step checks.
+The original 40→80 order is still reported, even when outside that window.
+
+For each of the six r/t channels, let e_n = |q_n − q_ref| and
+d_ab = |q_a − q_b|. The registered noise proxy is
+eta = |q80,T120 − q80,T60| + |q80,T120,PML48 − q80,T120,PML24|.
+All errors and consecutive differences must exceed 1e-10, and
+2 eta <= .1 min(e320, d160,320). The n80 half-step difference must be
+<= .1 min(d80,160, d160,320). The fine-grid extension applies the same
+2 eta_fine bound using the n320 time and PML pairs. Use max(eta, eta_fine)
+in the interval [log2((e160−eta)/(e320+eta)),
+log2((e160+eta)/(e320−eta))]; nonpositive arguments fail. All rows must
+be stable with finite positive energy, monitor decay below 1e-5, complete
+post-source qualification and no growth warning. Both phases must pass.
+
+| Polarization / grid phase | Finest reflection-order interval, all wavelengths | Largest h² coefficient change | Result |
+|---|---:|---:|---|
+| s / .375 | 1.891–2.139 | 1.180% | PASS |
+| s / .125 | 1.997–2.002 | .177% | PASS |
+| p / .375 | 1.958–2.175 | 1.470% | PASS |
+| p / .125 | 1.997–2.001 | .168% | PASS |
+
+Transmission also passed. Every row had complete post-source evidence and met
+the original finite-energy, stable-run and decay requirements. The additional
+fine-grid time-plus-boundary uncertainty consumed at most .148 of its fixed
+budget; using the larger coarse/fine uncertainty still passed the order window.
+The high coarse-grid reflection order is consistent with cancellation of the
+leading h² term and a pre-asymptotic h³ contribution, rather than loss of
+second-order convergence. These observations cover these two phases and this
+material/angle fixture only. They are new-source Linux JAX CPU evidence, not a
+fresh external-solver run, other-platform validation or independent review.
+
+See [PlaneWave acceptance](fd-planewave-acceptance.md) for source qualification
+and the separate broad-pulse PML limitation. The original failed campaign and
+its external-tool measurements above remain historical evidence. No material
+algorithm, default boundary, golden or numerical tolerance changed in this follow-up.
