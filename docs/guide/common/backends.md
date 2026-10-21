@@ -20,3 +20,24 @@ from wavebit import rcwa
 Requesting JAX double precision without x64 enabled raises a structured error. Optional dependencies are imported only when needed. Keep live arrays on the selected backend and device; converting differentiable inputs through NumPy severs their derivative path.
 
 See [automatic differentiation](autodiff.md) for preparation and tracing, and the [compatibility backend manual](../../migration/backends-v1.md) for prior-engine performance notes and historical measured comparisons.
+
+## Shared materials under JAX transformations
+
+For a single plane wave, `Prepared.run` can merge a scalar region layer into its adjacent
+half-space when both use the **same live JAX coefficient**. Build the declarations inside the
+transformed function: `Material(eps)` for both the layer background and the half-space. If
+permeability is live, it must be shared too; every region of the layer must match. This removes
+an artificial interface and preserves the shared parameter's derivative through the remaining
+half-space and the phase that moves the reference plane back to the original face.
+
+This proof is made afresh on each run, before array conversions. Equal values at `prepare`
+time do not freeze a merge. Separate inputs remain independent, even if they happen to have
+the same value; `eps + 0` is a separate expression, and passing an entire `Problem` as a JIT
+argument creates separate leaves. Those cases, raster materials, dispersive models, PyTorch
+material gradients and the internal `solve_field` path retain their existing merge limits.
+A positive `half_space_merge_tolerance` still refuses live materials.
+
+The benefit matters at complex incidence, where explicitly solving a thick layer of its own
+half-space's medium can amplify round-off to an order-one error. It does not claim stability
+for a genuinely different or patterned layer. Ordinary eager runs with concrete materials keep
+their existing path. See [the numerical explanation](../../theory/rcwa/connecting-algorithms.md#10-etms-labels-at-a-complex-in-plane-wavevector).

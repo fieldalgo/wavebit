@@ -653,6 +653,123 @@ def test_a_jitted_rayleigh_point_in_a_layer_of_the_lit_medium_is_finite(theta, o
         assert abs(float(gradient) - float(eager[1])) < 1e-4 * abs(float(eager[1]))
 
 
+def _shared_problem(eps, layer_eps=None, *, side='bottom', thickness=2e4):
+    """Issue #21: the same input feeds a scalar layer and its half-space."""
+    medium = wavebit.Material(eps)
+    return wavebit.rcwa.Problem(
+        units=wavebit.Units(length='nm'),
+        stack=wavebit.rcwa.Stack(
+            period=(700., 700.),
+            bottom=medium if side == 'bottom' else wavebit.Material(1.),
+            top=medium if side == 'top' else wavebit.Material(1.),
+            layers=(wavebit.rcwa.Layer(thickness=thickness, background=wavebit.Material(
+                eps if layer_eps is None else layer_eps)),)),
+        excitation=wavebit.rcwa.Excitation(wavelength=WL, sources=(
+            wavebit.rcwa.PlaneWave(theta=0.9+0.2j, side=side),)))
+
+
+@pytest.mark.parametrize('algorithm', ['etm', 'smm'])
+@pytest.mark.parametrize('side', ['bottom', 'top'])
+def test_shared_traced_permittivity_matches_interface_and_its_derivative(algorithm, side):
+    """Values, batches and derivatives follow the same medium, not a frozen value."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    with jax.enable_x64(True):
+        prepared = wavebit.rcwa.prepare(_shared_problem(9., side=side), backend='jax',
+                                        numerics=wavebit.rcwa.Numerics(orders=(2, 0), algorithm=algorithm))
+
+        def run(eps):
+            result = prepared.run(_shared_problem(eps, side=side))
+            assert result.diagnostics['half_space_merge'][0][side] == 1
+            return result.reflection.amplitude_s.ravel()[2]
+
+        eps = jnp.asarray([8.5, 9., 9.5])
+        values = jax.jit(jax.vmap(run))(eps)
+        expected = np.array([_interface('te', 'bottom', 0.9+0.2j, 2e4, e)[0]
+                             for e in np.asarray(eps)])
+        np.testing.assert_allclose(values, expected, rtol=1e-12)
+        scale = abs(expected[1])
+        value, grad = jax.jit(jax.value_and_grad(lambda e: jnp.real(run(e))/scale))(9.)
+        eager_value, eager_grad = jax.value_and_grad(lambda e: jnp.real(run(e))/scale)(9.)
+        # Independently differentiate Fresnel's shifted interface (no solver AD).
+        h = 1e-5
+        fd = (_interface('te', 'bottom', 0.9+0.2j, 2e4, 9.+h)[0].real
+              - _interface('te', 'bottom', 0.9+0.2j, 2e4, 9.-h)[0].real)/(2*h*scale)
+        np.testing.assert_allclose(value, expected[1].real/scale, rtol=1e-12)
+        np.testing.assert_allclose([grad, eager_grad], fd, rtol=1e-7)
+        np.testing.assert_allclose(eager_value, value, rtol=1e-12)
+
+
+@pytest.mark.parametrize('algorithm', ['etm', 'smm'])
+def test_equal_independent_tracers_keep_the_layer_and_its_derivative(algorithm):
+    """Preparation at equality must not freeze a merge or erase a layer's tangent."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    with jax.enable_x64(True):
+        numerics = wavebit.rcwa.Numerics(orders=(2, 0), algorithm=algorithm)
+        prepared = wavebit.rcwa.prepare(_shared_problem(9., thickness=100.),
+                                        numerics=numerics, backend='jax')
+
+        def run(eps, layer_eps):
+            result = prepared.run(_shared_problem(eps, layer_eps, thickness=100.))
+            assert result.diagnostics['half_space_merge'][0] is None
+            return jnp.real(result.reflection.amplitude_s.ravel()[2])
+
+        value, gradient = jax.jit(jax.value_and_grad(run, argnums=1))(9., 9.)
+        # Ordinary thin-film Fresnel composition, independently of the engine.
+        def slab(e):
+            kx = 3*np.sin(0.9+0.2j)
+            a, b, c = [_maystre(v-kx*kx) for v in (9., e, 1.)]
+            r1, r2 = (a-b)/(a+b), (b-c)/(b+c)
+            phase = np.exp(2j*2*np.pi/WL*b*100.)
+            return ((r1+r2*phase)/(1+r1*r2*phase)).real
+        h = 1e-5
+        fd = (slab(9.+h)-slab(9.-h))/(2*h)
+        assert abs(fd) > 1e-3
+        np.testing.assert_allclose(value, slab(9.), rtol=1e-12)
+        np.testing.assert_allclose(gradient, fd, rtol=1e-7)
+        np.testing.assert_allclose(jax.jit(run)(9., 8.), slab(8.), rtol=1e-12)
+
+
+@pytest.mark.parametrize('algorithm', ['etm', 'smm'])
+def test_shared_permeability_keeps_its_magnetic_interface_derivative(algorithm):
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    def problem(mu, layer_mu=None):
+        base = _shared_problem(9., thickness=200.)
+        return base.replace(stack=base.stack.replace(
+            bottom=wavebit.Material(9., mu=mu),
+            layers=(base.stack.layers[0].replace(background=wavebit.Material(
+                9., mu=mu if layer_mu is None else layer_mu)),)))
+
+    def exact(mu):
+        kx = np.sqrt(9*mu)*np.sin(0.9+0.2j)
+        a, b = _maystre(9*mu-kx*kx), _maystre(1-kx*kx)
+        return ((a-mu*b)/(a+mu*b)*np.exp(2j*2*np.pi/WL*a*200.)).real
+
+    with jax.enable_x64(True):
+        prepared = wavebit.rcwa.prepare(problem(1.5), backend='jax',
+                                        numerics=wavebit.rcwa.Numerics(orders=(2, 0), algorithm=algorithm))
+
+        def run(mu):
+            result = prepared.run(problem(mu))
+            assert result.diagnostics['half_space_merge'][0]['bottom'] == 1
+            return jnp.real(result.reflection.amplitude_s.ravel()[2])
+
+        value, gradient = jax.jit(jax.value_and_grad(run))(1.5)
+        h = 1e-5
+        np.testing.assert_allclose(value, exact(1.5), rtol=1e-12)
+        np.testing.assert_allclose(gradient, (exact(1.5+h)-exact(1.5-h))/(2*h), rtol=1e-7)
+
+        def separate(mu):
+            result = prepared.run(problem(mu, layer_mu=1.5))
+            assert result.diagnostics['half_space_merge'][0] is None
+            return jnp.real(result.reflection.amplitude_s.ravel()[2])
+
+        assert np.isfinite(float(jax.jit(separate)(1.5)))
+
+
 def test_unreadable_and_non_finite_materials():
     """A PyTorch conjugate view is read through, as the solve reads it; a NaN is no material and
     so not the half-space's, whatever the tolerance."""

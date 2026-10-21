@@ -6632,7 +6632,10 @@ class CoreFactorizationMixin:
         incident order; a direct ``kx`` / ``ky`` lights the specular order alone, as an angle
         does, and merges), and wherever the decision cannot be a fixed, honest one: a traced
         material, whose value cannot be read, and a differentiated one, whose derivative a merge
-        would drop. A tolerance the scene cannot apply is refused before this
+        would drop. The public adapter may instead prove a scalar region layer shares the
+        half-space's exact live input; that merge retains the common derivative through the
+        half-space. It never infers sharing from equal primal values.
+        A tolerance the scene cannot apply is refused before this
         (:meth:`_reject_unread_merge_tolerance`).
         """
         from wavebit.observations.power import transverse_k_is_real
@@ -6640,7 +6643,11 @@ class CoreFactorizationMixin:
         from wavebit.rcwa._engine.half_space_merge import material_match
         self._reject_unread_merge_tolerance()
         structure = self._structure
-        if structure is None or self._excitation is not None or self._materials_are_live():
+        if structure is None or self._excitation is not None:
+            return None
+        live = self._materials_are_live()
+        shared = getattr(self, '_shared_half_space_plan', None)
+        if live and shared is None:
             return None
         tolerance = self._half_space_merge_tolerance
         real_k = _concrete(transverse_k_is_real(self.xp, *self.order_kxy()))
@@ -6648,6 +6655,11 @@ class CoreFactorizationMixin:
             real_k = False
         if real_k and tolerance == 0:
             return None
+        if live:
+            # The public adapter proved equality of dependencies, not just values.
+            # A fresh solver receives this proof on each run, before conversions
+            # split the shared input into separate staged material expressions.
+            return shared
         n = len(structure)
         dtype = _np.complex64 if self.xp.finfo(self.float_dtype).bits == 32 else _np.complex128
 
