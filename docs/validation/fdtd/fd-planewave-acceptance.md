@@ -72,6 +72,28 @@ The maximum pairwise complex r/t difference must be at most 2e-7. This checks
 residual time dependence; it does not overturn that fixture's historical
 failed spatial-order campaign.
 
+## Stabilized measurement protocol
+
+The original broad-pulse campaign below is retained as historical evidence.
+`--protocol stabilized` selects a separate qualification fixture: 80 periods
+for planar and 320 for conical as T, 48-cell PML with `stabilize=3e-3`, and
+96 cells for the thickness control. The five time factors, independent farther
+boundary, source bandwidth, reference calculations and every accuracy and
+uncertainty limit stay the same. The domain expands outward when cells are
+added, preserving the inner PML faces and physical observation geometry.
+An explicit protocol distinguishes a changed experiment from a reinterpretation
+of the original failed result. Neither protocol asserts infinite-time stability.
+
+The holding-column diagnostic regressions explicitly inject the historical hard
+source inside their test scope. This keeps the trapped mode, growth thresholds
+and diagnostic mutants under test after the production p source changes.
+A separate test uses the production current and requires a verified post-source
+quiet window. The grazing `adds-p` control uses 320 and 640 periods: its return
+is 0.001369600 and 0.001369955 versus the independent layer model 0.001370.
+The old 160-period current-driven measurement was 0.001349794. The longer pair
+must agree within the existing relative 1e-3 pin tolerance; the model comparison
+and accept/refuse threshold remain unchanged.
+
 ## Outcomes and reproduction
 
 Missing runs, nonfinite values, missing diagnostics or excessive uncertainty
@@ -83,6 +105,7 @@ Run the manual campaign from a configured source checkout:
 
 ```sh
 PYTHONPATH=src:. python -m tests.fdtd.check_planewave_acceptance --output artifacts/planewave-acceptance
+PYTHONPATH=src:. python -m tests.fdtd.check_planewave_acceptance --protocol stabilized --workers 5 --output artifacts/planewave-stabilized
 python -m pytest tests/fdtd/test_fd_acceptance.py
 ```
 
