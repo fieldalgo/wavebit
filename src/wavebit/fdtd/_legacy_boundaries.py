@@ -83,8 +83,8 @@ PML_REFLECTION_TABLE = """\
        12    9.2e-05    4.7e-05    1.1e-04    3.4e-02
        16    1.1e-06    5.9e-07    1.3e-04    3.9e-02
        24    2.2e-08    1.4e-07    1.2e-04    4.4e-02
-   the target's own law, reflection**cos(theta):
-             1.0e-08    1.2e-07    1.0e-04    4.1e-02"""
+   the layer's round trip, reflection**(0.919 cos(theta)):
+             4.5e-08    4.3e-07    2.1e-04    5.3e-02"""
 
 #: The refusal below :data:`PML_CELLS`, quoting the table its own gate measured. Kept here
 #: rather than inline so that the test that re-measures the table can assert the message
@@ -98,12 +98,12 @@ THIN_PML_MESSAGE = (
     'reflection=1e-8:\n'
     + PML_REFLECTION_TABLE + '\n'
     'Below 12 the number is the grading\'s own discretization and it rises about a decade '
-    'every two cells; at 12 and above the layer already delivers its design target wherever '
-    'that target dominates, and the last row is why. So more cells buy accuracy near normal '
-    'incidence, and at grazing a lower reflection= is what buys it -- not more cells. Pass '
-    'allow_thin=True to take fewer anyway (the scene runs, it just reflects more), or raise '
-    'cells. The reflection depends on the cell count far more than on dx, so cells and not a '
-    'thickness is the knob.')
+    'every two cells; at 12 and above the grazing columns already sit below the layer\'s own '
+    'round trip, the last row, which more cells do not lower. So more cells buy accuracy near '
+    'normal incidence, and at grazing a lower reflection= is what buys it -- not more cells. '
+    'Pass allow_thin=True to take fewer anyway (the scene runs, it just reflects more), or '
+    'raise cells. The reflection depends on the cell count far more than on dx, so cells and '
+    'not a thickness is the knob.')
 
 #: The three axes in the order the public API spells a triple, and the six face names.
 AXES = ('x', 'y', 'z')
@@ -427,8 +427,8 @@ class PML(Absorbing):
         constants; with enough loss it decays on every slab family it was measured on. That is
         a measured balance, not a guarantee: the loss does not make the layer passive, so a
         structure unlike the sampled ones can still grow. **What it costs**: nothing at normal
-        incidence and, at an angle, a reflection that replaces the target's
-        ``reflection ** cos(theta)`` law (12 cells: 2.1e-4 at 30 degrees against 4.7e-5, 3.7e-3
+        incidence and, at an angle, a reflection that replaces the layer's round trip
+        ``reflection ** (g cos(theta))`` (12 cells: 2.1e-4 at 30 degrees against 4.7e-5, 3.7e-3
         at 60 against 1.1e-4). That is why it is opt-in: on by default it broke the Airy,
         closed-form PlaneWave, RCWA-stack and grazing-rule gates at 20-40 degrees.
         ``src/wavebit/fdtd/_prepare/cpml.py::stabilizing_rate`` carries the mechanism and the numbers.

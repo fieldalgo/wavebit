@@ -294,8 +294,8 @@ def stabilizing_rate(depth, thickness, eps_r, reflection, rho):
         12    9.2e-05 -> 9.2e-05  4.7e-05 -> 2.1e-04  1.1e-04 -> 3.7e-03  3.4e-02 -> 1.1e-01
         24    2.2e-08 -> 2.2e-08  1.4e-07 -> 1.7e-05  1.2e-04 -> 9.2e-04  4.4e-02 -> 7.9e-02
 
-    so the oblique columns are set by this loss and no longer by the target's
-    ``reflection ** cos(theta)``, and a lower ``reflection=`` does not buy them back (the loss
+    so the oblique columns are set by this loss and no longer by the layer's round trip
+    ``reflection ** (g cos(theta))``, and a lower ``reflection=`` does not buy them back (the loss
     grows with ``sigma_max``: 24 cells at 60 degrees, 9.2e-4 at 1e-8 and 1.1e-3 at 1e-12). The
     near field of a dipole near the layer (``studies/fdtd/cpml_evanescent/fdtd_cpml_evanescent.py``'s probe,
     ``R_face`` at ``f0``, the loss on the probed ``z+`` face only) goes from 2e-7..5e-6 to
