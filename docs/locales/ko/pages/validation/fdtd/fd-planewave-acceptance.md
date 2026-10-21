@@ -64,6 +64,7 @@ cutoff 1e-6에서 60/90/120주기를 추가 실행합니다. 모든 쌍의 복�
 설정한 소스 checkout에서 실행합니다.
 
 ```sh
+PYTHONPATH=src:. python -m tests.fdtd.check_planewave_acceptance --protocol spectral --backend jax --workers 2 --output artifacts/planewave-spectral
 PYTHONPATH=src:. python -m tests.fdtd.check_planewave_acceptance --output artifacts/planewave-acceptance
 python -m pytest tests/fdtd/test_fd_acceptance.py
 ```
@@ -163,3 +164,38 @@ n20/40/80에서48/96/192셀이며 두께 대조는 각각 두 배다. 모든 해
 320주기 대조의 두 backend 관측량 차는 최대8.9e-16으로 사전에 정한
 절대5e-10보다 작았다. 각 campaign은 실제 backend·입력 hash를 기록한다.
 GPU 검증은 아니다.
+
+## 물리 두께 유지 protocol CPU 결과 (2026-10-22)
+
+요청 주파수 중심 protocol의 필수 43행이 모두 통과했습니다. 새 실행 27행과
+입력이 같은 두 n20 장면의 완결 기록 16행을 사용했습니다. 재사용은 장면 표현,
+solver·fixture 해시, 버전, 기록·판정 함수의 동일성을 확인하고 모든 판정을
+재계산했습니다. 안정화 후보와 고정 셀 두께 후보는 실패가 확인된 불완전
+실험으로 보존하며 전체 통과로 세지 않습니다. 기본 protocol은 과거 재현용
+`original`이며, 위 `--protocol spectral` 명령이 최종 조건입니다.
+
+| 장면 | 시간/한도 | 경계/한도 | 대역폭/한도 | 정확도/한도 | 결과 |
+|---|---:|---:|---:|---:|---|
+| 평면 20 | .000169 | .009242 | .0000344 | 측정 유효성만 | PASS |
+| 평면 40 | .000399 | .023732 | .000164 | .6620 | PASS |
+| 평면 80 | .000641 | .032761 | .000288 | .6563 | PASS |
+| 원뿔 20 | .020356 | .004375 | .047166 | .9697 | PASS |
+| 원뿔 40 | .021398 | .005024 | .033646 | .3882 | PASS |
+
+각 값은 채널별 비율의 최대입니다. 사전 기준대로 평면 n20 정확도는 기존
+격자 수렴 시험이 판정합니다. 원뿔 최대 복소 오차는 .03442459에서 .01378228로
+약 2.498배 줄어 기존 1.8배를 충족했습니다. 새 접촉막 잔류는 5.672528e-8로
+2e-7 이내이며, JAX와 이전 NumPy 관측량 차이는 1.5e-15 이내입니다.
+새 펄스의 두 대역폭·두 입사 조건을 검사한 독립 입력 전달식 4개도 기존
+2e-6 한도로 통과했습니다. 명시적 과거 drive 진단 fixture와 수렴한 grazing
+기록을 사용하는 decay/grazing 163개가 모두 통과했습니다. 변경 없는 solver의
+이전 광원·원 정확도/수렴·미분 결과는 과거 근거이며 새 실행으로 세지 않습니다.
+
+이는 요청 주파수의 측정과 의도한 광원 변경의 근거입니다. 광대역 PML 안정성,
+접촉막의 과거 공간 차수 실패 해결, GPU·다른 OS·전체 CI·독립 검토 통과를
+뜻하지 않습니다.
+
+범위를 제한한 골든 갱신은 기존 300/500 step과 1e-12 한도를 유지합니다.
+`plane_wave`, `bloch_stack`, `conical`만 새 값을 반영하고 다른 장면의 배열은
+기존 바이트를 유지합니다. 전체 캡처는 CPU backend마다 두 번 재현됐으며,
+archive metadata는 새 장면과 유지한 장면의 출처를 구분합니다.
