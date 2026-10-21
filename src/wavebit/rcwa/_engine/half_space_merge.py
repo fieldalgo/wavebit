@@ -25,8 +25,10 @@ Which layers merge is a material question, decided once per solve from the scene
 (:func:`material_match`), never from a convolution matrix -- a uniform raster's matrices carry
 1e-16 of Fourier round-off, and ``solve_conv`` takes matrices that need not be the scene's. The
 decision changes the number of layers, which is the shape of the program, so it is taken only on
-concrete values that carry no derivative: a layer whose permittivity is being differentiated is
-not the half-space, whatever its value is at the point of evaluation.
+concrete values that carry no derivative, or on a public adapter's proof that scalar region
+materials share the same live input. An independently differentiated layer is not the
+half-space, whatever its value is at the point of evaluation; a shared input retains its
+derivative through the half-space and the reference-plane shift.
 """
 from typing import NamedTuple
 

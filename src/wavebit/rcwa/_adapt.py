@@ -206,6 +206,50 @@ def _engine_source(source, xp, execution):
     raise TypeError(f'rcwa has no engine lowering for {type(source).__name__}.')
 
 
+def _shared_half_space_plan(problem, execution):
+    """Prove a scalar region layer shares its half-space's live coefficients.
+
+    Identity of a tracer is a dependency proof, unlike equality of its current
+    primal. Inspect the declaration before conversion creates separate tracers.
+    Recomputed for each run; nothing about material equality is frozen at prepare.
+    Independent inputs, equivalent expressions, models and rasters are deliberately
+    not inferred to share a parameter.
+    """
+    from ._engine.half_space_merge import MergePlan
+
+    if execution.backend != 'jax' or not has_tracer(problem.stack):
+        return None
+    dtype = np.complex128 if execution.precision == 'double' else np.complex64
+
+    def same(a, b):
+        if (isinstance(a, (list, tuple)) or isinstance(b, (list, tuple))
+                or getattr(a, 'shape', ()) != () or getattr(b, 'shape', ()) != ()):
+            return False
+        if has_tracer((a, b)):
+            return a is b
+        a, b = np.asarray(a, dtype=dtype), np.asarray(b, dtype=dtype)
+        return bool(np.isfinite(a) and np.isfinite(b) and a == b)
+
+    def material(a, b):
+        return (type(a) is Material and type(b) is Material
+                and same(a.epsilon, b.epsilon)
+                and same(1.0 if a.mu is None else a.mu,
+                         1.0 if b.mu is None else b.mu))
+
+    def matches(layer, medium):
+        return (layer.epsilon is None and material(layer.background, medium)
+                and all(material(r.material, medium) for r in layer.regions))
+
+    layers = problem.stack.layers
+    bottom = 0
+    while bottom < len(layers) and matches(layers[bottom], problem.stack.bottom):
+        bottom += 1
+    top = 0
+    while top < len(layers) - bottom and matches(layers[len(layers)-1-top], problem.stack.top):
+        top += 1
+    return MergePlan(bottom, top) if bottom or top else None
+
+
 def build_solver(problem, numerics, execution, wavelength):
     from ._factory import rcwa as legacy_rcwa
     xp = _namespace(execution)
@@ -258,6 +302,7 @@ def build_solver(problem, numerics, execution, wavelength):
         formulation = kwargs.pop('formulation', 'auto')
         solver = legacy_rcwa(**kwargs)
         solver.formulation = formulation
+        solver._shared_half_space_plan = _shared_half_space_plan(problem, execution)
         return solver
     return legacy_rcwa(**kwargs)
 

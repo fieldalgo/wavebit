@@ -832,18 +832,26 @@ magnetic and double-negative half-spaces, the tolerance, and a mutant of every f
 
 **What is left.** Each limit below was measured; none is fixed.
 
-- *Where the materials are traced, and with an `excitation`, nothing merges.* The merge changes
-  the number of layers solved, which is the program's shape, so it is decided from concrete
-  materials. A traced angle is fine -- `jit` or `vmap` over `theta` merges, taking the angle as
-  complex -- but a traced material keeps every layer, and so keeps the knife edge an eager solve
-  removes: a gradient with respect to a material, a `jax.jit` that takes a material as its
-  argument, and JAX's `solve_field`, which hands the whole solver to its compiled body as
-  arguments -- so that on one JAX solver `solve()` and `solve_field()` can differ by O(1) on a
-  knife edge (0.69 with SMM and 0.30 with ETM on 60 um of the substrate at `theta = 1.2+0.4j`,
-  measured 2026-10-20). A positive `half_space_merge_tolerance` is refused there rather than
-  ignored. Deciding the merge before the trace and carrying it as static data, as frozen geometry
-  is, would close it. An `excitation` lights several orders and the face shift carries one, so it
-  solves every layer too.
+- *Independent traced materials and an `excitation` keep their layers.* The merge changes
+  the number of layers solved, so a material's current value cannot decide it under a trace.
+  A traced angle is fine: `jit` or `vmap` over `theta` merges concrete materials. Public
+  `Prepared.run` also merges scalar region layers whose `Material` coefficients share the
+  **same JAX input object** as the adjacent half-space. This is a proof of a shared dependency,
+  recomputed from every run's declaration before conversion; it is not equality frozen at
+  preparation. For example, constructing both `Material(eps)` declarations inside a function
+  of `eps` preserves their common permittivity derivative through the half-space and the
+  reference-plane shift. Issue #21's 20 um layer at `theta = 0.9+0.2j` then agrees with the
+  shifted Fresnel interface to relative error below 1e-12 for both ETM and SMM, including a
+  JIT sweep of the shared permittivity. The regression also checks its derivative against an
+  independent finite difference of that closed form.
+
+  Distinct traced inputs stay independent even when their values coincide. Expressions such as
+  `eps + 0`, separate leaves of a traced `Problem`, raster values and dispersive models do not
+  establish this sharing proof. Their knife-edge limitation remains, as does JAX's internal
+  `solve_field` path, which passes the whole solver as separate compiled arguments. A positive
+  `half_space_merge_tolerance` still refuses live materials; sharing supports exact equality,
+  not approximate snapping. Coherent `excitation` solves keep every layer too. See the
+  [JAX input-sharing contract](../../guide/common/backends.md#shared-materials-under-jax-transformations).
 
   A material only *written* inside a trace is not a traced one, though until 2026-10-20 it was
   taken for one. Inside `jax.jit` even `jnp.asarray` of a constant is staged, so a solver built in
