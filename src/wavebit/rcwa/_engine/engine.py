@@ -4147,11 +4147,14 @@ class CoreFactorizationMixin:
                 from wavebit.rcwa._engine.uniform_stack import solve as solve_uniform
                 self._formulation_assigned = Formulation.SECOND_ORDER
                 kx, ky = self.order_kxy()
-                result_dict = self._finish(solve_uniform(
+                uniform_result = solve_uniform(
                     self.wavelength, kx, ky, self.n_bot, self.n_top,
                     self._incidence_pair(), self.thickness, uniform, epx_conv_all,
                     phi=self._frame_azimuth(), incidence_side=self._kernel_incidence_side,
-                    answers=self._kernel_answers(), lit=self._kernel_lit()))
+                    answers=self._kernel_answers(), lit=self._kernel_lit())
+                if self.layer_algorithm != 'SMM' and isinstance(uniform_result, dict):
+                    uniform_result.pop('scattering', None)
+                result_dict = self._finish(uniform_result)
             elif self._grating_type == 0:
                 result_dict = self._solve_1d(epx_conv_all, epy_conv_all, epz_conv_i_all,
                                              mu=mu, mu_top=mu_top, mu_bot=mu_bot,
