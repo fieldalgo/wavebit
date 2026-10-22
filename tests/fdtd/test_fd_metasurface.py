@@ -101,40 +101,43 @@ def campaign_entry(name, n, pol):
 
 
 def repeat_campaign_run(name, n, pol):
-    """Replay the original hard-drive row and hold the production drive to its RCWA distance."""
+    """Hold historical hard-drive pins and separately qualified production pins."""
     h = study()
     entry = campaign_entry(name, n, pol)
     scene, _ = h.build(name, n, pol, periods=entry['periods'])
     got = amplitudes(quiet(fd.run, scene, 'numpy'))
-    historical = got
+    replays = [(entry, got)]
     if pol == 'p':
-        # Replay immutable campaign numbers with their original drive. Keep the
-        # production drive for the independent RCWA distance checks below.
         from wavebit.fdtd._prepare import sources
         with patch.object(sources, 'plane_wave_current_gain', lambda *args: None):
             historical = amplitudes(quiet(fd.run, scene, 'numpy'))
-    amp, eff = [], []
-    for key, values in entry['values'].items():
-        side, m, k, q = key.split('|')
-        value = got[(side, int(m), int(k), q)]
-        old_value = historical[(side, int(m), int(k), q)]
-        # The immutable campaign predates the public move from the cell corner to its
-        # centre. Convert only amplitudes back to that archived reference for this replay.
-        if q not in ('R', 'T') and (int(m) + int(k)) % 2:
-            value = -value
-            old_value = -old_value
-        # the campaign's own numbers, every cell
-        np.testing.assert_allclose(old_value, [complex(*v) for v in values], rtol=0, atol=1e-10,
-                                   err_msg=key)
-        ref = np.array([complex(*v) for v in entry['reference'][key]])
-        if q in ('R', 'T'):
-            eff.append(np.max(np.abs(value - ref)))
-        else:
-            amp.append(np.max(np.abs(value * h.phase(name, n, int(m), int(k)) - ref)))
-    # every order within the campaign's distance from RCWA, the phase referred to the centred
-    # pillar as the campaign refers it
-    assert max(amp) <= entry['A'] * (1 + 1e-9) + 1e-12
-    assert max(eff) <= entry['F'] * (1 + 1e-9) + 1e-12
+        current = json.loads(repository_path(
+            'tests/references/fd_metasurface_current_rows.json').read_text(encoding='utf-8'))
+        assert current['qualification']['passed'] is True
+        assert current['historical_archive_sha256'] == h._sha(ROWS)
+        current_entry = next(e for e in current['runs']
+                             if (e['scene'], e['n'], e['pol']) == (name, n, pol))
+        assert current_entry['reference'] == entry['reference']
+        assert current_entry['periods'] == entry['periods']
+        assert set(current_entry['values']) == set(entry['values'])
+        replays = [(entry, historical), (current_entry, got)]
+    for recorded, observed in replays:
+        amp, eff = [], []
+        for key, values in recorded['values'].items():
+            side, m, k, q = key.split('|')
+            value = observed[(side, int(m), int(k), q)]
+            # Both archives use the campaign's original cell-corner frame.
+            if q not in ('R', 'T') and (int(m) + int(k)) % 2:
+                value = -value
+            np.testing.assert_allclose(value, [complex(*v) for v in values],
+                                       rtol=0, atol=1e-10, err_msg=key)
+            ref = np.array([complex(*v) for v in recorded['reference'][key]])
+            if q in ('R', 'T'):
+                eff.append(np.max(np.abs(value - ref)))
+            else:
+                amp.append(np.max(np.abs(value * h.phase(name, n, int(m), int(k)) - ref)))
+        assert max(amp) <= recorded['A'] * (1 + 1e-9) + 1e-12
+        assert max(eff) <= recorded['F'] * (1 + 1e-9) + 1e-12
 
 
 @pytest.mark.parametrize('name,n,pol', (('M1', 20, 'p'), ('M2', 25, 's')))
