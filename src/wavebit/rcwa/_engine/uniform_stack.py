@@ -30,7 +30,10 @@ def _refine_root(xp, e, gx, gy, q):
         part = v-hi
         error = (hi-(v-part))+(a-part)
         return v, lo+b+error
-    re, im = xp.real(e)+xp.zeros_like(xp.real(q)), xp.imag(e)+xp.zeros_like(xp.real(q))
+    # Constant exterior media can still be Python scalars in a live stack.
+    # Promote through q without detaching any material or wavelength graph.
+    e = e + xp.zeros_like(q)
+    re, im = xp.real(e), xp.imag(e)
     er, ei = xp.zeros_like(re), xp.zeros_like(im)
     for v in (xp.reshape(gx, (-1,)), xp.reshape(gy, (-1,)), q):
         a, b = xp.real(v), xp.imag(v)
