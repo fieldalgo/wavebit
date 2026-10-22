@@ -1109,6 +1109,11 @@
       "spdx": "PSF-2.0",
       "url": "https://github.com/python/typing_extensions"
     },
+    "tzdata": {
+      "spdx": "Apache-2.0",
+      "url": "https://pypi.org/project/tzdata/2026.5/",
+      "review": "Reviewed tzdata 2026.5 official PyPI wheel METADATA and licenses/LICENSE plus licenses/licenses/LICENSE_APACHE (Apache-2.0); wheel SHA256 b683bd1b6659ddcd810ff02ad09ba821d4bf1065072805063eb35c49617905ac. Python/IANA time-zone data, no bundled shared libraries. Records an installed CI dependency; no Wavebit requirement is added."
+    },
     "urllib3": {
       "spdx": "MIT",
       "url": "https://github.com/urllib3/urllib3"
