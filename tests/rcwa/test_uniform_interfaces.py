@@ -117,3 +117,28 @@ def test_torch_independent_material_keeps_its_tangent(pol):
                                [complex(*v) for v in row['values'][:2]], rtol=1e-12, atol=0)
     grad, = torch.autograd.grad(r.real/1e52, e)
     np.testing.assert_allclose(grad.detach().numpy(), row['derivatives'][0][0]/1e52, rtol=1e-12)
+
+
+@pytest.mark.parametrize('algorithm', ['etm','smm'])
+def test_uniform_material_efficiency_only_keeps_the_answer_contract(algorithm):
+    jax = pytest.importorskip('jax')
+    from wavebit.rcwa._factory import rcwa as legacy
+    with jax.enable_x64(True):
+        def build(e, answers):
+            return legacy(backend='jax', top=1., bot=2.25, wavelength=1000.,
+                            theta=.3, polarization=(1.,0.), period=(700.,700.),
+                            truncation_order=(1,1), thickness=(150.,),
+                            structure=[dict(background=Material(e), shapes=[])],
+                            layer_algorithm=algorithm.upper(), answers=answers)
+        geometry = build(4., 'amplitude').freeze_geometry()
+        def solve(e, answers):
+            solver = build(e, answers)
+            result = solver.solve(geometry=geometry, auto_detune=False)
+            if algorithm == 'etm':
+                with pytest.raises(RuntimeError, match='ETM.*forms none'):
+                    _ = solver.scattering
+            return result.incident.R, result.incident.T
+        efficiency = jax.jit(lambda e: solve(e, 'efficiency'))(4.)
+        amplitude = jax.jit(lambda e: solve(e, 'amplitude'))(4.)
+        for got, expected in zip(efficiency, amplitude):
+            np.testing.assert_allclose(got, expected, rtol=1e-12, atol=1e-14)

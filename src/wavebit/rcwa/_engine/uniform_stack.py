@@ -41,7 +41,7 @@ def _refine_root(xp, e, gx, gy, q):
         hi, lo = product(a, b)
         im, ei = add(im, ei, -2*hi, -2*lo)
     residual = (re+er)+1j*(im+ei)
-    return q + residual/(2*xp.where(q == 0, xp.ones_like(q), q))
+    return xp.where(q == 0, q, q + residual/(2*xp.where(q == 0, xp.ones_like(q), q)))
 
 
 def _interfaces(xp, eps, roots, k2):
