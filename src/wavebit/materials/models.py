@@ -88,6 +88,15 @@ def _response(epsilon, mu, term, omega):
     xp, ref = _namespace(epsilon, mu, term, omega)
     device = getattr(ref, 'device', None)
     dtype = xp.complex64 if str(getattr(omega, 'dtype', '')) in ('float32', 'torch.float32') else xp.complex128
+    # A Python wavelength may select Torch's float32 default. It must not narrow
+    # a double material (or its backward cotangent) through a complex64 response.
+    def wide(value):
+        if isinstance(value, (tuple, list)):
+            return any(wide(v) for v in value)
+        return str(getattr(value, 'dtype', '')) in (
+            'float64', 'complex128', 'torch.float64', 'torch.complex128')
+    if wide(epsilon) or wide(mu) or wide(term):
+        dtype = xp.complex128
     e = _array(xp, epsilon, dtype=dtype, device=device)
     spectral_shape = tuple(omega.shape)
     def broadcast(value):

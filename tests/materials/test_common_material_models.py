@@ -147,3 +147,26 @@ def test_table_accepts_a_wavelength_sequence_with_the_same_unit_contract_as_othe
     np.testing.assert_allclose(values, [2., 3., 4.], rtol=1e-14)
     with pytest.raises(ValidationError):
         table.at(.499, units=Units(length='um'))
+
+
+@pytest.mark.parametrize('slot', ['epsilon', 'mu'])
+def test_torch_double_constant_material_never_narrows_through_python_wavelength(slot):
+    """A float32 default wavelength must not round a double material or overflow its AD."""
+    torch = pytest.importorskip('torch')
+    value = torch.tensor(1.+2.**-40, dtype=torch.float64, requires_grad=True)
+    material = Material(value) if slot == 'epsilon' else Material(2., mu=value)
+    response = material.at(1000., units=Units(length='nm'))
+    coefficient = getattr(response, slot)
+    assert coefficient.dtype == torch.complex128
+    assert coefficient.detach().real.item() == value.detach().item()
+    gradient, = torch.autograd.grad(coefficient.real*1e60, value)
+    assert gradient.item() == 1e60
+
+
+def test_torch_single_constant_material_keeps_single_precision():
+    torch = pytest.importorskip('torch')
+    value = torch.tensor(2., dtype=torch.float32, requires_grad=True)
+    response = Material(value).at(torch.tensor(1000., dtype=torch.float32), units=Units(length='nm'))
+    assert response.epsilon.dtype == torch.complex64
+    gradient, = torch.autograd.grad(response.epsilon.real, value)
+    assert gradient.item() == 1.
