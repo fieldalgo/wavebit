@@ -3984,13 +3984,15 @@ class CoreFactorizationMixin:
                    epxz_conv_all=None, epyz_conv_all=None,
                    epzx_conv_all=None, epzy_conv_all=None, mu=None,
                    mu_top=None, mu_bot=None, eps_top=None, eps_bot=None, layer_dng=None,
-                   _merge=None):
+                   _merge=None, _uniform=None):
         """Solve kernel-frame matrices, as returned by the private Fourier builders.
 
         ``layer_dng`` is :meth:`_layer_double_negative`, which only labels modes; see there.
         ``_merge`` is :meth:`_half_space_merge_plan`'s answer for the scene these matrices were
         built from, and only :meth:`_solve_built` passes one: a merge is decided from the
         scene's materials, so matrices handed in from outside are solved as they are.
+        ``_uniform`` likewise carries raw scalar materials only for scene-built matrices;
+        it never substitutes the scene for caller-supplied convolution matrices.
         """
         # Half-space terms handed in here need not be the scene's materials, which the setters
         # already checked; a magnetic pair is held to the same refusal of an active, propagating
@@ -4009,7 +4011,7 @@ class CoreFactorizationMixin:
                 epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all,
                 epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all, mu=mu,
                 mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
-                layer_dng=layer_dng, merge=_merge)
+                layer_dng=layer_dng, merge=_merge, uniform=_uniform)
 
     #: The sides (``'top'`` / ``'bot'``) whose half-space index a ``solve_conv`` pair signed, for
     #: as long as :meth:`_indices_signed_by_pairs` holds them, so that
@@ -4074,7 +4076,7 @@ class CoreFactorizationMixin:
                            epxz_conv_all=None, epyz_conv_all=None,
                            epzx_conv_all=None, epzy_conv_all=None, mu=None,
                            mu_top=None, mu_bot=None, eps_top=None, eps_bot=None,
-                           layer_dng=None, merge=None):
+                           layer_dng=None, merge=None, uniform=None):
         """:meth:`_solve_conv` once the half-space indices carry the pairs' signs."""
         before = self._grating_type
         self._assign_grating_type()
@@ -4139,7 +4141,18 @@ class CoreFactorizationMixin:
                 thickness=self.thickness[keep],
                 answers=Answers.AMPLITUDE if self._answers == Answers.EFFICIENCY else self._answers)
         try:
-            if self._grating_type == 0:
+            if merge is not None or first_order or self._grating_type != 2:
+                uniform = None
+            if uniform is not None:
+                from wavebit.rcwa._engine.uniform_stack import solve as solve_uniform
+                self._formulation_assigned = Formulation.SECOND_ORDER
+                kx, ky = self.order_kxy()
+                result_dict = self._finish(solve_uniform(
+                    self.wavelength, kx, ky, self.n_bot, self.n_top,
+                    self._incidence_pair(), self.thickness, uniform, epx_conv_all,
+                    phi=self._frame_azimuth(), incidence_side=self._kernel_incidence_side,
+                    answers=self._kernel_answers(), lit=self._kernel_lit()))
+            elif self._grating_type == 0:
                 result_dict = self._solve_1d(epx_conv_all, epy_conv_all, epz_conv_i_all,
                                              mu=mu, mu_top=mu_top, mu_bot=mu_bot,
                                              eps_top=eps_top, eps_bot=eps_bot, dng=layer_dng)
@@ -6557,6 +6570,19 @@ class CoreFactorizationMixin:
         return _anisotropy.scene_is_tensor(getattr(self, '_structure', None),
                                           getattr(self, '_mu', None))
 
+    def _independent_uniform_materials(self):
+        """Structural scalar uniformity; never compare independent material values."""
+        if (self._modeling_path != ModelingPath.PARAMETRIC
+                or not self._materials_are_live() or self._is_magnetic()
+                or self._has_tensor_materials() or not self._structure
+                or self._excitation is not None):
+            return None
+        if any(layer.get('shapes', []) for layer in self._structure):
+            return None
+        return [self._bot.epsilon] + [
+            as_material(layer.get('background', 1.0)).epsilon
+            for layer in self._structure] + [self._top.epsilon]
+
     def _materials_are_live(self):
         """Whether a layer or half-space material is traced or carries a derivative."""
         return any(_holds_tracer(v) or _holds_autodiff(v)
@@ -6790,7 +6816,8 @@ class CoreFactorizationMixin:
         eps = self._eps_conv_matrices(geometry)
         merge = self._half_space_merge_plan()
         if not self._is_magnetic():
-            return self._solve_conv(*eps, _merge=merge)
+            return self._solve_conv(*eps, _merge=merge,
+                                    _uniform=self._independent_uniform_materials())
         mu = self._mu_conv_matrices(geometry)
         return self._solve_conv(*eps, mu=mu,
                                mu_top=self._top.mu, mu_bot=self._bot.mu,

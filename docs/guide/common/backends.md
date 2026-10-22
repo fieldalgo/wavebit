@@ -42,6 +42,30 @@ half-space's medium can amplify round-off to an order-one error. It does not cla
 for a genuinely different or patterned layer. Ordinary eager runs with concrete materials keep
 their existing path. See [the numerical explanation](../../theory/rcwa/connecting-algorithms.md#10-etms-labels-at-a-complex-in-plane-wavevector).
 
+## Independent uniform material inputs
+
+For a single plane wave and second-order formulation (`auto` or `second_order`),
+traced scalar, nonmagnetic **region stacks with no shapes** use direct Fresnel interfaces
+when no exact half-space merge applies. Both `etm` and `smm` use this homogeneous-stack
+calculation. Independent materials remain independent at equal values: no layer is removed
+and their permittivity derivatives remain present. Reflection, transmission and fields use
+the same recursion; `smm` also exposes both scattering ports. A compensated normal-root
+residual reduces the phase error accumulated across long layers. This applies to JAX material
+transformations and PyTorch material gradients. Concrete eager solves keep their existing path. A double-precision material response
+also retains its precision when a Python wavelength would otherwise select a single-precision
+PyTorch intermediate; this prevents overflow of large, finite material cotangents.
+
+The direct interface uses material differences before rounding can turn zero contrast into
+a fictitious reflection. Tests cover the 20 um complex-angle slab with independent layer
+permittivity equal to 9, its adjacent float64 values, 8.5 and 9.5, both polarizations and
+incidence sides, including field and amplitude derivatives against a 120-digit reference.
+A two-layer oblique case also checks both ports and tangential field continuity.
+
+This does not extend the stable path to patterned or raster stacks, magnetic/tensor media,
+first-order formulations or coherent multi-source excitation. Physical poles, cutoff
+singularities and values outside floating-point range still require separate treatment.
+A positive merge tolerance still refuses live materials; these interfaces do not snap values.
+
 ## Compiled compatibility field solves
 
 The internal compatibility method `solver.solve_field(..., geometry=g)` checks concrete
