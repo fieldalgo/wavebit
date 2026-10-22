@@ -80,6 +80,7 @@ Apache-2.0이고, 파생 원본 코드의 MIT 고지는
 | `pillow` | matplotlib | MIT-CMU | |
 | `packaging` | matplotlib 외 | Apache-2.0 OR BSD-2-Clause | |
 | `python-dateutil` | matplotlib | Apache-2.0 AND BSD-3-Clause | |
+| `tzdata` | CI에 설치되는 시간대 데이터 | Apache-2.0 | 공식 2026.5 wheel의 metadata·license 파일 확인. 동봉 공유 라이브러리·새 Wavebit 의존성 없음. |
 | `sphinx`, `sphinxcontrib-mermaid`, `sphinxcontrib-applehelp`, `sphinxcontrib-devhelp`, `sphinxcontrib-htmlhelp`, `sphinxcontrib-jsmath`, `sphinxcontrib-qthelp`, `sphinxcontrib-serializinghtml` | `docs` | BSD-2-Clause | |
 | `pydata-sphinx-theme`, `accessible-pygments`, `babel`, `snowballstemmer`, `alabaster`, `click` | `docs` | BSD-3-Clause | |
 | `myst-parser`, `mdit-py-plugins`, `markdown-it-py`, `mdurl`, `sphinx-design`, `sphinx-external-toc`, `sphinx-multitoc-numbering`, `beautifulsoup4`, `soupsieve`, `pyyaml`, `imagesize`, `charset-normalizer`, `urllib3` | `docs` | MIT | |
