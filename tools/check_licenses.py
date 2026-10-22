@@ -56,6 +56,7 @@ import fnmatch
 import functools
 import importlib.metadata as metadata
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -448,6 +449,10 @@ def main():
           + f"; {bundled} bundled shared libraries matched reviewed records")
     for error in errors:
         print("LICENSE CHECK FAILED:", error, file=sys.stderr)
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            # Keep the failure readable through check annotations as well as log archives.
+            message = str(error).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+            print(f"::error title=Third-party license check::{message}", file=sys.stderr)
     return 1 if errors else 0
 
 
