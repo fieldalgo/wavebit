@@ -830,7 +830,7 @@ closed forms on knife edges where the unmerged solve is 0.4 to 1.0 off (each tes
 control), deletion on every path, the rungs, the ports and the continuity at the merged faces,
 magnetic and double-negative half-spaces, the tolerance, and a mutant of every factor it caught.
 
-**What is left.** Each limit below was measured; none is fixed.
+**What is left.** The structural limits and the remaining numerical limits are distinguished below.
 
 - *Independent traced materials and an `excitation` keep their layers.* The merge changes
   the number of layers solved, so a material's current value cannot decide it under a trace.
@@ -847,7 +847,21 @@ magnetic and double-negative half-spaces, the tolerance, and a mutant of every f
 
   Distinct traced inputs stay independent even when their values coincide. Expressions such as
   `eps + 0`, separate leaves of a traced `Problem`, raster values and dispersive models do not
-  establish this sharing proof. Their knife-edge limitation remains. JAX's internal
+  establish this sharing proof. A separate direct-interface path now handles independent scalar,
+  nonmagnetic region stacks with no shapes under material transformations (second-order,
+  single plane wave). It rationalizes TE reflection as `(epsilon_a-epsilon_b)/(q_a+q_b)^2`,
+  and the corresponding TM difference of squares, retaining a nonzero contrast tangent at
+  zero contrast. A two-face recursion uses decaying exponentials and supplies R/T, fields
+  and both SMM ports consistently. No independent input is merged or detached. For the
+  20 um slab, values and material tangents are checked against ordinary Fresnel formulas at
+  120 decimal digits, including the adjacent binary64 permittivities; ordinary finite
+  differences cannot resolve the equality case's approximately `4e51` relative condition
+  number. The reference generator and values live in
+  `tests/fixtures/rcwa/uniform_interfaces/`; `test_uniform_interfaces.py` also checks
+  two-layer fields/ports and PyTorch gradients. Patterned/raster, magnetic/tensor,
+  first-order and coherent-source cases retain their existing limits. Neither material
+  independence nor extreme conditioning makes the exact-input problem inherently unsolvable,
+  but this bounded path does not establish arbitrary-stack stability. JAX's internal
   `solve_field` now decides a merge
   from concrete materials before flattening the solver and carries that per-call plan into
   the compiled solve and field reconstruction. Outer material transformations still keep
