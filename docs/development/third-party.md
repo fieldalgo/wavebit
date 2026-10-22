@@ -87,6 +87,7 @@ Version floors are in `pyproject.toml`; the table names what CI installs.
 | `pillow` | matplotlib | MIT-CMU | |
 | `packaging` | matplotlib, others | Apache-2.0 OR BSD-2-Clause | |
 | `python-dateutil` | matplotlib | Apache-2.0 AND BSD-3-Clause | |
+| `tzdata` | installed CI time-zone data | Apache-2.0 | Reviewed official 2026.5 wheel metadata and license files; no bundled shared libraries or new Wavebit requirement. |
 | `sphinx`, `sphinxcontrib-mermaid`, `sphinxcontrib-applehelp`, `sphinxcontrib-devhelp`, `sphinxcontrib-htmlhelp`, `sphinxcontrib-jsmath`, `sphinxcontrib-qthelp`, `sphinxcontrib-serializinghtml` | `docs` | BSD-2-Clause | |
 | `pydata-sphinx-theme`, `accessible-pygments`, `babel`, `snowballstemmer`, `alabaster`, `click` | `docs` | BSD-3-Clause | |
 | `myst-parser`, `mdit-py-plugins`, `markdown-it-py`, `mdurl`, `sphinx-design`, `sphinx-external-toc`, `sphinx-multitoc-numbering`, `beautifulsoup4`, `soupsieve`, `pyyaml`, `imagesize`, `charset-normalizer`, `urllib3` | `docs` | MIT | |
