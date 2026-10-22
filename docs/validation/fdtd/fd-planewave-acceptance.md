@@ -270,3 +270,44 @@ not prove stability or settling of every driven broadband scene. The original
 broadband case remains unqualified; these two-time controls do not replace the
 five-time acceptance protocol above. No solver, golden or tolerance was changed
 for this follow-up.
+
+## Long broadband records and intermediate-time checks (2026-10-22)
+
+The original conical bandwidth `df=.15` was retained at 40 cells per wavelength,
+with cutoff `1e-6`, 96 PML cells (physical depth 2.4), and the same geometry,
+transverse wavevector, monitors, reference and fixed limits. Four new CPU/JAX
+records compared 640 and 1280 periods at stabilizing losses .003 and .03.
+
+| PML loss | 640–1280 time difference / cap | Interior-growth ratios | Two-time result |
+|---|---:|---|---|
+| .003 | 1.771860 | .720598 / .518109 | FAIL |
+| .03 | .988485 | .474283 / .223998 | PASS |
+
+Both largest changes were in the total power at wavelength 1.0. Their absolute
+accuracy ratios remained below .389, which cannot replace time qualification.
+The .003 comparison failed its preregistered trigger for a five-time extension;
+that extension was not run. A separately registered .03 record at 960 periods
+then gave a 640–960 difference of **1.138452 times the same cap**. The 960–1280
+maximum was .277307. Thus the marginal endpoint pass does not pass even this
+three-time comparison. These records establish neither the full five-time and
+boundary qualification nor a new default PML setting.
+
+One additional .003/640-period run recorded Ey and Ez at points on both monitor
+planes. Adding the four passive records changed no scattering observation
+(maximum difference 0, limit 1e-12). The late 320–640 Hann spectrum peaked at
+.778116 with frequency resolution .003125. Two-exponential matrix-pencil fits
+resolved a persistent oscillation near ±.777, distinct from the +1-order Yee
+cutoff .786622. Fits starting at 480 gave decay rates about .00102–.00107,
+corresponding to an amplitude e-folding time of roughly 1000 centre periods.
+Relative residuals were 1.3–1.4% for three point components and 9.1% for transmitted
+Ey; earlier-window fits were less accurate. A one-exponential fit was inadequate.
+Two temporal exponentials do not identify two spatial eigenmodes.
+
+This is evidence for a long-lived oscillation after growth is suppressed, not a
+spatial-mode identification or an infinite-time stability proof. The point
+records do not justify a Q estimate or correcting the measured DFT by a fitted
+tail. The related [ringdown analysis](fdtd-ringdown.md) and
+[pulse-convergence analysis](fdtd-pulse-convergence.md) describe why window and
+model dependence matter; their different fixtures do not establish the mechanism
+of this oscillation. All failed time comparisons remain failed at their original
+limits. No solver, source bandwidth or acceptance tolerance changed in this follow-up.
