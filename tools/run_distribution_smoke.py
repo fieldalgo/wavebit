@@ -73,7 +73,14 @@ def check_no_unshipped_code(sdist):
 
 def run(command, *, cwd, env):
     print('+', ' '.join(map(str, command)), flush=True)
-    subprocess.run(list(map(str, command)), cwd=cwd, env=env, check=True, timeout=1200)
+    try:
+        subprocess.run(list(map(str, command)), cwd=cwd, env=env, check=True, timeout=1200)
+    except subprocess.CalledProcessError:
+        if os.environ.get('GITHUB_ACTIONS') == 'true':
+            message = 'Failed command: ' + ' '.join(map(str, command))
+            message = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+            print(f'::error title=Installed distribution check::{message}', flush=True)
+        raise
 
 
 def main():
