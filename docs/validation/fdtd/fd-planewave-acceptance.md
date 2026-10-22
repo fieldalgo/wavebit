@@ -311,3 +311,50 @@ tail. The related [ringdown analysis](fdtd-ringdown.md) and
 model dependence matter; their different fixtures do not establish the mechanism
 of this oscillation. All failed time comparisons remain failed at their original
 limits. No solver, source bandwidth or acceptance tolerance changed in this follow-up.
+
+## Source-specific M1 regression qualification (2026-10-22)
+
+The original hard-source M1 p regression recorded an n20 maximum amplitude
+error of .027752897808 against stored RCWA. The current-source result is
+.027752997432. That single-grid increase was preserved as a failed historical
+maximum comparison; it did not establish a loss of spatial convergence.
+Six fresh CPU records now qualify the current source using the original C7
+formulas: JAX n20/40/80 at 120 periods, JAX n40 at 180, and NumPy/Torch n20 at 120.
+The stored RCWA ladders and shift instruments were reused, not rerun.
+
+| Cells per wavelength | Maximum amplitude error A | Maximum power error F |
+|---|---:|---:|
+| 20 | .0277529974 | .0136295190 |
+| 40 | .0066034566 | .0034952817 |
+| 80 | .0018113039 | .0009058605 |
+
+The fitted convergence orders are 1.968772 and 1.955651, above the unchanged 1.8
+requirement. Reference uncertainties .0002322194 and .0001661714 remain below
+one third of the fine errors. All 72 cell comparisons satisfy the original
+Richardson consistency criterion; both deliberate displacement controls fail
+as required. The n40 time changes are 5.76523e-7 and 2.21174e-7, below caps
+.0001811304 and .0000905860, respectively. All run-validity and layout checks
+pass. Maximum NumPy/JAX/Torch relative disagreement is 6.59e-15, below 1e-10.
+This qualifies M1 p only, not the whole metasurface campaign.
+
+`tests/references/fd_metasurface_rows.json` remains byte-for-byte unchanged.
+The regression explicitly replays its original hard drive and retains both its
+1e-10 pins and its recorded RCWA error caps. A separate
+`tests/references/fd_metasurface_current_rows.json` holds the qualified current
+NumPy row, using the same pin tolerance and error-cap formula
+`recorded * (1 + 1e-9) + 1e-12`. It retains exactly the same RCWA reference values,
+channels and 120-period scene. Its metadata records qualification results,
+source/version identities, raw-record hashes and the historical archive hash.
+No historical failure is reclassified, and no physical tolerance is widened.
+
+From a configured checkout with its root and `src` on `PYTHONPATH`, reproduce
+with `python -m tests.fdtd.check_metasurface_current --run --records
+artifacts/m1-current --output artifacts/m1-current-report.json`. The directory
+must be new. `--workers 2` permits two CPU workers; the default is one. The
+original one-time 180-period repeat applies only to an unsettled rung. To grade
+existing records, omit `--run`; different source/environment provenance is
+rejected. `--regression artifacts/m1-current-candidate.json` exports a separate
+candidate only after every physical criterion passes and refuses to overwrite
+an existing file. Review the evidence before promoting a candidate. This
+manual qualification does not replace CI, independent review or other-platform
+validation.

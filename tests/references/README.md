@@ -19,6 +19,15 @@ machine that has the tools; what CI checks on every push is the committed number
 **Regenerating a golden is not a way to make a failing test pass.** These numbers did not come
 from this codebase, which is exactly what makes them worth having.
 
+## Source-specific metasurface regression records
+
+`fd_metasurface_rows.json` preserves the historical hard-source campaign.
+`fd_metasurface_current_rows.json` separately records qualified current-source
+M1 p behavior against the same stored RCWA values. These are regression
+records from this project, not fresh outside-solver oracles. The original file,
+1e-10 replay tolerance and physical criteria remain unchanged. See the
+[qualification and guarded export procedure](../../docs/validation/fdtd/fd-planewave-acceptance.md#source-specific-m1-regression-qualification-2026-10-22).
+
 ## What the permittivity flip did to this directory (2026-08-20)
 
 Wavebit took a refractive index at its front door until 2026-08-20 and takes a relative
