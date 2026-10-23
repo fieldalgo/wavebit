@@ -70,7 +70,7 @@ def _apply(problem, numerics, updated):
     extra = 2 * (updated.absorber.cells - numerics.absorber.cells) * numerics.grid.spacing
     assert after.domain.size[2] - before.domain.size[2] == pytest.approx(extra)
     assert after.domain.center == before.domain.center
-    for name in ('wavelength', 'reference_media', 'allow_thin'):
+    for name in ('wavelength', 'reference_media', 'allow_thin', 'kappa_max'):
         assert getattr(updated.absorber, name) == getattr(numerics.absorber, name)
 
 
@@ -157,3 +157,13 @@ def test_public_context_does_not_change_private_engine_guidance():
     assert str(after.value) == str(before.value)
     assert 'z=PML(' in str(after.value) and 'grow Scene(domain=)' in str(after.value)
     assert 'numerics.replace(' in public_message
+
+
+def test_nondefault_stretch_is_retained_by_public_grazing_remedies():
+    problem = _column(.342)
+    numerics = _numerics(periods=40, kappa_max=8.)
+    message = _refusal(problem, numerics)
+    candidates = _candidates(message, numerics)
+    assert candidates
+    for updated in candidates:
+        _apply(problem, numerics, updated)

@@ -410,6 +410,12 @@ class PML(Absorbing):
         at (default 1e-8). It is a grading parameter, not a bound: the discrete reflection is
         set by the grading *and* the cell count *and* the angle, which is what the doubling
         table measures.
+    ``kappa_max``
+        Peak real coordinate stretch, static and finite, >= 1 (default 2). The profile is
+        ``1 + (kappa_max - 1) * fractional_depth**4``. Changing it changes the finite
+        termination and discrete reflection. Converge layer thickness, clearance and duration;
+        neither a larger stretch nor this declaration guarantees passivity or physical decay.
+        The reflection and stabilizing-loss measurements quoted here use the default 2.
     ``allow_thin``
         Take fewer than 12 cells anyway. The scene still runs; it just reflects more.
     ``stabilize``
@@ -423,8 +429,9 @@ class PML(Absorbing):
         target weaker than any measured. **Why it exists**: a stretch backed by a PEC wall is an *active*
         termination for evanescent waves, so a lossless structure with a bound mode just past
         the light line -- a grating's guided resonance at a Rayleigh wavelength, a slab under
-        an ``Axis1D`` column -- grows exponentially under the pure stretch, whatever its
-        constants; with enough loss it decays on every slab family it was measured on. That is
+        an ``Axis1D`` column -- can grow exponentially under the pure stretch. Its finite
+        termination depends on thickness, clearance and coordinate stretch; with enough loss
+        it decays on every slab family it was measured on at ``kappa_max=2``. That is
         a measured balance, not a guarantee: the loss does not make the layer passive, so a
         structure unlike the sampled ones can still grow. **What it costs**: nothing at normal
         incidence and, at an angle, a reflection that replaces the layer's round trip
@@ -450,6 +457,7 @@ class PML(Absorbing):
     reflection: float = PML_REFLECTION
     allow_thin: bool = False
     stabilize: object = None
+    kappa_max: float = 2.0
 
     def __post_init__(self):
         from wavebit.materials._time_domain import as_material
@@ -464,6 +472,10 @@ class PML(Absorbing):
             if not w > 0:
                 raise ValueError(f'PML(wavelength={self.wavelength!r}): a positive length.')
             object.__setattr__(self, 'wavelength', w)
+        kappa = static_float('PML', 'kappa_max', self.kappa_max)
+        if not (math.isfinite(kappa) and kappa >= 1.0):
+            raise ValueError('PML(kappa_max=...): a finite real number >= 1 is required.')
+        object.__setattr__(self, 'kappa_max', kappa)
         r = static_float('PML', 'reflection', self.reflection)
         if not 0 < r < 1:
             raise ValueError(

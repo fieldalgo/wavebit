@@ -322,7 +322,7 @@ def _cpml(scene, plan, rt):
                 f'matched to is a static value, not a leaf. Give PML(background=...) a '
                 f'concrete material, or differentiate a structure instead.')
         table = profiles(face.cells, plan.dx, plan.dt, wavelengths[face.name], eps_r,
-                         face.side, boundary.reflection)
+                         face.side, boundary.reflection, kappa_max=boundary.kappa_max)
         shape = [1, 1, 1]
         shape[_COMPONENT_AXIS[face.axis]] = face.cells
         for field, which in (('E', 'half'), ('H', 'node')):

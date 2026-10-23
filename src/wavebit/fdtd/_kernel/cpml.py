@@ -94,6 +94,9 @@ class CpmlFace:
     side: str
     cells: int
     region: object          # masks.Region
+    # Omit the default from the skeleton to preserve existing prepared identities.
+    kappa_max: float = dataclasses.field(default=2.0, metadata={
+        'skeleton': 'omit-default'})
 
     #: The stabilizing loss ``rho``; 0 on a pure stretch. :class:`StabilizedFace` sets it.
     stabilize = 0.0

@@ -318,8 +318,27 @@ stencil의 지원 범위는 그대로입니다. 진공 속 구 하나와 미분�
 
 `Numerics(absorber=PML(...))`가 모든 `Open()` 면의 흡수층을 정합니다. `cells=12`(그보다 적으면
 `allow_thin=True` 없이는 거절), `reflection=1e-8`, `wavelength`(생략하면 소스들이 공유하는 중심
-파장), 그리고 면 옆의 속박 모드가 자라지 않게 막는 추가 손실인 `stabilizing_loss`입니다(아래
-`GrowingFieldWarning` 참고).
+파장), `kappa_max=2`, 그리고 속박 모드의 성장을 억제할 수 있지만 물리 감쇠도 바꿀 수 있는
+선택적 추가 손실 `stabilizing_loss`입니다(아래 `GrowingFieldWarning` 참고).
+
+`kappa_max`는 1 이상인 유한한 정적 실수입니다. 실수 좌표 stretch는
+`1 + (kappa_max - 1) * fractional_depth**4`입니다. 이 흡수층 선언과 입사파 내부 column에
+적용되며 프로세스 전역 상수를 바꾸지 않습니다. 예를 들어
+`numerics.replace(absorber=numerics.absorber.replace(kappa_max=8))`은 다른 설정을 유지하며
+8을 명시합니다. 기본값은 2이고 생략한 job은 직렬화 형태와 key를 유지합니다. 수치 정책을
+바꾸면 다시 prepare하세요. `kappa_max`는 미분 대상이 아니며 재료 미분의 기존 범위는 유지됩니다.
+
+큰 stretch는 유한한 PML/PEC 종단과 근처 공진의 감쇠를 바꿉니다. **자동 안정화나 정확도
+보장은 아닙니다.** `Scene.domain`으로 물리 여유 거리를 늘리고, PML 두께(`cells * spacing`),
+격자 간격, 실행 시간의 수렴을 독립 감쇠 기준과 산란 관측량 모두에 대해 확인하세요. PML 셀만
+늘리면 영역 바깥의 패딩이 늘어나며 여유 거리가 늘어나지는 않습니다. `stabilizing_loss`는
+성장을 억제하면서 실제 공진을 과도하게 감쇠시킬 수도 있습니다. 측정된 손실 표는
+`kappa_max=2`에만 해당하며 다른 값에서 충분한 손실량은 표로 검증되어 있지 않습니다.
+
+기존 grazing 허용 규칙은 유지합니다. 연속체 감쇠는 실수 stretch에 무관하지만 유한 격자
+반사는 그렇지 않습니다. 안정화된 면의 정확한 이산 반사와 순수 stretch 대조 모두 요청한
+`kappa_max`를 사용합니다. 이 검사를 통과해도 모든 모드의 수동성이나 무한 시간 안정성을
+보장하지 않습니다. 이 옵션은 일반 FDTD API에 속하며 별도 `fdtd.native` API는 바뀌지 않습니다.
 
 ### Grazing 거절 뒤 설정 바꾸기
 
@@ -329,7 +348,7 @@ stencil의 지원 범위는 그대로입니다. 진공 속 구 하나와 미분�
 유지됩니다.
 
 메시지에 `updated = numerics.replace(...)` 후보가 나오면 기존 `numerics` 값에 적용하세요.
-안쪽의 `absorber.replace(...)`는 `wavelength`, `reference_media`, `allow_thin`을 보존합니다.
+안쪽의 `absorber.replace(...)`는 `wavelength`, `reference_media`, `allow_thin`, `kappa_max`를 보존합니다.
 실행 시간을 바꿔야 할 때는 실제 소스 이름을 넣은 `fdtd.Duration(periods=..., source=...)`를
 제시합니다. 이미 더 강한 반사 목표·더 깊은 층·충분히 긴 시간은 유지합니다. 흡수층을 깊게
 하면 물리 영역 **바깥**의 패딩이 자동으로 늘어나므로 `problem.scene.domain`은 그대로 두세요.

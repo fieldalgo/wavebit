@@ -338,8 +338,30 @@ type per axis or a `(low, high)` pair.
 
 `Numerics(absorber=PML(...))` sets every `Open()` face's layer: `cells=12` (fewer is refused
 unless `allow_thin=True`), `reflection=1e-8`, `wavelength` (the sources' shared centre wavelength
-when omitted) and `stabilizing_loss`, an extra loss that stops a bound mode next to the face from growing
-(see `GrowingFieldWarning` below).
+when omitted), `kappa_max=2`, and `stabilizing_loss`, an optional extra loss that can suppress
+bound-mode growth but also change its physical decay (see `GrowingFieldWarning` below).
+
+`kappa_max` is a finite static real number at least 1. The real coordinate stretch is
+`1 + (kappa_max - 1) * fractional_depth**4`. It applies to this absorber declaration and
+its incident-wave columns; it does not change a process-wide constant. For example,
+`numerics.replace(absorber=numerics.absorber.replace(kappa_max=8))` explicitly selects 8
+while retaining the other settings. The default remains 2, and jobs omitting it retain
+their serialized form and key. Prepare again after changing the numerical policy;
+`kappa_max` is not a differentiable parameter. Material derivatives retain their existing scope.
+
+A larger stretch changes the finite PML/PEC termination, including the decay of a nearby
+resonance. It is **not** an automatic stability or accuracy fix. Increase physical clearance
+in `Scene.domain`, and converge PML thickness (`cells * spacing`), grid spacing and run duration
+against an independent decay reference as well as the scattering observables. More PML cells
+alone add padding outside the domain; they do not add clearance. Added `stabilizing_loss` can
+suppress growth while overdamping the physical resonance. The measured loss table applies to
+`kappa_max=2`; other values have no tabulated sufficient loss.
+
+The existing grazing admission rules remain in force. Their continuum attenuation is
+independent of the real stretch, but finite-grid reflection is not. For a stabilized face,
+the exact discrete return and its pure-stretch comparison both use the requested `kappa_max`.
+Passing these checks does not establish all-mode passivity or infinite-time stability.
+This option belongs to the general FDTD API; the separate `fdtd.native` API is unchanged.
 
 ### Acting on a grazing refusal
 
@@ -350,7 +372,7 @@ Open face**, while each face keeps its physical or fixed reference medium.
 
 When the diagnostic prints an `updated = numerics.replace(...)` candidate, use
 the existing `numerics` value. Its nested `absorber.replace(...)` preserves
-`wavelength`, `reference_media` and `allow_thin`. A duration change includes the
+`wavelength`, `reference_media`, `allow_thin` and `kappa_max`. A duration change includes the
 actual source name in `fdtd.Duration(periods=..., source=...)`. Stronger reflection
 targets, deeper layers and already sufficient durations are retained. Increasing
 the absorber depth adds padding **outside** the physical region automatically;

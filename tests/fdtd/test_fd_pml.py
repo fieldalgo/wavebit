@@ -442,7 +442,7 @@ def test_the_cfs_pole_and_kappa_are_not_settled_by_this_probe():
 
     real, _, _ = doubling_reflection(12, 0.0)
     no_alpha, _, _ = doubling_reflection(12, 0.0, mutate_params=without('ALPHA_RELATIVE', 0.0))
-    no_kappa, _, _ = doubling_reflection(12, 0.0, mutate_params=without('KAPPA_MAX', 1.0))
+    no_kappa, _, _ = doubling_reflection(12, 0.0, kappa_max=1.0)
     assert no_alpha < real / 20, (no_alpha, real)      # measured 7.2e-7 against 9.2e-5
     assert no_kappa < real, (no_kappa, real)           # measured 6.7e-5 against 9.2e-5
     assert (cpml_module.ALPHA_RELATIVE, cpml_module.KAPPA_MAX) == (1.5, 2.0)

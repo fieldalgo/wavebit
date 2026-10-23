@@ -16,6 +16,7 @@ in [`../studies/`](../studies) with a [`../docs/`](../docs) write-up instead. Se
 
 | Entry | Question |
 |---|---|
+| `tests/fdtd/test_pml_kappa.py`, `tests/fdtd/test_fd_layer_return.py` | Does explicit PML coordinate stretch preserve default job/plan identity, independent kernel reflection, per-face/source isolation and backend material derivatives? |
 | `tests/fdtd/test_fd_acceptance.py`, `tests/fixtures/fdtd/acceptance.py` | Do fixed per-observable limits reject unstable, incomplete or inaccurate evidence without enlarging the budget? |
 | `tests/fdtd/check_metasurface_current.py` | Does current-source M1 p pass the unchanged C7 criteria before a separate regression row is exported? [Criteria](../docs/validation/fdtd/fd-planewave-acceptance.md#source-specific-m1-regression-qualification-2026-10-22). |
 | `tests/fdtd/check_planewave_acceptance.py` | Do all p-wave refinement runs satisfy the registered time, boundary and reference uncertainty caps? [Criteria](../docs/validation/fdtd/fd-planewave-acceptance.md). |

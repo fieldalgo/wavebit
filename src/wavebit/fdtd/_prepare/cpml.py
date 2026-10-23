@@ -118,7 +118,8 @@ MEASURED_STABILIZE = ((1e-8, 3e-3), (1e-6, 5e-3), (1e-4, 1e-2), (1e-3, 2e-2))
 def sufficient_stabilize(reflection):
     """The measured ``rho`` that suffices at ``reflection``, or ``None`` if none was measured.
 
-    The entry of :data:`MEASURED_STABILIZE` for the strongest tabulated target at least as
+    This table applies to ``kappa_max=2`` only. The entry of :data:`MEASURED_STABILIZE`
+    for the strongest tabulated target at least as
     weak as ``reflection`` -- the value that sufficed at a weaker target, since a weaker target
     needs more. **Sufficient on the sampled slab families, not a guarantee**: the loss does
     not make the layer passive (that would need ``sigma_loss >~ sigma / kappa**2`` on the normal
@@ -156,11 +157,12 @@ def face_eps_r(material, axis):
     return max(values)
 
 
-def profiles(cells, dx, dt, wavelength, eps_r, side, reflection):
+def profiles(cells, dx, dt, wavelength, eps_r, side, reflection, *, kappa_max=KAPPA_MAX):
     """``{'node': (b, a, ik), 'half': (b, a, ik)}`` for one face, as 1-D arrays of ``cells``.
 
     ``side`` is ``'-'`` or ``'+'``. ``ik`` is ``1/kappa``, which is what the kernel multiplies
-    by -- one division here instead of one per cell per step.
+    by -- one division here instead of one per cell per step. ``kappa_max`` is the face's
+    explicit peak stretch; the default retains the original profile.
     """
     thickness = cells * dx
     index = np.arange(cells, dtype=np.float64)
@@ -170,18 +172,19 @@ def profiles(cells, dx, dt, wavelength, eps_r, side, reflection):
             depth = (cells - index - offset) * dx
         else:
             depth = (index + offset) * dx
-        out[name] = _coefficients(depth, thickness, dt, wavelength, eps_r, reflection)
+        out[name] = _coefficients(depth, thickness, dt, wavelength, eps_r, reflection,
+                                  kappa_max=kappa_max)
     return out
 
 
-def _coefficients(depth, thickness, dt, wavelength, eps_r, reflection):
+def _coefficients(depth, thickness, dt, wavelength, eps_r, reflection, *, kappa_max=KAPPA_MAX):
     """``(b, a, 1/kappa)`` at the given depths; the ported formula, see the module docstring."""
     sigma_max = (-(ORDER + 1.0) * math.log(reflection)
                  / (2.0 * math.sqrt(eps_r) * thickness))
     alpha_max = ALPHA_RELATIVE * 2.0 * math.pi / wavelength
     f = np.clip(depth / thickness, 0.0, 1.0)
     sigma = sigma_max * f ** ORDER
-    kappa = 1.0 + (KAPPA_MAX - 1.0) * f ** ORDER
+    kappa = 1.0 + (kappa_max - 1.0) * f ** ORDER
     alpha = alpha_max * (1.0 - f)
     b = np.exp(-(sigma / kappa + alpha) * dt)
     denominator = kappa * (sigma + kappa * alpha)

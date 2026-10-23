@@ -591,7 +591,7 @@ def packet_layout(cells, angle, wavelength=1.0, cells_per_wavelength=20, courant
 
 
 def doubling_pair(cells=12, angle=0.0, layout=None, allow_thin=True, toward='+', stabilize=None,
-                  **kwargs):
+                  kappa_max=2.0, **kwargs):
     """``(test_scene, reference_scene, layout)``: the same packet, the PML at two distances.
 
     The doubling method in the form an initial-field engine can run it: two boxes whose cells
@@ -627,7 +627,7 @@ def doubling_pair(cells=12, angle=0.0, layout=None, allow_thin=True, toward='+',
     phi = packet.kx * dx
     x_face = fd.Periodic() if phi == 0.0 else fd.Bloch(phase=phi)
     pml = fd.PML(cells=cells, wavelength=layout['wavelength'], allow_thin=allow_thin,
-                 stabilize=stabilize)
+                 stabilize=stabilize, kappa_max=kappa_max)
     probe_z = sign * layout['probe_index'] * dx
     monitors = tuple(fd.Record(f'E{a}', at=(0.0, 0.0, probe_z), component=f'E{a}')
                      for a in 'xyz')
