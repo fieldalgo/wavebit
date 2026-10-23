@@ -72,7 +72,8 @@ SETTLE = 1.6
 # (a) The kernel's own steady state
 # ---------------------------------------------------------------------------------------------
 
-def _column(cells, rho, axis1d, kx, ky=0.0, eps=EPS, mu=None, match=None, interior=16):
+def _column(cells, rho, axis1d, kx, ky=0.0, eps=EPS, mu=None, match=None, interior=16,
+            kappa_max=2.0):
     """The 1 x 1 column along z: both z faces ``PML(cells, stabilize=rho)``, the medium given."""
     nz = 2 * cells + interior
     if axis1d:
@@ -80,7 +81,8 @@ def _column(cells, rho, axis1d, kx, ky=0.0, eps=EPS, mu=None, match=None, interi
     else:
         x = fd.Bloch(phase=kx * DX) if kx else fd.Periodic()
     y = fd.Bloch(phase=ky * DX) if ky else fd.Periodic()
-    pml = fd.PML(cells=cells, wavelength=1.0, stabilize=rho or None, background=match)
+    pml = fd.PML(cells=cells, wavelength=1.0, stabilize=rho or None, background=match,
+                 kappa_max=kappa_max)
     return fd.Scene(domain=fd.Domain(size=(DX, DX, nz * DX)),
                     boundaries=fd.Boundaries(x=x, y=y, z=pml),
                     resolution=fd.Resolution(dx=DX), run=fd.Run(steps=1),
@@ -88,16 +90,16 @@ def _column(cells, rho, axis1d, kx, ky=0.0, eps=EPS, mu=None, match=None, interi
 
 
 @functools.lru_cache(maxsize=None)
-def _matrix(cells, rho, axis1d, kx, ky=0.0, eps=EPS, mu=None, match=None):
-    scene, nz = _column(cells, rho, axis1d, kx, ky, eps, mu, match)
+def _matrix(cells, rho, axis1d, kx, ky=0.0, eps=EPS, mu=None, match=None, kappa_max=2.0):
+    scene, nz = _column(cells, rho, axis1d, kx, ky, eps, mu, match, kappa_max=kappa_max)
     M, dt = one_step_matrix(scene)
     return M, dt, nz
 
 
 def kernel_return(cells, rho, axis1d, kx, ky=0.0, eps=EPS, mu=None, match=None,
-                  wavelength=1.0):
+                  wavelength=1.0, kappa_max=2.0):
     """``({(side, 'TE'|'TM'): r}, dt)``: the kernel's steady-state return at each z face."""
-    M, dt, nz = _matrix(cells, rho, axis1d, kx, ky, eps, mu, match)
+    M, dt, nz = _matrix(cells, rho, axis1d, kx, ky, eps, mu, match, kappa_max)
     omega = 2 * math.pi / wavelength
     source = nz // 2
     f = np.zeros(M.shape[0], complex)
@@ -130,11 +132,11 @@ def kernel_return(cells, rho, axis1d, kx, ky=0.0, eps=EPS, mu=None, match=None,
 
 
 def model_return(side, cells, rho, dt, kx, axis1d, ky=0.0, eps=EPS, mu=None, match=None,
-                 wavelength=1.0):
+                 wavelength=1.0, kappa_max=2.0):
     K = math.hypot(grid_k(kx, DX, axis1d), grid_k(ky, DX))
     eps_r = eps * (1.0 if mu is None else mu) if match is None else match
     te, tm = layer_return(cells, DX, dt, 1.0, eps_r, side, 1e-8, rho, wavelength, K, eps=eps,
-                          mu=1.0 if mu is None else mu)
+                          mu=1.0 if mu is None else mu, kappa_max=kappa_max)
     return {'TE': te, 'TM': tm}
 
 
@@ -293,12 +295,13 @@ def test_a_settled_probe_lands_on_the_model(cells, angle, rho):
 # (c) The continuum limit of the pure stretch
 # ---------------------------------------------------------------------------------------------
 
-def _thick(reflection, cos, cpw, thickness=1.2):
+def _thick(reflection, cos, cpw, thickness=1.2, kappa_max=2.0):
     """The pure stretch, ``thickness`` wavelengths deep, at ``cpw`` cells per wavelength."""
     dx = 1.0 / cpw
     K = grid_k(2 * math.pi * math.sqrt(1 - cos ** 2), dx, axis1d=True)
     return max(abs(r) for r in layer_return(round(thickness * cpw), dx, 0.5 * dx / math.sqrt(3),
-                                            1.0, 1.0, '+', reflection, 0.0, 1.0, K))
+                                            1.0, 1.0, '+', reflection, 0.0, 1.0, K,
+                                            kappa_max=kappa_max))
 
 
 CPW = (20, 40, 80, 160, 320, 640)
@@ -306,11 +309,16 @@ CPW = (20, 40, 80, 160, 320, 640)
 
 @pytest.mark.parametrize('reflection, cos', [(1e-8, 0.26), (1e-12, 0.26), (1e-16, 0.26),
                                              (1e-12, 0.3), (1e-8, 0.5)])
-def test_the_pure_stretch_approaches_the_continuum_from_below(reflection, cos):
+@pytest.mark.parametrize('kappa_max', [2., 8.])
+def test_the_pure_stretch_approaches_the_continuum_from_below(reflection, cos, kappa_max):
     """Rising, below ``R_c``, first order, and within 5% of it at 640 cells per wavelength
     (measured 0.955 .. 0.989)."""
     R_c = grazing.continuum_return(reflection, cos)
-    got = [_thick(reflection, cos, cpw) for cpw in CPW]
+    # A larger real stretch shortens the wavelength inside the layer. For kappa=8,
+    # the 80->160 ratio at cos=.5 is .365, still outside the original asymptotic
+    # first-order criterion. Refine the grid, keeping the criterion and depth fixed.
+    cpws = CPW if kappa_max == 2. else tuple(2 * n for n in CPW)
+    got = [_thick(reflection, cos, cpw, kappa_max=kappa_max) for cpw in cpws]
     assert all(a < b for a, b in zip(got, got[1:])), got
     assert got[-1] < R_c and got[-1] > 0.94 * R_c, (got, R_c)
     gaps = [R_c - r for r in got]
@@ -429,3 +437,13 @@ def test_an_order_past_the_grids_nyquist_along_the_axis_is_refused():
     # normal order is far inside: dx^2 n^2 W^2 <= (2 pi / 8)^2 = 0.62.
     r = layer_return(12, dx, dt, 1.0, 1.0, '-', 1e-8, 3e-3, 8 * dx, np.array([0.0, 1.0]))
     assert np.all(np.isfinite(r[0])) and np.all(np.isfinite(r[1]))
+
+
+@pytest.mark.parametrize('kappa_max', [1., 8.])
+@pytest.mark.parametrize('angle, rho, eps, match', [
+    (0, 0., 1., None), (60, 0., 2.25, None), (30, .003, 2.25, 1.),
+])
+def test_explicit_stretch_matches_independent_kernel_return(kappa_max, angle, rho, eps, match):
+    kx = _kx(angle, eps)
+    got, dt = kernel_return(12, rho, False, kx, eps=eps, match=match, kappa_max=kappa_max)
+    _check(got, dt, 12, rho, kx, False, eps=eps, match=match, kappa_max=kappa_max)

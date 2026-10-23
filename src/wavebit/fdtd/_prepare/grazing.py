@@ -345,7 +345,7 @@ def face_return(scene, plan, name, face, n, wavelength, design, K):
     if eps_r is None:
         return None
     return layer_return(face.cells, plan.dx, plan.dt, design, eps_r, name[1], face.reflection,
-                        _stabilize(face), wavelength, K, eps=n * n)
+                        _stabilize(face), wavelength, K, eps=n * n, kappa_max=face.kappa_max)
 
 
 def judge_returns(r, r_pure, pols):
@@ -891,6 +891,8 @@ def _spell_face(face, cells, stabilize):
         parts.append(f'background={face.background!r}')
     if face.allow_thin:
         parts.append('allow_thin=True')
+    if face.kappa_max != 2.0:
+        parts.append(f'kappa_max={face.kappa_max:g}')
     return 'PML(' + ', '.join(parts) + ')'
 
 
@@ -916,7 +918,8 @@ def _lossy_message(row, pw, what, scene, plan, others):
     c, R, rho = row['cos'], row['reflection'], row['stabilize']
     face = scene.boundaries.face(row['face'])
     governed = _governed(scene, row['face'])
-    description = (f"PML(cells={row['cells']}, reflection={R:g}, stabilizing_loss={rho:g})"
+    stretch = f", kappa_max={face.kappa_max:g}" if face.kappa_max != 2.0 else ""
+    description = (f"PML(cells={row['cells']}, reflection={R:g}, stabilizing_loss={rho:g}{stretch})"
                    if is_public() else _spell_face(face, row['cells'], f'stabilize={rho:g}'))
     head = (f"Stabilized face refused: {what} at wavelength {row['wavelength']:g} has exit cos "
             f"theta = {c:.3f}. That face is "
@@ -968,7 +971,10 @@ def _lossy_message(row, pw, what, scene, plan, others):
         else:
             text = f'{where}{_spell_face(face, at, "stabilize=None")}{run}, the pure stretch'
         need = sufficient_stabilize(R)
-        if need is None:
+        if face.kappa_max != 2.0:
+            text += (' -- the stabilizing-loss table was measured at kappa_max=2 only; '
+                     'check physical decay and growth for this stretch')
+        elif need is None:
             text += (f' -- and reflection={R:g} is a weaker target than any the loss was '
                      f'measured at (src/wavebit/fdtd/_prepare/cpml.py::MEASURED_STABILIZE)')
         elif fix['rho'] < need * (1.0 - 1e-12):

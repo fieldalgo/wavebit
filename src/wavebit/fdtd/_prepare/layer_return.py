@@ -102,7 +102,7 @@ def grid_k(k, dx, axis1d=False):
 
 
 def layer_return(cells, dx, dt, design_wavelength, eps_r, side, reflection, rho, wavelength,
-                 K, eps=1.0, mu=1.0):
+                 K, eps=1.0, mu=1.0, *, kappa_max=2.0):
     """``(r_TE, r_TM)``: the complex return of one PML face of this kernel.
 
     ``cells``, ``design_wavelength`` (the face's CFS pole is set from it), ``eps_r`` (what the
@@ -122,7 +122,8 @@ def layer_return(cells, dx, dt, design_wavelength, eps_r, side, reflection, rho,
     docstring says why the grazing rule never asks for one).
     """
     omega = 2.0 * math.pi / wavelength
-    table = profiles(cells, dx, dt, design_wavelength, eps_r, side, reflection)
+    table = profiles(cells, dx, dt, design_wavelength, eps_r, side, reflection,
+                     kappa_max=kappa_max)
     delay = cmath.exp(1j * omega * dt)
     S = {}
     for name in ('node', 'half'):

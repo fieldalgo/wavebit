@@ -2512,6 +2512,12 @@ def _stabilize_notes(scene, plan):
         if not face.stabilize:
             continue                    # the pure stretch: the decay warning speaks for it
         reflection = scene.boundaries.face(face.name).reflection
+        if face.kappa_max != 2.0:
+            out.append((PMLStabilityWarning,
+                        f'PML on {face.name!r}: kappa_max={face.kappa_max:g}; the measured '
+                        f'stabilizing-loss table applies to kappa_max=2 only. Check late-time '
+                        f'growth and physical decay while varying thickness and clearance'))
+            continue
         need = sufficient_stabilize(reflection)
         if need is None:
             out.append((PMLStabilityWarning,

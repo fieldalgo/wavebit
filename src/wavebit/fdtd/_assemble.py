@@ -769,6 +769,11 @@ def _growth_cause(scene, plan):
 
 def _pml_cause(scene, plan):
     """The PML faces' part of :func:`_growth_cause`, or ``None`` with no PML face."""
+    if any(face.kappa_max != 2.0 for face in plan.cpml):
+        return ('A non-default PML coordinate stretch changes the finite termination. '
+                'The stabilizing-loss measurements apply to kappa_max=2 only. Check layer '
+                'thickness, physical clearance and late-time growth against an independent '
+                'decay reference; added stabilizing_loss can also change the physical decay.')
     faces = [(face.name, face.stabilize) for face in plan.cpml]
     pure = [name for name, rho in faces if not rho]
     if pure:

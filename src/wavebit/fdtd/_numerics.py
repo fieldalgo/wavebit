@@ -1,6 +1,7 @@
 """Grid, integration duration, and absorbing implementation choices."""
+import math
 from dataclasses import field
-from wavebit._common.declarations import spec
+from wavebit._common.declarations import spec, static_float
 from wavebit._common.execution import frozen_mapping
 from wavebit.errors import ValidationError
 
@@ -44,6 +45,9 @@ class PML:
     ``reference_media={'z-': Material(...)}`` fixes the stretch profile while a continued
     substrate's physical material varies. It does not replace the substrate material. Omitted
     faces follow their physical boundary medium.
+    ``kappa_max`` is the peak real coordinate stretch (finite, static, >= 1; default 2).
+    Changing it changes the finite termination and discrete reflection. Converge layer
+    thickness, physical clearance and run duration together; it is not a stability guarantee.
     """
     cells: int = 12
     wavelength: object = None
@@ -51,8 +55,18 @@ class PML:
     allow_thin: bool = False
     stabilizing_loss: object = None
     reference_media: object = field(default_factory=dict)
+    kappa_max: float = 2.0
+    _FIELDS_OMITTED_AT_DEFAULT = ('kappa_max',)
 
     def __post_init__(self):
+        try:
+            kappa = static_float('PML', 'kappa_max', self.kappa_max)
+            if not (math.isfinite(kappa) and kappa >= 1.0):
+                raise ValueError('PML(kappa_max=...): a finite real number >= 1 is required.')
+        except ValueError as exc:
+            raise ValidationError(str(exc), code='numerics.pml.kappa_max',
+                                  path='numerics.absorber.kappa_max') from exc
+        object.__setattr__(self, 'kappa_max', kappa)
         object.__setattr__(self, 'reference_media', frozen_mapping(self.reference_media))
 
 

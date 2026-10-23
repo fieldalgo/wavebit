@@ -173,7 +173,9 @@ def _encode(v):
                  if not (isinstance(v, Plan) and f.name in ('junctions', 'shape_ranges', 'decay')
                          and not getattr(v, f.name))
                  and not (f.metadata.get('skeleton') == 'omit-none'
-                          and getattr(v, f.name) is None)]]
+                          and getattr(v, f.name) is None)
+                 and not (f.metadata.get('skeleton') == 'omit-default'
+                          and getattr(v, f.name) == f.default)]]
     if isinstance(v, (tuple, list)):
         return ['tuple', [_encode(x) for x in v]]
     if isinstance(v, dict):
@@ -381,6 +383,7 @@ def _absorbing(scene, grid):
             wavelengths.append((name, checks.face_wavelength(face, scene, name)))
             rho = DEFAULT_STABILIZE if face.stabilize is None else face.stabilize
             fields = dict(name=name, axis=axis, side=name[1], cells=face.cells,
+                          kappa_max=face.kappa_max,
                           region=Region.face(axis, name[1], face.cells, grid.n))
             cpml.append(StabilizedFace(stabilize=float(rho), **fields) if rho > 0
                         else CpmlFace(**fields))
