@@ -79,6 +79,7 @@ from wavebit.materials._time_domain import Material
 from wavebit.materials._time_domain import concrete
 from wavebit.materials._time_domain import eps_at
 from wavebit.fdtd._public_names import public_description, public_name
+from wavebit.fdtd._spelling import is_public
 
 __all__ = ['face_wavelength', 'check_faces', 'check_overlaps', 'check_absorbing_layers',
            'check_stability', 'notes', 'cfl_bound', 'check_one_cell_bloch', 'cfl_axis_sum',
@@ -1822,14 +1823,39 @@ def check_absorbing_layers(scene, plan):
                 f'interface inside one is a mirror the layer cannot undo, because the '
                 f'reflection leaves the way it came and only the cells in front of the '
                 f'interface are in its way. (In a PML the stretched coordinate is complex '
-                f'there as well, so nothing matches it at all.) Move the interface out of '
-                f'the layer, or run the structure all the way through it -- which today '
-                f'the cell-snapped fdtd.SnappedBox or fdtd.SnappedSlab and an unturned fd.Box '
-                f'can, reaching past the face. An fd.Cylinder or fd.Prism along {name[0]!r} is refused in a '
-                f'layer by its cross terms; running one through an absorbing layer is not supported '
-                f'yet, and no date is set. A sphere cannot run through one.')
+                f'there as well, so nothing matches it at all.) '
+                + (_public_layer_remedy(name) if is_public() else
+                   f'Move the interface out of '
+                   f'the layer, or run the structure all the way through it -- which today '
+                   f'the cell-snapped fdtd.SnappedBox or fdtd.SnappedSlab and an unturned fd.Box '
+                   f'can, reaching past the face. An fd.Cylinder or fd.Prism along {name[0]!r} is refused in a '
+                   f'layer by its cross terms; running one through an absorbing layer is not supported '
+                   f'yet, and no date is set. A sphere cannot run through one.'))
         if kind == 'PML':
             _refuse_lossy_in_layer(_background(scene), name, 'Scene(background=)')
+
+
+def _public_layer_remedy(name):
+    """The way out of :func:`check_absorbing_layers`' refusal for a public ``wavebit.fdtd`` caller.
+
+    The public lowering (``_lower_public``) puts an ``Open()`` face's layer outside the physical
+    domain and refuses a finite body that touches the face, so a public body meets this refusal
+    only when it ends before the face and the cells its surface is smoothed over cross into the
+    layer. It also lets less run through the layer than the engine does: a fixed, unturned
+    ``Box`` that reaches the face and whose ``Structure`` declares ``continuation``
+    (``_continue_box``), and a ``SnappedSlab`` along the
+    face's axis with no ``Open()`` face on another axis. A ``SnappedBox`` cannot continue.
+    """
+    return (f'The body ends before the Open face; what reaches the layer is its smoothed edge, '
+            f'the cells over which its surface is averaged. Move its end farther from the face, '
+            f'until fdtd.check no longer refuses it. Only a uniform medium can run through the '
+            f'layer: a fixed, unturned fdtd.Box that reaches the face, whose fdtd.Structure '
+            f'declares continuation=({name!r},), and that reaches more than one cell past both '
+            f'transverse faces, which must not be Open (a substrate), or an fdtd.SnappedSlab({name[0]}=...) that reaches the face when no face '
+            f'on another axis is Open. Nothing else can: not an fdtd.SnappedBox, a turned '
+            f'fdtd.Box, an fdtd.Cylinder or fdtd.Prism, nor any body narrower than the '
+            f'cross-section, such as a waveguide core. Running those into an absorbing layer is '
+            f'not supported yet, and no date is set.')
 
 
 def _background(scene):

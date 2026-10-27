@@ -188,6 +188,71 @@ def test_a_compat_caller_still_reads_the_compat_spelling():
     assert spoken('fd.plan(scene)') == 'fd.plan(scene)'
 
 
+def near_the_open_face(shape, continuation=()):
+    """One glass body in a periodic column whose z faces are Open, at dx = 0.05 (z+ at 0.5)."""
+    return fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(.8, .8, 1.)),
+        boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open()),
+        structures=(fdtd.Structure('glass', shape=shape, material=Material(epsilon=2.25),
+                                   continuation=continuation),)),
+        sources=(fdtd.CurrentDipole('d', center=(0., 0., -.2), component='Ex',
+                 pulse=fdtd.GaussianPulse(wavelength=1., frequency_sigma_hz=4e13)),),
+        outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('e', at=(0., 0., -.25), component='Ex'),)))
+
+
+LAYER = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05), duration=fdtd.Duration(steps=20),
+                      absorber=fdtd.PML(cells=12))
+
+
+def _ending(cells, kind='Box'):
+    """A body 0.3 tall whose top is ``cells`` cells below the z+ face."""
+    top = .5 - cells * .05
+    if kind == 'Cylinder':
+        return fdtd.Cylinder(radius=.1, height=.3, center=(0., 0., top - .15))
+    return fdtd.Box(size=(.2, .2, .3), center=(0., 0., top - .15))
+
+
+@pytest.mark.parametrize('kind', ['Box', 'Cylinder'])
+def test_a_smoothed_edge_in_an_open_face_layer_is_offered_only_what_the_public_route_admits(kind):
+    """A body ending half a cell before an Open face reaches the layer with its smoothed edge.
+
+    The engine's remedy for it -- run the structure through, as a cell-snapped SnappedBox or
+    SnappedSlab or an unturned Box can -- is true where the engine's own scene puts the layer
+    inside the domain. A public caller's layer is padded outside it, and the public lowering
+    lets only a Box that declares continuation and a SnappedSlab through; a SnappedBox core was
+    offered and is refused. Each way out the public message names passes, and what it rules out
+    is refused.
+    """
+    report = fdtd.check(near_the_open_face(_ending(.5, kind)), numerics=LAYER)
+    (issue,) = report.issues
+    message = issue.message
+    assert "ends inside the PML on 'z+'" in message
+    assert 'The body ends before the Open face' in message
+    assert "whose fdtd.Structure declares continuation=('z+',)" in message
+    assert 'fdtd.Box that reaches the face' in message and 'fdtd.SnappedSlab(z=...)' in message
+    assert 'not supported yet, and no date is set' in message
+    assert 'reaching past the face' not in message and 'cell-snapped fdtd.SnappedBox or' not in message
+    assert not COMPAT.search(message), message
+    with pytest.raises(ValidationError, match='The body ends before the Open face'):
+        fdtd.prepare(near_the_open_face(_ending(.5, kind)), numerics=LAYER)
+    # The ways out it names.
+    substrate = fdtd.Box(size=(1., 1., .4), center=(0., 0., .4))
+    for way_out, continuation in ((_ending(3, kind), ()), (substrate, ('z+',)),
+                                  (fdtd.SnappedSlab(z=(.2, .5)), ())):
+        assert fdtd.check(near_the_open_face(way_out, continuation), numerics=LAYER).ok, way_out
+    # What it rules out: a SnappedBox core, and a Box narrower than the cross-section.
+    for ruled_out, continuation in ((fdtd.SnappedBox(size=(.2, .2, .3), center=(0., 0., .35)), ()),
+                                    (fdtd.Box(size=(.2, .2, .4), center=(0., 0., .4)), ('z+',))):
+        codes = {i.code for i in fdtd.check(near_the_open_face(ruled_out, continuation),
+                                            numerics=LAYER).issues}
+        assert codes == {'fdtd.padding_continuation'}, (ruled_out, codes)
+    # The engine's own scene keeps the engine's remedy.
+    scene, _ = lower_problem(near_the_open_face(_ending(.5, kind)), LAYER)
+    with pytest.raises(ValueError, match='reaching past the face') as engine:
+        fd.plan(scene)
+    assert 'The body ends before the Open face' not in str(engine.value)
+
+
 def test_a_planning_warning_is_spelled_for_the_public_caller():
     """A Region past a PEC wall warns; the remedy is an Open face, not a compat absorber.
 
