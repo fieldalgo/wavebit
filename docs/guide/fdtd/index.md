@@ -2,6 +2,9 @@
 
 Start with the [current FDTD problem API](general-fdtd.md), [how the solver models a problem](model.md) and the [runnable pulse example](../../getting-started/fdtd.md). The physical native-grid and periodic-stack guides cover the other formulations. Historical research guides retain their measured scope and pinned source versions.
 
+What the general engine's smoothed geometry supports today, and what stage 4 left open, is in the
+[stage 4 report](../../validation/fdtd/fd-stage4-report.md).
+
 - [Physical native Yee grids](native-grids.md)
 - [Physical periodic-stack problems](periodic-problems.md)
 - [Automatic stopping and graded absorbing padding](stopping-and-absorbers.md)
