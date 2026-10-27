@@ -186,10 +186,38 @@ M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). The default, `'fourier'`, is unchang
   continuous across walls normal to y, so at each sample its series is summed over the y orders
   first, then Li's inverse rule along the raster row under the sample turns its x coefficients
   into those of `D_x`, which is summed along x and divided by `eps`. `E_y` is the same along the
-  column under the sample. One consequence is worth knowing: across a wall normal to y, `E_x` is
-  read off two different rows, so at a finite truncation it steps there by a few percent where
-  the default's `E_x` is smooth. The step shrinks as the truncation grows; the jump the rule
-  removes, `eps*E_x` across a wall normal to x, does not shrink under the default.
+  column under the sample.
+- **What it trades on a 2D cell.** Each rule is right on one kind of wall and wrong on the
+  other, and neither error goes away as the truncation grows. `E_x` meets two kinds of wall:
+  across a wall normal to x it is the normal component and must jump (`eps*E_x` is what stays
+  continuous), and across a wall normal to y it is tangential and must not jump.
+  - The default is continuous everywhere, so it is right across walls normal to y and wrong
+    across walls normal to x: there `eps*E_x` mismatches by the full contrast (75 to 92% of the
+    larger side in the three test cells below), and the sum rings beside the wall.
+  - The continuity rule makes `eps*E_x` continuous across walls normal to x, to 1e-7. But
+    across a wall normal to y it reads the two sides off two different rows, each row's
+    operator built for that row's walls alone, so there `E_x` steps where it should be
+    continuous.
+  - Measured on three cells — a 3.5-index square, a 2.5-index checkerboard with four-way
+    corners, and a lossy L-shape at oblique incidence — at orders 4, 8, 12 and 16, each jump
+    relative to the larger side, at the middle of each pixel edge:
+    - The step is 5 to 43% of the local field (median over walls) and up to 75% at the worst
+      wall, beside corners.
+    - It shows no trend toward zero over that range. The default's mismatch across the other
+      walls does not shrink either.
+    - A higher order does not remove the step. It is the same kind of error as the one the
+      rule removes, moved to the other walls.
+  - More than one pixel away from any wall the two rules agree and converge together. There
+    the continuity rule is somewhat more accurate: RMS error 0.7 to 2.0% of the field at
+    order 16, against 1.5 to 2.3% for the default.
+  - The choice therefore depends on what you read and where. Use `'continuity'` for anything
+    built from the normal field at sidewalls: `D` or `eps*E_n` across a wall, the field just
+    inside a wall normal to the component, or absorbed power beside a sidewall. Keep the
+    default where a component runs along walls normal to the other axis and you need it
+    continuous there, as in a smooth field map or a tangential boundary value. Away from walls
+    either rule will do. A reconstruction right on both kinds of wall would split `E` at each
+    point into the part normal to the local wall, read from `D`, and the part along it, read
+    from `E`. Wavebit does not have one yet.
 - **Why use it.** It is RETICOLO's `res3` rule (`parm.res1.champ=1`): with it the RETICOLO field
   goldens agree to 1e-13 on every slot of the 1D and conical cases, `E_x` included, where the
   default differs by 7e-2 to 1e-1, and to 4e-11 on every slot of a two-layer crossed grating,
