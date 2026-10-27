@@ -170,6 +170,13 @@ class NumpyTimeLoop:
         return state, self.xp.stack(samples)
 
 
+def _traced(jax, xp, reference):
+    """Whether a JAX transform is tracing this call: a traced input, or a jit trace staging
+    every new array (``jnp.zeros`` is a tracer only there; checked on jax 0.11.0 and 0.12.0)."""
+    return (any(isinstance(v, jax.core.Tracer) for v in jax.tree.leaves(reference))
+            or isinstance(xp.zeros(()), jax.core.Tracer))
+
+
 class JaxTimeLoop(NumpyTimeLoop):
     def __init__(self, device=None, reference=None):
         import jax
@@ -182,8 +189,16 @@ class JaxTimeLoop(NumpyTimeLoop):
         # `import jax` (the shared body only acts on a loaded JAX) and before any array is
         # built. Not at module level: `import wavebit` already imports this module, and four
         # committed assertions pin that it pulls in no JAX.
-        lift_jax_x64(required=True)
         import jax.numpy as xp
+        if not jax.config.jax_enable_x64 and _traced(jax, xp, reference):
+            # Too late to lift: the caller's trace already holds its inputs at 32 bits, so the
+            # solve would run on rounded values, and a jitted caller's next call fails on a
+            # 32-/64-bit input mismatch. Same refusal as the public API's.
+            raise RuntimeError(
+                'JAX double precision requires jax.config.update("jax_enable_x64", True) '
+                'before creating arrays; this FDTD solve was reached inside a JAX transform '
+                '(jit, grad or vmap) while it was off, so its inputs are already 32-bit.')
+        lift_jax_x64(required=True)
         if device in (0, 1):
             device = 'cpu' if device == 0 else 'gpu'
         if isinstance(device, str):

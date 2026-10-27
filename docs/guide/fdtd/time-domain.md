@@ -570,7 +570,10 @@ are static. Materials, source, pulse and initial fields remain differentiable.
 Choose a fixed dt valid throughout optimization: concrete invalid materials or
 CFL violations raise; traced coefficients expose `stable` in the result and must
 be constrained by the caller. An optimizer must preserve positive epsilon/mu and
-nonnegative conductivity. Enable JAX x64 before array creation for precision studies.
+nonnegative conductivity. Enable JAX x64 (`jax.config.update('jax_enable_x64', True)`)
+before creating arrays. An eager solve switches it on itself, but a solve reached inside
+`jax.jit`, `jax.grad` or `jax.vmap` while it is off raises `RuntimeError`: the transform has
+already traced its inputs at 32 bits.
 
 `device='cpu'` or `device='gpu'` selects a device; Torch also accepts `'cuda'`
 and device objects. Torch inherits a tensor epsilon's device when device is
