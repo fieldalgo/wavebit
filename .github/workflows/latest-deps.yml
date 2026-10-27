@@ -23,13 +23,13 @@
 #   - any job failed -> open, or comment on, one issue titled CANARY_TITLE below; required CI
 #     is unaffected, so the issue is the alarm. It is closed by the next run that passes.
 #   - on Mondays (and on a manual run with `refresh`), the recorded versions are compared with
-#     the ones installed here; if they differ, a new draft pull request from main replaces
-#     `.github/constraints/` (and supersedes an older one). Draft, so it runs no CI until
-#     someone has read it and marked it ready; then the full required CI runs against the new
-#     versions. If that fails, keep the failing distribution at its previous version and land
-#     the rest.
-# Creating that pull request needs the repository setting "Allow GitHub Actions to create and
-# approve pull requests". docs/development/verification.md has the policy.
+#     the ones installed here; if they differ, a branch from main replacing `.github/constraints/`
+#     is pushed, and one issue titled REFRESH_TITLE below is opened or updated with a link that
+#     opens its pull request. A person opens it -- a pull request this workflow's token opened
+#     would run no CI, and the repository does not let Actions open them -- and its required
+#     CI is the full validation of the new versions. If that fails, close it: the recorded
+#     versions stay, and the next refresh offers newer ones. The issue closes itself once main
+#     records the newest versions. docs/development/verification.md has the policy.
 name: latest dependencies
 
 on:
@@ -40,7 +40,7 @@ on:
   workflow_dispatch:
     inputs:
       refresh:
-        description: 'Also open or update the pull request that records these versions'
+        description: 'Also push a branch with these versions and link it in the refresh issue'
         type: boolean
         default: false
   # A change to this workflow or to the tool runs the checks once on its own pull request
@@ -62,6 +62,7 @@ permissions:
 
 env:
   CANARY_TITLE: Latest dependencies canary is failing
+  REFRESH_TITLE: Newer dependency versions are ready to record
   REFRESH_PREFIX: deps/ci-constraints-
 
 jobs:
@@ -273,22 +274,20 @@ jobs:
             gh issue close "$existing" --comment "The newest dependency releases pass again: $RESULTS. Run: $RUN_URL."
           fi
 
-  # Always a new draft pull request from main, never a push onto an open one: a push made with
-  # this workflow's token starts no workflow, so a commit added to a pull request already
-  # marked ready would sit there with no required checks; and a branch cut weeks ago would
-  # show its diff against itself rather than against main. An open refresh pull request that
-  # already holds exactly these versions is left alone; one that does not is closed as
-  # superseded.
+  # Always a new branch from main, never a push onto an older one, so its diff is against main.
+  # Older refresh branches are deleted, and a pull request someone opened from one that records
+  # other versions is closed as superseded; one that records exactly these is left alone.
   refresh:
     needs: [tests, docs, distribution]
     if: >-
       ${{ always() && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'skipped') &&
           ((github.event_name == 'schedule' && github.event.schedule == '41 19 * * 1') ||
            (github.event_name == 'workflow_dispatch' && inputs.refresh)) }}
-    name: open the pull request that records these versions
+    name: push the branch that records these versions
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v7
@@ -304,10 +303,11 @@ jobs:
           path: ${{ runner.temp }}/constraints
           merge-multiple: true
 
-      - name: Open a draft pull request with the new versions
+      - name: Push a branch with the new versions and link it in the refresh issue
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          SERVER: ${{ github.server_url }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           RESULTS: "tests: ${{ needs.tests.result }}, docs: ${{ needs.docs.result }}, distribution: ${{ needs.distribution.result }}"
         run: |
@@ -324,17 +324,23 @@ jobs:
               cmp -s <(grep -v '^#' "$new/$set.txt") <(git show "$1:.github/constraints/$set.txt" | grep -v '^#') || return 1
             done
           }
-          if same_as HEAD; then
-            echo "main already records the newest versions; nothing to do."
-            exit 0
-          fi
+          issue=$(gh issue list --state open --search "\"$REFRESH_TITLE\" in:title" --json number,title \
+            --jq "[.[] | select(.title == env.REFRESH_TITLE)][0].number // empty")
+          old_branches=$(git branch -r --format='%(refname:lstrip=3)' | grep "^$REFRESH_PREFIX" || true)
           pr=$(gh pr list --state open --json number,headRefName \
             --jq "[.[] | select(.headRefName | startswith(env.REFRESH_PREFIX))][0] // empty | \"\(.number) \(.headRefName)\"")
+          if same_as HEAD; then
+            echo "main already records the newest versions; nothing to do."
+            [ -z "$issue" ] || gh issue close "$issue" --comment "main records the newest versions. Run: $RUN_URL."
+            for branch in $old_branches; do git push origin --delete "$branch"; done
+            exit 0
+          fi
           if [ -n "$pr" ] && same_as "origin/${pr#* }"; then
             echo "Pull request #${pr%% *} already records these versions; nothing to do."
             exit 0
           fi
-          git checkout -b "$REFRESH_PREFIX$(date -u +%Y-%m-%d)-$GITHUB_RUN_ID"
+          branch="$REFRESH_PREFIX$(date -u +%Y-%m-%d)-$GITHUB_RUN_ID"
+          git checkout -b "$branch"
           cp "$new"/tests.txt "$new"/docs.txt "$new"/distribution.txt .github/constraints/
           summary=$(for set in tests docs distribution; do git diff --unified=0 -- ".github/constraints/$set.txt" \
             | grep -E '^[-+][a-z0-9]' | sed "s/^/$set: /" || true; done)
@@ -343,13 +349,19 @@ jobs:
           git add .github/constraints
           git commit -m "ci: record the newest dependency versions" -m "Recorded by $RUN_URL ($RESULTS)."
           git push origin HEAD
-          body=$(printf '%s\n\n%s\n\n```diff\n%s\n```\n\n%s' \
-            "The newest releases as installed by $RUN_URL ($RESULTS)." \
-            "Changes to \`.github/constraints/\` against main:" "$summary" \
-            "Before marking this ready: read the changes, run the checks the changed distributions touch, and add any newly installed distribution to the license inventory. Ready runs the full required CI on these versions. If it fails, keep the failing distribution at its previous version and say why here; never loosen a tolerance or regenerate a golden to pass.")
-          url=$(gh pr create --draft --base main --title "ci: record the newest dependency versions" --body "$body") \
-            || { echo "::error::could not open the pull request; enable Settings -> Actions -> General -> Allow GitHub Actions to create and approve pull requests"; exit 1; }
-          echo "Opened $url"
           if [ -n "$pr" ]; then
-            gh pr close "${pr%% *}" --delete-branch --comment "Superseded by $url, which records newer versions."
+            gh pr close "${pr%% *}" --comment "Superseded: newer versions are on $branch; see the issue \"$REFRESH_TITLE\"."
           fi
+          for old in $old_branches; do git push origin --delete "$old" || true; done
+          link="$SERVER/$GH_REPO/compare/main...$branch?expand=1&title=ci%3A+record+the+newest+dependency+versions"
+          body=$(printf '%s\n\n%s\n\n```diff\n%s\n```\n\n%s\n\n%s' \
+            "Newer releases than \`.github/constraints/\` records, installed by $RUN_URL ($RESULTS)." \
+            "Changes against main:" "$summary" \
+            "**To record them, [open the pull request]($link).** Its required CI then runs the full validation on these versions. Merge it when it is green (or enable auto-merge). If it is red, close it: the recorded versions stay, and the next refresh offers newer ones. Never loosen a tolerance or regenerate a golden to make a version pass; a newly installed distribution needs its license review in that pull request." \
+            "This issue is updated by each refresh and closes itself once main records the newest versions.")
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "$body"
+          else
+            gh issue create --title "$REFRESH_TITLE" --body "$body"
+          fi
+          printf '%s\n' "$body" >> "$GITHUB_STEP_SUMMARY"
