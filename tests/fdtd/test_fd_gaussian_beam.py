@@ -339,7 +339,7 @@ def test_g6_backends_agree(runs):
 # G7: derivatives
 # ---------------------------------------------------------------------------------------------
 
-G7_POINT = {'amplitude': 1.3, 'phase': .4, 'delay': 2e-15, 'scatterer': 3.0}
+G7_POINT = {'amplitude': 1.3, 'phase': .4, 'delay': 2e-15, 'scatterer': 2.0}
 G7_STEPS = {'amplitude': 1e-3, 'phase': 1e-3, 'delay': 1e-17, 'scatterer': 3e-4}
 
 
