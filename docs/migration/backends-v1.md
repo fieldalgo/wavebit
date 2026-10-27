@@ -62,7 +62,7 @@ LAPACK on the host CPU, MAGMA on the GPU and cuSOLVER on the GPU, automatically 
 version, by whether left eigenvectors were asked for (this solver never asks) and by
 `jax_use_magma`. PyTorch still documents that a CUDA input to `torch.linalg.eig` synchronizes
 that device with the CPU, but 2.10 added a native `cusolverDnXgeev` path on CUDA 12.8 or newer —
-both hold for every version this project supports (`jax>=0.11`, `torch>=2.13`). **None of those
+both hold for every version this project supports (`jax>=0.11`, `torch>=2.14`). **None of those
 paths has been run here** — nothing in this repository has been measured on a GPU — so read that
 column as "the framework supports it", not as a performance claim. TPU is out entirely, because
 a 32-bit eigendecomposition has no route there at all.
@@ -153,5 +153,5 @@ nothing — and it would buy little anyway, since the solve is almost entirely L
 compiler forwards untouched. Until 2026-10 nothing kept wavebit out of the graph, and default
 mode returned wrong values and gradients with no error: Inductor (torch 2.13) miscompiled the
 complex identity the modal exponential is built on. `fullgraph=True`, `torch.export` and
-`torch.jit.trace` are refused by name. On torch below 2.13 compiling does not run at all, which
-is why that is the floor. See [`../torch-compile.md`](../development/torch-compile.md).
+`torch.jit.trace` are refused by name. On torch below 2.13 compiling does not run at all, and
+2.14 fixed that miscompile, which is why 2.14 is the floor. See [`../torch-compile.md`](../development/torch-compile.md).
