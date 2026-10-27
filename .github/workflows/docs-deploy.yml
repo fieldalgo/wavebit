@@ -70,8 +70,10 @@ jobs:
       # autodoc imports the package to read its docstrings, so the site cannot be built from
       # the markdown alone. NumPy only -- nothing on the public surface needs an optional
       # backend to be introspected.
+      # At the versions `tests.yml`'s `docs` job checked (`.github/constraints/docs.txt`), so a
+      # release deploys pages built the way its commit was validated.
       - name: Install Wavebit and the docs extra
-        run: pip install -e '.[docs]'
+        run: python tools/ci_constraints.py install docs
 
       # `-W` here as well as in `tests.yml`: a deploy is the worst place to discover that a
       # renamed symbol left a page short.

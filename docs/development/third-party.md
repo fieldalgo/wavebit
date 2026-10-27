@@ -57,7 +57,7 @@ Policy:
 
 ## Python distributions
 
-Version floors are in `pyproject.toml`; the table names what CI installs.
+Version floors are in `pyproject.toml`; the table names what CI installs, and `.github/constraints/` holds the exact versions it installs ([dependency versions in CI](verification.md#dependency-versions-in-ci)).
 
 ### Runtime
 

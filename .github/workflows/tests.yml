@@ -34,6 +34,13 @@
 #              by hand and autodoc reports an unimportable one as a warning, so a
 #              renamed public symbol fails here instead of leaving a quietly
 #              shorter page.
+#
+# Every job except `lint` installs through `tools/ci_constraints.py`, which applies the exact
+# versions in `.github/constraints/` (ruff is pinned in its own step). A new upstream release
+# therefore cannot turn a run red on a commit that changed nothing; the versions move by a pull
+# request that replaces those files. `latest-deps.yml` installs the newest releases daily,
+# outside this workflow, and raises the alarm there. docs/development/verification.md has the
+# policy.
 name: tests
 
 on:
@@ -147,13 +154,11 @@ jobs:
           python-version: '3.12'
           cache: pip
 
-      # Installed ahead of the package so pip already sees torch>=2.13 as
-      # satisfied and does not pull the multi-gigabyte CUDA wheel from PyPI.
-      # The CPU index's latest is well above the floor, so this stays satisfied;
-      # if the floor ever passes what that index serves, pin it here instead.
-      - name: Install CPU-only PyTorch
-        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
-
+      # The CPU torch wheel goes in first, so pip already sees torch as satisfied and does
+      # not pull the multi-gigabyte CUDA wheel from PyPI. `tools/ci_constraints.py` runs that
+      # install and the package install after it, both at the versions in
+      # `.github/constraints/tests.txt`.
+      #
       # `contour` belongs here with the backends, and its absence cost 41 of the 42
       # failures in run 33738428639 -- every one of them the same ImportError,
       # `normal_method='contour'` reaching for contourpy that no step had installed.
@@ -162,8 +167,8 @@ jobs:
       # it is fine. This job is not that user: it is the one that installs everything
       # precisely so that no part of the suite goes unexercised.
       # Install plotting too so time-record coordinate/animation tests cannot silently skip.
-      - name: Install Wavebit with both optional backends, contour, and plotting
-        run: pip install -e '.[jax,pytorch,contour,plot]' pytest pytest-timeout pytest-xdist
+      - name: Install CPU-only PyTorch, then Wavebit with both optional backends, contour, and plotting
+        run: python tools/ci_constraints.py install tests
 
       # Fails the run if a backend is missing, which would otherwise turn the
       # cross-backend tests into silent skips: the suite guards them with
@@ -412,11 +417,8 @@ jobs:
           cache: pip
 
       # The same installation as `test`, for the same reasons given there.
-      - name: Install CPU-only PyTorch
-        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
-
-      - name: Install Wavebit with both optional backends, contour, and plotting
-        run: pip install -e '.[jax,pytorch,contour,plot]' pytest pytest-timeout pytest-xdist
+      - name: Install CPU-only PyTorch, then Wavebit with both optional backends, contour, and plotting
+        run: python tools/ci_constraints.py install tests
 
       - name: Verify all three backends and contourpy are importable
         run: python -c "import numpy, jax, torch, contourpy, matplotlib, wavebit; print(wavebit.__file__)"
@@ -528,16 +530,12 @@ jobs:
           python-version: '3.12'
           cache: pip
 
-      # Same reason as in `test`: get the CPU wheel in before the extras can pull
-      # the CUDA one.
-      - name: Install CPU-only PyTorch
-        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
-
       # Both backends, because `shapes_1d` solves on torch,
       # `shapes_2d` on jax, and the two `_verification` ones run all three.
       # The FDTD recording example also exercises the optional plot extra.
-      - name: Install Wavebit with both optional backends
-        run: pip install -e '.[jax,pytorch,plot]'
+      # The CPU torch wheel goes in first, as in `test`, at the versions in tests.txt.
+      - name: Install CPU-only PyTorch, then Wavebit with both optional backends
+        run: python tools/ci_constraints.py install examples
 
       # Runs every examples/**/*.py from its own directory under MPLBACKEND=Agg and
       # fails on a non-zero exit or a `Traceback`.
@@ -569,7 +567,12 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
       - name: Install distribution tooling
-        run: python -m pip install build twine
+        run: python tools/ci_constraints.py install distribution-tools
+      # The smoke builds in an isolated environment and installs into a venv of its own; the
+      # PIP_* variables carry `.github/constraints/distribution.txt` into both.
+      - name: Apply the recorded versions to the smoke's own pip calls
+        shell: bash
+        run: python tools/ci_constraints.py env distribution >> "$GITHUB_ENV"
       - name: Build and exercise an isolated installed distribution
         run: python tools/run_distribution_smoke.py --output "${{ runner.temp }}/wavebit-distribution"
 
@@ -588,7 +591,7 @@ jobs:
       # The package itself, because autodoc imports it to read the docstrings -- NumPy only,
       # since nothing on the public surface needs an optional backend to be introspected.
       - name: Install Wavebit and the docs extra
-        run: pip install -e '.[docs]'
+        run: python tools/ci_constraints.py install docs
 
       - name: Check installed licenses against the reviewed inventory
         run: python tools/check_licenses.py
