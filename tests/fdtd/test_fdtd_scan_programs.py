@@ -4,16 +4,19 @@ Measured 2026-09-11 at 154faa2: every eager ``wavebit.fdtd(backend=1)`` scene so
 times -- two source bases, each with a reference and an actual ``fdtd_grid`` run, each a
 checkpointed chunk scan plus a tail scan -- and ran all 8 again on every later call, though the
 solve holds 2 distinct programs. An eager ``jax.lax.scan`` caches its executable on the traced
-body jaxpr, which hashes by identity, and ``fdtd_grid`` builds a new ``step`` closure per call.
-``backends.time_domain._eager_scan`` keys the compiled program on the jaxpr's structure
-(``_program_key``) and the scan's length.
+body, which hashes by identity, and ``fdtd_grid`` built a new ``step`` closure per call.
+``fdtd_grid`` now hands the loop a ``runtime.Step`` -- a module-level builder, hashable settings
+and the call's arrays -- and ``JaxTimeLoop._run`` runs it through a plain ``jax.jit`` keyed on
+static values, shapes and dtypes alone, with no reading of JAX's traced program.
 """
 
 from wavebit.fdtd._periodic.api import fdtd as _legacy_wavebit_fdtd
 
 from wavebit.fdtd._periodic.grid import fdtd_grid as _legacy_wavebit_fdtd_grid
 import gc
-import warnings
+import subprocess
+import sys
+import textwrap
 import weakref
 
 import numpy as np
@@ -125,31 +128,30 @@ def test_changed_bloch_factors_remain_live_in_a_shared_scan_program():
         assert hot.tobytes() == fresh.tobytes()
 
 
-def _inner_jit_scan(c):
-    """An eager scan whose body calls an inner ``jax.jit`` that closes over the array ``c``."""
+def _scale(runtime, settings, arrays):
+    """A minimal step builder: ``carry * factor + bias + n``, with a static ``shift``."""
+    def step(carry, n):
+        return carry * arrays['factor'] + arrays['bias'] + n + settings, None
+    return step
+
+
+def _run(arrays, settings=0., init=None, length=3, kind='steps'):
     import jax.numpy as jnp
-    inner = jax.jit(lambda x: x * c)
-    return time_domain._eager_scan(lambda carry, n: (carry + inner(jnp.ones(3)), None),
-                                   jnp.zeros(3), jnp.arange(4))[0]
+    loop = time_domain.JaxTimeLoop()
+    step = time_domain.Step(_scale, loop, settings, arrays)
+    init = jnp.zeros(2) if init is None else init
+    xs = jnp.arange(float(length))
+    return loop._run(kind, step, init, xs)[0]
 
 
-def test_an_inner_jit_closing_over_an_array_is_not_shared():
-    """jax 0.11 made ``ClosedJaxpr`` and ``Jaxpr`` one class, so the constants an inner
-    ``jax.jit`` carries arrive on a nested *Jaxpr*. A key that reads them only on a
-    ``ClosedJaxpr`` branch never reads them, and a second call runs on the first call's array:
-    measured 2026-09-12, [4, 8, 12] came back where [40, 80, 120] was asked."""
+def _arrays(factor=.5, bias=(1., 2.)):
     import jax.numpy as jnp
-    time_domain._SCAN_PROGRAMS.clear()
-    first = _inner_jit_scan(jnp.array([1., 2., 3.]))
-    second = _inner_jit_scan(jnp.array([10., 20., 30.]))
-    np.testing.assert_array_equal(np.asarray(first), [4., 8., 12.])
-    np.testing.assert_array_equal(np.asarray(second), [40., 80., 120.])
-    assert not time_domain._SCAN_PROGRAMS
+    return dict(factor=factor, bias=jnp.asarray(bias))
 
 
-def test_a_function_valued_parameter_is_not_shared():
-    """A custom_jvp's rule is rebuilt by every trace and hashes by identity: keyed, every call
-    would compile anew and push a program nothing asks for again into the bounded cache."""
+def test_a_plain_function_runs_the_plain_scan_and_caches_nothing():
+    """Only a ``Step`` is shared. Any other function -- a user's closure, a custom_jvp or a
+    callback in the body -- runs ``lax.scan`` as it always did: exact, and compiled per call."""
     import jax.numpy as jnp
 
     @jax.custom_jvp
@@ -158,32 +160,83 @@ def test_a_function_valued_parameter_is_not_shared():
     g.defjvp(lambda primal, tangent: (g(primal[0]), jnp.cos(primal[0]) * tangent[0]))
 
     def step(c, n):
+        c = c + jax.pure_callback(lambda x: np.asarray(x) * 2,
+                                  jax.ShapeDtypeStruct(c.shape, c.dtype), c)
         return c + g(c + n), None
     time_domain._SCAN_PROGRAMS.clear()
-    got = time_domain._eager_scan(step, jnp.zeros(3), jnp.arange(2.))[0]
-    want = jax.lax.scan(step, jnp.zeros(3), jnp.arange(2.))[0]
+    loop = time_domain.JaxTimeLoop()
+    got = loop._run('steps', step, jnp.ones(3), jnp.arange(2.))[0]
+    want = jax.lax.scan(step, jnp.ones(3), jnp.arange(2.))[0]
     assert np.asarray(got).tobytes() == np.asarray(want).tobytes()
     assert not time_domain._SCAN_PROGRAMS
 
 
-def test_a_weakly_typed_carry_runs_unshared():
-    """``lax.scan`` promotes a weakly typed carry and retraces; a shared program would not."""
+def test_a_step_built_with_a_custom_rule_or_callback_is_shared_exactly():
+    """With the jaxpr no longer read, a body holding a custom_jvp or a callback is no longer a
+    special case: the builder and settings are the key, and the rule is rebuilt inside the jit."""
+    import jax.numpy as jnp
+
+    def build(runtime, settings, arrays):
+        @jax.custom_jvp
+        def g(x):
+            return jnp.sin(x)
+        g.defjvp(lambda primal, tangent: (g(primal[0]), jnp.cos(primal[0]) * tangent[0]))
+
+        def step(c, n):
+            c = c + jax.pure_callback(lambda x: np.asarray(x) * 2,
+                                      jax.ShapeDtypeStruct(c.shape, c.dtype), c)
+            return c * arrays['a'] + g(c + n), None
+        return step
     time_domain._SCAN_PROGRAMS.clear()
-    out = time_domain._eager_scan(lambda c, n: (c + n, None), 0., np.arange(3.))[0]
-    assert float(out) == 3.
+    loop = time_domain.JaxTimeLoop()
+    for a in (jnp.full(3, .5), jnp.full(3, .25)):
+        step = time_domain.Step(build, loop, None, dict(a=a))
+        got = loop._run('steps', step, jnp.ones(3), jnp.arange(2.))[0]
+        want = jax.lax.scan(build(loop, None, dict(a=a)), jnp.ones(3), jnp.arange(2.))[0]
+        assert np.asarray(got).tobytes() == np.asarray(want).tobytes()
+    assert len(time_domain._SCAN_PROGRAMS) == 1
+
+
+def test_a_scalar_leaf_or_setting_is_part_of_the_program():
+    """A Python scalar is baked into the program, as the closure it replaced baked it in. So it
+    is in the key, by type and bit pattern: ``-0.0`` is not ``0.0``, and ``1``, ``1.0`` and
+    ``True`` -- equal and equally hashed in Python -- are three programs, not one."""
+    key = time_domain._static_key
+    assert key(0.) != key(-0.)
+    assert len({key(1), key(1.), key(True)}) == 3
+    assert key((1., 2)) == key((1., 2)) and key((1., 2)) != key([1., 2])
+    with pytest.raises(TypeError):
+        key(np.array([1., 2.]))
+    with pytest.raises(TypeError):
+        key({})
+    time_domain._SCAN_PROGRAMS.clear()
+    results = [np.asarray(_run(_arrays(factor=f), settings=s)) for f, s in
+               ((.5, 0.), (.25, 0.), (.5, -0.), (.5, 1.))]
+    assert len(time_domain._SCAN_PROGRAMS) == 4
+    assert results[0].tobytes() != results[1].tobytes()
+    assert results[0].tobytes() != results[3].tobytes()
+
+
+def test_unkeyable_settings_run_the_plain_scan():
+    """Settings that cannot be a key cost the sharing, never the answer."""
+    import jax.numpy as jnp
+
+    def build(runtime, settings, arrays):
+        return lambda c, n: (c + settings['shift'] + n, None)
+    time_domain._SCAN_PROGRAMS.clear()
+    loop = time_domain.JaxTimeLoop()
+    step = time_domain.Step(build, loop, {'shift': 1.}, {})
+    got = loop._run('steps', step, jnp.zeros(2), jnp.arange(3.))[0]
+    np.testing.assert_array_equal(np.asarray(got), [6., 6.])
     assert not time_domain._SCAN_PROGRAMS
 
 
 def test_each_scan_length_is_its_own_entry():
     """One entry per trip count. Without the length in the key, a sweep of tail lengths grew a
     compiled copy per length inside one entry's jit, where the cache's bound never saw it."""
-    import jax.numpy as jnp
-
-    def step(c, n):
-        return c * .5 + n, None
     time_domain._SCAN_PROGRAMS.clear()
     for length in (3, 5, 3):
-        time_domain._eager_scan(step, jnp.ones(2), jnp.arange(length, dtype=float))
+        _run(_arrays(), length=length)
     assert len(time_domain._SCAN_PROGRAMS) == 2
 
 
@@ -191,128 +244,58 @@ def test_the_cache_stays_within_its_bound():
     """Least-recently-used eviction holds the cache at its bound. A hit keeps its entry -- the
     same compiled program, not a recompiled copy, which is what FIFO eviction would leave -- and
     the newest entry is never the one evicted, which is what MRU eviction would do."""
-    import jax.numpy as jnp
-
-    def hot(c, n):
-        return c + 0., None
     time_domain._SCAN_PROGRAMS.clear()
-    time_domain._eager_scan(hot, jnp.zeros(1), jnp.arange(1.))
+    _run(_arrays(), settings=0.)
     first = next(iter(time_domain._SCAN_PROGRAMS))
     first_program = time_domain._SCAN_PROGRAMS[first]
     last = None
     for k in range(time_domain._SCAN_PROGRAMS_MAX + 3):
         before = set(time_domain._SCAN_PROGRAMS)
-        time_domain._eager_scan(lambda c, n, k=k: (c + (k + 1.), None), jnp.zeros(1),
-                                jnp.arange(1.))
+        _run(_arrays(), settings=k + 1.)
         added = set(time_domain._SCAN_PROGRAMS) - before
         assert len(added) == 1, f'call {k} left no entry of its own: the newest was evicted'
         (last,) = added
-        time_domain._eager_scan(hot, jnp.zeros(1), jnp.arange(1.))   # keep the hot entry recent
+        _run(_arrays(), settings=0.)   # keep the hot entry recent
     assert len(time_domain._SCAN_PROGRAMS) == time_domain._SCAN_PROGRAMS_MAX
     assert time_domain._SCAN_PROGRAMS.get(first) is first_program
     assert last in time_domain._SCAN_PROGRAMS
 
 
-def _body_closed_over_a_big_array():
-    """``(weak reference, step function)``. The array lives only in the closure, so deleting
-    the returned function drops the last reference this test holds."""
-    import jax.numpy as jnp
-    c = jnp.arange(1000.)
-    return weakref.ref(c), lambda carry, n: (carry + c[:2], None)
-
-
-def test_a_program_keeps_none_of_the_arrays_it_was_first_traced_with():
-    """jax 0.11's ``closed.jaxpr`` is ``closed`` itself, constants included, and the cached
-    program closed over it: up to 64 programs, each holding a first call's arrays."""
+def test_a_program_keeps_none_of_the_arrays_it_ran_on():
+    """Arrays are arguments of the compiled program, never part of it or of its key."""
     import jax.numpy as jnp
     time_domain._SCAN_PROGRAMS.clear()
-    ref, body = _body_closed_over_a_big_array()
-    time_domain._eager_scan(body, jnp.zeros(2), jnp.arange(2.))
-    del body
+    big = jnp.arange(1000.)
+    ref = weakref.ref(big)
+    loop = time_domain.JaxTimeLoop()
+    step = time_domain.Step(lambda rt, s, a: (lambda c, n: (c + a['big'][:2], None)),
+                            loop, None, dict(big=big))
+    loop._run('steps', step, jnp.zeros(2), jnp.arange(2.))
+    del big, step
     gc.collect()
     assert len(time_domain._SCAN_PROGRAMS) == 1
-    assert ref() is None, 'the cached program still holds the array it was traced with'
+    assert ref() is None, 'the cached program still holds an array it ran on'
 
 
-def test_a_jax_that_moved_a_name_the_key_reads_costs_the_sharing_not_the_solve(monkeypatch):
-    """Every eager solve used to depend on ``jax.extend.core``, ``jax.typeof`` and
-    ``jax.core.Tracer`` staying where they are; a JAX that moves one now warns once and scans."""
+def test_a_shifted_step_counts_from_its_offset():
+    """``Step.shifted`` is ``step(state, n + start)`` -- the record path's final tail -- with
+    ``start`` in the key, so two offsets are two programs and neither sees the other's."""
     import jax.numpy as jnp
-    monkeypatch.setattr(time_domain, '_jax_api', lambda: None)
-    monkeypatch.setattr(time_domain, '_API_WARNED', [])
     time_domain._SCAN_PROGRAMS.clear()
-
-    def step(c, n):
-        return c + n, None
-    with pytest.warns(RuntimeWarning, match='eager-scan program cache'):
-        out = time_domain._eager_scan(step, jnp.zeros(()), jnp.arange(3.))[0]
-    assert float(out) == 3.
-    with warnings.catch_warnings():
-        warnings.simplefilter('error')
-        time_domain._eager_scan(step, jnp.zeros(()), jnp.arange(3.))
-    assert not time_domain._SCAN_PROGRAMS
-
-
-def test_a_scan_inside_a_trace_never_resolves_the_key_names(monkeypatch):
-    """Inside a trace nothing is dispatched, so the plain scan is exact and the key's names are
-    not needed. Resolving them there was not harmless: the resolver used to import
-    ``jax.extend``, and from jax 0.12.0 that import adds entries to JAX's tracing context, so a
-    user's ``jax.jit`` holding the process's first FDTD solve traced twice (measured
-    2026-10-19). This holds on any JAX: the resolver may not run inside a trace at all."""
-    import jax.numpy as jnp
-
-    def refuse():
-        raise AssertionError('the eager-scan key names were resolved inside a trace')
-    monkeypatch.setattr(time_domain, '_jax_api', refuse)
-
-    def step(c, n):
-        return c + n, None
-    out = jax.jit(lambda c: time_domain._eager_scan(step, c, jnp.arange(3.))[0])(jnp.zeros(()))
-    assert float(out) == 3.
-
-
-def test_resolving_the_key_names_leaves_the_tracing_context_alone():
-    """The resolver used to import ``jax.extend``; from jax 0.12.0 that import grows JAX's
-    tracing context (51 to 53 entries), so every program compiled before it missed its cache
-    once afterwards -- the next solve's eager operations all compiled again. The context's
-    length is read through a private name; a JAX without it skips this check. It can only
-    fail where nothing earlier in the process imported ``jax.extend``."""
-    config = pytest.importorskip('jax._src.config')
-    if not hasattr(config, 'trace_context'):
-        pytest.skip('this JAX has no trace_context to compare')
-    before = len(config.trace_context())
-    api = time_domain._jax_api.__wrapped__()
-    assert api is not None and len(api.functions) > len(time_domain._FUNCTION_TYPES)
-    assert len(config.trace_context()) == before
-
-
-def test_a_parameter_enters_the_key_by_its_bytes():
-    """An array or float parameter is compared by bit pattern -- ``-0.0`` is not ``0.0``, one
-    element changed is another program -- and a function-valued one cannot be keyed at all."""
-    key = time_domain._param_key
-    assert key(np.array([1., 2.])) == key(np.array([1., 2.]))
-    assert key(np.array([1., 2.])) != key(np.array([1., 3.]))
-    assert key(0.) != key(-0.)
-    assert key(np.float32(1)) != key(np.float64(1))
-    with pytest.raises(time_domain._Unshareable):
-        key(lambda x: x)
-
-
-def test_the_resolver_turns_a_missing_name_into_the_fallback(monkeypatch):
-    """The resolver itself has to catch a moved name. The test above replaces it wholesale, so
-    its ``except`` never ran, and a resolver catching only ``ImportError`` passed every test
-    while a JAX without ``jax.typeof`` crashed every eager solve. ``__wrapped__`` bypasses the
-    resolver's cache."""
-    monkeypatch.delattr(jax, 'typeof')
-    assert time_domain._jax_api.__wrapped__() is None
+    loop = time_domain.JaxTimeLoop()
+    step = time_domain.Step(_scale, loop, 0., dict(factor=1., bias=jnp.zeros(2)))
+    for start in (0, 4):
+        moved = step.shifted(start)
+        got = loop._run('steps', moved, jnp.zeros(2), jnp.arange(3.))[0]
+        np.testing.assert_array_equal(np.asarray(got), [3. + 3 * start] * 2)
+        assert np.asarray(moved(jnp.zeros(2), 1.)[0]).tolist() == [1. + start] * 2
+    assert len(time_domain._SCAN_PROGRAMS) == 2
 
 
 def test_the_cache_is_changed_under_its_lock(monkeypatch):
     """Threads share the cache. Without the lock, six threads over a two-entry cache raised
     `dictionary changed size during iteration` within a second (measured 2026-09-13). A race is
     a poor test, so what is pinned is that the shared path takes the lock, exactly once."""
-    import jax.numpy as jnp
-
     class Counting:
         def __init__(self):
             self.entered = 0
@@ -325,23 +308,53 @@ def test_the_cache_is_changed_under_its_lock(monkeypatch):
     lock = Counting()
     monkeypatch.setattr(time_domain, '_SCAN_LOCK', lock)
     time_domain._SCAN_PROGRAMS.clear()
-    time_domain._eager_scan(lambda c, n: (c * 2., None), jnp.ones(2), jnp.arange(3.))
+    _run(_arrays())
     assert len(time_domain._SCAN_PROGRAMS) == 1
     assert lock.entered == 1
 
 
-def test_a_callback_in_the_body_is_not_shared():
-    """A callback primitive carries its function in a frozen dataclass that hashes and compares
-    the function by identity; keyed, it would split every call apart like a bare function."""
-    import jax.numpy as jnp
+def test_a_jitted_first_solve_traces_once_and_repeats_without_compiling():
+    """From jax 0.12.0, importing ``jax.extend`` grows JAX's tracing context; the structural
+    key used to import it during the first solve, so a user's ``jax.jit`` around that solve
+    traced twice and the next eager solve compiled everything again (measured 2026-10-19). The
+    loop now reads no JAX internals. A fresh process is the only place this can be seen."""
+    script = textwrap.dedent('''
+        import jax, numpy as np
+        jax.config.update('jax_enable_x64', True)
+        from wavebit.fdtd._periodic.grid import fdtd_grid
+        names, traces = [], []
+        jax.monitoring.register_event_duration_secs_listener(
+            lambda event, duration, fun_name=None, **kw:
+            names.append(fun_name) if event == '/jax/core/compile/backend_compile_duration' else None)
+        E0 = np.zeros((3, 8, 2, 2)); E0[1, 4] = 1.
+        def solve(eps):
+            traces.append(None)
+            return fdtd_grid(eps, spacing=(1., 1., 1.), dt=.2, steps=9, electric=E0,
+                             checkpoint_steps=4, backend='jax')['E']
+        run = jax.jit(solve)
+        run(np.full((8, 2, 2), 2.)); run(np.full((8, 2, 2), 2.5))
+        assert len(traces) == 1, traces
+        solve(np.full((8, 2, 2), 2.)); before = len(names)
+        solve(np.full((8, 2, 2), 3.))
+        assert names[before:] == [], names[before:]
+        print('ok')
+    ''')
+    out = subprocess.run([sys.executable, '-c', script], capture_output=True, text=True,
+                         encoding='utf-8', timeout=600)
+    assert out.returncode == 0 and out.stdout.strip() == 'ok', out.stderr[-3000:]
 
-    def host(x):
-        return np.asarray(x) * 2
 
-    def step(c, n):
-        return c + jax.pure_callback(host, jax.ShapeDtypeStruct(c.shape, c.dtype), c), None
+def test_a_solve_inside_a_trace_runs_the_plain_scan():
+    """Inside a user's ``jax.jit`` every leaf is a tracer and nothing is dispatched, so the plain
+    scan runs and nothing is cached: a nested jit there would change the user's program (same
+    bytes, a few percent more temp memory on jax 0.12.0). The answer is the eager one."""
+    jax.config.update('jax_enable_x64', True)
+    def solve(eps):
+        return _legacy_wavebit_fdtd_grid(eps, spacing=(1., 1., 1.), dt=.2, steps=43,
+                                         electric=E0, wavelengths=[20., 24.], monitor_z=[3],
+                                         checkpoint_steps=7, backend='jax')['electric_spectrum']
+    eps = np.full((16, 2, 2), 2.)
     time_domain._SCAN_PROGRAMS.clear()
-    got = time_domain._eager_scan(step, jnp.ones(2), jnp.arange(2.))[0]
-    want = jax.lax.scan(step, jnp.ones(2), jnp.arange(2.))[0]
-    assert np.asarray(got).tobytes() == np.asarray(want).tobytes()
+    traced = np.asarray(jax.jit(solve)(eps))
     assert not time_domain._SCAN_PROGRAMS
+    np.testing.assert_allclose(traced, np.asarray(solve(eps)), rtol=1e-13, atol=1e-15)

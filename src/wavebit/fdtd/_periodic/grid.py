@@ -2,13 +2,16 @@
 
 This low-level API takes native grid coefficients, not Stack/Incidence scenes.
 """
+import dataclasses
 import math
 import operator
+import typing
 
 import numpy as np
 
 from wavebit._common.backend import eager_under_torch_compile
 from wavebit._common.backend import _concrete
+from wavebit.fdtd._periodic.runtime import Step
 from wavebit.fdtd._periodic.runtime import time_loop_backend
 
 
@@ -321,39 +324,12 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
         # Native component control volumes: E x/y and H z use dual widths.
         weights_e = array(np.stack((dual, dual, widths))[:, :, None, None], dtype=real_dtype)
         weights_h = array(np.stack((widths, widths, dual))[:, :, None, None], dtype=real_dtype)
-        def field_norm_squared(e, h):
-            return xp.sum(weights_e*xp.abs(e)**2+weights_h*xp.abs(h)**2)*spacing[1]*spacing[2]
         material_zero = runtime.zeros((len(pole_coefficients),), dtype=real_dtype)
-        def material_activity(polarizations, previous):
-            values = []
-            for p, old, omega2, strength in zip(polarizations, previous, pole_frequencies_squared, pole_strengths):
-                active = strength > 0
-                # Positive oscillator activity; P and its backward-difference
-                # velocity are staggered, so this is not a conserved Yee energy.
-                density = (omega2*xp.abs(p)**2+xp.abs((p-old)/dt)**2)/xp.where(active, strength, 1.)
-                values.append(xp.sum(weights_e*xp.where(active, density, 0.))*spacing[1]*spacing[2])
-            return xp.stack(values) if values else material_zero
 
     # These live Bloch factors are constant over the trajectory. Keep their
     # graph, but avoid repeating scalar indexing and inversion in every curl.
     forward_factors = tuple(factors[axis] for axis in range(3))
     backward_factors = tuple(1/factor for factor in forward_factors)
-
-    def shifted(v, axis, forward, factor):
-        interior = [slice(None)]*v.ndim
-        edge = [slice(None)]*v.ndim
-        interior[axis] = slice(1, None) if forward else slice(None, -1)
-        edge[axis] = slice(0, 1) if forward else slice(-1, None)
-        wrapped = v[tuple(edge)]*factor
-        pieces = (v[tuple(interior)], wrapped) if forward else (wrapped, v[tuple(interior)])
-        return xp.concat(pieces, axis=axis)
-
-    def derivative(v, axis, forward):
-        neighbor = shifted(v, axis, forward,
-                           (forward_factors if forward else backward_factors)[axis])
-        denominator = ((dz_forward if forward else dz_backward)
-                       if nonuniform and axis == 0 else float(spacing[axis]))
-        return (neighbor-v if forward else v-neighbor)/denominator
 
     # Reuse Wavebit's own documented CPML coefficients; no external source.
     if pml_cells:
@@ -377,81 +353,31 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
             pml_e, pml_h = profile(0.), profile(.5)
     auxiliary = runtime.zeros((2,)+shape[1:], dtype=dtype) if pml_cells else runtime.zeros((0,), dtype=dtype)
 
-    def curl(v, forward, memory):
-        ex, ey, ez = v[0], v[1], v[2]
-        dzey, dzex = derivative(ey, 0, forward), derivative(ex, 0, forward)
-        if pml_cells:
-            b, a, kappa = pml_h if forward else pml_e
-            memory = b*memory+a*xp.stack((dzey, dzex))
-            dzey, dzex = dzey/kappa+memory[0], dzex/kappa+memory[1]
-        return xp.stack((derivative(ez, 1, forward)-dzey,
-                         dzex-derivative(ez, 2, forward),
-                         derivative(ey, 2, forward)-derivative(ex, 1, forward))), memory
-
-    def planes(v, magnetic_field):
-        offsets = ((1, 1, 0), (1, 0, 1), (0, 1, 1)) if magnetic_field else ((0, 0, 1), (0, 1, 0), (1, 0, 0))
-        values = []
-        for c, (zh, yh, xh) in enumerate(offsets):
-            face = v[c, iz]
-            if zh:
-                previous = v[c, (iz-1)%shape[1]]*xp.where(iz == 0, backward_factors[0], 1)[:, None, None]
-                weight = plane_weight if nonuniform else .5
-                face = weight*face+(1-weight)*previous
-            if yh:
-                face = .5*(face+shifted(face, 1, False, backward_factors[1]))
-            if xh:
-                face = .5*(face+shifted(face, 2, False, backward_factors[2]))
-            values.append(face)
-        return xp.stack(values, axis=1)
-
-    def step(state, n):
-        e, h, fe, fh, pe, ph, polarizations, previous = state[:8]
-        rotation, ph = curl(e, True, ph)
-        h = ah*h-bh*rotation
-        rotation, pe = curl(h, False, pe)
-        updated = tuple(gain*p-hold*old+drive_p*e for (gain, hold, drive_p), p, old
-                        in zip(pole_coefficients, polarizations, previous))
-        delta_p = sum((new-old for new, old in zip(updated, polarizations)), 0.)
-        e = ae*e+be*(rotation-current*drive[n]-delta_p/dt)
-        monitor_state = (fe, fh)
-        if convergence_window is not None:
-            monitor_state += state[10:12]
-        if len(indices):
-            def accumulate(values):
-                fe, fh = values[:2]
-                # Left sample represents up to stride steps; clip the last block.
-                weight = xp.minimum(array(dft_subsample), array(steps-n))
-                ek = xp.exp(2j*xp.pi*frequency*(n+1)*dt)*dt
-                hk = xp.exp(2j*xp.pi*frequency*(n+.5)*dt)*dt
-                de = ek[:, None, None, None, None]*planes(e, False)[None]
-                dh = hk[:, None, None, None, None]*planes(h, True)[None]
-                updated = (fe+weight*de, fh+weight*dh)
-                if convergence_window is not None:
-                    tail_weight = xp.maximum(array(0), n+weight-(steps-convergence_window))
-                    tail_weight = xp.minimum(weight, tail_weight)
-                    updated += (values[2]+tail_weight*de, values[3]+tail_weight*dh)
-                return updated
-            monitor_state = (accumulate(monitor_state) if dft_subsample == 1 else
-                             runtime.conditional(n % dft_subsample == 0, accumulate,
-                                                 lambda v: v, monitor_state))
-        fe, fh = monitor_state[:2]
-        result = (e, h, fe, fh, pe, ph, updated, polarizations)
-        if convergence_window is not None:
-            peak, tail_peak = state[8:10]
-            norm = field_norm_squared(e, h)
-            in_tail = array(n >= steps-convergence_window)
-            peak = xp.maximum(peak, norm)
-            tail_peak = xp.maximum(tail_peak, xp.where(in_tail, norm, 0.))
-            activity = material_activity(updated, polarizations)
-            material_peak = xp.maximum(state[12], activity)
-            material_tail = xp.maximum(state[13], xp.where(in_tail, activity, 0.))
-            result += (peak, tail_peak)+monitor_state[2:]+(material_peak, material_tail)
-        return result, None
+    # The step is data -- a module-level builder, static settings and this call's arrays -- so
+    # a compiled JAX scan is reused by every later solve of the same program shape.
+    settings = _StepSettings(dt=dt, steps=steps, depth=shape[1], spacing=tuple(spacing),
+                             nonuniform=nonuniform, pml=bool(pml_cells), monitors=len(indices),
+                             dft_subsample=dft_subsample, convergence_window=convergence_window)
+    arrays = dict(ae=ae, be=be, ah=ah, bh=bh, current=current, drive=drive,
+                  forward=forward_factors, backward=backward_factors,
+                  poles=tuple(pole_coefficients))
+    if nonuniform:
+        arrays.update(dz_forward=dz_forward, dz_backward=dz_backward, plane_weight=plane_weight)
+    if pml_cells:
+        arrays.update(pml_e=pml_e, pml_h=pml_h)
+    if len(indices):
+        arrays.update(iz=iz, frequency=frequency)
+    if convergence_window is not None:
+        arrays.update(weights_e=weights_e, weights_h=weights_h, material_zero=material_zero,
+                      frequencies_squared=tuple(pole_frequencies_squared),
+                      strengths=tuple(pole_strengths))
+    step = Step(_build_step, runtime, settings, arrays)
 
     polarization = tuple(runtime.zeros(shape, dtype=dtype) for _ in pole_coefficients)
     state = (e, h, accum, accum, auxiliary, auxiliary, polarization, polarization)
     if convergence_window is not None:
-        state += (field_norm_squared(e, h), array(0., dtype=real_dtype), accum, accum, material_zero, material_zero)
+        state += (_field_norm_squared(xp, weights_e, weights_h, settings.spacing, e, h),
+                  array(0., dtype=real_dtype), accum, accum, material_zero, material_zero)
     records = {}
     if _validate_only:
         # Public native-grid preparation shares every admission check above and
@@ -463,8 +389,7 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
     if record_field is None:
         state = runtime.advance(step, state, steps, checkpoint_steps)
     else:
-        def capture(current):
-            return xp.stack([current[names.index(name)//3][names.index(name)%3][record_slices] for name in selected])
+        capture = _Capture(xp, tuple(names.index(name) for name in selected), record_slices)
         state, history = runtime.advance_recorded(step, state, steps, checkpoint_steps, record_field, capture)
         stamps = array((np.arange(0, steps, record_field)+1)*dt)
         for index, name in enumerate(selected):
@@ -517,3 +442,148 @@ def fdtd_grid(epsilon, *, spacing, dt, steps, mu=1., conductivity=0.,
                 dft_subsample=dft_subsample, dft_samples=(steps-1)//dft_subsample+1 if len(band) else 0,
                 h_time=(steps-.5)*dt, spacing=array(spacing), bloch_phase=phase,
                 z_nodes=array(nodes[:-1]), z_spacing=array(widths), pml_reflection=pml_reflection)
+
+
+class _StepSettings(typing.NamedTuple):
+    """The plain values a time step bakes in; equal settings and array shapes are one program."""
+    dt: float
+    steps: int
+    depth: int
+    spacing: tuple
+    nonuniform: bool
+    pml: bool
+    monitors: int
+    dft_subsample: int
+    convergence_window: object
+
+
+@dataclasses.dataclass(frozen=True)
+class _Capture:
+    """Stack the selected native components of a state, cropped to the record region."""
+    xp: object
+    components: tuple
+    region: tuple
+
+    def __call__(self, state):
+        return self.xp.stack([state[c//3][c%3][self.region] for c in self.components])
+
+
+def _field_norm_squared(xp, weights_e, weights_h, spacing, e, h):
+    return xp.sum(weights_e*xp.abs(e)**2+weights_h*xp.abs(h)**2)*spacing[1]*spacing[2]
+
+
+def _build_step(runtime, settings, arrays):
+    """``step(state, n)`` for :func:`fdtd_grid`, reading only ``settings`` and ``arrays``.
+
+    Module level, and closing over nothing else, so that one program shape builds one program
+    on every solve (:class:`wavebit.fdtd._periodic.runtime.Step`).
+    """
+    xp, array = runtime.xp, runtime.array
+    dt, steps, spacing = settings.dt, settings.steps, settings.spacing
+    nonuniform, convergence_window = settings.nonuniform, settings.convergence_window
+    dft_subsample = settings.dft_subsample
+    ae, be, ah, bh = arrays['ae'], arrays['be'], arrays['ah'], arrays['bh']
+    current, drive = arrays['current'], arrays['drive']
+    forward_factors, backward_factors = arrays['forward'], arrays['backward']
+    pole_coefficients = arrays['poles']
+
+    def shifted(v, axis, forward, factor):
+        interior = [slice(None)]*v.ndim
+        edge = [slice(None)]*v.ndim
+        interior[axis] = slice(1, None) if forward else slice(None, -1)
+        edge[axis] = slice(0, 1) if forward else slice(-1, None)
+        wrapped = v[tuple(edge)]*factor
+        pieces = (v[tuple(interior)], wrapped) if forward else (wrapped, v[tuple(interior)])
+        return xp.concat(pieces, axis=axis)
+
+    def derivative(v, axis, forward):
+        neighbor = shifted(v, axis, forward,
+                           (forward_factors if forward else backward_factors)[axis])
+        denominator = ((arrays['dz_forward'] if forward else arrays['dz_backward'])
+                       if nonuniform and axis == 0 else float(spacing[axis]))
+        return (neighbor-v if forward else v-neighbor)/denominator
+
+    def curl(v, forward, memory):
+        ex, ey, ez = v[0], v[1], v[2]
+        dzey, dzex = derivative(ey, 0, forward), derivative(ex, 0, forward)
+        if settings.pml:
+            b, a, kappa = arrays['pml_h'] if forward else arrays['pml_e']
+            memory = b*memory+a*xp.stack((dzey, dzex))
+            dzey, dzex = dzey/kappa+memory[0], dzex/kappa+memory[1]
+        return xp.stack((derivative(ez, 1, forward)-dzey,
+                         dzex-derivative(ez, 2, forward),
+                         derivative(ey, 2, forward)-derivative(ex, 1, forward))), memory
+
+    def planes(v, magnetic_field):
+        iz = arrays['iz']
+        offsets = ((1, 1, 0), (1, 0, 1), (0, 1, 1)) if magnetic_field else ((0, 0, 1), (0, 1, 0), (1, 0, 0))
+        values = []
+        for c, (zh, yh, xh) in enumerate(offsets):
+            face = v[c, iz]
+            if zh:
+                previous = v[c, (iz-1)%settings.depth]*xp.where(iz == 0, backward_factors[0], 1)[:, None, None]
+                weight = arrays['plane_weight'] if nonuniform else .5
+                face = weight*face+(1-weight)*previous
+            if yh:
+                face = .5*(face+shifted(face, 1, False, backward_factors[1]))
+            if xh:
+                face = .5*(face+shifted(face, 2, False, backward_factors[2]))
+            values.append(face)
+        return xp.stack(values, axis=1)
+
+    def material_activity(polarizations, previous):
+        values = []
+        for p, old, omega2, strength in zip(polarizations, previous, arrays['frequencies_squared'],
+                                            arrays['strengths']):
+            active = strength > 0
+            # Positive oscillator activity; P and its backward-difference
+            # velocity are staggered, so this is not a conserved Yee energy.
+            density = (omega2*xp.abs(p)**2+xp.abs((p-old)/dt)**2)/xp.where(active, strength, 1.)
+            values.append(xp.sum(arrays['weights_e']*xp.where(active, density, 0.))*spacing[1]*spacing[2])
+        return xp.stack(values) if values else arrays['material_zero']
+
+    def step(state, n):
+        e, h, fe, fh, pe, ph, polarizations, previous = state[:8]
+        rotation, ph = curl(e, True, ph)
+        h = ah*h-bh*rotation
+        rotation, pe = curl(h, False, pe)
+        updated = tuple(gain*p-hold*old+drive_p*e for (gain, hold, drive_p), p, old
+                        in zip(pole_coefficients, polarizations, previous))
+        delta_p = sum((new-old for new, old in zip(updated, polarizations)), 0.)
+        e = ae*e+be*(rotation-current*drive[n]-delta_p/dt)
+        monitor_state = (fe, fh)
+        if convergence_window is not None:
+            monitor_state += state[10:12]
+        if settings.monitors:
+            frequency = arrays['frequency']
+            def accumulate(values):
+                fe, fh = values[:2]
+                # Left sample represents up to stride steps; clip the last block.
+                weight = xp.minimum(array(dft_subsample), array(steps-n))
+                ek = xp.exp(2j*xp.pi*frequency*(n+1)*dt)*dt
+                hk = xp.exp(2j*xp.pi*frequency*(n+.5)*dt)*dt
+                de = ek[:, None, None, None, None]*planes(e, False)[None]
+                dh = hk[:, None, None, None, None]*planes(h, True)[None]
+                updated = (fe+weight*de, fh+weight*dh)
+                if convergence_window is not None:
+                    tail_weight = xp.maximum(array(0), n+weight-(steps-convergence_window))
+                    tail_weight = xp.minimum(weight, tail_weight)
+                    updated += (values[2]+tail_weight*de, values[3]+tail_weight*dh)
+                return updated
+            monitor_state = (accumulate(monitor_state) if dft_subsample == 1 else
+                             runtime.conditional(n % dft_subsample == 0, accumulate,
+                                                 lambda v: v, monitor_state))
+        fe, fh = monitor_state[:2]
+        result = (e, h, fe, fh, pe, ph, updated, polarizations)
+        if convergence_window is not None:
+            peak, tail_peak = state[8:10]
+            norm = _field_norm_squared(xp, arrays['weights_e'], arrays['weights_h'], spacing, e, h)
+            in_tail = array(n >= steps-convergence_window)
+            peak = xp.maximum(peak, norm)
+            tail_peak = xp.maximum(tail_peak, xp.where(in_tail, norm, 0.))
+            activity = material_activity(updated, polarizations)
+            material_peak = xp.maximum(state[12], activity)
+            material_tail = xp.maximum(state[13], xp.where(in_tail, activity, 0.))
+            result += (peak, tail_peak)+monitor_state[2:]+(material_peak, material_tail)
+        return result, None
+    return step

@@ -158,8 +158,12 @@ Disabling YNN fusion (`--xla_cpu_experimental_ynn_fusion_type=`) gives 107 MB fo
   that grows is the execution temp. Here it takes the derivative case from 1.2–2.5× the eager
   peak at resolutions 6–10 to about 3.8× at resolution 20 (13.6 GB against 3.6 GB in the
   docstring of the resolution-20 test).
-- **`_eager_scan`.** Under an outer jit every leaf is a tracer, so it falls back to plain
-  `lax.scan`. Eager `jacfwd` takes the same fallback because its closed-over values are tracers.
+- **The eager-scan program cache.** Under an outer jit every leaf is a tracer, so it falls back
+  to plain `lax.scan`. Eager `jacfwd` takes the same fallback because its closed-over values are
+  tracers. The cache measured here (`_eager_scan`) has since been replaced by `JaxTimeLoop._run`,
+  which keeps the same rule: any tracer runs the plain `lax.scan`. On jax 0.11.0 and 0.12.0 the
+  optimized programs of an outer `jit` of the value, `grad` and `jacfwd` were compared with the
+  ones built before the replacement and are the same instructions.
 
 The resolution-6 docstring lists 5.3, 6.2 and 7.2 GB at resolutions 6, 8 and 10, at duration 40.
 Those figures come from a process that runs the eager Jacobian before the jit one. A jit-only
