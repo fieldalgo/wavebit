@@ -193,6 +193,13 @@ def adapt_result(problem,numerics,execution,raw,metadata):
                 spectral_energy=value.flux*spectral_factor,units=flux_units,
                 faces=None if value.faces is None else {f:v*spectral_factor for f,v in value.faces.items()},
                 metadata=dict(transform,orientation='positive plane normal or outward closed surface',invariant_axes=invariant_axes))
+        elif isinstance(m,monitors.ModeMonitor):
+            from ._modes import mode_spectrum
+            from ._runtime import runtime
+            rt=runtime(execution.backend,execution.device)
+            spectrum=mode_spectrum(problem,numerics,m,value,raw.plan,rt,spectral_factor,flux_units,units.length)
+            measured.extend((v,None) for v in (spectrum.forward,spectrum.backward))
+            outputs[name]=spectrum
         elif isinstance(m,monitors.FarFieldMonitor):
             outputs[name]=FarFieldSpectrum(_raw=value,_factor=spectral_factor,wavelengths=value.wavelengths,
                                            units=flux_units+'/sr')
