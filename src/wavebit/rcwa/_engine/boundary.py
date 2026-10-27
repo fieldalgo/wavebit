@@ -974,8 +974,12 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
             second = xp.argmin(masked, axis=1)
             sx, sy = ux[rows, second], uy[rows, second]
             turn2b = xp.maximum(2. - 2.*(ux*sx[:, None] + uy*sy[:, None]), floor2)
-            past = xp.maximum((length - length[rows, nearest][:, None])/xp.sqrt(turn2),
-                              (length - length[rows, second][:, None])/xp.sqrt(turn2b))
+            first = (length - length[rows, nearest][:, None])/xp.sqrt(turn2)
+            # The second nearest's own weight against the nearest: one at the tie, where the two
+            # are interchangeable, and falling as fast as that weight away from it.
+            tied = xp.exp(-first[rows, second]/width)[:, None]
+            past = first + tied*xp.maximum(
+                (length - length[rows, second][:, None])/xp.sqrt(turn2b) - first, 0.)
             # On the pair's own interface only the intervals through the sample count: the
             # pole that leaves the exact normal there.
             weight = xp.where((distance <= threshold2)[:, None], xp.astype(~off, dtype), xp.exp(
