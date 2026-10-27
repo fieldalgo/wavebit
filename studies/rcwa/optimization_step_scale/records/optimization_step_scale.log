@@ -1,0 +1,37 @@
+# 2fd0229 · started 2026-10-27T06:33:00+00:00 · load 1.56 2.27 1.26 1/109 1299
+{"orders": 15, "size": 1922, "kernel": "eig", "torch": 5.047839852999914, "jax": 7.452400717999922}
+{"orders": 15, "size": 1922, "kernel": "solve", "torch": 0.3314974170000369, "jax": 0.4256194150000283}
+{"orders": 15, "size": 1922, "kernel": "matmul", "torch": 0.2022561719999203, "jax": 0.5097377239999332}
+{"orders": 20, "size": 3362, "kernel": "eig", "torch": 18.54457761399999, "jax": 31.23048385499999}
+{"orders": 20, "size": 3362, "kernel": "solve", "torch": 1.5430885009999429, "jax": 1.9960020290000102}
+{"orders": 20, "size": 3362, "kernel": "matmul", "torch": 1.0137039749999985, "jax": 2.664861397999971}
+# /home/user/wavebit/studies/rcwa/optimization_step_scale/optimization_step_scale.py --orders 15 --layers 1 --path shape --rounds 3 --arms torch,torch-compile,jax-grad,jax-jit --threads 4 --out studies/rcwa/optimization_step_scale/records/optimization_step_scale.jsonl
+/home/user/wavebit/.venv/lib/python3.13/site-packages/array_api_compat/torch/_aliases.py:221: UserWarning: torch.asarray: unspecified requires_grad now defaults to obj.requires_grad instead of False. Pass requires_grad=False explicitly to get the old behavior and silence this warning. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/utils/tensor_new.cpp:1737.)
+  return torch.asarray(obj, dtype=dtype, device=device, copy=copy, **kwargs)
+/home/user/wavebit/studies/rcwa/optimization_step_scale/optimization_step_scale.py:253: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:820.)
+  return float(value), v.grad.numpy().copy()
+round 0 torch         step   46.035 s  modeling    1.355 s  +5.01 GB  T0 0.682221839291
+/home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_dynamo/variables/functions.py:2762: UserWarning: Dynamo detected a call to a `functools.lru_cache`-wrapped function at '_helpers.py:790'. Dynamo ignores the cache wrapper and directly traces the wrapped function. Silent incorrectness is only a *potential* risk, not something we have observed. Enable TORCH_LOGS=+dynamo for a DEBUG stack trace.
+
+This call originates from:
+  File "/home/user/wavebit/.venv/lib/python3.13/site-packages/array_api_compat/common/_helpers.py", line 790, in array_namespace
+    xp, info = _cls_to_namespace(cast(Hashable, type(x)), api_version, use_compat)
+               ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  torch._dynamo.utils.warn_once(msg)
+/home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_dynamo/variables/functions.py:2762: UserWarning: Dynamo detected a call to a `functools.lru_cache`-wrapped function at '_helpers.py:655'. Dynamo ignores the cache wrapper and directly traces the wrapped function. Silent incorrectness is only a *potential* risk, not something we have observed. Enable TORCH_LOGS=+dynamo for a DEBUG stack trace.
+
+This call originates from:
+  File "/home/user/wavebit/.venv/lib/python3.13/site-packages/array_api_compat/common/_helpers.py", line 655, in _cls_to_namespace
+    _issubclass_fast(cls_, "numpy", "ndarray")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  torch._dynamo.utils.warn_once(msg)
+round 0 torch-compile step   45.511 s  modeling    5.497 s  +4.36 GB  T0 0.682221839291
+round 0 jax-grad      step  119.264 s  modeling   10.761 s  +6.22 GB  T0 0.682221839291
+round 0 jax-jit       step   81.395 s  modeling    4.185 s  +3.91 GB  T0 0.682221839291
+round 1 torch-compile step   45.550 s  modeling    1.590 s  +4.39 GB  T0 0.688414099866
+round 1 jax-grad      step   92.745 s  modeling    3.869 s  +5.41 GB  T0 0.688414099866
+round 1 jax-jit       step   70.279 s  modeling    3.185 s  +3.55 GB  T0 0.688414099866
+round 1 torch         step   43.643 s  modeling    1.428 s  +4.24 GB  T0 0.688414099866
