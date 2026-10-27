@@ -254,6 +254,7 @@ subtrees:
               - file: validation/fdtd/fd-subpixel-occupancy
               - file: validation/fdtd/fd-two-debye-film
               - file: validation/fdtd/fd-waveguide-modes
+              - file: validation/fdtd/fd-waveguide-through-pml
               - file: validation/fdtd/fdtd-adjoint-validation
               - file: validation/fdtd/fdtd-bragg-cavity
               - file: validation/fdtd/fdtd-circle-gradients
