@@ -308,6 +308,25 @@ a step straddled at 1e-4 -- and reads 0.1476 / 0.1478 / 0.1477 / 0.1477 / 0.1477
   mixing.
 - *A third candidate* is weighed against the nearest, which itself switches: within about a sample
   of a point where three candidates meet, that weight can still step. The windows above include it.
+  Measured 2026-10-21 (`fc040e4`, NumPy) on the case that shows it most plainly, one
+  interface pair: a square polygon of permittivity 9, 0.2 on a side, alone in a unit cell (orders
+  (3, 3), grid 128, s light at theta 0.2 and wavelength 1.3). On its diagonals the two nearest
+  edges tie exactly, `argmin` picks one with the last bit of the vertices, and the other two
+  edges -- opposite and perpendicular to the one picked -- trade their weights. Moving the square
+  rigidly by 1e-9 moves only those vertex bits (at most 3.3e-16 after centring), yet `xx` steps
+  between 0.476 and 0.524 at the nine samples near the centre, where all four edges are within
+  a few widths, and by 1e-6 to 1e-4 along the rest of the diagonals; `sum(T)` steps by 4.6e-8,
+  and by 9.2e-8 for a shift of one period (an irregular quadrilateral: 3e-15). The step is a
+  thousand times smaller than the same kind of scene's grid error (an L polygon moves 5.6e-5
+  between grids 128 and 2048) and leaves the derivative alone (section 4's square). Two
+  symmetric weights were tried and withdrawn: each interval weighed against the nearest *and* the
+  second nearest, taking the larger distance past either bisector, and the same with the second
+  term blended in by the second nearest's own weight. Both remove the step (at most 4e-15), but
+  they change the extension wherever near-ties are common: by 1.6e-5 on that L at grid 128,
+  shrinking with the grid to 6e-8 at 2048 onto the same limit, which the current field approaches
+  slightly faster; and by 2.5e-4 / 1.6e-4 on a 256-gon over a rectangle at grids 128 / 256, where
+  every facet's neighbours nearly tie. Neither is an improvement worth that, so the step stays.
+  The cross-pair average has the same structure and was not measured (issue #36).
 - *Time and memory.* The field at the default grid 1024 costs 1.8 to 2.3 times the hard one
   (section 6, NumPy: 6.6 s against 3.7 s on the tilted L's 96 interval images, 14.0 s against
   6.6 s on the painted pair's 176, 484 s against 215 s on a disc painted over a rectangle, whose
