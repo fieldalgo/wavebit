@@ -33,8 +33,10 @@ with ``F_A`` and ``F_B`` the bodies' own exact fills and ``S`` the volume of the
     cross-section times a 1-D overlap for an extrusion.
 
 Anything else -- curved bodies that overlap in a voxel, a crease meeting a crease -- has only a
-bracket, not a value, and is refused. So is a **flush joint**, two coincident back-to-back flat
-faces: which material owns the shared plane is the junction's question (``junction.py``,
+bracket, not a value, and is refused. So is **any voxel two curved surfaces share** (a sphere or a
+cylinder wall against another), even where the volume is exact: the registered convergence gate
+for such a pair, the S7 dimer, failed, and its registered consequence is this refusal. So is a
+**flush joint**, two coincident back-to-back flat faces: which material owns the shared plane is the junction's question (``junction.py``,
 ``Structure(junction=)``), measured there, and a second rule for it is not offered here.
 
 **The interface.** ``w_c`` is the second moment of every interface in the voxel: each member's own
@@ -302,6 +304,13 @@ def _globally_apart(a, b):
     return False
 
 
+def _curved(body):
+    """Whether ``body``'s surface can be curved in a voxel: a sphere, or a cylinder's wall."""
+    from wavebit.fdtd._shapes import Cylinder
+    from wavebit.fdtd._shapes import Sphere
+    return isinstance(body, (Sphere, Cylinder))
+
+
 def geometry(body_a, body_b, points, dx, tol):
     """Everything the rule needs at ``points`` ``(N, 3)``, or the reason it cannot be had.
 
@@ -330,6 +339,14 @@ def geometry(body_a, body_b, points, dx, tol):
     if flush.any():
         return ('a flush joint (two coincident back-to-back faces); which medium owns the '
                 'shared plane is the junction rule\'s question', int(np.argmax(flush)))
+
+    # Two curved surfaces in one voxel: the registered arm-D gate (the S7 dimer of two
+    # dielectric spheres) failed its criterion (b), so the clip does not answer them
+    # (docs/validation/fdtd/fd-polytope-clip.md, "Results").
+    curved = (_curved(body_a) & ~flat_a) & (_curved(body_b) & ~flat_b)
+    if curved.any():
+        return ('two curved surfaces in one voxel, which the registered dimer gate did not '
+                'pass', int(np.argmax(curved)))
 
     apart = np.zeros(n, bool)
     if _globally_apart(body_a, body_b):

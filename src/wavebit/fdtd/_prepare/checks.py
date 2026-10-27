@@ -426,7 +426,9 @@ def check_smoothed(scene, grid):
     junction does not recognise as flush is clipped -- exact per-medium fills and one
     projection over both interfaces, written over the same marked points -- wherever the two
     bodies' shared volume in every marked voxel is exact (proved apart, both flat, or one an
-    unturned Box face). A flush joint, a curved overlap, a union of one material, a third
+    unturned Box face) and no voxel holds two curved surfaces (a sphere or a cylinder wall
+    against another: their registered gate, the S7 dimer, failed). A flush joint, a curved
+    overlap, a union of one material, a third
     structure in a written voxel, a lossy, magnetic or anisotropic medium, the stencil, and a
     pair the junction recognises but refuses keep this refusal, with the clip's reason
     appended. ``docs/validation/fdtd/fd-polytope-clip.md`` holds the registered gates.
