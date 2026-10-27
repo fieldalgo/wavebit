@@ -50,6 +50,13 @@ the cross-section declaring continuation; a continued `SnappedBox` that touches 
 continued `SnappedBox` that does not reach the named face; a `SnappedSlab` naming a
 face of its own axis.
 
+Amendment to D1, before it was first run: a `CurrentDipole` is refused on an
+`InvariantAxis` (its stamp is not uniform along the invariant axis), so D1's source is
+instead an initial field. Its E is the slab's TE0 mode at 1.55 µm, as `solve_modes`
+returns it, times `exp(-(z + 2)^2 / (2 (0.6 µm)^2)) cos(beta0 (z + 2))` with `beta0` that
+mode's propagation constant, and its H is zero. It launches TE0 both ways from z = -2 µm
+with a spectrum centred near 1.55 µm. Everything else in D1 is as registered.
+
 ## Results
 
 Pending.
