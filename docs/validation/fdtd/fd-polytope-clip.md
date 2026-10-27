@@ -173,3 +173,23 @@ chosen after seeing a measured number; it is committed and published before the 
   law through that wavelength's non-writing grids (40 and 56), against the 80-cell reference.
   The band error (mean over wavelengths) is reported only over the wavelengths every compared
   grid shares.
+
+## Amendment 2 (2026-10-27, instrument run length; before any arm D row was kept)
+
+One timing probe of arm D (32 cells per unit, wavelength 1.0, the narrow band of Amendment 1,
+`Run(periods=40)`) showed the narrow-band pulse still on at the end of the run: the flux
+monitor's decay diagnostic read 0.022. Its value is discarded and is not a row of the
+record. A narrow band of relative width 0.04 needs about 35 periods to pass, so a valid run is
+longer, and eleven narrow-band runs at the 80-cell reference grid would not finish in this
+campaign's budget. The instrument is therefore:
+
+* at the grids where the clip writes (20, 24, 28, 32), one narrow-band run per wavelength
+  that plans, `Run(periods=90)`;
+* at 40, 56 and 80, where a band covering all eleven wavelengths plans
+  (`Band(wavelength=4/3, df=0.12)`), one broadband run, `Run(periods=40)`;
+* an instrument check: at 40 cells, narrow-band runs at wavelengths 1.0, 1.5 and 2.0 against
+  that grid's broadband run, reported, so that the two instruments are shown to agree well
+  below the errors criterion (b) compares.
+
+Every row records its decay diagnostic; a row whose flux monitor has not decayed below
+1e-4 is reported as unsettled. The pass rules are unchanged.
