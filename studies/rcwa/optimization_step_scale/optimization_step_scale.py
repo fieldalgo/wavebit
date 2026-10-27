@@ -77,7 +77,7 @@ def _parse():
     ap.add_argument('--compile-configs', default='15:1',
                     help='orders:layers at which --sweep keeps the torch-compile arm')
     ap.add_argument('--mem-limit-gb', type=float, default=None,
-                    help='abort and record the peak once the resident set passes this (default 90%% of RAM)')
+                    help='abort and record the peak once the resident set passes this (default 95%% of RAM or of the memory cgroup limit, whichever is lower)')
     ap.add_argument('--kernels', action='store_true',
                     help='time the dense kernels alone (eig, solve, matmul) at each order\'s eig size')
     ap.add_argument('--out', default=str(ROOT / 'artifacts' / 'studies' / 'optimization_step_scale.jsonl'))
@@ -85,9 +85,25 @@ def _parse():
 
 
 ARGS = _parse()
-_MEM_TOTAL = next(int(line.split()[1]) * 1024 for line in open('/proc/meminfo')
-                  if line.startswith('MemTotal'))
-MEM_LIMIT = (ARGS.mem_limit_gb * 2**30 if ARGS.mem_limit_gb else 0.9 * _MEM_TOTAL)
+
+
+def _memory_ceiling():
+    """RAM, or the memory cgroup's limit when that is lower (a container's real ceiling)."""
+    ceiling = next(int(line.split()[1]) * 1024 for line in open('/proc/meminfo')
+                   if line.startswith('MemTotal'))
+    for line in open('/proc/self/cgroup'):
+        _, controllers, path = line.strip().split(':', 2)
+        for limit_file in ([f'/sys/fs/cgroup/memory{path}/memory.limit_in_bytes'] if 'memory' in controllers.split(',')
+                           else [f'/sys/fs/cgroup{path}/memory.max'] if controllers == '' else []):
+            try:
+                ceiling = min(ceiling, int(open(limit_file).read()))
+            except (OSError, ValueError):          # absent, or 'max'
+                pass
+    return ceiling
+
+
+# The cgroup counts every process in it, not only this one, so stop with some room to spare.
+MEM_LIMIT = (ARGS.mem_limit_gb * 2**30 if ARGS.mem_limit_gb else 0.95 * _memory_ceiling())
 
 # Thread pinning must precede the first import of numpy/torch/jax. Torch's LAPACK is MKL
 # (OpenMP); jaxlib's CPU LAPACK kernels come from SciPy's OpenBLAS; XLA's own ops use its
@@ -104,6 +120,7 @@ def machine():
     commit = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', '--short', 'HEAD'],
                             capture_output=True, text=True).stdout.strip()
     return dict(cpu=cpu, cores=os.cpu_count(), ram_gb=round(mem / 2**20, 1), threads=ARGS.threads,
+                memory_ceiling_gb=round(_memory_ceiling() / 2**30, 2),
                 python=platform.python_version(), numpy=numpy.__version__, scipy=scipy.__version__,
                 torch=torch.__version__, jax=jax.__version__, commit=commit,
                 torch_lapack='MKL' if torch.backends.mkl.is_available() else 'other')
