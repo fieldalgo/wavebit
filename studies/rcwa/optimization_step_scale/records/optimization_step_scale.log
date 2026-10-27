@@ -192,3 +192,23 @@ This call originates from:
 /home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_inductor/lowering.py:2774: UserWarning: Torchinductor does not support code generation for complex operators. Performance may be worse than eager.
   warnings.warn(
 round 0 torch-compile step   46.874 s  modeling   20.590 s  +4.31 GB  T0 0.993379861756
+round 0 jax-grad      step  111.380 s  modeling    4.584 s  +5.95 GB  T0 0.993379861756
+E1027 06:58:26.585726    2274 slow_operation_alarm.cc:74] Constant folding an instruction is taking > 1s:
+
+  %scatter-add.40 = c128[961,61]{1,0} scatter(%broadcast_in_dim.278, %constant.687, %broadcast.87), update_window_dims={0}, inserted_window_dims={1}, scatter_dims_to_operand_dims={1}, index_vector_dim=1, to_apply=%region_21.46.clone, metadata={op_name="jit(modeling)/transpose(jvp(jit(_take)))/scatter-add" stack_frame_id=209}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+E1027 06:58:28.053145    2223 slow_operation_alarm.cc:141] The operation took 2.467629458s
+Constant folding an instruction is taking > 1s:
+
+  %scatter-add.40 = c128[961,61]{1,0} scatter(%broadcast_in_dim.278, %constant.687, %broadcast.87), update_window_dims={0}, inserted_window_dims={1}, scatter_dims_to_operand_dims={1}, index_vector_dim=1, to_apply=%region_21.46.clone, metadata={op_name="jit(modeling)/transpose(jvp(jit(_take)))/scatter-add" stack_frame_id=209}
+
+This isn't necessarily a bug; constant-folding is inherently a trade-off between compilation time and speed at runtime. XLA has some guards that attempt to keep constant folding from taking too long, but fundamentally you'll always be able to come up with an input program that takes a long time.
+
+If you'd like to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+round 0 jax-jit       step   78.068 s  modeling    4.406 s  +3.76 GB  T0 0.993379861756
+round 1 torch-compile step   61.816 s  modeling    0.529 s  +4.02 GB  T0 0.993373868071
+round 1 jax-grad      step  114.504 s  modeling    0.914 s  +6.50 GB  T0 0.993373868071
+round 1 jax-jit       step   68.063 s  modeling    0.811 s  +3.31 GB  T0 0.993373868071
