@@ -154,6 +154,9 @@ def _source(source, units, problem=None, numerics=None):
     if isinstance(source, sources.ModeSource):
         from ._mode_source import mode_sheet
         return mode_sheet(source, problem, numerics, units)
+    if isinstance(source, sources.GaussianBeam):
+        from ._beam_source import beam_sheet
+        return beam_sheet(source, problem, numerics, units)
     if not isinstance(source, (sources.PlaneWave, sources.CurrentDipole, sources.TFSF)):
         raise UnsupportedFeatureError('unsupported source', code='source.type', path='sources', actual=type(source).__name__)
     kw = dict(name=source.name, band=_pulse(source.pulse, units),
@@ -272,8 +275,9 @@ def validate_sources(problem):
     for index, source in enumerate(problem.sources):
         indexed = f'sources[{index}]'
         if not isinstance(source, (sources.PlaneWave, sources.CurrentDipole, sources.TFSF,
-                                   sources.ModeSource)):
-            raise UnsupportedFeatureError('expected PlaneWave, CurrentDipole, TFSF or ModeSource',
+                                   sources.ModeSource, sources.GaussianBeam)):
+            raise UnsupportedFeatureError('expected PlaneWave, CurrentDipole, TFSF, ModeSource or '
+                                          'GaussianBeam',
                                           code='source.type', path=indexed, actual=type(source).__name__)
         if not isinstance(source.name, str) or not source.name:
             raise ValidationError('source name must be a nonempty string', code='source.name', path=indexed+'.name')
@@ -496,7 +500,7 @@ def lower_problem(problem, numerics, *, plan=None):
                 raise ValidationError('monitor is outside the physical domain',code='monitor.outside_domain',path='outputs.'+m.name)
         else:old_scene._monitor_inside(m,physical_low,physical_high)
     for source in problem.sources:
-        if isinstance(source,sources.ModeSource):
+        if isinstance(source,(sources.ModeSource,sources.GaussianBeam)):
             if not isinstance(source.plane, geometry.Plane):
                 raise ValidationError('expected Plane', code='source.plane', path='sources.'+source.name+'.plane')
             axis=source.plane.axis

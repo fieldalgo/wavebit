@@ -16,3 +16,4 @@ Start with the [current FDTD problem API](general-fdtd.md), [how the solver mode
 - [How the FDTD solver models a problem](model.md)
 - [A solve in the time domain](time-domain.md)
 - [Waveguide modes of the discrete grid](waveguide-modes.md)
+- [Gaussian beams](gaussian-beam.md)

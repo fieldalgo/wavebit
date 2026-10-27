@@ -492,7 +492,7 @@ def _clear_of_sources(where, scene, grid, lo, hi, closed, tfsf=True):
                 from wavebit.errors import ValidationError
                 raise ValidationError(
                     f'{where}: the {shape} (nodes {_nodes_text(lo, hi)}) is within a cell of the '
-                    f'sheet of ModeSource({src.name!r}) at node {k} along {AXES[P]}, where the '
+                    f'sheet of {src.kind}({src.name!r}) at node {k} along {AXES[P]}, where the '
                     f'field jumps from the total field on one side to the scattered field on the '
                     f'other. Move it at least two cells off the sheet.',
                     code='monitor.source_sheet', path='outputs')

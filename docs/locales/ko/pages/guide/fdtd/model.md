@@ -363,7 +363,7 @@ stencil의 지원 범위는 그대로입니다. 진공 속 구 하나와 미분�
 
 ## 소스
 
-`Problem.sources`에는 `PlaneWave`, `CurrentDipole`, `TFSF`를 넣습니다. 이름은 중복되지 않는
+`Problem.sources`에는 `PlaneWave`, `CurrentDipole`, `TFSF`, `ModeSource`, `GaussianBeam`을 넣습니다. 이름은 중복되지 않는
 빈 문자열이 아닌 문자열이어야 하며, 펄스는 `GaussianPulse`여야 합니다. `check`와
 `Prepared.validate`는 잘못된 선언을 `sources[i]`, 잘못되거나 중복된 이름을
 `sources[i].name`, 잘못된 펄스 형식을 `sources.<name>.pulse` 경로에 보고합니다.
@@ -393,6 +393,7 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 | `PlaneWave(name, plane=..., pulse=..., direction="-z", theta=0, phi=0, polarization="s")` | `plane`에 가장 가까운 노드 평면의 한 방향 시트로, `direction` 쪽으로만 내보냅니다. `theta`는 진행 축으로부터의 극각, `phi`는 첫 번째 가로 축(z 방향 파동이면 x)으로부터의 방위각입니다. `"s"`는 E가 입사면에 수직, `"p"`는 입사면 안입니다. 가로 면은 `Periodic()`(수직 입사)이거나 `Bloch.from_source`가 만든 `Bloch` 면이어야 합니다. 가로 파수 벡터는 펄스의 중심 파장에서 고정되므로, 비스듬한 광대역 펄스는 일정한 각도의 조명이 아닙니다. |
 | `CurrentDipole(name, center=..., pulse=..., component="Ey", kind="electric", current_moment=1)` | 점 **전류**(A·m), 또는 `kind="magnetic"`이면 그 자기 등가물(V·m)입니다. 매끄러운 스탬프(기본 `"bspline"` 또는 `"tent"`, 둘 다 반폭 두 셀)에 퍼뜨려, 중심이 어디에 있든 모멘트와 무게중심이 정확합니다. C·m 단위의 쌍극자 모멘트가 아닙니다. |
 | `TFSF(name, box=..., pulse=..., direction="-z", polarization="x")` | `SnappedBox` 안에만 있는 평면파(안은 전체장, 밖은 산란장)로, 유한한 산란체용입니다. 축 방향만 되고, 그 축의 두 면은 `Open()`이어야 합니다. |
+| `GaussianBeam(name, plane=..., pulse=..., waist=..., focus=(0, 0, 0), polarization="x", direction="+z")` | `plane`에 가장 가까운 노드 면의 시트에서 한쪽으로 내보내는 집속 가우시안 빔입니다. [가우시안 빔](gaussian-beam.md)을 참고하세요. |
 | `InitialField(E, H, amplitude=1)` | 실행이 시작하는 장: `t = 0`의 E와 `t = -dt/2`의 H를 배열로, 또는 각 성분의 Yee 점에서 평가되는 호출 가능 객체로 줍니다. |
 
 `PlaneWave.plane`에는 `fdtd.Plane(z=.5)`처럼 `fdtd.Plane`을 넣어야 합니다.
@@ -661,8 +662,8 @@ for w, r, t in zip(wavelengths, R, T):
 
 - CUDA는 [명시한 Torch 범위](../../validation/fdtd/general-cuda.md)로 제한되며, 다른 GPU 백엔드와 단정밀도는 거부합니다. 격자는 균일한 정육면체입니다.
 - 셀별 배열과 비균일 z 격자는 `fdtd.native`로 선언합니다. 일반 장면의 CSG 합집합·교집합·차집합과 기울어진 밀어내기 축은 지원하지 않습니다.
-- 일반 장면의 가우시안 빔은 아직 구현하지 않았습니다. 모드 광원, 모드 모니터, 모드 솔버는
-  [도파관 모드](waveguide-modes.md)에 설명되어 있습니다.
+- 모드 광원, 모드 모니터, 모드 솔버는 [도파관 모드](waveguide-modes.md)에, 가우시안 빔은
+  [가우시안 빔](gaussian-beam.md)에 설명되어 있습니다.
 - 자동 정지는 `fdtd.DecayStop`, 단계형 전도도 흡수층은 `fdtd.ConductiveAbsorber`로 제공합니다. [정지와 흡수층](stopping-and-absorbers.md)을 참고하세요.
 - `fdtd.Shape`는 사용자 정의 고정 도형을 받으며 prepared 재사용 시 선언 상태를 검사합니다. 도형의 셀 support는 Open padding에 닿지 않아야 합니다.
 - 손실·분산 스무딩 바디는 평평한 필름으로 제한됩니다.

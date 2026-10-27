@@ -36,7 +36,7 @@ PUBLIC = {
  'wavebit.fdtd': ('Bloch', 'Boundaries', 'Box', 'ConductiveAbsorber', 'CurrentDipole', 'Cylinder',
                   'DecayStop', 'DiffractionMonitor', 'Domain', 'Duration', 'FarFieldMonitor',
                   'FarFieldSpectrum', 'FieldMonitor', 'FluxMonitor', 'GaussianPulse',
-                  'InitialField', 'InvariantAxis', 'MirrorSymmetry', 'ModeMonitor', 'ModeSource',
+                  'InitialField', 'InvariantAxis', 'GaussianBeam', 'MirrorSymmetry', 'ModeMonitor', 'ModeSource',
                   'ModeSpectrum',
                   'Numerics', 'Open', 'Outputs',
                   'PEC', 'PMC', 'PML', 'Periodic', 'Plane', 'PlaneWave', 'Prepared', 'Prism',

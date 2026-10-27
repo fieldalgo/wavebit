@@ -114,6 +114,7 @@ subtrees:
           - file: guide/fdtd/model
           - file: guide/fdtd/time-domain
           - file: guide/fdtd/waveguide-modes
+          - file: guide/fdtd/gaussian-beam
   - file: reference/index
     title: API reference
     subtrees:

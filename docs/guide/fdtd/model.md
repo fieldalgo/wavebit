@@ -389,7 +389,8 @@ These messages do not relax the return tolerance or the measured support limits.
 
 ## Sources
 
-`Problem.sources` accepts `PlaneWave`, `CurrentDipole` and `TFSF` declarations with
+`Problem.sources` accepts `PlaneWave`, `CurrentDipole`, `TFSF`, `ModeSource` and
+`GaussianBeam` declarations with
 unique, nonempty string names and a `GaussianPulse`. `check` and
 `Prepared.validate` report malformed declarations at `sources[i]`, invalid or
 duplicate names at `sources[i].name`, and invalid pulses at
@@ -422,6 +423,7 @@ one matching the cell boundaries, is unsupported and produces a structured
 | `PlaneWave(name, plane=..., pulse=..., direction="-z", theta=0, phi=0, polarization="s")` | a one-way sheet at the node plane nearest `plane`, launching toward `direction`. `theta` is the polar angle from the propagation axis and `phi` the azimuth from the first transverse axis (x for a z wave); `"s"` has E perpendicular to the plane of incidence, `"p"` in it. The transverse faces must be `Periodic()` (normal incidence) or the `Bloch` faces from `Bloch.from_source`; the transverse wavevector is fixed at the pulse's centre wavelength, so an oblique broadband pulse is not constant-angle illumination. |
 | `CurrentDipole(name, center=..., pulse=..., component="Ey", kind="electric", current_moment=1)` | a point **current** (A·m), or with `kind="magnetic"` its magnetic equivalent (V·m), spread over a smooth stamp (`"bspline"`, the default, or `"tent"`, each with a half-width of two cells) that keeps the moment and its centroid exact wherever the centre sits. It is not a dipole moment in C·m. |
 | `TFSF(name, box=..., pulse=..., direction="-z", polarization="x")` | a plane wave inside a `SnappedBox` only (total field inside, scattered field outside), for a finite scatterer. Axis directions only; the two faces along its axis must be `Open()`. |
+| `GaussianBeam(name, plane=..., pulse=..., waist=..., focus=(0, 0, 0), polarization="x", direction="+z")` | a focused Gaussian beam launched one way from a sheet at the node plane nearest `plane`; see [Gaussian beams](gaussian-beam.md). |
 | `InitialField(E, H, amplitude=1)` | the field the run starts from: E at `t = 0` and H at `t = -dt/2`, given as arrays or as callables evaluated at each component's own Yee points. |
 
 `PlaneWave.plane` must be an `fdtd.Plane`, for example `fdtd.Plane(z=.5)`;
@@ -709,8 +711,8 @@ coating of 0.105 µm instead, the same scene would warn `geometry.cell_snapped` 
   other GPU backends and single precision are refused. The grid is uniform and cubic.
 - Per-cell sampled grids use `fdtd.native`; this general-scene formulation has no raster body.
   Constructive solid geometry (union, intersection, difference) and tilted extrusion axes are unsupported.
-- No Gaussian beams. Mode sources, mode monitors and the mode solver are described in
-  [Waveguide modes](waveguide-modes.md).
+- Mode sources, mode monitors and the mode solver are described in
+  [Waveguide modes](waveguide-modes.md), and Gaussian beams in [Gaussian beams](gaussian-beam.md).
 - No smoothed lossy or dispersive bodies outside flat films.
 - **Only a cell-snapped core continues into an absorbing layer.** Into an `Open()` face's PML
   continue the background, a `SnappedSlab` across that axis (or, declaring

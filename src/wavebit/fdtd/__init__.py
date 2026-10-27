@@ -3,7 +3,8 @@ from ._problem import Problem, Scene
 from ._geometry import (Domain, Shape, SnappedSlab, SnappedBox, Plane, Sphere, Box, Cylinder, Prism,
                         Structure)
 from ._boundaries import Open, Periodic, Bloch, PEC, PMC, MirrorSymmetry, InvariantAxis, Boundaries
-from ._sources import GaussianPulse, PlaneWave, CurrentDipole, TFSF, ModeSource, InitialField
+from ._sources import (GaussianPulse, PlaneWave, CurrentDipole, TFSF, ModeSource, GaussianBeam,
+                       InitialField)
 from ._monitors import (TimeSeriesMonitor, FieldMonitor, FluxMonitor, DiffractionMonitor,
                         FarFieldMonitor, ModeMonitor, Outputs)
 from ._numerics import UniformGrid, Duration, PML, ConductiveAbsorber, DecayStop, Numerics
@@ -16,7 +17,8 @@ __all__ = ['Problem', 'Scene',
            'Domain', 'Shape', 'SnappedSlab', 'SnappedBox', 'Plane', 'Sphere', 'Box', 'Cylinder',
            'Prism', 'Structure',
            'Open', 'Periodic', 'Bloch', 'PEC', 'PMC', 'MirrorSymmetry', 'InvariantAxis', 'Boundaries',
-           'GaussianPulse', 'PlaneWave', 'CurrentDipole', 'TFSF', 'ModeSource', 'InitialField',
+           'GaussianPulse', 'PlaneWave', 'CurrentDipole', 'TFSF', 'ModeSource', 'GaussianBeam',
+           'InitialField',
            'TimeSeriesMonitor', 'FieldMonitor', 'FluxMonitor', 'DiffractionMonitor',
            'FarFieldMonitor', 'ModeMonitor', 'Outputs',
            'UniformGrid', 'Duration', 'PML', 'ConductiveAbsorber', 'DecayStop', 'Numerics',
