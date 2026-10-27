@@ -35,3 +35,74 @@ round 1 torch-compile step   45.550 s  modeling    1.590 s  +4.39 GB  T0 0.68841
 round 1 jax-grad      step   92.745 s  modeling    3.869 s  +5.41 GB  T0 0.688414099866
 round 1 jax-jit       step   70.279 s  modeling    3.185 s  +3.55 GB  T0 0.688414099866
 round 1 torch         step   43.643 s  modeling    1.428 s  +4.24 GB  T0 0.688414099866
+round 2 jax-grad      step   91.850 s  modeling    3.371 s  +5.40 GB  T0 0.694179731390
+round 2 jax-jit       step   70.788 s  modeling    2.858 s  +3.52 GB  T0 0.694179731389
+round 2 torch         step   43.280 s  modeling    1.590 s  +4.20 GB  T0 0.694179731389
+round 2 torch-compile step   44.687 s  modeling    1.459 s  +4.20 GB  T0 0.694179731389
+round 3 jax-jit       step   72.656 s  modeling    2.795 s  +3.48 GB  T0 0.699504508004
+Traceback (most recent call last):
+  File "/home/user/wavebit/studies/rcwa/optimization_step_scale/optimization_step_scale.py", line 375, in <module>
+    kernels() if ARGS.kernels else sweep() if ARGS.sweep else main()
+                                                              ~~~~^^
+  File "/home/user/wavebit/studies/rcwa/optimization_step_scale/optimization_step_scale.py", line 295, in main
+    value, grad = fn(x)
+                  ~~^^^
+  File "/home/user/wavebit/studies/rcwa/optimization_step_scale/optimization_step_scale.py", line 251, in step
+    value = fn(v)
+  File "/home/user/wavebit/studies/rcwa/optimization_step_scale/optimization_step_scale.py", line 223, in loss
+    return prepared.run(build(v)).T[0, n, n].real            # zeroth-order transmittance
+           ~~~~~~~~~~~~^^^^^^^^^^
+  File "/home/user/wavebit/src/wavebit/_common/backend.py", line 124, in door
+    return run(*args, **kwargs)
+  File "/home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_dynamo/eval_frame.py", line 1548, in _fn
+    return fn(*args, **kwargs)
+  File "/home/user/wavebit/src/wavebit/_common/backend.py", line 61, in eager
+    return fn(*args, **kwargs)
+  File "/home/user/wavebit/src/wavebit/rcwa/_lifecycle.py", line 376, in run
+    result = solver.solve(geometry=geometry, auto_detune=self.numerics.detuning or False)
+  File "/home/user/wavebit/src/wavebit/_common/backend.py", line 124, in door
+    return run(*args, **kwargs)
+  File "/home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_dynamo/eval_frame.py", line 1548, in _fn
+    return fn(*args, **kwargs)
+  File "/home/user/wavebit/src/wavebit/_common/backend.py", line 61, in eager
+    return fn(*args, **kwargs)
+  File "/home/user/wavebit/src/wavebit/rcwa/_engine/engine.py", line 829, in wrapped
+    return func(self, *args, **kwargs)
+  File "/home/user/wavebit/src/wavebit/rcwa/_engine/engine.py", line 242, in call
+    return function(self, *args, **kwargs)
+  File "/home/user/wavebit/src/wavebit/rcwa/_engine/engine.py", line 5881, in solve
+    return self._solve_detuned(geometry, auto_detune)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/wavebit/src/wavebit/rcwa/_engine/engine.py", line 5886, in _solve_detuned
+    return self._solve_built(geometry)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "/home/user/wavebit/src/wavebit/rcwa/_engine/engine.py", line 6892, in _solve_built
+    eps = self._eps_conv_matrices(geometry)
+  File "/home/user/wavebit/src/wavebit/rcwa/_engine/engine.py", line 6168, in _eps_conv_matrices
+    return self._slots_for(self.structure, geometry, quantity='permittivity')
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/wavebit/src/wavebit/rcwa/_engine/engine.py", line 6457, in _slots_for
+    conv = _parametric.to_conv_mat_parametric_layers(
+        structure, half_width_u, half_width_v,
+    ...<11 lines>...
+        gamma_plans=None if geometry is None else geometry.gamma_plans,
+        **({} if self._projector is None else {'nvf_projector': self.nvf_projector}))
+  File "/home/user/wavebit/src/wavebit/rcwa/_engine/parametric.py", line 2915, in to_conv_mat_parametric_layers
+    mats = to_conv_mat_parametric_nvf(
+        xp, layer.get('shapes', []), background, half_width_u, half_width_v,
+        lattice, dtype, shape_nvf_grid_size=shape_nvf_grid_size, plan=gamma,
+        **({} if nvf_projector is None else {'nvf_projector': nvf_projector}))
+  File "/home/user/wavebit/src/wavebit/rcwa/_engine/parametric.py", line 2614, in to_conv_mat_parametric_nvf
+    return nvf_from_coeffs(xp, eps_c, inv_eps_c, *coeffs[:3], half_width_u, half_width_v,
+                           c_yx=coeffs[3] if len(coeffs) == 4 else None,
+                           eps_bound=largest_eps(xp, [background] + [s['material'] for s in shapes],
+                                                 dtype))
+  File "/home/user/wavebit/src/wavebit/rcwa/_engine/parametric.py", line 2664, in nvf_from_coeffs
+    return _nvf_assemble(xp, ep_dir, ep_inv, C_xx, C_xy, C_yy, C_yx, eps_bound=eps_bound)
+  File "/home/user/wavebit/src/wavebit/rcwa/_engine/factorization.py", line 2187, in _nvf_assemble
+    ep_inv = _floor_singular_values(xp, ep_inv, 1.0 / (INVERSE_RULE_BOUND * eps_bound))
+  File "/home/user/wavebit/src/wavebit/rcwa/_engine/factorization.py", line 1854, in _floor_singular_values
+    U, s, Vh = xp.linalg.svd(_no_gradient(B))
+               ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+torch._C._LinAlgError: linalg.svd: The algorithm failed to converge because the input matrix is ill-conditioned or has too many repeated singular values (error code: 1).
+# /home/user/wavebit/studies/rcwa/optimization_step_scale/optimization_step_scale.py --orders 15 --layers 1 --path raster --rounds 3 --arms torch,torch-compile,jax-grad,jax-jit --threads 4 --out studies/rcwa/optimization_step_scale/records/optimization_step_scale.jsonl
