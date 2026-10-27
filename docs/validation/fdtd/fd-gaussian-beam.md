@@ -73,6 +73,12 @@ centred at 1 µm with `frequency_sigma_hz = 2e13` and `cutoff = 1e-12`. Polariza
   (`monitor.source_sheet`); the engine placeholder `fd.GaussianBeam` (`NotImplementedError`
   naming the public source).
 
+Amendment to G4, before its three-dimensional case was first run: at the sheet (2 µm from the
+focus, Rayleigh range 3.14 µm) the beam's radius is 1.19 µm, so on the outermost cells of a
+±3 µm cross-section it is about 2e-3 of its peak, above the 1e-3 the source admits
+(`source.beam_size`). That cross-section is widened to ±3.5 µm in x and y (the beam is then
+2e-4 of its peak there). Everything else in G4 is as registered.
+
 ## Results
 
 Pending.
