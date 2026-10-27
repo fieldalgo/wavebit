@@ -51,10 +51,10 @@ _U = r'(?<![\w.])'
 #: messages spell those publicly where they are raised.
 _SHARED = ('Plane', 'Box', 'Sphere', 'Cylinder', 'Prism', 'PlaneWave', 'TFSF', 'Bloch',
            'Boundaries', 'Periodic', 'PEC', 'PMC', 'InitialField', 'Domain', 'Shape', 'Structure',
-           'PML', 'ModeMonitor')
+           'PML', 'ModeMonitor', 'ModeSource')
 
 #: Stage-7 placeholders that no surface implements yet.
-_UNIMPLEMENTED = ('ModeSource', 'GaussianBeam')
+_UNIMPLEMENTED = ('GaussianBeam',)
 
 PHRASES = (
     # A static refusal ends with the engine's leaves; the public module has its own.

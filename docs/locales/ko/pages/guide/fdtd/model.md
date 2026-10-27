@@ -661,7 +661,7 @@ for w, r, t in zip(wavelengths, R, T):
 
 - CUDA는 [명시한 Torch 범위](../../validation/fdtd/general-cuda.md)로 제한되며, 다른 GPU 백엔드와 단정밀도는 거부합니다. 격자는 균일한 정육면체입니다.
 - 셀별 배열과 비균일 z 격자는 `fdtd.native`로 선언합니다. 일반 장면의 CSG 합집합·교집합·차집합과 기울어진 밀어내기 축은 지원하지 않습니다.
-- 일반 장면의 가우시안 빔과 모드 소스는 아직 구현하지 않았습니다. 모드 모니터와 모드 솔버는
+- 일반 장면의 가우시안 빔은 아직 구현하지 않았습니다. 모드 광원, 모드 모니터, 모드 솔버는
   [도파관 모드](waveguide-modes.md)에 설명되어 있습니다.
 - 자동 정지는 `fdtd.DecayStop`, 단계형 전도도 흡수층은 `fdtd.ConductiveAbsorber`로 제공합니다. [정지와 흡수층](stopping-and-absorbers.md)을 참고하세요.
 - `fdtd.Shape`는 사용자 정의 고정 도형을 받으며 prepared 재사용 시 선언 상태를 검사합니다. 도형의 셀 support는 Open padding에 닿지 않아야 합니다.

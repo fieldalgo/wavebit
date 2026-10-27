@@ -154,6 +154,11 @@ class ModeSpectrum(Declaration):
     :func:`solve_modes` returns them at that wavelength (``modes[i]`` holds them, with their
     phase convention); ``|forward|**2`` is ``forward_energy``. ``effective_index`` is each
     mode's index on the grid.
+
+    With ``ModeMonitor(source=...)``, ``injected`` and ``leakage`` (``(wavelengths,)``, complex,
+    same units as ``forward``) are the amplitudes of that source's mode, on the source's plane,
+    that it launched its way and leaked the other way; ``injected_energy`` and
+    ``leakage_energy`` are their squared magnitudes. Without it they are ``None``.
     """
     wavelengths: tuple
     frequencies_hz: object
@@ -165,6 +170,10 @@ class ModeSpectrum(Declaration):
     units: str
     modes: tuple = ()
     metadata: object = field(default_factory=dict)
+    injected: object = None
+    leakage: object = None
+    injected_energy: object = None
+    leakage_energy: object = None
 
     def __post_init__(self):
         register_dataclass(type(self))
@@ -586,8 +595,18 @@ def prepare_window(problem, numerics, plane, wavelength):
                 f'host eigensolve and does not differentiate.', 'mode.traced',
                 'scene.background.' + leaf)
 
-    # The full scene, lowered only for its grid and its structures' supports.
-    full, metadata = lower_problem(problem, numerics)
+    # The full scene, lowered only for its grid and its structures' supports. Its sources and
+    # monitors are left out: a ModeSource is lowered by solving on its own window, and neither
+    # changes the grid, the time step or the coefficients. A run length that counts a source's
+    # periods is replaced by one step, and a PML that takes its wavelength from the sources is
+    # graded for the solve's wavelength (its profile lies outside the window).
+    from ._monitors import Outputs
+    absorber = numerics.absorber
+    if isinstance(absorber, PML) and absorber.wavelength is None:
+        absorber = absorber.replace(wavelength=wavelength)
+    full, metadata = lower_problem(
+        problem.replace(sources=(), outputs=Outputs()),
+        numerics.replace(duration=Duration(steps=1), absorber=absorber))
     grid = Grid.from_domain(full.domain.size, full.domain.center, full.resolution.dx)
     pad = metadata['padding_cells']
     low = metadata['physical_domain']['low']
@@ -927,6 +946,18 @@ def mode_spectrum(problem, numerics, monitor, value, plan, rt, spectral_factor, 
                                 for q, beta, f, r, e in modes], 'numpy'))
     forward, backward = xp.stack(forward), xp.stack(backward)
     names = {0: 'x', 1: 'y', 2: 'z'}
+    launched = {}
+    if monitor.source is not None:
+        from ._mode_source import mode_sheet, injected_amplitudes
+        from ._sources import ModeSource
+        source = next(s for s in problem.sources
+                      if isinstance(s, ModeSource) and s.name == monitor.source)
+        sheet = mode_sheet(source, problem, numerics, problem.units)
+        injected, leakage = injected_amplitudes(sheet, plan, rt,
+                                                [float(lam) for lam in monitor.wavelengths])
+        launched = dict(injected=injected * root, leakage=leakage * root,
+                        injected_energy=xp.abs(injected * root) ** 2,
+                        leakage_energy=xp.abs(leakage * root) ** 2)
     return ModeSpectrum(
         wavelengths=tuple(monitor.wavelengths),
         frequencies_hz=np.asarray([C0 / (w * problem.units.length_unit_meters)
@@ -937,4 +968,5 @@ def mode_spectrum(problem, numerics, monitor, value, plan, rt, spectral_factor, 
         metadata={'axis': names[window.w], 'position': window.low[window.w] + window.k * window.dx,
                   'forward_direction': '+' + names[window.w], 'amplitude_units':
                   'sqrt(' + units_label + ')', 'length_units': length_units,
-                  'pairing': 'node-plane E with the mean of the two H half planes, as FluxMonitor'})
+                  'pairing': 'node-plane E with the mean of the two H half planes, as FluxMonitor',
+                  'source': monitor.source}, **launched)

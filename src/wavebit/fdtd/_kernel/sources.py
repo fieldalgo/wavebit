@@ -183,11 +183,19 @@ def waveform_table(plan, params, rt):
     n = rt.array(np.arange(plan.steps, dtype=np.float64), 'float64')
     rows = []
     for term in plan.terms:
-        for shift in getattr(term, 'rows', ()):
+        # A row may carry a static (phase, delay) offset of its own: a mode sheet's H row is
+        # its E row half a cell upstream (``mode_sheet.py``). No other term has one, and theirs
+        # are computed exactly as before.
+        offsets = getattr(term, 'row_offsets', None)
+        for i, shift in enumerate(getattr(term, 'rows', ())):
             p = params['sources'][term.name]
             s = (n + shift) * plan.dt - p['t0'] - p['delay']
+            phase = p['phase']
+            if offsets is not None:
+                s = s - offsets[i][1]
+                phase = phase + offsets[i][0]
             envelope = rt.xp.exp(-0.5 * (s / p['tau']) ** 2)
-            w = envelope * rt.xp.sin((2.0 * math.pi) * p['f0'] * s + p['phase'])
+            w = envelope * rt.xp.sin((2.0 * math.pi) * p['f0'] * s + phase)
             rows.append(p['amplitude'] * w)
     if plan.dtype == 'complex128':
         one = rt.array(1.0 + 0.0j, 'complex128')

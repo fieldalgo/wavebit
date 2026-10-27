@@ -150,7 +150,10 @@ def _full_cell_plane(plane, path):
             code=_area(path)+'.plane_span', path=path, expected='no transverse spans', actual=spans)
 
 
-def _source(source, units):
+def _source(source, units, problem=None, numerics=None):
+    if isinstance(source, sources.ModeSource):
+        from ._mode_source import mode_sheet
+        return mode_sheet(source, problem, numerics, units)
     if not isinstance(source, (sources.PlaneWave, sources.CurrentDipole, sources.TFSF)):
         raise UnsupportedFeatureError('unsupported source', code='source.type', path='sources', actual=type(source).__name__)
     kw = dict(name=source.name, band=_pulse(source.pulse, units),
@@ -210,6 +213,11 @@ def _monitor(m, problem, numerics=None):
         if not isinstance(m.plane, geometry.Plane):
             raise ValidationError('expected Plane', code='monitor.plane', path='outputs.'+m.name+'.plane')
         from ._modes import window_plane
+        if m.source is not None and not any(isinstance(s, sources.ModeSource) and s.name == m.source
+                                            for s in problem.sources):
+            raise ValidationError(f'ModeMonitor(source={m.source!r}) names no ModeSource of the '
+                                  f'problem', code='monitor.source',
+                                  path='outputs.'+m.name+'.source', actual=m.source)
         return old_monitors.Flux(name=m.name, wavelengths=m.wavelengths,
                                  plane=window_plane(problem, numerics, m.plane))
     if isinstance(m, monitors.TimeSeriesMonitor):
@@ -263,8 +271,9 @@ def validate_sources(problem):
     names = set()
     for index, source in enumerate(problem.sources):
         indexed = f'sources[{index}]'
-        if not isinstance(source, (sources.PlaneWave, sources.CurrentDipole, sources.TFSF)):
-            raise UnsupportedFeatureError('expected PlaneWave, CurrentDipole or TFSF',
+        if not isinstance(source, (sources.PlaneWave, sources.CurrentDipole, sources.TFSF,
+                                   sources.ModeSource)):
+            raise UnsupportedFeatureError('expected PlaneWave, CurrentDipole, TFSF or ModeSource',
                                           code='source.type', path=indexed, actual=type(source).__name__)
         if not isinstance(source.name, str) or not source.name:
             raise ValidationError('source name must be a nonempty string', code='source.name', path=indexed+'.name')
@@ -487,7 +496,13 @@ def lower_problem(problem, numerics, *, plan=None):
                 raise ValidationError('monitor is outside the physical domain',code='monitor.outside_domain',path='outputs.'+m.name)
         else:old_scene._monitor_inside(m,physical_low,physical_high)
     for source in problem.sources:
-        if isinstance(source,sources.PlaneWave):
+        if isinstance(source,sources.ModeSource):
+            if not isinstance(source.plane, geometry.Plane):
+                raise ValidationError('expected Plane', code='source.plane', path='sources.'+source.name+'.plane')
+            axis=source.plane.axis
+            if not physical_low[axis]<=source.plane.position<=physical_high[axis]:
+                raise ValidationError('source is outside the physical domain',code='source.outside_domain',path='sources.'+source.name+'.plane')
+        elif isinstance(source,sources.PlaneWave):
             if not isinstance(source.plane, geometry.Plane):
                 raise ValidationError('expected Plane', code='source.plane', path='sources.'+source.name+'.plane')
             axis=source.plane.axis
@@ -501,7 +516,7 @@ def lower_problem(problem, numerics, *, plan=None):
                 raise ValidationError('source is outside the physical domain',code='source.outside_domain',path='sources.'+source.name+'.box')
     legacy=old_scene.Scene(domain=old_scene.Domain(size=size,center=center),
         boundaries=old_boundaries.Boundaries(**converted),resolution=old_scene.Resolution(dx=dx),run=run,
-        background=background,structures=tuple(structures),sources=tuple(_source(s,units) for s in problem.sources),
+        background=background,structures=tuple(structures),sources=tuple(_source(s,units,problem,numerics) for s in problem.sources),
         monitors=outputs,initial=initial)
     # The engine reads a junction rule only on the standing member of a flush
     # pair. In particular, a continued substrate and unrelated bodies retain

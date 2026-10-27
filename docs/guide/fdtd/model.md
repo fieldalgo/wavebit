@@ -709,7 +709,7 @@ coating of 0.105 µm instead, the same scene would warn `geometry.cell_snapped` 
   other GPU backends and single precision are refused. The grid is uniform and cubic.
 - Per-cell sampled grids use `fdtd.native`; this general-scene formulation has no raster body.
   Constructive solid geometry (union, intersection, difference) and tilted extrusion axes are unsupported.
-- No Gaussian beams or mode sources. Mode monitors and the mode solver are described in
+- No Gaussian beams. Mode sources, mode monitors and the mode solver are described in
   [Waveguide modes](waveguide-modes.md).
 - No smoothed lossy or dispersive bodies outside flat films.
 - **Only a cell-snapped core continues into an absorbing layer.** Into an `Open()` face's PML

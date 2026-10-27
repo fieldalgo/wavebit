@@ -147,11 +147,17 @@ class ModeMonitor:
     toward the plane's ``+`` normal and toward its ``-`` normal. The plane is a mode plane:
     across a uniform section of the guide, with the same transverse window and the same
     refusals as :func:`solve_modes`. ``wavelengths`` are vacuum wavelengths in ``Problem.units``.
+
+    ``source=`` names a :class:`ModeSource` of the problem: the spectrum then also carries what
+    that source launched its way (``injected``) and leaked the other way (``leakage``), at each
+    wavelength, as amplitudes of the source's own mode on the source's plane, in this monitor's
+    units. Divide ``forward_energy`` by ``injected_energy`` for a transmission.
     """
     name: str
     plane: object
     wavelengths: tuple
     modes: int = 1
+    source: object = None
 
     def __post_init__(self):
         object.__setattr__(self, 'wavelengths', tuples(self.wavelengths))
@@ -161,6 +167,10 @@ class ModeMonitor:
                                   'integer', code='monitor.modes',
                                   path=f'outputs.{self.name}.modes', actual=self.modes)
         object.__setattr__(self, 'modes', int(self.modes))
+        if self.source is not None and not (isinstance(self.source, str) and self.source):
+            raise ValidationError('ModeMonitor(source=...) is the name of a ModeSource',
+                                  code='monitor.source', path=f'outputs.{self.name}.source',
+                                  actual=self.source)
 
 
 @spec
