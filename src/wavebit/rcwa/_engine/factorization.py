@@ -549,6 +549,26 @@ def _nested_rule(xp, grid, half_width_u, half_width_v, series_u, series_v, *, in
     return xp.linalg.inv(out) if invert_outer else out
 
 
+def line_inverse_rules(xp, grid, half_width):
+    """``[T(1/g)]^-1`` of every line of a raster: Li's inverse rule along the last axis.
+
+    ``grid`` is ``(n_lines, n)``, each line a permittivity staircase over ``n`` equal pixels of
+    the period; the result is ``(n_lines, 2*half_width+1, 2*half_width+1)``, line ``j``'s
+    operator taking the Fourier coefficients of ``E`` normal to that line's walls to those of
+    ``D``. These are the inner matrices :func:`_nested_rule` builds with ``inner='u'``, in the
+    same order-index convention, and with the same exact staircase coefficients
+    (:func:`_pixel_correction`) -- which are also what the integrated coefficients give for a
+    raster, since both are the exact transform of the same piecewise-constant line. The field
+    reconstruction's continuity rule applies them one sample line at a time
+    (:func:`wavebit.rcwa._engine.fields._continuity_2d`).
+    """
+    grid = xp.astype(grid, _complex_dtype(xp, grid))
+    n = 2 * half_width + 1
+    lines = _raster_series(xp, half_width, _pixel_correction)(1.0 / grid)    # [j, k]
+    at = _toeplitz_positions(xp, half_width, _device(xp, grid))
+    return xp.linalg.inv(xp.reshape(xp.take(lines, at, axis=1), (grid.shape[0], n, n)))
+
+
 def _nesting(nesting):
     """``nesting`` as a :class:`~wavebit.rcwa._engine.enums.Nesting`, ``None`` meaning the default."""
     return DEFAULT_NESTING if nesting is None else nesting_of(nesting)

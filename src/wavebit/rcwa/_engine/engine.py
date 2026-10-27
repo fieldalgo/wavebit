@@ -4782,10 +4782,14 @@ class CoreFactorizationMixin:
     @device_scoped
     def _refuse_continuity(self):
         """Refuse ``discontinuous='continuity'`` where it is not built yet, by name."""
-        if self._grating_type not in (0, 1):
+        if self._grating_type == 2 and self._formulation_assigned == Formulation.FIRST_ORDER:
             raise NotImplementedError(
-                "discontinuous='continuity' is built for 1D gratings (the TE/TM and conical "
-                'paths) so far; a 2D cell still takes the Fourier sum.')
+                "discontinuous='continuity' is built on the second-order 2D reconstruction; the "
+                'first-order formulation still takes the Fourier sum.')
+        if self._grating_type == 2 and _np.ndim(self.order_kxy()[0]) != 1:
+            raise NotImplementedError(
+                "discontinuous='continuity' applies its rule along the cell's x and y lines; a "
+                'skewed lattice has no such lines and is refused.')
         if self.modeling_path != ModelingPath.RASTER:
             raise NotImplementedError(
                 "discontinuous='continuity' reads eps at the sample points from a raster "
@@ -4799,41 +4803,69 @@ class CoreFactorizationMixin:
                 "discontinuous='continuity' is not available after a solve that merged layers "
                 'into its half-spaces.')
 
-    def _continuity_rows(self, sample_x, backside):
-        """``eps`` of each kernel layer record at the x samples, for the continuity rule.
+    @staticmethod
+    def _sample_pixels(spec, period, n_pixels, axis):
+        """The raster pixel under each sample along one axis, for the continuity rule.
 
-        One entry per ``layer_info_list`` record, in its order: a ``(n_x,)`` array where the
-        layer varies along x, ``None`` where it does not -- a uniform layer keeps the Fourier
-        sum, bit for bit, since there is nothing for the rule to change there. The raster's
-        column ``j`` covers ``[j, j+1) * period / n_columns`` from the cell's negative-x edge, so
-        a sample is read from the column it falls in, periodically. A sample exactly on a wall
-        between two permittivities belongs to the column on its positive side.
+        Pixel ``j`` covers ``[j, j+1) * period / n_pixels`` from the cell's negative edge, so a
+        sample is read from the pixel it falls in, periodically. A sample exactly on a wall
+        between two permittivities belongs to the pixel on its positive side.
         """
+        from wavebit.rcwa._engine.field_result import _host_value
+        if is_count(spec):
+            corner = _np.linspace(0., 1., int(spec))
+        else:
+            points = _host_value(spec)
+            if points is None or period is None:
+                raise ValueError(f"discontinuous='continuity' needs concrete {axis} and period "
+                                 'to choose the raster pixel under each sample.')
+            corner = _np.asarray(points, dtype=float) / float(period) + 0.5
+        # Half a part in 1e9 lifts a sample that rounding put just below a pixel edge it sits on.
+        return _np.floor(corner * n_pixels + 1e-9).astype(int) % n_pixels
+
+    def _continuity_rows(self, sample_x, sample_y, backside):
+        """What the continuity rule reads off each kernel layer record, in its order.
+
+        ``None`` where the layer is uniform -- it keeps the Fourier sum, bit for bit, since there
+        is nothing for the rule to change there. Otherwise, on the 1D paths, ``eps`` at the x
+        samples ``(n_x,)``; on the 2D path a triple ``(ops_x, ops_y, eps)``: ``ops_x[j]`` is Li's
+        inverse rule ``[[1/eps]]_x^-1`` along the raster row under the ``j``-th y sample,
+        ``ops_y[i]`` the same along the column under the ``i``-th x sample, and ``eps`` the
+        ``(n_y, n_x)`` permittivity at the samples
+        (:func:`wavebit.rcwa._engine.fields._continuity_2d`).
+        """
+        from wavebit.rcwa._engine.factorization import line_inverse_rules
         from wavebit.rcwa._engine.field_result import _host_value
         xp = self.xp
         structure = self.structure
-        n_columns = structure.shape[-1]
-        period = _host_value(_lattice.periods_of(self.lattice)[0])
-        if is_count(sample_x):
-            corner = _np.linspace(0., 1., int(sample_x))
-        else:
-            points = _host_value(sample_x)
-            if points is None or period is None:
-                raise ValueError("discontinuous='continuity' needs concrete sample_x and period "
-                                 'to choose the raster column under each sample.')
-            corner = _np.asarray(points, dtype=float) / float(period) + 0.5
-        # Half a part in 1e9 lifts a sample that rounding put just below a column edge it sits on.
-        columns = _np.floor(corner * n_columns + 1e-9).astype(int) % n_columns
+        periods = _lattice.periods_of(self.lattice)
+        columns = self._sample_pixels(sample_x, _host_value(periods[0]), structure.shape[-1],
+                                      'sample_x')
+        two_d = self._grating_type == 2
+        if two_d:
+            lines = self._sample_pixels(sample_y, _host_value(periods[1]), structure.shape[-2],
+                                        'sample_y')
+            kx, ky = self.order_kxy()
+            half_u, half_v = (kx.shape[0] - 1) // 2, (ky.shape[0] - 1) // 2
         rows = []
         for layer in range(structure.shape[0]):
-            row = structure[layer, 0]
-            values = _host_value(row)
+            grid = structure[layer] if two_d else structure[layer, 0]
+            values = _host_value(grid)
             if values is not None and _np.all(values == values.flat[0]):
                 rows.append(None)
-            else:
-                index = as_array(xp, columns, device=_device_of(row))
-                rows.append(xp.take(row, index, axis=0))
-        # The 1D kernels append records from the top public layer down; a backside (public
+                continue
+            dev = _device_of(grid)
+            at_x = as_array(xp, columns, device=dev)
+            if not two_d:
+                rows.append(xp.take(grid, at_x, axis=0))
+                continue
+            at_y = as_array(xp, lines, device=dev)
+            ops_x = xp.take(line_inverse_rules(xp, grid, half_u), at_y, axis=0)
+            ops_y = xp.take(line_inverse_rules(xp, xp.permute_dims(grid, (1, 0)), half_v),
+                            at_x, axis=0)
+            eps = xp.take(xp.take(grid, at_y, axis=0), at_x, axis=1)
+            rows.append((ops_x, ops_y, eps))
+        # The kernels append records from the top public layer down; a backside (public
         # top) incidence solves the mirrored scene, which reverses that.
         return rows if backside else rows[::-1]
 
@@ -4860,8 +4892,10 @@ class CoreFactorizationMixin:
         rebuilt: ``'fourier'`` (the default) sums its own coefficients, which ring at every wall;
         ``'continuity'`` sums the continuous ``D_x`` series and divides by ``eps`` at each sample
         (P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357 (1998); RETICOLO's ``champ=1``). It
-        changes ``E_x`` in patterned layers only, on the 1D TM and conical paths of a raster
-        structure, and is refused elsewhere (:meth:`_refuse_continuity`).
+        changes ``E_x`` in patterned layers only on the 1D TM and conical paths, and ``E_x`` and
+        ``E_y`` on the 2D path, each summed line by line (``E_x`` along the row under the sample,
+        ``E_y`` along the column); it needs a raster structure and is refused elsewhere
+        (:meth:`_refuse_continuity`).
 
         ``incidences`` names which of the incidences the solve carries to reconstruct, one
         leading axis entry each, **in the order asked for**: ``'incident'`` is the incidence the
@@ -4916,7 +4950,7 @@ class CoreFactorizationMixin:
             sample_z = to_mirrored_z(sample_z, self.thickness)
         kx, ky = self.order_kxy()
 
-        eps_rows = self._continuity_rows(sample_x, backside) if continuity else None
+        eps_rows = self._continuity_rows(sample_x, sample_y, backside) if continuity else None
         if self._grating_type == 0:
             sample_y = 1
             field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list,
@@ -4948,7 +4982,8 @@ class CoreFactorizationMixin:
                                   self.layer_info_list, self.lattice,
                                   sample_x=sample_x, sample_y=sample_y,
                                   sample_z=sample_z, incidences=incidences,
-                                  interface_side='left' if backside else 'right')
+                                  interface_side='left' if backside else 'right',
+                                  eps_rows=eps_rows)
 
         # The kernels' state describes the field of their corner column (`_kernel_lit`), whose
         # incident wave is unit at the cell corner; the public incidence is unit at the centre.

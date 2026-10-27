@@ -42,10 +42,12 @@ at the cell centre since 2026-09-27 (see :func:`_in_our_frame`).
 **One component is excluded, and it is not swept under the rug.** TM's ``E_x`` is discontinuous
 across the grating's vertical interfaces and the two codes resolve it differently at any finite
 truncation -- 7.0e-2 to 1.0e-1 here, shrinking with ``truncation_order`` but non-monotonically, in the shape
-of Gibbs ringing near the jump rather than of a defect. Which code is closer to the true field
-is not established, and cannot be from inside this directory.
-:func:`test_the_discontinuous_tm_component_is_the_known_exception` pins that gap from both
-sides so it cannot silently grow, and cannot silently vanish without someone updating the
+of Gibbs ringing near the jump rather than of a defect. The cause is the reconstruction rule:
+RETICOLO rebuilds TM's ``E_x`` from the continuous ``D_x`` series divided by ``eps``, this
+library's default sums ``E_x``'s own series, and ``discontinuous='continuity'`` applies
+RETICOLO's rule (``test_the_continuity_rule_matches_reticolo_on_every_slot``).
+:func:`test_the_discontinuous_tm_component_is_the_known_exception` pins the default's gap from
+both sides so it cannot silently grow, and cannot silently vanish without someone updating the
 story here.
 """
 
