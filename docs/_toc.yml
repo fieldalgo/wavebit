@@ -246,6 +246,7 @@ subtrees:
               - file: validation/fdtd/fd-oscillator-stack
               - file: validation/fdtd/fd-oscillator-sum-film
               - file: validation/fdtd/fd-pole-arithmetic
+              - file: validation/fdtd/fd-polytope-clip
               - file: validation/fdtd/fd-single-pole-film
               - file: validation/fdtd/fd-sphere-clip-jit
               - file: validation/fdtd/fd-policy-cell-shapes

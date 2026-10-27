@@ -24,6 +24,7 @@ usage see the [FDTD guide](../../guide/fdtd/general-fdtd.md) and the
 `src/wavebit/fdtd/`.
 
 - [Mixed material parameters and pole arithmetic refusals](fd-pole-arithmetic.md)
+- [Two smoothed surfaces in one voxel: the polytope clip (stage 4, C10)](fd-polytope-clip.md)
 - [C8: one conductive film in a dielectric](fd-conductive-film.md)
 - [C8: separated parallel conductive films](fd-conductive-stack.md)
 - [C8: two exactly touching conductive films](fd-conductive-contact.md)
