@@ -1028,7 +1028,8 @@ energy certificate, which read a contract-breaking turned box's real negative `1
 as an inconclusive bound; every arm (negative fill, NaN, a moment above 1) is tested. Two
 remedies named spellings that are refused: a figure-eight's lobes as two prisms meet in voxels
 door 5 refuses, and an `fd.Cylinder` or `fd.Prism` along an absorbing face's axis is refused in
-the layer by its cross terms until C9. The mixed overlap -- a smoothed body in a snapped Drude
+the layer by its cross terms (running one through a layer is not supported yet, and no date is
+set). The mixed overlap -- a smoothed body in a snapped Drude
 Region -- is tested, and the advice to spell a layer as a smoothed `fd.Box` is limited to
 lossless, non-dispersive layers (door 1 refuses the others until C8). Four mutants of these
 fixes each fail one case.

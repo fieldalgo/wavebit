@@ -144,7 +144,7 @@ def test_a_smoothed_body_in_a_snapped_dispersive_region_hears_door_one():
 
 def test_the_advice_names_only_spellings_that_plan():
     """The figure-eight's two lobes meet in voxels door 5 refuses; a cylinder through a layer is
-    refused by its cross terms (C9). Neither is offered as a remedy any more."""
+    refused by its cross terms, with no date for support. Neither is offered as a remedy any more."""
     with pytest.raises(ValueError) as caught:
         fd.Prism(vertices=((-0.2, -0.1), (0.2, 0.1), (0.2, -0.1), (-0.2, 0.1)), height=0.3)
     assert 'keep a voxel between them' in str(caught.value)
@@ -154,4 +154,5 @@ def test_the_advice_names_only_spellings_that_plan():
                        resolution=fd.Resolution(dx=0.05), run=fd.Run(steps=4),
                        structures=(fd.Structure(fd.Box(size=(1.4, 0.4, 0.4)), 2.25),))
     message = str(pytest.raises(ValueError, _quiet_plan, layered).value)
-    assert 'until C9' in message and 'unturned fd.Box can' in message
+    assert 'not supported yet, and no date is set' in message and 'unturned fd.Box can' in message
+    assert 'C9' not in message

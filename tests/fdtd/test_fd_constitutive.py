@@ -365,8 +365,10 @@ def test_plan_checks_surfaces_at_common_nodes_too():
 def test_loss_and_mirror_doors_cover_the_interpolation_halo():
     scene = cavity(mu=None)
     pml = fd.Boundaries.open(fd.PML(cells=3, wavelength=2., allow_thin=True))
-    with pytest.raises(ValueError, match='interpolation support meets.*absorbing layer'):
+    with pytest.raises(ValueError, match='interpolation support meets.*absorbing layer') as caught:
         quiet(fd.plan, scene.replace(boundaries=pml))
+    assert 'not supported yet, and no date is set' in str(caught.value)
+    assert 'C9' not in str(caught.value)
     loss = fd.Structure(fd.Region(size=(.05,.1,.1), center=(.275,0.,0.)),
                         fd.Conductor(eps=1., sigma=.2))
     with pytest.raises(ValueError, match='interpolation support meets.*conductivity or poles'):

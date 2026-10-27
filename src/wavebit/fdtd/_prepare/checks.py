@@ -1826,7 +1826,8 @@ def check_absorbing_layers(scene, plan):
                 f'the layer, or run the structure all the way through it -- which today '
                 f'the cell-snapped fdtd.SnappedBox or fdtd.SnappedSlab and an unturned fd.Box '
                 f'can, reaching past the face. An fd.Cylinder or fd.Prism along {name[0]!r} is refused in a '
-                f'layer by its cross terms until C9; a sphere cannot run through one.')
+                f'layer by its cross terms; running one through an absorbing layer is not supported '
+                f'yet, and no date is set. A sphere cannot run through one.')
         if kind == 'PML':
             _refuse_lossy_in_layer(_background(scene), name, 'Scene(background=)')
 
