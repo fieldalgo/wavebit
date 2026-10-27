@@ -11,7 +11,7 @@ from wavebit.observations import (TimeSeries, FieldSamples, RawFieldSpectrum,
 from wavebit.observations.fields import _component_units
 from wavebit.units import C0, Z0
 from . import _monitors as monitors, _boundaries as boundaries
-from ._sources import ModeSource
+from ._sources import ModeSource, GaussianBeam
 
 
 #: SpectralFlux fields that were renamed (fieldalgo/wavebit#57), and their replacements.
@@ -294,7 +294,7 @@ def adapt_result(problem,numerics,execution,raw,metadata):
     provenance=dict(solver='fdtd',execution=execution,numerics=numerics,units=units,
         coordinate_frame=_COORDINATE_FRAME,time_convention='exp(-i*omega*t)',
         actual_steps=raw.plan.steps,time_step_seconds=raw.plan.dt*ts,source_normalization={s.name:('current moment in A*m' if s.kind=='electric' else 'equivalent magnetic current moment in V*m')
-            if hasattr(s,'current_moment') else ('mode amplitude in sqrt(W) (per metre of each invariant axis)'
-            if isinstance(s,ModeSource) else 'electric field amplitude in V/m') for s in problem.sources},**metadata)
+            if hasattr(s,'current_moment') else ('beam or mode amplitude in sqrt(W) (per metre of each invariant axis)'
+            if isinstance(s,(ModeSource,GaussianBeam)) else 'electric field amplitude in V/m') for s in problem.sources},**metadata)
     return Result(outputs=outputs,validity=validity,diagnostics=diagnostics,provenance=provenance,
                   source_references=source_references,final_fields=final)
