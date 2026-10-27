@@ -126,6 +126,53 @@ changes nothing there. The same M7 criterion therefore also holds for a smoothed
 `Box` core of 1.03 µm by 0.51 µm, whose faces lie between cells and whose
 per-component averages differ.
 
-## Results
+## Results (2026-10-27)
 
-Pending. Results are added below, beside the criteria, once computed.
+Measured with `tests/fdtd/test_fd_waveguide_modes.py` on Linux CPU, Python 3.12,
+NumPy 2.5.4, SciPy 1.18.1. Every registered criterion passed.
+
+| Criterion | Limit | Measured |
+| --- | --- | --- |
+| M1 `q/Omega`, `n_eff` vs closed form (2-D; invariant) | 1e-12 | 4.6e-15, 4.8e-15; 4.4e-16, 5.9e-16 |
+| M2 `q^2` vs discrete closed form, five modes, three spacings | 1e-10 | 7e-14, 7e-14, 1.1e-12 (worst per spacing) |
+| M2 observed order vs continuum | >= 1.8 | 2.024 to 2.027, then 2.006 to 2.007 |
+| M3 observed order, six modes | >= 1.8 | 2.014 to 2.019, then 2.003 to 2.005 |
+| M3 `|n_eff - exact|` at 0.0125 µm | <= 1e-3 | 5.2e-4 (TM2) to 7.9e-4 (TE0) |
+| M3 Richardson extrapolation | <= 1e-4 | 1.6e-6 to 3.5e-6 |
+| M3 orthogonality / power | 1e-10 / 1e-12 | passed at every spacing |
+| M4 Hadley corners, error at the three spacings | monotone, <= 1e-3 | see below |
+| M5 refusals | by code | each refusal raised with its code |
+| M6 backends | bitwise | equal |
+| M7 mode advanced by the run, 100 steps | 1e-10 | at most 6.4e-14 (slab), 2.1e-14 (snapped box), 1.3e-14 (smoothed box) |
+
+The exact slab indices (TE0, TE1, TE2, TM0, TM1, TM2) are 1.9562181938,
+1.8225308386, 1.5975660835, 1.9470205470, 1.7879894882 and 1.5490399425. At 0.05,
+0.025 and 0.0125 µm the solver is above each by 1.29e-2 to 8.4e-3, 3.2e-3 to 2.1e-3,
+and 7.9e-4 to 5.2e-4. The third TM mode's largest transverse E on the window edge is
+4e-4 of its peak, inside the 1e-3 admission limit; it is the least confined mode
+here.
+
+Hadley's corners, signed error at 1/40, 1/80 and 1/160 (near those values for the
+PEC-left/top cases, whose PMC walls set the spacing as described in the test):
+
+| Core, cladding, PEC sides | Published | Error | Observed order |
+| --- | --- | --- | --- |
+| 2.25, 1, left/right | 1.27627404 | +1.10e-3, +2.74e-4, +6.84e-5 | 2.00, 2.00 |
+| 8, 1, left/right | 2.65679692 | +8.86e-3, +2.20e-3, +5.49e-4 | 2.01, 2.00 |
+| 1, 2.25, left/top | 1.387926425 | +1.17e-3, +2.89e-4, +7.17e-5 | 2.02, 2.01 |
+| 1, 8, left/top | 2.761465320 | +9.69e-3, +2.37e-3, +5.85e-4 | 2.03, 2.02 |
+
+Second order holds at these corners on this grid with a smoothed core: the field
+singularity of a dielectric corner did not show at these spacings. This is an
+observation at three spacings, not a statement about finer grids.
+
+What this does not establish: accuracy for lossy, dispersive, anisotropic or leaky
+guides, all refused; and any run's accuracy, which still needs its own spacing
+convergence. The effective index is the grid's, by construction.
+
+Mutation checks (each product change below was made, the named test failed, and the
+source was restored byte for byte): leaving `Omega` as `omega` (M1, M2); dropping the
+low-wall tangential-E mask (M2); dropping the cosine factor of the power (M3); dropping
+the PMC high-face masks (M4); reading `eps_u` for `eps_w`, swapping `eps_u` and `eps_v`,
+taking `beta = q`, flipping the sign of `E_w`, returning `Z0 H` for `H` (M7); disabling
+each refusal (M5); and returning NumPy arrays for `backend='jax'` (M6).

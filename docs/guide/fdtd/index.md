@@ -18,3 +18,4 @@ What the general engine's smoothed geometry supports today, and what stage 4 lef
 - [Current FDTD domains, sources and observations](general-fdtd.md)
 - [How the FDTD solver models a problem](model.md)
 - [A solve in the time domain](time-domain.md)
+- [Waveguide modes of the discrete grid](waveguide-modes.md)
