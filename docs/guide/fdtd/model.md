@@ -209,12 +209,34 @@ The rule has limits, each enforced by `check`:
 | No `ConductiveMaterial` or `DispersiveMaterial`, except a flat film spanning the cell | lossy and dispersive mixing is validated only for those film scopes |
 | Must not touch an `Open()` face unless an unturned, transversely uniform `Box` explicitly declares `Structure.continuation` | finite-body continuation is not inferred; see [smoothed substrates](substrate-gradients.md) |
 | Must not reach a `Periodic()` face, unless it runs the whole period reaching **more than** one cell past both faces | otherwise part of it would be lost at the seam |
-| Two smoothed surfaces may not pass through the same cell | the mixing rule describes two media and one surface per cell; separate them by a cell or write one body |
+| Two smoothed surfaces may share a cell only where the pair can be answered exactly (below) | the mixing rule describes two media and one surface per cell; other pairs are refused: separate them by a cell or write one body |
 | A smoothed surface may not cut a cell that a cell-snapped face also cuts | the cell would hold three media (see below) |
 
 A smoothed body may sit **inside** a cell-snapped structure, or on top of another smoothed body:
 a `Cylinder` or unturned `Box` standing flush on the face of an unturned smoothed `Box` is handled
 by `Numerics(junction="split")`, the default (`"staircase"` and `"refuse"` are the alternatives).
+
+**Two bodies in one cell.** Where the surfaces of two smoothed bodies pass through the same
+cell and the pair is not a flush junction, the engine computes in each such cell how much of it
+each medium fills -- the two bodies and whatever the cell held before them -- and mixes the
+three with one rule: harmonic across the interfaces, arithmetic along them, which is exact for
+parallel layers. It does so only where the volume the two bodies share in that cell is computed
+exactly:
+
+- bodies that provably do not overlap: a dimer with a gap smaller than a cell, a sphere resting
+  on a substrate, two boxes or prisms side by side with a sub-cell gap;
+- bodies whose surfaces are both flat in that cell;
+- any body sunk into, or standing just above, the face of an unturned `Box`.
+
+Everything else keeps the refusal, by name: a flush joint the junction rule does not cover (two
+coincident faces, such as a `Prism` or a turned `Box` standing on a face), curved bodies that
+overlap, overlapping bodies of one material (write them as one body), three smoothed surfaces in
+one cell, a third structure reaching the cell unless it is listed earlier and fills the cell
+whole, lossy, dispersive, magnetic or anisotropic media, `discretization="stencil"`, and a
+ranged (differentiated) geometry on either body. Material values of the pair may be traced.
+`check` lists each pair as `clip with structures[j]` in the body block, and the run's
+`SubpixelAccuracyWarning` names it. What this was measured to do is in
+[the polytope clip](../../validation/fdtd/fd-polytope-clip.md).
 
 The global `Numerics.junction` policy is read only by the standing body of each
 supported flush pair, using the engine's role selection after substrate continuation.
@@ -267,7 +289,9 @@ result policy records.
 2. a finite smoothed `Box` substrate that does not reach the `Open()` face, with the pillar flush
    on it (the junction rule above);
 3. a cell-snapped `SnappedBox` pillar on a `SnappedSlab` substrate (rectangular, faces snapped);
-4. a smoothed pillar raised at least half a cell above the `SnappedSlab` face.
+4. a smoothed pillar raised at least half a cell above the `SnappedSlab` face;
+5. a smoothed pillar sunk into a smoothed `Box` substrate, or raised above it by less than a
+   cell (two bodies in one cell, above).
 
 The first choice continues a half-space substrate through the absorber. See
 [the physical example](substrate-gradients.md) for its geometric restrictions and the fixed
@@ -733,6 +757,8 @@ for the protocol and [stopping/absorbers](stopping-and-absorbers.md) for numeric
   — how smoothing is measured, including the half-cell placement of a snapped slab's face.
 - [A periodic metasurface against RCWA](../../validation/fdtd/fd-metasurface-validation.md) — what agrees with
   RCWA and at what convergence order.
+- [The polytope clip](../../validation/fdtd/fd-polytope-clip.md) — two smoothed bodies in one cell, and
+  what was measured.
 - [Radiation consistent with the Yee lattice](../../validation/fdtd/fd-lattice-radiation.md) — the far-field transform.
 - The film studies (for example [one Drude or Lorentz film](../../validation/fdtd/fd-single-pole-film.md)) — the bounded
   scopes for lossy and dispersive layers.

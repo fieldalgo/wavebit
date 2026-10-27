@@ -79,7 +79,7 @@ def _static(plan):
     """The plan's static content, as ``skeleton_of`` receives it."""
     content = {f.name: getattr(plan, f.name) for f in dataclasses.fields(plan) if f.name != 'skeleton'}
     # Absent optional records preserve skeletons from before these fields existed.
-    for name in ('junctions', 'shape_ranges', 'decay'):
+    for name in ('junctions', 'clips', 'shape_ranges', 'decay'):
         if not getattr(plan, name):
             content.pop(name)
     return content

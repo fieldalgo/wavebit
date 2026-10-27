@@ -1227,13 +1227,17 @@ def test_two_smoothed_surfaces_in_one_voxel_are_refused():
     with pytest.raises(ValueError, match='surfaces pass through'):
         _quiet(fd.plan, pair)
 
-    # two balls that touch, and two that overlap: both are the same defect and both are refused
-    for gap in (0.0, -0.1):
-        touching = _grid_scene((
+    # two balls that touch, and two that overlap. Since C10 the touching pair is answered --
+    # its shared volume is provably zero, so its per-medium fills are exact
+    # (docs/validation/fdtd/fd-polytope-clip.md) -- and the overlapping pair, whose shared
+    # volume between two curved surfaces has only a bracket, is still refused.
+    def pair(gap):
+        return _grid_scene((
             fd.Structure(fd.Sphere(radius=0.15, center=(-0.15 - gap / 2, 0.0, 0.0)), 4.0),
             fd.Structure(fd.Sphere(radius=0.15, center=(0.15 + gap / 2, 0.0, 0.0)), 4.0)))
-        with pytest.raises(ValueError, match='surfaces pass through'):
-            _quiet(fd.plan, touching)
+    assert len(_quiet(fd.plan, pair(0.0)).clips) == 1
+    with pytest.raises(ValueError, match='surfaces pass through.*neither is flat'):
+        _quiet(fd.plan, pair(-0.1))
 
 
 def test_the_size_of_the_composition_error_the_door_refuses(monkeypatch):
@@ -1572,9 +1576,11 @@ def test_the_shared_surface_mark_reaches_a_voxel_diagonal_and_not_an_edge():
 
     assert count(math.sqrt(3.0) / 2.0) == 8
     assert count(0.5) == 0
-    # The common E node at the midpoint adds one more shared voxel in C11.
-    with pytest.raises(ValueError, match='surfaces pass through the same voxel: 9'):
-        _quiet(fd.plan, _grid_scene(pair))
+    # The common E node at the midpoint adds one more shared voxel in C11. Since C10 the
+    # disjoint pair is clipped there instead of refused: door 5's marks are its write set.
+    plan = _quiet(fd.plan, _grid_scene(pair))
+    (record,) = plan.clips
+    assert sum(count for _, count, *_ in record.counts) >= 1
 
 
 def test_a_smoothed_shape_on_a_one_cell_invariant_axis_is_refused():
