@@ -96,4 +96,50 @@ limits included, is as registered.
 
 ## Results
 
-Pending.
+Measured with `tests/fdtd/test_fd_gaussian_beam.py` on NumPy (JAX and Torch where named),
+double precision.
+
+| Criterion | Limit | 0.05 µm | 0.025 µm | Verdict |
+| --- | --- | --- | --- | --- |
+| G1 waist, TE / TM | `|w / waist - 1|` at most 1e-6 | 1.07e-8 / 1.08e-8 | -7.2e-9 / -7.2e-9 | passed |
+| G2 Gouy phase against the continuum, largest over z in [-3, 3] µm | 2e-3 rad at 0.05 | **2.20e-3** | 5.42e-4 | **failed** |
+| G2 observed order | at least 1.8 | | 2.02 | passed |
+| G3 focal peak in the dielectric (continuum 1.37398 µm, paraxial 1.25 µm) | 0.03 at 0.05, 0.01 at 0.025, smaller | 1.34846 (0.0255) | 1.37084 (0.0031) | passed |
+| G4 power, TE / TM | 2e-5 | -1.5e-12 / -7.6e-13 | -9.0e-13 / -5.5e-13 | passed |
+| G4 power, three dimensions | 2e-5 | -3.6e-8 | | passed |
+| G5 backward energy against the prediction, per forward | 1e-6 | 6.2e-12 / 6.2e-14 / 5.0e-12 | 2.5e-12 / 4.1e-14 / 5.0e-12 | passed |
+| G5 forward energy against the prediction | 1e-5 | 1.3e-11 / 6.3e-13 / 5.0e-12 | 7.4e-12 / 3.8e-13 / 6.1e-12 | passed |
+| G5 predicted backward per forward at 1.0 µm | 1e-12 | 1.4e-13 | 8.5e-14 | passed |
+| G5 predicted backward per forward at 0.95 / 1.05 µm | reported | 2.6e-7 / 2.8e-7 | 2.5e-7 / 2.8e-7 | |
+| G6 JAX / Torch against NumPy, flux and axis | 1e-12 | 2.3e-16, 1.0e-15 / 1.1e-16, 1.2e-15 | | passed |
+| G7 derivatives against extrapolated central differences | 1e-6 | pending | | |
+| G8 refusals by code | as listed | all raised | | passed |
+
+**G2 failed as registered.** The largest Gouy-phase difference from the continuum at
+0.05 µm is 2.20e-3 rad, above the registered 2e-3. The error falls at second order
+(5.42e-4 at 0.025 µm), the registered second part. The difference is the grid's dispersion:
+the run's beam is exact for the grid, and the grid's plane waves have a phase velocity that
+depends on their direction, which the continuum's do not. The limit is not changed. The test is kept as a strict expected
+failure beside a passing test of its order. For scale, the exact beam's Gouy phase differs
+from the paraxial `arctan(z / zR) / 2` by 2.1e-3 rad over the same range.
+
+Two details of the runs, neither a change to a limit. G3's half-space crosses the x faces,
+so it declares `continuation=('x-', 'x+')`, the slab door of `fd-waveguide-through-pml.md`.
+The `FluxMonitor`s span x in ±5.9 µm, clear of the absorbing layers, as a flux plane must.
+A `FieldMonitor` is not refused within a cell of the sheet (the refusal covers flux planes,
+as for a TFSF box), so G8 tests that refusal with a `FluxMonitor`.
+
+A design constant moved once, before any result depended on it. When first written, the
+source required the beam to fall below 1e-13 of its peak at the edge of its padded transform
+grid. The first run (G1's setup) found the light-line ripple at 5e-11, so the constant became
+1e-7, with the padding doubled until the beam meets it (at most 2^24 points). The G3 and
+three-dimensional G4 amendments above are refusals under that rule.
+
+Added after registration, as a further test: the beam is centred on a transverse focus.
+Thirteen deliberate breaks of the source were caught: each sign of the discrete Faraday law,
+the cosine rows' quarter period, the 1 W scaling, the polarization mapping, the axial and
+the transverse focus, the edge, medium and face rules, the traced-waist refusal, and two
+errors in the back-radiation prediction. Each time the source was restored byte for byte.
+As for the mode source, the H rows' half-cell group delay changes only the off-centre
+back-radiation. G5 reports that part and the exact prediction follows it, so no limit bounds
+the delay.
