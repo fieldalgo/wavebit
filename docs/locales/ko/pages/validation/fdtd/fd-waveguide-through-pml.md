@@ -42,6 +42,12 @@ D3, 코드(`fdtd.padding_continuation`)로 거부: 단면보다 좁고 continuat
 continuation, 지정한 면에 닿지 않는 이어진 `SnappedBox`, 자기 축의 면을 지정한
 `SnappedSlab`.
 
+D1 수정(처음 실행 전): `CurrentDipole`은 `InvariantAxis`에서 거부되므로(스탬프가 불변 축을
+따라 균일하지 않음) D1의 광원은 초기장으로 바꿉니다. E는 `solve_modes`가 돌려주는 1.55 µm의
+평판 TE0 모드에 `exp(-(z + 2)^2 / (2 (0.6 µm)^2)) cos(beta0 (z + 2))`(`beta0`는 그 모드의 전파
+상수)를 곱한 것이고 H는 0입니다. z = -2 µm에서 TE0를 양쪽으로 쏘아 보내며 스펙트럼 중심은
+1.55 µm 부근입니다. 나머지는 등록한 그대로입니다.
+
 ## 결과
 
 대기 중.
