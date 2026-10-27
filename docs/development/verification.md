@@ -131,12 +131,15 @@ backend-sensitive files, the `-W` docs build and the distribution smoke on Linux
 Windows. A scheduled
 failure opens or comments on one issue, which the next passing run closes. On Mondays, or on
 a manual run with `refresh`, it compares the versions it installed with the recorded ones. If
-they differ, it opens a new draft pull request from main that replaces the files, and closes
-an older one it supersedes.
+they differ, it pushes a branch from main that replaces the files. It then opens or updates
+one issue that lists the changes and links to a pull request from that branch. A person
+opens that pull request: Actions may not open pull requests in this repository, and one its
+token opened would run no CI.
 
-A version moves only through that pull request, read and marked ready like any other. Its
-required CI is the full validation on the new versions, including macOS and Windows. If it
-fails, keep the failing distribution at its previous version, land the rest and record why.
+A version moves only through that pull request. Its required CI is the full validation on the
+new versions, including macOS and Windows. Merge it when it is green. If it is red, close it:
+the recorded versions stay, and the next refresh offers newer ones. To land part of it, keep
+the failing distribution at its previous version in a follow-up pull request and record why.
 A tolerance is not loosened and a golden is not regenerated to make a version pass. A newly
 installed distribution needs its license review in the same pull request.
 
