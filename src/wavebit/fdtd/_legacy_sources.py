@@ -619,9 +619,11 @@ SOURCE_TYPES = (Dipole, PlaneWave, TFSF)
 
 @_eager_under_torch_compile
 def GaussianBeam(*args, **kwargs):
-    """Refused by name: a Gaussian beam source is stage 7."""
-    raise NotImplementedError('fd.GaussianBeam belongs to stage 7 (beams and mode sources). '
-                              'Stage 2 has fdtd.CurrentDipole, fd.PlaneWave and fd.TFSF.')
+    """Refused by name: a Gaussian beam (stage 7) is on the public surface only."""
+    raise NotImplementedError('fd.GaussianBeam (stage 7, beams and mode sources) is not on the '
+                              'engine surface: the public wavebit.fdtd.GaussianBeam launches a '
+                              'focused beam. Stage 2 has fdtd.CurrentDipole, fd.PlaneWave and '
+                              'fd.TFSF.')
 
 
 @_eager_under_torch_compile

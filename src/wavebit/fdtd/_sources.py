@@ -2,7 +2,8 @@
 from wavebit._common.declarations import spec
 from ._structure import tuples
 
-__all__ = ['GaussianPulse', 'PlaneWave', 'CurrentDipole', 'TFSF', 'ModeSource', 'InitialField']
+__all__ = ['GaussianPulse', 'PlaneWave', 'CurrentDipole', 'TFSF', 'ModeSource', 'GaussianBeam',
+           'InitialField']
 
 
 @spec
@@ -136,3 +137,40 @@ class ModeSource:
                                   code='source.mode', path=f'sources.{self.name}.mode',
                                   actual=self.mode)
         object.__setattr__(self, 'mode', int(self.mode))
+
+
+@spec(positional=('name',), renamed={'delay': 'delay_seconds'})
+class GaussianBeam:
+    """A focused Gaussian beam launched one way from a plane.
+
+    ``fdtd.GaussianBeam('b', plane=fdtd.Plane(z=-4.), direction='+z', waist=1.5,
+    focus=(0., 0., 0.), polarization='y', pulse=fdtd.GaussianPulse(wavelength=1., ...))``. On the
+    focal plane the E component along ``polarization`` (a transverse axis) is
+    ``exp(-r**2 / waist**2)`` about ``focus`` (``waist`` is the 1/e amplitude radius, as for
+    ``rcwa.GaussianBeam``); the other transverse component is zero there. The beam is the
+    propagating part of that plane's angular spectrum, built from the grid's own plane waves in
+    the homogeneous medium that fills the source plane, so ``focus`` is where it would focus if
+    that medium filled space. ``amplitude`` is in square-root watts (per metre of each invariant
+    axis): a continuous wave of this amplitude carries ``amplitude**2`` watts. ``phase`` is in
+    radians and ``delay_seconds`` delays the pulse.
+
+    The plane is a one-sided total-field/scattered-field sheet. At the pulse's centre wavelength
+    it launches exactly the beam, one way; elsewhere in the band a little goes backward. The
+    faces across the plane are ``Open`` (or ``InvariantAxis``), and the cross-section must hold
+    the beam. ``waist`` and ``focus`` are concrete; ``amplitude``, ``phase`` and
+    ``delay_seconds`` may be traced.
+    """
+    name: str
+    plane: object
+    pulse: GaussianPulse
+    waist: object
+    focus: tuple = (0., 0., 0.)
+    polarization: str = 'x'
+    direction: str = '+z'
+    amplitude: object = 1.
+    phase: object = 0.
+    delay_seconds: object = 0.
+
+    def __post_init__(self):
+        if isinstance(self.focus, list):
+            object.__setattr__(self, 'focus', tuple(self.focus))
