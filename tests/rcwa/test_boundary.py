@@ -1653,3 +1653,60 @@ def test_the_reduced_basis_mutant_is_killed(what, old, new):
     finally:
         importlib.reload(_b)
     assert killed, f'SURVIVED: {what}'
+
+
+def _continued_endpoints_dense(a, e, l2, valid, pair, scale):
+    """The one-array form of ``boundary._continued_endpoints`` before it was formed per pair."""
+    from wavebit.rcwa._engine.boundary import _SAME_POINT
+    m = a.shape[0]
+    start, end = a, a + e
+    tol2 = (_SAME_POINT*scale)**2
+    cross = e[:, None, 0]*e[None, :, 1] - e[:, None, 1]*e[None, :, 0]
+    parallel = cross*cross <= _SAME_POINT**2*l2[:, None]*l2[None, :]
+    index = np.arange(m)
+    other = (index[:, None] != index[None, :]) & valid[None, :] & parallel
+    same = pair[:, None] == pair[None, :]
+
+    def on(points):
+        d = points[:, None, :] - a[None, :, :]
+        along = d[..., 0]*e[None, :, 0] + d[..., 1]*e[None, :, 1]
+        perp = d[..., 0]*e[None, :, 1] - d[..., 1]*e[None, :, 0]
+        slack = np.sqrt(tol2*l2)[None, :]
+        return (perp*perp <= tol2*l2[None, :]) & (along >= -slack) & (along <= l2[None, :] + slack)
+
+    start_on, end_on = on(start), on(end)
+    repeat = other & same & start_on & end_on & (start_on & end_on).T
+    through = other & same & ~repeat
+    return (np.any(through & start_on, axis=1), np.any(through & end_on, axis=1),
+            np.any(repeat & (index[None, :] < index[:, None]), axis=1))
+
+
+def test_continued_endpoints_per_pair_match_the_one_array_form():
+    """Forming each material pair's block on its own reads the same three flags as one array.
+
+    The intervals hold every case the flags name -- a straight interface split in three, a
+    repeat in reverse, a zero-length interval -- in two pairs that share those lines, so a
+    relation across pairs (which must not count) is on offer everywhere.
+    """
+    from wavebit.rcwa._engine.boundary import _continued_endpoints
+    rng = np.random.default_rng(7)
+    pieces = [((0., 0.), (.3, 0.)), ((.3, 0.), (.5, 0.)), ((.5, 0.), (1., 0.)),   # one line, split
+              ((.5, 0.), (.3, 0.)),                                               # a reversed repeat
+              ((.2, .2), (.2, .2)),                                               # zero length
+              ((.2, .2), (.2, .6)), ((.2, .6), (.2, .9))]                         # another split line
+    pieces += [tuple(map(tuple, rng.uniform(0., 1., (2, 2)))) for _ in range(25)]
+    starts = np.array([p[0] for p in pieces])
+    edges = np.array([p[1] for p in pieces]) - starts
+    a = np.concatenate([starts, starts])
+    e = np.concatenate([edges, edges])
+    l2 = np.sum(e*e, axis=1)
+    valid = l2 > 0.
+    pair = [0]*len(pieces) + [1]*len(pieces)
+    order = rng.permutation(len(pair))
+    a, e, l2, valid = a[order], e[order], l2[order], valid[order]
+    pair = [pair[i] for i in order]
+    got = _continued_endpoints(np, a, e, l2, valid, pair, 1.)
+    want = _continued_endpoints_dense(a, e, l2, valid, np.asarray(pair), 1.)
+    for g, w in zip(got, want):
+        np.testing.assert_array_equal(np.asarray(g), w)
+    assert any(np.any(w) for w in want)
