@@ -108,6 +108,13 @@ spectrum.effective_index, spectrum.modes[0][0]       # 사영에 쓴 모드
 [검증 기록](../../validation/fdtd/fd-waveguide-modes.md)). `Open` 면을 가로지르면 창은 측정기와
 `solve_modes` 모두 물리 가장자리에서 한 칸 안쪽에서 멈추고, 측정기는 흡수층 칸을 읽지 않습니다.
 
+`Open` 면 밖으로 빠져나가는 도파관은 그 면을 지나 이어지는 셀 맞춤 코어로 씁니다:
+`fdtd.Structure('core', shape=fdtd.SnappedBox(size=(1., .5, 10.)), material=...,
+continuation=('z-', 'z+'))`, 또는 슬래브가 뻗어 있는 축의 면을 지정한 `SnappedSlab`입니다. 그러면
+도파 모드는 끝면을 만나지 않고 흡수층에 들어갑니다. 측정한 반사는
+[검증 기록](../../validation/fdtd/fd-waveguide-through-pml.md)에 있습니다. 스무딩 코어는 `Open`
+면에서 거절됩니다.
+
 ## 정확도
 
 등록한 검사와 측정 결과는 [검증 기록](../../validation/fdtd/fd-waveguide-modes.md)에

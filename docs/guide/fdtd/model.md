@@ -207,7 +207,7 @@ The rule has limits, each enforced by `check`:
 | The smallest extent the body bounds must be at least 4 cells; 4 to 8 cells warns | across fewer cells, where the mixed cells fall decides the answer more than the body does |
 | Material: `Material` with a scalar permittivity and permeability; no per-axis values | the mixing rule is applied per component and assumes an isotropic body |
 | No `ConductiveMaterial` or `DispersiveMaterial`, except a flat film spanning the cell | lossy and dispersive mixing is validated only for those film scopes |
-| Must not touch an `Open()` face unless an unturned, transversely uniform `Box` explicitly declares `Structure.continuation` | finite-body continuation is not inferred; see [smoothed substrates](substrate-gradients.md) |
+| Must not touch an `Open()` face unless an unturned, transversely uniform `Box` explicitly declares `Structure.continuation` | finite-body continuation is not inferred; see [smoothed substrates](substrate-gradients.md). A cell-snapped waveguide core may continue instead (see [General-scene limits](#general-scene-limits)) |
 | Must not reach a `Periodic()` face, unless it runs the whole period reaching **more than** one cell past both faces | otherwise part of it would be lost at the seam |
 | Two smoothed surfaces may not pass through the same cell | the mixing rule describes two media and one surface per cell; separate them by a cell or write one body |
 | A smoothed surface may not cut a cell that a cell-snapped face also cuts | the cell would hold three media (see below) |
@@ -329,7 +329,7 @@ type per axis or a `(low, high)` pair.
 
 | Face | Meaning |
 | --- | --- |
-| `Open()` | outgoing: a PML outside the physical domain, matched to the uniform medium that reaches the face. Only uniform media may reach it — the background, a `SnappedSlab` across that axis, or an unturned `Box` that declares `Structure.continuation` and reaches more than one cell past both transverse faces; any other finite body touching it, or a slab or continued `Box` crossing an orthogonal `Open()` face, is refused (see [General-scene limits](#general-scene-limits)). |
+| `Open()` | outgoing: a PML outside the physical domain, matched to the uniform medium that reaches the face. Only uniform media may reach it — the background, a `SnappedSlab` across that axis, an unturned `Box` that declares `Structure.continuation` and reaches more than one cell past both transverse faces, or a `SnappedBox` core that declares continuation through that face; any other finite body touching it, or a slab or continued `Box` crossing an orthogonal `Open()` face, is refused (see [General-scene limits](#general-scene-limits)). |
 | `Periodic()` | both faces wrap with no phase; normal incidence in a periodic cell. |
 | `Bloch(phase=φ)` or `Bloch(k=k)` | both faces wrap with a phase; the run becomes complex (twice the memory and work). `Bloch.from_source(source, units=...)` writes the faces an oblique `PlaneWave` needs. |
 | `PEC()` / `PMC()` | tangential E / tangential H vanishes on the wall. A structure reaching past one is clipped, with `GeometryClippedWarning`. |
@@ -709,18 +709,22 @@ coating of 0.105 µm instead, the same scene would warn `geometry.cell_snapped` 
   other GPU backends and single precision are refused. The grid is uniform and cubic.
 - Per-cell sampled grids use `fdtd.native`; this general-scene formulation has no raster body.
   Constructive solid geometry (union, intersection, difference) and tilted extrusion axes are unsupported.
-- No Gaussian beams, mode sources or mode monitors.
+- No Gaussian beams or mode sources. Mode monitors and the mode solver are described in
+  [Waveguide modes](waveguide-modes.md).
 - No smoothed lossy or dispersive bodies outside flat films.
-- **A body narrower than the cross-section cannot continue into an absorbing layer.** Only
-  uniform media continue into an `Open()` face's PML: the background, a `SnappedSlab` across that
-  axis, and an unturned `Box` that declares `Structure.continuation` and reaches more than one cell
-  past both transverse faces (a substrate; see [smoothed substrates](substrate-gradients.md)). A
-  finite body that touches an `Open()` face is refused — a `Cylinder`, `Prism` or `Sphere`, or a
-  `Box` or `SnappedBox` core — and so is a smoothed body that ends so close to the face that its
-  smoothed edge reaches the layer. A waveguide whose core, round or rectangular, continues into
-  the absorber is therefore not supported yet, and no date is set. Ending the core before the
-  absorber, with its smoothed edge clear of the layer, avoids the refusal, but the end face then
-  reflects, so the scene solves a different problem.
+- **Only a cell-snapped core continues into an absorbing layer.** Into an `Open()` face's PML
+  continue the background, a `SnappedSlab` across that axis (or, declaring
+  `Structure(continuation=...)`, through the faces of the axes it runs along), an unturned `Box`
+  that declares `Structure.continuation` and reaches more than one cell past both transverse
+  faces (a substrate; see [smoothed substrates](substrate-gradients.md)), and a `SnappedBox`
+  core that declares `Structure(continuation=('z-', 'z+'))` (any one axis) and reaches those
+  physical faces. The core is extended through the padding with its cross-section unchanged, so
+  every layer of the PML sees the same medium; its measured guided-mode reflection is in the
+  [validation record](../../validation/fdtd/fd-waveguide-through-pml.md). A smoothed core
+  narrower than the cross-section — a `Box`, `Cylinder`, `Prism` or `Sphere` — is still refused
+  at an `Open()` face, and so is a smoothed body that ends so close to the face that its
+  smoothed edge reaches the layer, or a continued core that touches an `Open()` face of another
+  axis.
 
 Custom static geometry implements `fdtd.Shape`; prepared reuse checks its declared instance state.
 Its cell support must stay clear of Open padding. See the [migration guide](../../migration/index.md)

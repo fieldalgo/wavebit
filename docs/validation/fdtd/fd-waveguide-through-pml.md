@@ -59,4 +59,28 @@ with a spectrum centred near 1.55 µm. Everything else in D1 is as registered.
 
 ## Results
 
-Pending.
+Measured with `tests/fdtd/test_fd_waveguide_pml.py` on NumPy, double precision.
+
+| Criterion | Limit | 12 cells | 24 cells | Verdict |
+| --- | --- | --- | --- | --- |
+| D1 TE0 power reflection, slab | at most 1e-5 with 12 cells, smaller with 24 | 4.3e-8 | 3.5e-16 | passed |
+| D1 no `GrowingFieldWarning` in 400 periods | none | none raised | none raised | passed |
+| D2 fundamental-mode power reflection, rectangular core | at most 1e-5 with 12 cells, smaller with 24 | 1.3e-6 | 3.5e-12 | passed |
+| D3 refusals by code | `fdtd.padding_continuation` | all five raised | | passed |
+
+Two details of the runs, neither a change to a limit. D1 has no source to infer the PML
+wavelength from, so its `PML` names 1.55 µm, and its 400 periods are written as the
+equivalent duration in seconds. D2's pulse width was not registered; the first width tried
+(`frequency_sigma_hz = 3e13`) was refused by the resolution check before any step (its
+shortest wavelength is sampled at fewer than 8 cells in the core), and the runs use
+`1.5e13`. D2's core is sampled at about 10 cells per wavelength at 1 µm, so its runs carry the
+`CoarseMeshWarning`; the reflection it measures is of the mode on that grid.
+
+Added after registration, as further refusal and admission tests (no limit changed): a
+continued core reaching only one of the two named faces (each way), continuation naming
+faces of two axes, the registered D1 and D2 scenes passing `check` and `prepare`, and the
+lowered core spanning the allocated domain with its cross-section unchanged. Each new rule
+was broken on purpose and the tests failed: dropping the one-axis rule, either reach check,
+the padding check, the extension through either face, the slab's own-axis rule or the
+crossing-rule exemption, and letting a smoothed `Box` continue; the source was then restored
+byte for byte.
