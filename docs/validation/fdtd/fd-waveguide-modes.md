@@ -219,3 +219,35 @@ MM5, refusals by name: a monitor plane where the medium changes along the axis
 (`mode.nonuniform`); a traced or gradient-carrying structure that reaches the
 monitor plane (`mode.traced`); more modes than are confined (`mode.count`); a
 non-positive `modes` (`monitor.modes`); a plane outside the physical domain.
+
+### MM2 outcome and a registered replacement (2026-10-27)
+
+MM2 as registered **failed**. Its precondition was not met: after 150 source periods
+the decay diagnostic reported 2.0e-3 of the peak energy still in the monitor regions
+(the line is 1e-5), and the modal sum differed from the flux by 4.5e-5 (limit 1e-6).
+Longer runs (300 and 600 periods) still did not settle. The cause is physical and
+lies in the configuration: a closed metal guide traps the spectral content at each
+mode's cutoff, where the group velocity is zero, so a broadband pulse whose spectrum
+crosses cutoffs never leaves the guide.
+
+The unsettled field explains the mismatch. The run's own `FluxMonitor` values differed
+along the lossless guide by 3% (λ = 1.05 µm) to 14% (0.9 µm) between z = 1.5 and 3.5 µm,
+while each well-propagating mode's net modal energy stayed constant along z and only
+the near-cutoff TE21 mode's changed. The Fourier fields of a run that has not decayed
+are not a solution of both discrete curl equations at once. The end correction
+(`src/wavebit/fdtd/_post.py::end_correction`) makes each field's own update exact against the
+other field's *uncorrected* transform, so the corrected pair leaves a residue at the
+final field's level. A box of corrected phasors gave relative curl residuals of 0.7%
+(Faraday) and 5-7% (Ampère); the same curls applied to the time-domain fields close to
+4.7e-15. This is the engine's documented behavior for a run that has not decayed (its
+`UnsettledFieldWarning`); it is recorded here, not changed.
+
+MM2b, registered after the MM2 failure and before it was run: the MM2 guide and
+monitors, with a narrowband pulse kept inside the band where exactly seven modes
+propagate on this grid. The discrete cutoffs of the next mode above and the last mode
+below are at 1.0087 µm and 1.0644 µm. The pulse is centred at 1.036 µm, with a
+frequency standard deviation of 1.3e12 Hz (both band edges more than six standard
+deviations away) and `cutoff=1e-9`, and the monitors read 1.036 µm. The run must
+report the fields settled, and the seven-mode sum must equal the flux to a relative
+1e-6 at both monitors.
+
