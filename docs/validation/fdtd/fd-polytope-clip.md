@@ -143,3 +143,33 @@ else. The planned construction:
 
 Agreement across three backends is consistency, not physical correctness; Gate 2 is the
 physical gate.
+
+## Amendment 1 (2026-10-27, before any field was computed)
+
+Planning the registered scenes (`fdtd_subpixel_polytope_clip.py plan`, which builds plans and
+counts the clip's written voxels and computes no field) showed that two statements above were
+wrong about the instrument, and that some registered grids cannot be planned. Nothing below was
+chosen after seeing a measured number; it is committed and published before the first run.
+
+* **Arm L: when the clip writes.** "The gap is thinner than every grid used, so its two faces
+  share voxels at every grid" is false. The clip writes only where **both** faces fall inside
+  one voxel, and a gap of 0.003 straddles a voxel boundary at 224 and 320 cells per unit, where
+  it writes nothing (on the one-cell column: 3, 1, 3, 2, 1, 2, 0, 0 electric voxels at 28, 40,
+  56, 80, 112, 160, 224, 320). Grid 20 is refused twice: by the PML door with a half-unit layer
+  (10 cells, under 12) and by the resolution door (`eps` 6 at wavelength 0.8 is under 8 cells
+  per wavelength). **The arm's grids become 28, 40, 56, 80, 112 and 160 cells per unit**, the
+  set at which the clip writes and every wavelength plans; the PML is at least 12 cells and half
+  a unit thick. The pass rule is unchanged: least-squares order of the band error over these
+  six grids at least 1.8 per polarisation.
+* **Arm D: what plans.** At the grids where the S7 dimer's clip writes (32, 32, 24 and 24
+  electric voxels at 20, 24, 28 and 32 cells per unit; none at 40, 56, 80), the resolution door
+  refuses `eps` 12 at the shorter wavelengths: grid 20 plans at 1.6-2.0 only, 24 at 1.4-2.0,
+  28 at 1.2-2.0, 32 and finer at all eleven. Each wavelength is run as its own narrow band
+  (`df = 0.04 / wavelength`), so that a wavelength the door admits is not lost to a broadband
+  pulse's shortest wavelength. **Criterion (a) is kept as registered and will be reported as
+  read: it fails at 20, 24 and 28 cells per unit**, because of the resolution door and not of
+  the clip. **Criterion (b) is applied per wavelength**: at every wavelength and every
+  clip-writing grid that plans, the relative error must lie within a factor of 2 of the power
+  law through that wavelength's non-writing grids (40 and 56), against the 80-cell reference.
+  The band error (mean over wavelengths) is reported only over the wavelengths every compared
+  grid shares.
