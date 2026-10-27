@@ -44,6 +44,7 @@ usage see the [FDTD guide](../../guide/fdtd/general-fdtd.md) and the
 - [C8: one film with two Debye poles](fd-two-debye-film.md)
 - [Waveguide modes of the discrete Yee system (stage 7)](fd-waveguide-modes.md)
 - [A cell-snapped waveguide through an absorbing layer (stage 7)](fd-waveguide-through-pml.md)
+- [A one-way waveguide mode source (stage 7)](fd-mode-source.md)
 - [Adjoint, discrete derivatives and physical accuracy](fdtd-adjoint-validation.md)
 - [Bragg cavity temporal and spatial convergence](fdtd-bragg-cavity.md)
 - [Circular FDTD shapes and diameter derivatives](fdtd-circle-gradients.md)
