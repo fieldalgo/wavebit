@@ -50,7 +50,7 @@ Apache-2.0이고, 파생 원본 코드의 MIT 고지는
 
 ## Python 배포 패키지
 
-버전 하한은 `pyproject.toml`에 있고, 표는 CI가 설치하는 패키지를 적습니다.
+버전 하한은 `pyproject.toml`에 있고, 표는 CI가 설치하는 패키지를 적으며, CI가 설치하는 정확한 버전은 `.github/constraints/`에 있습니다([CI의 의존성 버전](verification.md#ci의-의존성-버전)).
 
 ### Runtime
 

@@ -109,6 +109,44 @@ keep their original workflow configuration. Test selection, numerical criteria,
 required checks and release gates are unchanged. A release still requires successful
 validation of its exact commit. This is a CI execution queue, not a PR merge queue.
 
+## Dependency versions in CI
+
+Required CI does not install the newest releases. Every job of the
+[test workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)
+except `lint` installs through `tools/ci_constraints.py`, which applies the exact versions in
+`.github/constraints/`: `tests.txt` for the test, slow and examples jobs, `docs.txt` for the
+docs build and its deployment, `distribution.txt` for the distribution smoke and its isolated
+builds. A release upstream therefore cannot turn a run red on a commit that changed nothing.
+`pyproject.toml` is unchanged by this: its floors are still the oldest versions verified,
+users still install the newest releases, and the files are not an install requirement.
+
+There is one file per environment because the environments disagree. The PyTorch CPU index
+mirrors only some versions of torch's own dependencies, and the docs extra and the packaging
+tools hold different versions of shared distributions.
+
+The [latest dependencies workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/latest-deps.yml)
+watches the newest releases. It is not a required check. Daily, it installs the same three
+environments without the files and runs the license check, the quick profile, the
+backend-sensitive files, the `-W` docs build and the Linux distribution smoke. A scheduled
+failure opens or comments on one issue, which the next passing run closes. On Mondays, or on
+a manual run with `refresh`, it compares the versions it installed with the recorded ones. If
+they differ, it opens a draft pull request that replaces the files, or adds a commit to the
+open one.
+
+A version moves only through that pull request, read and marked ready like any other. Its
+required CI is the full validation on the new versions, including macOS and Windows. If it
+fails, keep the failing distribution at its previous version, land the rest and record why.
+A tolerance is not loosened and a golden is not regenerated to make a version pass. A newly
+installed distribution needs its license review in the same pull request.
+
+To reproduce a CI environment locally, in a fresh virtual environment:
+
+```shell
+python tools/ci_constraints.py install tests            # the recorded versions
+python tools/ci_constraints.py install tests --latest   # the newest releases
+python tools/ci_constraints.py freeze tests             # record what is installed
+```
+
 ## CI runs the two partitions in shards
 
 The [test workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)

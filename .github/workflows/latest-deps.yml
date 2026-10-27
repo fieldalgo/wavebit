@@ -1,0 +1,330 @@
+# The newest release of every dependency, checked daily, outside the required checks.
+#
+# `tests.yml` installs the exact versions in `.github/constraints/`, so a release upstream
+# (jax, torch, numpy, scipy, sphinx, or anything they pull in) cannot turn a run red on a
+# commit that changed nothing. That is only half of it: users install the newest releases,
+# and a break there should be found here first, not by them. Twice in October 2026 an upstream
+# release did exactly that to an unchanged main -- jax 0.12.0 changed a trace count the FDTD
+# tests pin, and a new transitive dependency (tzdata) failed the license check.
+#
+# This workflow installs the same environments as `tests.yml` through the same tool,
+# `tools/ci_constraints.py install --latest`, then runs:
+#   tests         the license check, the quick profile, and the files where a backend
+#                 release shows first: cross-backend agreement, eager/compiled parity,
+#                 FDTD program caching and gradients.
+#   docs          the license check and the `-W` Sphinx build of both languages.
+#   distribution  the sdist/wheel smoke on Linux (macOS and Windows run on the refresh PR).
+# Each job also records what it installed (`freeze`) as an artifact.
+#
+# It is not a required check and it is not in `tests.yml`: `release-gate.yml` accepts a
+# successful `tests` run on a commit, and a run of this workflow must never count as one.
+#
+# Scheduled and manual runs report:
+#   - any job failed -> open, or comment on, one issue titled CANARY_TITLE below; required CI
+#     is unaffected, so the issue is the alarm. It is closed by the next run that passes.
+#   - on Mondays (and on a manual run with `refresh`), the recorded versions are compared with
+#     the ones installed here; if they differ, a draft pull request replaces
+#     `.github/constraints/`. Draft, so it runs no CI until someone has read it and marked it
+#     ready; then the full required CI runs against the new versions. If that fails, keep the
+#     failing distribution at its previous version and land the rest.
+# Creating that pull request needs the repository setting "Allow GitHub Actions to create and
+# approve pull requests". docs/development/verification.md has the policy.
+name: latest dependencies
+
+on:
+  schedule:
+    # Daily, and Monday's run also refreshes. Two lines so a run can tell which it is.
+    - cron: '41 19 * * 0,2-6'
+    - cron: '41 19 * * 1'
+  workflow_dispatch:
+    inputs:
+      refresh:
+        description: 'Also open or update the pull request that records these versions'
+        type: boolean
+        default: false
+  # A change to this workflow or to the tool runs the checks once on its own pull request
+  # (Ready only, as in tests.yml); nothing is reported from a pull request.
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/latest-deps.yml'
+      - 'tools/ci_constraints.py'
+
+# Not a validation of a commit, so not the main queue of tests.yml: a newer canary replaces
+# an older one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CANARY_TITLE: Latest dependencies canary is failing
+  REFRESH_PREFIX: deps/ci-constraints-
+
+jobs:
+  tests:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    name: tests on the newest releases
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install CPU-only PyTorch, then Wavebit with every extra, at the newest releases
+        id: install
+        run: python tools/ci_constraints.py install tests --latest
+
+      # Only a complete install is recorded: a half-installed environment would drop pins.
+      - name: Record what was installed
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        run: python tools/ci_constraints.py freeze tests --output "${{ runner.temp }}/constraints/tests.txt"
+
+      - name: Show versions newer than the recorded ones
+        if: ${{ always() }}
+        run: diff <(grep -v '^#' .github/constraints/tests.txt) <(grep -v '^#' "${{ runner.temp }}/constraints/tests.txt") || true
+        shell: bash
+
+      - name: Upload the recorded versions
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: constraints-tests
+          path: ${{ runner.temp }}/constraints/tests.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Verify all three backends and contourpy are importable
+        run: python -c "import numpy, jax, torch, contourpy, matplotlib, wavebit; print(wavebit.__file__)"
+
+      - name: Check installed licenses against the reviewed inventory
+        run: python tools/check_licenses.py
+
+      # Same thread settings as tests.yml, for the reasons given there.
+      - name: Run the quick profile and the backend-sensitive files
+        env:
+          OPENBLAS_NUM_THREADS: 1
+          OMP_NUM_THREADS: 1
+          MKL_NUM_THREADS: 1
+          NUMEXPR_NUM_THREADS: 1
+          VECLIB_MAXIMUM_THREADS: 1
+          XLA_FLAGS: --xla_cpu_multi_thread_eigen=false
+        run: |
+          python -u tools/run_verification.py --profile quick --workers 2 \
+            --timeout 1200 --timeout-method thread \
+            --output "${{ runner.temp }}/wavebit-verification/quick"
+          python -u tools/run_verification.py --profile full --slow exclude --workers 2 \
+            --timeout 1200 --timeout-method thread \
+            --path tests/api/test_eager_grad_parity.py \
+            --path tests/api/test_torch_compile.py \
+            --path tests/rcwa/test_gradients.py \
+            --path tests/fdtd/test_fdtd_scan_programs.py \
+            --path tests/fdtd/test_fd_backends.py \
+            --path tests/fdtd/test_fd_stage1_backends.py \
+            --path tests/fdtd/test_fd_stage2_backends.py \
+            --path tests/fdtd/test_fd_stage3_backends.py \
+            --path tests/fdtd/test_fdtd_scene_backends.py \
+            --output "${{ runner.temp }}/wavebit-verification/backends"
+
+      - name: Upload verification evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: latest-deps-verification
+          path: |
+            ${{ runner.temp }}/wavebit-verification/*/*.json
+            ${{ runner.temp }}/wavebit-verification/*/*/*.json
+            ${{ runner.temp }}/wavebit-verification/*/*/*.jsonl
+            ${{ runner.temp }}/wavebit-verification/*/*/*.xml
+            ${{ runner.temp }}/wavebit-verification/*/*/*.log
+            !${{ runner.temp }}/wavebit-verification/*/snapshot/**
+          if-no-files-found: warn
+          retention-days: 14
+
+  docs:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    name: docs on the newest releases
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install Wavebit and the docs extra at the newest releases
+        id: install
+        run: python tools/ci_constraints.py install docs --latest
+
+      # Only a complete install is recorded: a half-installed environment would drop pins.
+      - name: Record what was installed
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        run: python tools/ci_constraints.py freeze docs --output "${{ runner.temp }}/constraints/docs.txt"
+
+      - name: Show versions newer than the recorded ones
+        if: ${{ always() }}
+        run: diff <(grep -v '^#' .github/constraints/docs.txt) <(grep -v '^#' "${{ runner.temp }}/constraints/docs.txt") || true
+        shell: bash
+
+      - name: Upload the recorded versions
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: constraints-docs
+          path: ${{ runner.temp }}/constraints/docs.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Check installed licenses against the reviewed inventory
+        run: python tools/check_licenses.py
+
+      - name: Build English and Korean sites, warnings as errors
+        run: |
+          python -m sphinx -W -b html -D wavebit_bilingual=1 -d docs/_build/doctrees/en docs docs/_build/html
+          python -m sphinx -W -b html -D wavebit_bilingual=1 -D language=ko -d docs/_build/doctrees/ko docs docs/_build/html/ko
+
+  distribution:
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    name: distribution on the newest releases
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      # The tools, the build backend and what the smoke installs, so that `freeze` sees
+      # everything the job's constraints have to cover.
+      - name: Install the distribution tooling and the package at the newest releases
+        id: install
+        run: python tools/ci_constraints.py install distribution --latest
+
+      # Only a complete install is recorded: a half-installed environment would drop pins.
+      - name: Record what was installed
+        if: ${{ always() && steps.install.outcome == 'success' }}
+        run: python tools/ci_constraints.py freeze distribution --output "${{ runner.temp }}/constraints/distribution.txt"
+
+      - name: Show versions newer than the recorded ones
+        if: ${{ always() }}
+        run: diff <(grep -v '^#' .github/constraints/distribution.txt) <(grep -v '^#' "${{ runner.temp }}/constraints/distribution.txt") || true
+        shell: bash
+
+      - name: Upload the recorded versions
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: constraints-distribution
+          path: ${{ runner.temp }}/constraints/distribution.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Build and exercise an isolated installed distribution
+        run: python tools/run_distribution_smoke.py --output "${{ runner.temp }}/wavebit-distribution"
+
+  report:
+    needs: [tests, docs, distribution]
+    if: ${{ always() && github.event_name != 'pull_request' }}
+    name: open or close the canary issue
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open, comment on or close the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULTS: "tests: ${{ needs.tests.result }}, docs: ${{ needs.docs.result }}, distribution: ${{ needs.distribution.result }}"
+          FAILED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: |
+          existing=$(gh issue list --state open --search "\"$CANARY_TITLE\" in:title" --json number,title \
+            --jq "[.[] | select(.title == env.CANARY_TITLE)][0].number // empty")
+          if [ "$FAILED" = "true" ]; then
+            body=$(printf '%s\n\n%s\n\n%s\n\n%s' \
+              "The newest dependency releases failed this run: $RESULTS." \
+              "Run: $RUN_URL. Each job's step \"Show versions newer than the recorded ones\" lists what changed since \`.github/constraints/\`." \
+              "Required CI and main are unaffected: they install the recorded versions. Users installing \`wavebit\` today get the newest releases, so a failure here may reach them." \
+              "This issue closes itself after the next run that passes.")
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body "$body"
+            else
+              gh issue create --title "$CANARY_TITLE" --body "$body"
+            fi
+          elif [ -n "$existing" ]; then
+            gh issue close "$existing" --comment "The newest dependency releases pass again: $RESULTS. Run: $RUN_URL."
+          fi
+
+  refresh:
+    needs: [tests, docs, distribution]
+    if: >-
+      ${{ always() && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'skipped') &&
+          ((github.event_name == 'schedule' && github.event.schedule == '41 19 * * 1') ||
+           (github.event_name == 'workflow_dispatch' && inputs.refresh)) }}
+    name: open or update the pull request that records these versions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: constraints-*
+          path: ${{ runner.temp }}/constraints
+          merge-multiple: true
+
+      - name: Commit the new versions to the open refresh pull request, or open one
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESULTS: "tests: ${{ needs.tests.result }}, docs: ${{ needs.docs.result }}, distribution: ${{ needs.distribution.result }}"
+        run: |
+          set -euo pipefail
+          new="${{ runner.temp }}/constraints"
+          for set in tests docs distribution; do
+            test -s "$new/$set.txt" || { echo "::error::no recorded $set.txt from this run"; exit 1; }
+          done
+          # Only versions count; the header names how a file was written.
+          changed() {
+            for set in tests docs distribution; do
+              cmp -s <(grep -v '^#' "$new/$set.txt") <(grep -v '^#' ".github/constraints/$set.txt") || return 0
+            done
+            return 1
+          }
+          pr=$(gh pr list --state open --json number,headRefName \
+            --jq "[.[] | select(.headRefName | startswith(env.REFRESH_PREFIX))][0] // empty | \"\(.number) \(.headRefName)\"")
+          if [ -n "$pr" ]; then
+            git checkout "${pr#* }"
+          else
+            git checkout -b "$REFRESH_PREFIX$(date -u +%Y-%m-%d)-$GITHUB_RUN_ID"
+          fi
+          if ! changed; then
+            echo "The recorded versions are already the newest; nothing to do."
+            exit 0
+          fi
+          cp "$new"/tests.txt "$new"/docs.txt "$new"/distribution.txt .github/constraints/
+          summary=$(for set in tests docs distribution; do git diff --unified=0 -- ".github/constraints/$set.txt" \
+            | grep -E '^[-+][a-z0-9]' | sed "s/^/$set: /" || true; done)
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/constraints
+          git commit -m "ci: record the newest dependency versions" -m "Recorded by $RUN_URL ($RESULTS)."
+          git push origin HEAD
+          body=$(printf '%s\n\n%s\n\n```diff\n%s\n```\n\n%s' \
+            "The newest releases as installed by $RUN_URL ($RESULTS)." \
+            "Changes to \`.github/constraints/\`:" "$summary" \
+            "Before marking this ready: read the changes, run the checks the changed distributions touch, and add any newly installed distribution to the license inventory. Ready runs the full required CI on these versions. If it fails, keep the failing distribution at its previous version and say why here; never loosen a tolerance or regenerate a golden to pass.")
+          if [ -n "$pr" ]; then
+            gh pr comment "${pr%% *}" --body "$body"
+          else
+            gh pr create --draft --base main --title "ci: record the newest dependency versions" --body "$body" \
+              || { echo "::error::could not open the pull request; enable Settings -> Actions -> General -> Allow GitHub Actions to create and approve pull requests"; exit 1; }
+          fi

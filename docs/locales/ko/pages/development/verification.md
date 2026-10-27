@@ -104,6 +104,41 @@ pytest를 종료할 수 있습니다. 이미 flush한 JSONL 이벤트는 남기�
 검증은 바뀌지 않으며, 릴리스에는 정확한 대상 커밋의 검증 성공이 필요합니다.
 이는 CI 실행 대기열이며 PR 병합 대기열과는 다릅니다.
 
+## CI의 의존성 버전
+
+필수 CI는 최신 릴리스를 설치하지 않습니다.
+[테스트 workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)의
+`lint`를 제외한 모든 작업은 `tools/ci_constraints.py`로 설치하며, 이 도구는
+`.github/constraints/`의 정확한 버전을 적용합니다. test·slow·examples 작업은 `tests.txt`,
+docs 빌드와 배포는 `docs.txt`, 배포 스모크와 그 격리 빌드는 `distribution.txt`를 씁니다.
+따라서 상류의 새 릴리스가 아무것도 바뀌지 않은 커밋의 실행을 실패로 만들 수 없습니다.
+`pyproject.toml`은 바뀌지 않습니다. 하한은 여전히 검증한 가장 오래된 버전이고, 사용자는
+여전히 최신 릴리스를 설치하며, 이 파일들은 설치 요구 사항이 아닙니다.
+
+환경마다 파일이 따로 있는 이유는 환경끼리 버전이 다르기 때문입니다. PyTorch CPU 인덱스는
+torch 의존성의 일부 버전만 제공하고, docs extra와 패키징 도구는 같은 배포판의 서로 다른
+버전을 씁니다.
+
+[최신 의존성 workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/latest-deps.yml)는
+최신 릴리스를 지켜봅니다. 필수 검사가 아닙니다. 매일 같은 세 환경을 파일 없이 설치하고
+라이선스 검사, quick 프로필, 백엔드에 민감한 파일, `-W` docs 빌드, Linux 배포 스모크를
+실행합니다. 예약 실행이 실패하면 이슈 하나를 열거나 그 이슈에 댓글을 달고, 다음에 통과한
+실행이 그 이슈를 닫습니다. 월요일 실행이나 `refresh`를 켠 수동 실행은 설치한 버전을 기록된
+버전과 비교합니다. 다르면 파일을 바꾸는 draft PR을 열거나, 이미 열린 그 PR에 커밋을 더합니다.
+
+버전은 그 PR로만 바뀌며, 다른 PR처럼 읽고 Ready로 바꿉니다. 그 PR의 필수 CI가 macOS와
+Windows를 포함한 새 버전의 전체 검증입니다. 실패하면 실패한 배포판만 이전 버전으로 두고
+나머지를 반영한 뒤 이유를 기록합니다. 버전을 통과시키려고 허용 오차를 완화하거나 golden을
+다시 만들지 않습니다. 새로 설치되는 배포판은 같은 PR에서 라이선스 검토가 필요합니다.
+
+CI 환경을 로컬에서 재현하려면 새 가상 환경에서 실행합니다.
+
+```shell
+python tools/ci_constraints.py install tests            # 기록된 버전
+python tools/ci_constraints.py install tests --latest   # 최신 릴리스
+python tools/ci_constraints.py freeze tests             # 설치된 버전 기록
+```
+
 ## CI는 두 실행 범위를 shard로 나눠 실행
 
 [테스트 workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)는
