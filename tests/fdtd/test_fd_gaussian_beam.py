@@ -259,12 +259,12 @@ def test_g4_a_unit_amplitude_carries_one_watt_per_metre(runs, dx, polarization):
 @pytest.mark.slow
 def test_g4_a_unit_amplitude_carries_one_watt_in_three_dimensions():
     _quiet()
-    span = (-3.4, 3.4)
-    beam = fdtd.GaussianBeam('b', plane=fdtd.Plane(z=-2.), pulse=_pulse(), waist=1.,
+    span = (-4.4, 4.4)
+    beam = fdtd.GaussianBeam('b', plane=fdtd.Plane(z=-2.), pulse=_pulse(), waist=1.5,
                              focus=(0., 0., 0.), polarization='x', direction='+z')
     problem = fdtd.Problem(
         units=Units(length='um'),
-        scene=fdtd.Scene(domain=fdtd.Domain(size=(7., 7., 5.)), boundaries=fdtd.Boundaries.open()),
+        scene=fdtd.Scene(domain=fdtd.Domain(size=(9., 9., 5.)), boundaries=fdtd.Boundaries.open()),
         sources=(beam,), outputs=fdtd.Outputs(monitors=(
             fdtd.FluxMonitor('flux', plane=fdtd.Plane(z=2., x=span, y=span), wavelengths=(1.,)),)))
     numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05),
