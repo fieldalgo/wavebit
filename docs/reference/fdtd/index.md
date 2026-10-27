@@ -171,6 +171,21 @@ Grid, duration, absorber and stopping rule: choices that do not change the physi
 .. autoclass:: wavebit.fdtd.FarFieldSpectrum
    :members:
 ```
+
+## Waveguide modes
+
+Modes of the discrete Yee system on a plane across a uniform cross-section; see the
+[waveguide-mode guide](../../guide/fdtd/waveguide-modes.md).
+
+```{eval-rst}
+.. autofunction:: wavebit.fdtd.solve_modes
+
+.. autoclass:: wavebit.fdtd.WaveguideModes
+   :members:
+
+.. autoclass:: wavebit.fdtd.WaveguideMode
+   :members:
+```
 ## Native-grid and periodic-stack formulations
 
 See [native-grid units and observations](../../guide/fdtd/native-grids.md) and

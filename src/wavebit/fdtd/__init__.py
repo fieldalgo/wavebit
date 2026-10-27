@@ -9,6 +9,7 @@ from ._monitors import (TimeSeriesMonitor, FieldMonitor, FluxMonitor, Diffractio
 from ._numerics import UniformGrid, Duration, PML, ConductiveAbsorber, DecayStop, Numerics
 from ._api import Prepared, check, prepare, run
 from ._result import Result, SpectralFlux, FarFieldSpectrum
+from ._modes import solve_modes, WaveguideMode, WaveguideModes
 from . import native, periodic
 
 __all__ = ['Problem', 'Scene',
@@ -21,6 +22,7 @@ __all__ = ['Problem', 'Scene',
            'UniformGrid', 'Duration', 'PML', 'ConductiveAbsorber', 'DecayStop', 'Numerics',
            'Prepared', 'check', 'prepare', 'run',
            'Result', 'SpectralFlux', 'FarFieldSpectrum',
+           'solve_modes', 'WaveguideMode', 'WaveguideModes',
            'native', 'periodic']
 
 #: Names this module no longer has, and what replaced them. Each is a tombstone, not an alias:
