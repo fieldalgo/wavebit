@@ -295,7 +295,8 @@ def validate(scene, plan):
                 raise ValueError(f'{term.name} interpolation support meets the {name} '
                                  'absorbing layer. Constitutive D/B memory currently needs '
                                  'lossless cells; leave one interpolation cell beyond the '
-                                 'smoothed support clear of the layer. Crossing it is C9.')
+                                 'smoothed support clear of the layer. Crossing it is not '
+                                 'supported yet, and no date is set.')
         for i, structure in enumerate(structures):
             if (_intersect(box, structure.shape.support(plan.grid)) is not None
                     and isinstance(structure.material, (Conductor, Dispersive))):

@@ -50,6 +50,11 @@ magnetic constitutive loss, dispersive or conductive coupled geometry, general C
 smoothing, or the open C7 convergence gate. Their existing measured scopes remain
 as documented in [smoothed occupancy](fd-subpixel-occupancy.md).
 
+Status (2026-10-27): a smoothed body narrower than the cross-section, such as a
+waveguide core, cannot continue into a CPML layer. This is not supported yet,
+and no date is set. The public `wavebit.fdtd` refuses it; see
+{ref}`General-scene limits <fdtd-model-general-scene-limits>`.
+
 A potential-coupling support with equal material and host permittivity still owns
 its flux term. Its zero cross coefficients are a physical control on the new
 route, rather than an automatic switch to the old diagonal route.
