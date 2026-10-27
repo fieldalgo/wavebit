@@ -180,17 +180,29 @@ continuous `D` series instead: sum `D`, then divide by `eps` at each sample (P. 
 M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). The default, `'fourier'`, is unchanged.
 
 - **What it changes.** `E_x` in the patterned layers of a 1D grating, on the pure TM and the
-  conical paths. Every other component, every uniform layer and the whole TE field are returned
-  bit for bit as the default returns them.
+  conical paths; `E_x` and `E_y` in the patterned layers of a 2D cell. Every other component,
+  every uniform layer and the whole TE field are returned bit for bit as the default returns them.
+- **How it works on a 2D cell.** Line by line. `E_x` jumps across walls normal to x and is
+  continuous across walls normal to y, so at each sample its series is summed over the y orders
+  first, then Li's inverse rule along the raster row under the sample turns its x coefficients
+  into those of `D_x`, which is summed along x and divided by `eps`. `E_y` is the same along the
+  column under the sample. One consequence is worth knowing: across a wall normal to y, `E_x` is
+  read off two different rows, so at a finite truncation it steps there by a few percent where
+  the default's `E_x` is smooth. The step shrinks as the truncation grows; the jump the rule
+  removes, `eps*E_x` across a wall normal to x, does not shrink under the default.
 - **Why use it.** It is RETICOLO's `res3` rule (`parm.res1.champ=1`): with it the RETICOLO field
-  goldens agree to 1e-13 on every slot, `E_x` included, where the default differs by 7e-2 to
-  1e-1. On a 1D TM bar of index 3.5 its RMS error in `E_x` is 2.5 to 7 times smaller than the
-  default's at every truncation order from 10 to 80, against a reference at order 800.
-- **What it reads.** `eps` at each sample, from the raster column the sample falls in. A sample
-  exactly on a wall belongs to the column on its positive side. Derivatives with respect to the
-  raster's values are exact; the column choice is not differentiated.
-- **Not yet.** 2D cells, shape structures, tensor materials and solves that merged layers into a
-  half-space refuse it by name; the current result API's `field` does not take it yet.
+  goldens agree to 1e-13 on every slot of the 1D and conical cases, `E_x` included, where the
+  default differs by 7e-2 to 1e-1, and to 4e-11 on every slot of a two-layer crossed grating,
+  where the default's `E_x` and `E_y` differ by about 0.3. On a 1D TM bar of index 3.5 its RMS
+  error in `E_x` is 2.5 to 7 times smaller than the default's at every truncation order from 10
+  to 80, against a reference at order 800.
+- **What it reads.** `eps` at each sample, from the raster pixel the sample falls in, and on a
+  2D cell the inverse-rule matrix of the row and the column through it. A sample exactly on a
+  wall belongs to the pixel on its positive side. Derivatives with respect to the raster's
+  values are exact; the pixel choice is not differentiated.
+- **Not yet.** Shape structures, tensor materials, skewed lattices, the first-order 2D
+  formulation and solves that merged layers into a half-space refuse it by name; the current
+  result API's `field` does not take it yet.
 
 ## Earlier-interface field calls
 

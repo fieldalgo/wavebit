@@ -107,6 +107,7 @@ the committed numbers. [The star lift](../../docs/validation/fdtd/fd-subpixel-oc
 | **fmmax**, the in-cell **field** | uniform stacks exactly (7.8e-16), **x-patterned layers to ~1e-4**, and an **x/y-patterned** one to ~3e-2 on both formulations — the only outside check of a field whose `ky` orders come from the structure | the `fwref` env | `golden_fmmax_field.npz` |
 | **RETICOLO**, the in-cell **field** | the *pure TE/TM 1D* path (`field_1d`), which the two rows above never reach — **1e-14 on gratings**, five components of six | Octave + `RETICOLO_PATH` | `golden_reticolo_field.npz` |
 | **RETICOLO**, the **conical** field | `field_1d_conical` on a *patterned* layer — an azimuth and a discontinuity at once, which nothing else here reached | same | `golden_reticolo_conical_field.npz` |
+| **RETICOLO**, the **2D** field | `field_2d` on two patterned layers of a crossed grating, under both of `res3`'s in-plane rules: `champ = 1` is `discontinuous='continuity'` on all six components and `champ = 0` the default on the four transverse ones, 4e-11 at worst; the two rules differ by about 0.3 in `Ex` and `Ey` | Octave + `RETICOLO_PATH`, through `octave` as a subprocess (no `oct2py`) | `golden_reticolo_2d_field.npz` |
 | **fmmax**, `Formulation.FFT` | `factorization='laurent'`, the same operator: **identity** on patterned layers -- 6.1e-13 to 3.2e-11 in total and per order, on a rectangular cell, a lossy metal and a hexagonal one -- once fmmax's sampled coefficients are extrapolated to the exact ones | the `fwref` env | `golden_fmmax_laurent.npz` |
 | **fmmax**, **double negatives** | gratings on a lossy double-negative substrate (1D and 2D, `\|mu\| != 1`), double-negative pixels inside a grating (patterned `eps` and `mu`), and a grating lit **from** a lossy double negative: every order's unpolarized `R` and `T`, ETM and SMM, through the `theta` door and the direct-`k` door -- **identity**, 2.7e-14 to 6.2e-12, once the quadrature is extrapolated away as for the row above | the `fwref` env | `golden_fmmax_dng.npz` |
 | **PyMoosh** 4.0.1 (MIT), **lossless double negatives** | flat multilayers with a lossless double negative as the substrate, as the lit superstrate, as an inner layer, and all three: `r`, `t`, `R`, `T`, TE and TM, four in-plane wavevectors each, on the TE/TM, 2D and first-order paths, ETM and SMM -- 8.8e-15 at worst. The case fmmax cannot arbitrate | a throwaway venv with PyMoosh 4.0.1 -- see its generator | `golden_pymoosh_dng.npz` |
@@ -505,6 +506,11 @@ default is unchanged and keeps the bounded exception. On which is closer to the 
 on a 1D TM bar (n = 3.5) against the rule's own `truncation_order = 800`, where the two rules
 agree to 2e-3 away from the walls, the continuity rule's RMS error in `Ex` is 2.5 to 7 times
 smaller at every `truncation_order` from 10 to 80, and it does not ring.
+
+On a crossed grating `res3` applies the same rule line by line when `champ = 1` -- `Ex` along
+the row through each sample, `Ey` along the column -- and the plain sum when `champ = 0`.
+`golden_reticolo_2d_field.npz` stores both, and `test_reticolo_2d_field_golden.py` matches
+`discontinuous='continuity'` to the first and the default to the second.
 
 Three things had to be measured, each worth O(1) when guessed wrong:
 
