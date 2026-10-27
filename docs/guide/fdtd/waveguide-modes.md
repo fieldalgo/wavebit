@@ -120,6 +120,13 @@ and monitor (measured against central differences in the
 window stops one cell inside the physical edge, for the monitor and for `solve_modes` alike;
 the monitor reads no absorbing cells.
 
+A guide that runs out through an `Open` face is written with a cell-snapped core that
+continues through it: `fdtd.Structure('core', shape=fdtd.SnappedBox(size=(1., .5, 10.)),
+material=..., continuation=('z-', 'z+'))`, or a `SnappedSlab` with the faces of the axes it
+runs along. The guided mode then enters the absorbing layer without meeting an end face; its
+measured reflection is in the [validation record](../../validation/fdtd/fd-waveguide-through-pml.md).
+A smoothed core is refused at an `Open` face.
+
 ## Accuracy
 
 The registered checks and their measured results are in the
