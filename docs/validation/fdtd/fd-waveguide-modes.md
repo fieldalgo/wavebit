@@ -284,3 +284,29 @@ small but not zero, so the limits are looser than MM1's: the opposite direction 
 other mode each at most 1e-8 of the launched amplitude, and the launched mode's
 spectral energy equal to the flux on the same span to a relative 1e-8.
 
+### ModeMonitor results (2026-10-27)
+
+Measured with `tests/fdtd/test_fd_mode_monitor.py` (same environment as above).
+
+| Criterion | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| MM1 opposite direction / other mode / energy vs flux, 12 launches | 1e-10 | 4.7e-15 / 6.8e-16 / 4.8e-16 (worst) | passed |
+| MM2 seven-mode sum vs flux, broadband pulse | 1e-6, settled | 4.5e-5, not settled | **failed** (kept as an expected failure) |
+| MM2b seven-mode sum vs flux, narrowband pulse | 1e-6, settled | 1.7e-10 at both monitors; 5.0e-15 of the peak energy left | passed |
+| MM3 backends, MM2 amplitudes | 1e-12 | 6.2e-16 (JAX), 3.4e-16 (Torch) | passed |
+| MM4 AD vs central difference at step 3e-4 | 1e-6 | 9.6e-6 | **failed** (kept as an expected failure) |
+| MM4b AD vs fourth-order extrapolated difference | 1e-7 | 1.27e-8 (JAX and Torch) | passed |
+| MM5 refusals | by code | raised by `check` and by `run` (the mode count at `run`) | passed |
+| MM6 finite span: opposite direction / other mode / energy vs flux | 1e-8 | 3.1e-13 / 0 / 7.2e-13 | passed |
+
+In MM2b the +z monitor reads backward energy only in the two slowest modes, 2.8e-5
+(TE21) and 1.5e-6 (TM21) of the forward total. That is the end PML returning the
+near-cutoff modes, which it absorbs worst. It is measured here, not judged.
+
+Mutation checks (each made, the test failed, the source restored byte for byte):
+swapping the forward and backward combinations, dropping the cosine factor of the H
+overlap, reading one H half plane instead of their mean, dropping the spectral scale
+(MM1); shifting the window crop of a finite span (MM6); removing the early check of the
+window (MM5); solving the window with every structure instead of those that reach it
+(MM4b); summing six modes instead of seven (MM2b).
+

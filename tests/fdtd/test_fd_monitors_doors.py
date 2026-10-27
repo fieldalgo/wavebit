@@ -160,8 +160,10 @@ def test_a_diffraction_monitor_names_its_plane_side_and_window():
 
 
 def test_mode_monitors_and_decay_stopping_are_stage_7():
-    with pytest.raises(NotImplementedError, match='stage 7'):
+    with pytest.raises(NotImplementedError, match='stage 7') as caught:
         fd.ModeMonitor('m')
+    # The engine surface does not have it; the message names the public one that does.
+    assert 'wavebit.fdtd.ModeMonitor' in str(caught.value)
     # Decay is now explicit, but both the ratio and physical window are required.
     with pytest.raises(TypeError, match="needs 'window'"):
         fd.Decay(1e-5)

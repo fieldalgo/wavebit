@@ -34,7 +34,7 @@ _CLASS_MODULES = {
                      'Open', 'PEC', 'PMC', 'MirrorSymmetry', 'InvariantAxis', 'PlaneWave',
                      'CurrentDipole', 'TFSF', 'InitialField', 'GaussianPulse', 'Outputs',
                      'TimeSeriesMonitor', 'FieldMonitor', 'FluxMonitor', 'DiffractionMonitor',
-                     'FarFieldMonitor', 'Numerics', 'UniformGrid', 'Duration', 'PML',
+                     'FarFieldMonitor', 'ModeMonitor', 'Numerics', 'UniformGrid', 'Duration', 'PML',
                      'ConductiveAbsorber', 'DecayStop'),
     'wavebit': ('Execution',),
     'wavebit.fdtd.native': ('Problem', 'Medium', 'Oscillator', 'Current', 'InitialField',

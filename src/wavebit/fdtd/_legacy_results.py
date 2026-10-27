@@ -149,6 +149,8 @@ class FluxResult:
     wavelengths: tuple
     flux: object
     faces: object = None
+    accumulators: object = None   # a plane's corrected DFT phasors (Eu, Ev, Hu, Hv)
+    layout: object = None         # and where they sit (_prepare/monitors.py::PlaneLayout)
 
 
 @_eager_under_torch_compile

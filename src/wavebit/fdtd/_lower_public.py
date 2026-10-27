@@ -164,8 +164,16 @@ def _monitor_geometry(m, field, expected):
 _ENGINE_SIDE = {'reflected': 'reflect', 'transmitted': 'transmit'}
 
 
-def _monitor(m, problem):
+def _monitor(m, problem, numerics=None):
     """The engine monitor for public monitor ``m``, built explicitly (never by class name)."""
+    if isinstance(m, monitors.ModeMonitor):
+        # A plane flux over exactly the mode window; the projection onto the modes is made
+        # from its accumulators when the result is adapted (src/wavebit/fdtd/_modes.py).
+        if not isinstance(m.plane, geometry.Plane):
+            raise ValidationError('expected Plane', code='monitor.plane', path='outputs.'+m.name+'.plane')
+        from ._modes import window_plane
+        return old_monitors.Flux(name=m.name, wavelengths=m.wavelengths,
+                                 plane=window_plane(problem, numerics, m.plane))
     if isinstance(m, monitors.TimeSeriesMonitor):
         return old_monitors.Record(m.name, at=m.at, component=m.component)
     if isinstance(m, (monitors.FieldMonitor, monitors.FluxMonitor)):
@@ -414,7 +422,7 @@ def lower_problem(problem, numerics, *, plan=None):
             raise ValidationError('expected fdtd.InitialField',code='initial.type',path='initial')
         initial=old_sources.InitialField(E=problem.initial.E,H=_scaled_initial(problem.initial.H,Z0),amplitude=problem.initial.amplitude)
     # Validate physical monitor positions before adding the implementation padding.
-    outputs=tuple(_monitor(m,problem) for m in problem.outputs.monitors)
+    outputs=tuple(_monitor(m,problem,numerics) for m in problem.outputs.monitors)
     for m in outputs:
         _monitor_plane_bounds(m, physical_low, physical_high)
         if isinstance(m,old_monitors.Record):

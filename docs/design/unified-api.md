@@ -1194,7 +1194,8 @@ not extend that scope.
 | `rcwa.operators` and `rcwa.experimental` (§5) | implemented, as submodules imported explicitly | `src/wavebit/rcwa/operators.py`, `src/wavebit/rcwa/experimental/` |
 | Detuning as explicit, recorded policy (§8) | implemented: `rcwa.Numerics(detuning=None)` is the default and solves the requested point | `src/wavebit/rcwa/numerics.py` |
 | `fdtd.Problem`, `Scene`, `Domain`, `Boundaries`, `Structure`, `PlaneWave`, `GaussianPulse`, `Outputs`, `Record`, `Numerics`, `UniformGrid`, `Duration`, `PML`, with the PML outside the physical domain (§6) | implemented; CPU and double precision only (§13) | `src/wavebit/fdtd/` |
-| FDTD `GaussianBeam`, mode sources and monitors, decay termination, nonuniform grids, GPU (§6) | not implemented, and not exposed | -- |
+| FDTD `GaussianBeam`, mode sources, decay termination, nonuniform grids, GPU (§6) | not implemented, and not exposed | -- |
+| FDTD discrete waveguide modes (`solve_modes`) and `ModeMonitor` (stage 7) | implemented | [validation](../validation/fdtd/fd-waveguide-modes.md) |
 | `fdtd.Numerics.geometry_ranges` (§7) | implemented | `src/wavebit/fdtd/_numerics.py` |
 | Host-only topology decisions rejected under an external transform (§7) | implemented: fixed-cell Cartesian Li rectangle sizes/centres use an array-valued edge-order guard under JIT/vmap. Other scalar region geometry can explicitly select `topology_check='host'` for checked CPU callbacks. The default device policy refuses it under `jax.jit` or `jax.vmap` (`prepared.host_topology`); an eager `jax.grad` tracer's primal is checked as a PyTorch tensor is | `src/wavebit/rcwa/_lifecycle.py` |
 | `outputs`, `validity`, `diagnostics`, `provenance` on every result; `DiffractionOrders` with `order(m, n)`, `FieldSamples`, `SpectralFieldSamples`, `RawDiffractionSpectrum`, `TimeSeries` (§8) | implemented | `src/wavebit/observations/` |
