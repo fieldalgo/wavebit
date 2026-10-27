@@ -6,7 +6,7 @@ NumPy 2.5.1 / SciPy 1.18.0 / jax 0.11.0. **Updated 2026-10 (§6)**, on torch 2.1
 Targets:
 - `src/wavebit/rcwa/_engine/engine.py::CoreSolveMixin.period` — where the first failure was raised (it was the block modeller's own `period` setter until that path was removed)
 - `src/wavebit/_common/backend.py::eig` — the primitive the remaining failures are about
-- `pyproject.toml` — the torch floor, raised from 2.7 to 2.13 as a result; see §3
+- `pyproject.toml` — the torch floor, raised from 2.7 to 2.13 as a result (§3), and to 2.14 for §6's upstream fix
 - `src/wavebit/_common/backend.py::eager_under_torch_compile` — the doors that keep wavebit out of the
   compiled graph since 2026-10; see §6
 
@@ -39,8 +39,10 @@ complex operators at all, which is essentially the entire remainder.
 **Recommendation (2026-08): do not add `torch.compile` support.** It still holds for speed —
 §6 keeps wavebit eager under a compiler, which by construction buys wavebit's part nothing. The torch floor was nonetheless raised
 to 2.13 — not to enable compiling, but because this project's stated rule is that floors are the
-versions the suite is verified against (`pyproject.toml`), and 2.13 is what it is now verified
-against. Eager torch and `.backward()` work fine on 2.7.0; only `torch.compile` does not.
+versions the suite is verified against (`pyproject.toml`), and 2.13 is what it was then verified
+against. It is 2.14 since 2026-10-16, the first release with §6's Inductor defect fixed, so the
+canary that reproduces it asserts on every supported torch. Eager torch and `.backward()` work
+fine on 2.7.0; only `torch.compile` does not.
 
 ---
 
@@ -147,7 +149,7 @@ not. Both halves were re-checked on `8257e2c` after the same-material short-circ
 buys nothing — but because `pyproject.toml`'s own rule is that floors are the versions the suite is
 verified against. The full suite was run on that combination (torch 2.13.0, jax 0.11.0, NumPy
 2.5.1, SciPy 1.18.0, array-api-compat 1.15.0): green, nothing skipped, no regressions against
-the frozen goldens.
+the frozen goldens. The floor is 2.14 since 2026-10-16 (§6).
 
 Versions 2.8–2.12 are untested and therefore excluded; the floor can be relaxed later if
 someone verifies one, which is cheaper than tightening it after a release. At the time of
@@ -316,7 +318,7 @@ routes and double backward returns the eager derivative: around `create_graph=Tr
 reads 1.1001006774e-04 against a NumPy second difference of 1.1001006765e-04, where it raised
 `InternalTorchDynamoError` before. Around `jvp(jvp)` and `vmap(jacfwd)` it is the eager
 derivative too, and so exact: these two differentiate a linear solve's forward rule again or
-run it under two `vmap` levels, which `torch.linalg.solve`'s own rule gets wrong (torch 2.13)
+run it under two `vmap` levels, which `torch.linalg.solve`'s own rule gets wrong (torch 2.13 and 2.14)
 and `backend.linear_solve`, which every solve goes through, gets right (the autodiff guide's
 [Forward mode](../migration/autodiff-v1.md#forward-mode)). `tests/api/test_torch_compile.py` checks all
 three against NumPy.
@@ -325,8 +327,8 @@ three against NumPy.
 
 - `fullgraph=True`, and a strict `torch.export`, raise `torch._dynamo.exc.Unsupported: Skip
   calling torch.compiler.disable()d function ... (reason: wavebit runs eagerly under
-  torch.compile: Inductor (torch 2.13) silently miscompiles its complex arithmetic -- see
-  docs/development/torch-compile.md)`. A door carries the reason only once it has run with Dynamo
+  torch.compile: compiling it buys no speed, and Inductor has silently miscompiled its complex
+  arithmetic before (torch 2.13, fixed in 2.14) -- see docs/development/torch-compile.md)`. A door carries the reason only once it has run with Dynamo
   loaded: the first `fullgraph` compile or strict export in a process names
   `torch.compiler.disable` without the reason, even after eager wavebit calls (those take the
   fast path and cache nothing) -- still loud, `Unsupported`.

@@ -20,8 +20,9 @@ import numpy as _np
 
 #: What Dynamo prints when it meets a wavebit door: ``torch.compile(fullgraph=True)`` and a
 #: strict ``torch.export`` raise ``Unsupported`` carrying it.
-EAGER_REASON = ('wavebit runs eagerly under torch.compile: Inductor (torch 2.13) silently '
-                'miscompiles its complex arithmetic -- see docs/development/torch-compile.md')
+EAGER_REASON = ('wavebit runs eagerly under torch.compile: compiling it buys no speed, and '
+                'Inductor has silently miscompiled its complex arithmetic before (torch 2.13, '
+                'fixed in 2.14) -- see docs/development/torch-compile.md')
 
 #: Each door's ``torch.compiler.disable`` wrapper, keyed by the function it runs.
 _EAGER_DOORS = {}
@@ -65,11 +66,13 @@ def _refusing_export(fn):
 def _eager_function(fn):
     """``fn`` as a door ``torch.compile`` never traces into; the arithmetic is ``fn``'s own.
 
-    Inductor (torch 2.13, CPU, complex128 with an input that requires grad) returns wrong values
-    and gradients for this solver with no error: it emits the in-place diagonal write of
+    Inductor (torch 2.13, CPU, complex128 with an input that requires grad) returned wrong values
+    and gradients for this solver with no error: it emitted the in-place diagonal write of
     ``array_api_compat``'s ``eye`` after the kernels that read it, so the modal exponential's
-    identity reads as zero. Dynamo alone and AOTAutograd alone are exact, so the cure is to keep
-    wavebit's frames out of the compiled graph, not to change its arithmetic.
+    identity read as zero. Dynamo alone and AOTAutograd alone were exact, so the cure was to keep
+    wavebit's frames out of the compiled graph, not to change its arithmetic. PyTorch fixed the
+    defect in 2.14.0 (pytorch#182012), which is the floor; the doors stay, because compiling
+    wavebit's part buys no speed and they keep it out of the next Inductor defect too.
 
     Two shortcuts that look equivalent are not:
 
@@ -1412,7 +1415,7 @@ def as_array(xp, v, dtype=None, device=None, copy=False):
 
     A foreign array crossing into ``xp`` also gets its strides normalised
     (:func:`forward_strided`), because PyTorch is the one namespace that refuses a reversed
-    NumPy view. That half is current: on torch 2.13.0 ``asarray(np.flip(a))`` still raises
+    NumPy view. That half is current: on torch 2.14.1 ``asarray(np.flip(a))`` still raises
     ``ValueError: At least one stride in the given numpy array is negative``.
 
     The *gradient* hazard this function was written for is fixed upstream and is no longer
@@ -1425,8 +1428,8 @@ def as_array(xp, v, dtype=None, device=None, copy=False):
     detached copy. Reproduced here on torch 2.0.0, and that branch is still verbatim in the
     v2.11.0 source. pytorch#170897 (landed 2026-03-31), first released in **torch 2.12.0**
     (2026-05-11), changed the default to ``obj.requires_grad`` and warns once about the old
-    one; measured on torch 2.13.0 — this project's floor, see ``docs/development/torch-compile.md`` —
-    every ``asarray`` path now preserves both ``requires_grad`` and the graph, so on gradients
+    one; measured on torch 2.13.0 and again on 2.14.1 (the floor is 2.14, see
+    ``docs/development/torch-compile.md``), every ``asarray`` path now preserves both ``requires_grad`` and the graph, so on gradients
     the two spellings agree. ``array_api_compat`` never entered into it: its torch ``asarray``
     is a passthrough that only fixes device propagation (changelog 1.12.0, pytorch#150199).
 
