@@ -37,7 +37,8 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: '3.x'
+        # The version the distribution smoke builds with, at the versions it records.
+        python-version: '3.12'
     - name: The release tag must name the version pyproject.toml declares
       run: |
         python - "${GITHUB_REF_NAME}" <<'PY'
@@ -49,9 +50,13 @@ jobs:
                      f'bump pyproject.toml (and tag v{version}) or retag')
         print(f'tag {tag} == version {version}')
         PY
+    # Built the way the release commit's `distribution` jobs built it: build and setuptools at
+    # the versions in .github/constraints/distribution.txt (docs/development/verification.md).
+    - name: Apply the recorded versions to the build and its isolated environment
+      run: python tools/ci_constraints.py env distribution >> "$GITHUB_ENV"
     - name: Build package
       run: |
-        python -m pip install --upgrade pip build
+        python tools/ci_constraints.py install distribution-tools
         python -m build
     - name: Publish package
       # Referenced by tag, not by commit: this action pulls a prebuilt container image named after

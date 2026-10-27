@@ -10,6 +10,7 @@ docs/development/verification.md (Dependency versions in CI).
     python tools/ci_constraints.py install tests             # the recorded versions
     python tools/ci_constraints.py install tests --latest    # the newest releases
     python tools/ci_constraints.py freeze tests              # record what is installed
+    python tools/ci_constraints.py merge distribution A B C  # one set from several OS freezes
     python tools/ci_constraints.py env distribution          # PIP_* lines for $GITHUB_ENV
 
 `ENVIRONMENTS` is the one place the CI install commands are written; the workflows call
@@ -36,6 +37,10 @@ CONSTRAINTS = ROOT / '.github' / 'constraints'
 # `tests` and `docs` record different versions of the same distribution and get one file
 # each rather than sharing one.
 CPU_TORCH = ['torch', '--index-url', 'https://download.pytorch.org/whl/cpu']
+# With the recorded versions, that step may also look on PyPI: a later step can move one of
+# torch's dependencies to a version only PyPI has, and the record then names it. torch itself
+# cannot come from there -- it is recorded with its `+cpu` label, which only the CPU index serves.
+PYPI = 'https://pypi.org/simple'
 
 # The build backend, as pyproject.toml declares it. Builds run in an isolated environment
 # that `pip freeze` cannot see, so each set installs it once where freeze can, and the
@@ -93,31 +98,35 @@ def install(name, *, latest):
             raise SystemExit(f'{constraints_file(name).relative_to(ROOT)} is missing')
         env.update(pip_environment(name))
     for arguments in ENVIRONMENTS[name][1]:
+        if not latest and '--index-url' in arguments:
+            arguments = [*arguments, '--extra-index-url', PYPI]
         command = [sys.executable, '-m', 'pip', 'install', *arguments]
         print('+', ' '.join(command), flush=True)
         subprocess.run(command, cwd=ROOT, env=env, check=True)
 
 
 def installed():
-    """{canonical name: version} for every distribution in this interpreter's environment,
-    local version labels dropped: the CPU index serves `torch 2.14.1+cpu`, and the
-    constraint `torch==2.14.1` matches it (PEP 440 ignores a local label the specifier
-    does not name) while also holding on an index that has no such label."""
+    """{canonical name: version} for every distribution in this interpreter's environment.
+    Local labels are kept: `torch==2.14.1+cpu` is what keeps the CUDA build of the same
+    version, on PyPI, from satisfying the record. Where a distribution appears twice, the
+    first on the path is the one Python imports, and the one recorded; metadata without a
+    name is not a distribution anyone can pin."""
     found = {}
     for dist in metadata.distributions():
-        name = canonical(dist.metadata['Name'])
-        if name not in UNRECORDED:
-            found[name] = dist.version.split('+', 1)[0]
+        name = dist.metadata['Name']
+        if name and canonical(name) not in UNRECORDED:
+            found.setdefault(canonical(name), dist.version)
     return found
 
 
-def render(name, versions):
+def render(name, versions, how=None):
     users = ', '.join(sorted(k for k, v in ENVIRONMENTS.items() if v[0] == ENVIRONMENTS[name][0]))
+    how = how or (f'`python tools/ci_constraints.py freeze {name}` with Python '
+                  f'{platform.python_version()} on {platform.system()}')
     lines = [
         f'# Exact versions required CI installs for: {users}.',
-        f'# Written by `python tools/ci_constraints.py freeze {name}` with Python '
-        f'{platform.python_version()} on {platform.system()}; replace it the same way, by pull request.',
-        '# A distribution missing here (one another OS adds) installs at its newest version.',
+        f'# Written by {how}; replace it the same way, by pull request.',
+        '# A distribution missing here installs at its newest version.',
     ]
     lines += [f'{key}=={versions[key]}' for key in sorted(versions)]
     return '\n'.join(lines) + '\n'
@@ -130,22 +139,53 @@ def freeze(name, output):
     print(f'wrote {path}')
 
 
+def read(path):
+    """{name: version} from a recorded file."""
+    pins = {}
+    for line in Path(path).read_text(encoding='utf-8').splitlines():
+        if line and not line.startswith('#'):
+            key, version = line.split('==', 1)
+            pins[key] = version
+    return pins
+
+
+def merge(name, inputs, output):
+    """One set from the freezes of several OSes: the union, which has to agree wherever two
+    name the same distribution (they resolve the same day, so a disagreement is a real
+    platform difference that one file cannot hold, and is reported rather than guessed)."""
+    union, origin = {}, {}
+    for path in inputs:
+        for key, version in read(path).items():
+            if union.setdefault(key, version) != version:
+                raise SystemExit(f'{key}: {origin[key]} records {union[key]}, {path} records {version}')
+            origin.setdefault(key, path)
+    systems = ', '.join(Path(p).stem for p in inputs)
+    path = Path(output) if output else constraints_file(name)
+    path.write_text(render(name, union, f'`python tools/ci_constraints.py merge {name}` from {systems}'),
+                    encoding='utf-8', newline='\n')
+    print(f'wrote {path}')
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     commands = parser.add_subparsers(dest='command', required=True)
-    for command in ('install', 'freeze', 'env'):
+    for command in ('install', 'freeze', 'merge', 'env'):
         sub = commands.add_parser(command)
         sub.add_argument('name', choices=sorted(ENVIRONMENTS))
         if command == 'install':
             sub.add_argument('--latest', action='store_true',
                              help='ignore the recorded versions and install the newest releases')
-        if command == 'freeze':
+        if command == 'merge':
+            sub.add_argument('inputs', nargs='+', help='recorded files to combine')
+        if command in ('freeze', 'merge'):
             sub.add_argument('--output', help='write here instead of over the recorded file')
     args = parser.parse_args(argv)
     if args.command == 'install':
         install(args.name, latest=args.latest)
     elif args.command == 'freeze':
         freeze(args.name, args.output)
+    elif args.command == 'merge':
+        merge(args.name, args.inputs, args.output)
     else:
         for key, value in pip_environment(args.name).items():
             print(f'{key}={value}')

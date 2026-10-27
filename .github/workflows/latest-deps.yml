@@ -13,7 +13,7 @@
 #                 release shows first: cross-backend agreement, eager/compiled parity,
 #                 FDTD program caching and gradients.
 #   docs          the license check and the `-W` Sphinx build of both languages.
-#   distribution  the sdist/wheel smoke on Linux (macOS and Windows run on the refresh PR).
+#   distribution  the sdist/wheel smoke on Linux, macOS and Windows.
 # Each job also records what it installed (`freeze`) as an artifact.
 #
 # It is not a required check and it is not in `tests.yml`: `release-gate.yml` accepts a
@@ -23,10 +23,11 @@
 #   - any job failed -> open, or comment on, one issue titled CANARY_TITLE below; required CI
 #     is unaffected, so the issue is the alarm. It is closed by the next run that passes.
 #   - on Mondays (and on a manual run with `refresh`), the recorded versions are compared with
-#     the ones installed here; if they differ, a draft pull request replaces
-#     `.github/constraints/`. Draft, so it runs no CI until someone has read it and marked it
-#     ready; then the full required CI runs against the new versions. If that fails, keep the
-#     failing distribution at its previous version and land the rest.
+#     the ones installed here; if they differ, a new draft pull request from main replaces
+#     `.github/constraints/` (and supersedes an older one). Draft, so it runs no CI until
+#     someone has read it and marked it ready; then the full required CI runs against the new
+#     versions. If that fails, keep the failing distribution at its previous version and land
+#     the rest.
 # Creating that pull request needs the repository setting "Allow GitHub Actions to create and
 # approve pull requests". docs/development/verification.md has the policy.
 name: latest dependencies
@@ -186,11 +187,18 @@ jobs:
           python -m sphinx -W -b html -D wavebit_bilingual=1 -d docs/_build/doctrees/en docs docs/_build/html
           python -m sphinx -W -b html -D wavebit_bilingual=1 -D language=ko -d docs/_build/doctrees/ko docs docs/_build/html/ko
 
+  # All three OSes, unlike the other two: required CI applies distribution.txt on macOS and
+  # Windows too, and what only they install (colorama for build on Windows, keyring's backends)
+  # is recorded only if a run there freezes it. `merge` in the refresh job combines the three.
   distribution:
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    name: distribution on the newest releases
-    runs-on: ubuntu-latest
+    name: distribution on the newest releases (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -206,19 +214,19 @@ jobs:
       # Only a complete install is recorded: a half-installed environment would drop pins.
       - name: Record what was installed
         if: ${{ always() && steps.install.outcome == 'success' }}
-        run: python tools/ci_constraints.py freeze distribution --output "${{ runner.temp }}/constraints/distribution.txt"
+        run: python tools/ci_constraints.py freeze distribution --output "${{ runner.temp }}/constraints/distribution-${{ runner.os }}.txt"
 
       - name: Show versions newer than the recorded ones
         if: ${{ always() }}
-        run: diff <(grep -v '^#' .github/constraints/distribution.txt) <(grep -v '^#' "${{ runner.temp }}/constraints/distribution.txt") || true
+        run: diff <(grep -v '^#' .github/constraints/distribution.txt) <(grep -v '^#' "${{ runner.temp }}/constraints/distribution-${{ runner.os }}.txt") || true
         shell: bash
 
       - name: Upload the recorded versions
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: constraints-distribution
-          path: ${{ runner.temp }}/constraints/distribution.txt
+          name: constraints-distribution-${{ runner.os }}
+          path: ${{ runner.temp }}/constraints/distribution-${{ runner.os }}.txt
           if-no-files-found: warn
           retention-days: 14
 
@@ -239,8 +247,15 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           RESULTS: "tests: ${{ needs.tests.result }}, docs: ${{ needs.docs.result }}, distribution: ${{ needs.distribution.result }}"
-          FAILED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+          FAILED: ${{ contains(needs.*.result, 'failure') }}
+          CANCELLED: ${{ contains(needs.*.result, 'cancelled') }}
         run: |
+          # A cancelled run says nothing about the releases: a newer run replaced it, or
+          # someone stopped it. Neither opens nor closes the issue.
+          if [ "$CANCELLED" = "true" ]; then
+            echo "Cancelled ($RESULTS); not reporting."
+            exit 0
+          fi
           existing=$(gh issue list --state open --search "\"$CANARY_TITLE\" in:title" --json number,title \
             --jq "[.[] | select(.title == env.CANARY_TITLE)][0].number // empty")
           if [ "$FAILED" = "true" ]; then
@@ -258,13 +273,19 @@ jobs:
             gh issue close "$existing" --comment "The newest dependency releases pass again: $RESULTS. Run: $RUN_URL."
           fi
 
+  # Always a new draft pull request from main, never a push onto an open one: a push made with
+  # this workflow's token starts no workflow, so a commit added to a pull request already
+  # marked ready would sit there with no required checks; and a branch cut weeks ago would
+  # show its diff against itself rather than against main. An open refresh pull request that
+  # already holds exactly these versions is left alone; one that does not is closed as
+  # superseded.
   refresh:
     needs: [tests, docs, distribution]
     if: >-
       ${{ always() && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'skipped') &&
           ((github.event_name == 'schedule' && github.event.schedule == '41 19 * * 1') ||
            (github.event_name == 'workflow_dispatch' && inputs.refresh)) }}
-    name: open or update the pull request that records these versions
+    name: open the pull request that records these versions
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -273,6 +294,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
 
       - uses: actions/download-artifact@v7
         with:
@@ -280,7 +304,7 @@ jobs:
           path: ${{ runner.temp }}/constraints
           merge-multiple: true
 
-      - name: Commit the new versions to the open refresh pull request, or open one
+      - name: Open a draft pull request with the new versions
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -289,27 +313,28 @@ jobs:
         run: |
           set -euo pipefail
           new="${{ runner.temp }}/constraints"
-          for set in tests docs distribution; do
-            test -s "$new/$set.txt" || { echo "::error::no recorded $set.txt from this run"; exit 1; }
+          for file in tests docs distribution-Linux distribution-macOS distribution-Windows; do
+            test -s "$new/$file.txt" || { echo "::error::no recorded $file.txt from this run"; exit 1; }
           done
+          python tools/ci_constraints.py merge distribution --output "$new/distribution.txt" \
+            "$new/distribution-Linux.txt" "$new/distribution-macOS.txt" "$new/distribution-Windows.txt"
           # Only versions count; the header names how a file was written.
-          changed() {
+          same_as() {  # same_as <git ref>: the new versions are exactly those at that ref
             for set in tests docs distribution; do
-              cmp -s <(grep -v '^#' "$new/$set.txt") <(grep -v '^#' ".github/constraints/$set.txt") || return 0
+              cmp -s <(grep -v '^#' "$new/$set.txt") <(git show "$1:.github/constraints/$set.txt" | grep -v '^#') || return 1
             done
-            return 1
           }
-          pr=$(gh pr list --state open --json number,headRefName \
-            --jq "[.[] | select(.headRefName | startswith(env.REFRESH_PREFIX))][0] // empty | \"\(.number) \(.headRefName)\"")
-          if [ -n "$pr" ]; then
-            git checkout "${pr#* }"
-          else
-            git checkout -b "$REFRESH_PREFIX$(date -u +%Y-%m-%d)-$GITHUB_RUN_ID"
-          fi
-          if ! changed; then
-            echo "The recorded versions are already the newest; nothing to do."
+          if same_as HEAD; then
+            echo "main already records the newest versions; nothing to do."
             exit 0
           fi
+          pr=$(gh pr list --state open --json number,headRefName \
+            --jq "[.[] | select(.headRefName | startswith(env.REFRESH_PREFIX))][0] // empty | \"\(.number) \(.headRefName)\"")
+          if [ -n "$pr" ] && same_as "origin/${pr#* }"; then
+            echo "Pull request #${pr%% *} already records these versions; nothing to do."
+            exit 0
+          fi
+          git checkout -b "$REFRESH_PREFIX$(date -u +%Y-%m-%d)-$GITHUB_RUN_ID"
           cp "$new"/tests.txt "$new"/docs.txt "$new"/distribution.txt .github/constraints/
           summary=$(for set in tests docs distribution; do git diff --unified=0 -- ".github/constraints/$set.txt" \
             | grep -E '^[-+][a-z0-9]' | sed "s/^/$set: /" || true; done)
@@ -320,11 +345,11 @@ jobs:
           git push origin HEAD
           body=$(printf '%s\n\n%s\n\n```diff\n%s\n```\n\n%s' \
             "The newest releases as installed by $RUN_URL ($RESULTS)." \
-            "Changes to \`.github/constraints/\`:" "$summary" \
+            "Changes to \`.github/constraints/\` against main:" "$summary" \
             "Before marking this ready: read the changes, run the checks the changed distributions touch, and add any newly installed distribution to the license inventory. Ready runs the full required CI on these versions. If it fails, keep the failing distribution at its previous version and say why here; never loosen a tolerance or regenerate a golden to pass.")
+          url=$(gh pr create --draft --base main --title "ci: record the newest dependency versions" --body "$body") \
+            || { echo "::error::could not open the pull request; enable Settings -> Actions -> General -> Allow GitHub Actions to create and approve pull requests"; exit 1; }
+          echo "Opened $url"
           if [ -n "$pr" ]; then
-            gh pr comment "${pr%% *}" --body "$body"
-          else
-            gh pr create --draft --base main --title "ci: record the newest dependency versions" --body "$body" \
-              || { echo "::error::could not open the pull request; enable Settings -> Actions -> General -> Allow GitHub Actions to create and approve pull requests"; exit 1; }
+            gh pr close "${pr%% *}" --delete-branch --comment "Superseded by $url, which records newer versions."
           fi

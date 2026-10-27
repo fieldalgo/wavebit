@@ -115,8 +115,8 @@ Required CI does not install the newest releases. Every job of the
 [test workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/tests.yml)
 except `lint` installs through `tools/ci_constraints.py`, which applies the exact versions in
 `.github/constraints/`: `tests.txt` for the test, slow and examples jobs, `docs.txt` for the
-docs build and its deployment, `distribution.txt` for the distribution smoke and its isolated
-builds. A release upstream therefore cannot turn a run red on a commit that changed nothing.
+docs build and its deployment, `distribution.txt` for the distribution smoke, the release
+build and their isolated builds. A release upstream therefore cannot turn a run red on a commit that changed nothing.
 `pyproject.toml` is unchanged by this: its floors are still the oldest versions verified,
 users still install the newest releases, and the files are not an install requirement.
 
@@ -127,11 +127,12 @@ tools hold different versions of shared distributions.
 The [latest dependencies workflow](https://github.com/fieldalgo/wavebit/blob/main/.github/workflows/latest-deps.yml)
 watches the newest releases. It is not a required check. Daily, it installs the same three
 environments without the files and runs the license check, the quick profile, the
-backend-sensitive files, the `-W` docs build and the Linux distribution smoke. A scheduled
+backend-sensitive files, the `-W` docs build and the distribution smoke on Linux, macOS and
+Windows. A scheduled
 failure opens or comments on one issue, which the next passing run closes. On Mondays, or on
 a manual run with `refresh`, it compares the versions it installed with the recorded ones. If
-they differ, it opens a draft pull request that replaces the files, or adds a commit to the
-open one.
+they differ, it opens a new draft pull request from main that replaces the files, and closes
+an older one it supersedes.
 
 A version moves only through that pull request, read and marked ready like any other. Its
 required CI is the full validation on the new versions, including macOS and Windows. If it
