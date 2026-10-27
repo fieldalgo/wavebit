@@ -491,9 +491,20 @@ of the interface to divide by — forming `Dx = eps*Ex` leaves a gap of the same
 (1.7e-1, 1.6e-1, 8.1e-2, 4.8e-2 at `truncation_order = 4, 8, 16, 32`), neither better nor worse.
 
 The test excludes that one slot on patterned stacks and bounds it **from both sides**, so the
-exception can neither grow nor quietly disappear. Whether either code's `Ex` is closer to the
-true field is *not* established here — settling that needs a reference finer than either, and
-nothing in this directory provides one.
+exception can neither grow nor quietly disappear.
+
+**Resolved 2026-10-27: the gap is a reconstruction rule, not truncation noise.** RETICOLO's
+`res3` rebuilds TM's `Ex` as the sum of the *continuous* `D_x` series divided by `eps(x)` at
+each sample (P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)); on the pure 1D TM
+path it does so whatever `parm.res1.champ` says. This library's default sums `Ex`'s own series.
+The `Dx = eps*Ex` check above formed `D` pointwise *after* the ringing sum, which is why it
+could not close the gap; the rule sums `D`'s series instead. `reconstruct_field(...,
+discontinuous='continuity')` applies RETICOLO's rule and agrees with this golden to 3.6e-14 on
+every case, `Ex` included (`test_the_continuity_rule_matches_reticolo_on_every_slot`); the
+default is unchanged and keeps the bounded exception. On which is closer to the true field:
+on a 1D TM bar (n = 3.5) against the rule's own `truncation_order = 800`, where the two rules
+agree to 2e-3 away from the walls, the continuity rule's RMS error in `Ex` is 2.5 to 7 times
+smaller at every `truncation_order` from 10 to 80, and it does not ring.
 
 Three things had to be measured, each worth O(1) when guessed wrong:
 
@@ -557,7 +568,7 @@ It lands in the same two tiers, measured over 24 cases (4 stacks x 3 angle pairs
 | --- | --- |
 | every component both codes resolve | **9.8e-14** |
 | fitted amplitude, departure from 1 | **4.2e-14** |
-| `Ex` on a patterned layer | 8.6e-2 to 1.2e-1 — the exception, bounded from both sides |
+| `Ex` on a patterned layer | 8.6e-2 to 1.2e-1 — the exception, bounded from both sides; 6e-14 with `discontinuous='continuity'` |
 
 **The finding is that nothing conical-specific had to be discovered.** The transform established
 on the pure TE/TM path — whole-cell z reversal plus the declared frame's z-parity, no
