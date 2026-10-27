@@ -500,7 +500,7 @@ def refuse_extra_incidences(incidences):
 
 def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
              sample_x=20, sample_y=1, sample_z=20, incidences=('incident',), interface_side='right',
-             _coefficients=False):
+             _coefficients=False, eps_rows=None):
     """Field of a pure TE/TM 1D stack.
 
     Returns ``(nz, sample_y, sample_x, 3)``, where ``nz`` is ``sample_z * n_layers`` for a count
@@ -509,6 +509,11 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
     No leading incidence axis, unlike every other entry point here: ``tetm`` declared the
     polarization away, so this path solved one incidence and ``T1`` holds one column. Asking
     for another is refused rather than ignored -- see :func:`refuse_extra_incidences`.
+
+    ``eps_rows`` selects the continuity reconstruction of TM's ``E_x``: one entry per layer record,
+    ``eps`` at the x samples or ``None`` (see the engine's ``_continuity_rows``). The ``D_x`` series
+    is summed and divided by ``eps(x)`` -- P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357
+    (1998). ``None`` keeps the Fourier sum. TE has no component normal to a vertical wall.
     """
     refuse_extra_incidences(incidences)
     _require_solved(T1, layer_info_list)
@@ -522,8 +527,9 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
 
     T_layer = T1
     cells = []
-    for spec, (epz_conv_i, W, V, q, d, A_i, B, muz_conv_i, amplitudes) in zip(
-            z_per_layer, layer_info_list[::-1]):
+    rows = [None] * len(layer_info_list) if eps_rows is None else eps_rows
+    for spec, (epz_conv_i, W, V, q, d, A_i, B, muz_conv_i, amplitudes), eps_row in zip(
+            z_per_layer, layer_info_list[::-1], rows[::-1]):
         nz = _n_samples(spec)
         from wavebit.rcwa._engine.modal_gradient import exponential
         if amplitudes is None:
@@ -551,6 +557,11 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
             bwd = _diag_exp(xp, k0 * Qd, n_orders)
         My = W @ (fwd @ c1 + bwd @ c2)
         Mx = V @ (-fwd @ c1 + bwd @ c2)
+        if tetm_index and eps_row is not None:
+            # TM's `V` is `epx_conv^-1 W q`, so `epx_conv @ Mx` -- the D_x series in Mx's
+            # normalization -- is `W q u`: no inverse, and exactly the continuous quantity.
+            u = -fwd @ c1 + bwd @ c2
+            Mx = W @ (q @ u if q.ndim == 2 else xp.reshape(q, (-1, 1)) * u)
         # The longitudinal component, and **the whole reason a permeability had to reach this
         # function in the same change that let one into the operator.** It is algebraic rather
         # than propagated: the solve hands over the transverse pair, and this line recovers the
@@ -593,6 +604,8 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
             sgn = -1j if tetm_index == 0 else 1j
             Fy = inv_f[:, :, None, :] @ My[:, None, None, :, :]
             Fx = sgn * (inv_f[:, :, None, :] @ Mx[:, None, None, :, :])
+            if tetm_index and eps_row is not None:
+                Fx = Fx / xp.reshape(eps_row, (1, 1, -1, 1, 1))
             Fz = sgn * (inv_f[:, :, None, :] @ Mz[:, None, None, :, :])
             # Into the declared frame (module docstring): E_z, H_x, H_y flip, E_t and H_z do not.
             # The two layouts fill the same three slots with different components, so the pattern
@@ -609,7 +622,8 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
 
 
 def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, sample_y,
-                   sample_z, incidences, conical, interface_side, _coefficients=False):
+                   sample_z, incidences, conical, interface_side, _coefficients=False,
+                   eps_rows=None):
     """Shared body of the conical and 2D reconstructions.
 
     They differ only in how the layer's mode matrices assemble into ``(Sx, Sy, Ux, Uy)``; the
@@ -637,6 +651,9 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
     ``tests/rcwa/test_magnetic_layer.py``.
     """
     _require_solved(T1, layer_info_list)
+    if eps_rows is not None and not conical:
+        raise NotImplementedError('the continuity reconstruction is built for the conical path '
+                                  'only; the 2D path still takes the Fourier sum.')
     xp = array_namespace(T1)
     C = T1.dtype
     k0 = 2 * 3.141592653589793 / wavelength
@@ -660,7 +677,8 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
     z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 4, interface_side)
 
     cells = []
-    for spec, entry in zip(z_per_layer, layer_info_list[::-1]):
+    rows = [None] * len(layer_info_list) if eps_rows is None else eps_rows
+    for spec, entry, eps_row in zip(z_per_layer, layer_info_list[::-1], rows[::-1]):
         epz_conv_i, W, V, q, d, big_A_i, big_B, muz_conv_i, amplitudes = entry[:9]
         nz = _n_samples(spec)
         q_1, q_2 = q[:n_orders], q[n_orders:]
@@ -731,6 +749,20 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
         # (`is not None`), which is the one form a traced `muz_conv_i` can answer.
         if muz_conv_i is not None:
             Uz = muz_conv_i @ Uz
+        if eps_row is not None:
+            # Ampere's x row puts the D_x series in Sx's place: it is continuous across the
+            # grating's walls, so its sum does not ring, and the jump of E_x enters exactly when
+            # the sum is divided by eps(x) below. In this frame z runs into the stack, which
+            # gives the row as eps_x E_x = i Ky U_z + d(U_y)/d(k0 z), and d/d(k0 z) of
+            # (-a+ + a-) is q (a+ + a-) on either layout. Pinned by the RETICOLO conical golden.
+            if q.ndim == 2:
+                qs = q @ (ap + am)
+                qs1, qs2 = qs[..., :n_orders, :], qs[..., n_orders:, :]
+            else:
+                qs1 = xp.reshape(q_1, (-1, 1)) * (a1p + a1m)
+                qs2 = xp.reshape(q_2, (-1, 1)) * (a2p + a2m)
+            V_21, V_22 = V[n_orders:, :n_orders], V[n_orders:, n_orders:]
+            Sx = 1j * (Ky @ Uz) + (V_21 @ qs1 + V_22 @ qs2)
 
         if _coefficients:
             cells.append(xp.stack([M[..., 0] for M in
@@ -740,6 +772,8 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
             # `-1j` converts out of `U = i H`; the three minus signs on top of it are the parity
             # into the declared frame (module docstring), so `H_z` keeps the bare conversion.
             comps = [inv_f @ M[:, :, None, None, :, :] for M in (Sx, Sy, -Sz)]
+            if eps_row is not None:
+                comps[0] = comps[0] / xp.reshape(eps_row, (1, 1, 1, -1, 1, 1))
             comps += [-1j * (inv_f @ M[:, :, None, None, :, :]) for M in (-Ux, -Uy, Uz)]
             val = xp.concat([c[..., 0] for c in comps], axis=-1)
             cells.append(xp.moveaxis(val, 1, 0))
@@ -863,14 +897,16 @@ def field_2d_first_order(wavelength, kx, ky, T1, layer_info_list, lattice,
 
 def field_1d_conical(wavelength, kx, ky, T1, layer_info_list, lattice,
                      sample_x=20, sample_y=20, sample_z=20, incidences=('incident',), interface_side='right',
-                 _coefficients=False):
+                 _coefficients=False, eps_rows=None):
     """Field of a general 1D (conical) stack. ``(n_selected, nz, sample_y, sample_x, 6)``.
 
     ``nz`` is ``sample_z * n_layers`` for a count, ``len(sample_z)`` for explicit coordinates.
+    ``eps_rows`` selects the continuity reconstruction of ``E_x``, as :func:`field_1d` describes.
     """
     return _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice,
                           sample_x, sample_y, sample_z, incidences, conical=True,
-                          interface_side=interface_side, _coefficients=_coefficients)
+                          interface_side=interface_side, _coefficients=_coefficients,
+                          eps_rows=eps_rows)
 
 
 def field_2d(wavelength, kx, ky, T1, layer_info_list, lattice,

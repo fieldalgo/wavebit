@@ -111,7 +111,7 @@ def _in_our_frame(e, pol, theta):
     return e[::-1] * Z_PARITY[pol] * centre
 
 
-def _reconstruct(stack, theta, pol):
+def _reconstruct(stack, theta, pol, discontinuous='fourier'):
     # STACKS and the comparison use downward depth, top layer first; public Wavebit uses
     # height, bottom layer first, as RETICOLO's raw archive does.
     thickness, structure = STACKS[stack]
@@ -123,7 +123,8 @@ def _reconstruct(stack, theta, pol):
                           # this the two truncations differ and nothing lands at 1e-14.
                           fourier_coefficients='integrated', answers='field')
     solver.solve()
-    cell = np.asarray(solver.reconstruct_field(sample_x=RES_X, sample_y=1, sample_z=RES_Z))
+    cell = np.asarray(solver.reconstruct_field(sample_x=RES_X, sample_y=1, sample_z=RES_Z,
+                                               discontinuous=discontinuous))
     return cell[::-1, 0, :, :] * Z_PARITY[pol]                       # (sample_z*n_layers, sample_x, 3)
 
 
@@ -197,6 +198,13 @@ def test_the_discontinuous_tm_component_is_the_known_exception(stack, theta, pol
     or a sign — either of those is O(1). The lower bound says the exception is still real: if
     a change ever makes ``E_x`` agree to machine precision, this fails and whoever did it has
     to come here and rewrite the story rather than inherit a stale caveat.
+
+    **The cause is known since 2026-10-27, and it is a rule, not truncation noise.** RETICOLO
+    rebuilds TM's ``E_x`` on the 1D path as the sum of the continuous ``D_x`` series divided by
+    ``eps(x)`` (Lalanne & Jurek 1998), whatever ``parm.res1.champ`` says; this library's default
+    sums ``E_x``'s own series. With ``discontinuous='continuity'`` the two agree to 1e-13 on every
+    case -- :func:`test_the_continuity_rule_matches_reticolo_on_every_slot`. This test keeps the
+    default's gap bounded, because the default is unchanged.
     """
     g = _golden()
     c = SLOW_SLOT[pol]
@@ -272,3 +280,19 @@ def test_the_patterned_stacks_are_actually_patterned(stack):
         ours = ours_index[n_layers(stack) - 1 - k, 0, idx]
         theirs = o[k * RES_Z:(k + 1) * RES_Z]
         assert np.allclose(theirs, ours[None, :], atol=1e-9), (k, theirs[0], ours)
+
+
+@pytest.mark.parametrize('stack,theta,pol', CASES, ids=IDS)
+def test_the_continuity_rule_matches_reticolo_on_every_slot(stack, theta, pol):
+    """``discontinuous='continuity'`` is RETICOLO's rule: all three slots at 1e-12, ``E_x`` included."""
+    g = _golden()
+    ref = _in_our_frame(g[key(stack, theta, pol)], pol, theta)
+    got = _reconstruct(stack, theta, pol, discontinuous='continuity')
+    cell = np.max(np.abs(ref))
+    for c in range(3):
+        amp = np.max(np.abs(ref[..., c]))
+        if amp < 1e-9 * cell:
+            assert np.max(np.abs(got[..., c])) < 1e-9 * cell, NAMES[pol][c]
+            continue
+        gap = np.max(np.abs(got[..., c] - ref[..., c])) / amp
+        assert gap < TOL, f'{NAMES[pol][c]}: {gap:.2e}'

@@ -170,6 +170,28 @@ does not define a unique two-sided derivative across a material discontinuity.
 Runs with other sources still use concrete source grouping and layer segmentation, and refuse
 a JAX-traced input; this differentiation guarantee does not extend to them.
 
+## Normal components inside a patterned layer
+
+Inside a patterned layer the field component normal to a material wall jumps there (it is
+`eps*E_n` that is continuous), so the Fourier sum of its coefficients rings near every wall at any
+truncation, and the ringing reaches well away from the walls. The earlier interface's
+`solver.reconstruct_field` takes `discontinuous='continuity'` to rebuild that component from the
+continuous `D` series instead: sum `D`, then divide by `eps` at each sample (P. Lalanne and
+M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). The default, `'fourier'`, is unchanged.
+
+- **What it changes.** `E_x` in the patterned layers of a 1D grating, on the pure TM and the
+  conical paths. Every other component, every uniform layer and the whole TE field are returned
+  bit for bit as the default returns them.
+- **Why use it.** It is RETICOLO's `res3` rule (`parm.res1.champ=1`): with it the RETICOLO field
+  goldens agree to 1e-13 on every slot, `E_x` included, where the default differs by 7e-2 to
+  1e-1. On a 1D TM bar of index 3.5 its RMS error in `E_x` is 2.5 to 7 times smaller than the
+  default's at every truncation order from 10 to 80, against a reference at order 800.
+- **What it reads.** `eps` at each sample, from the raster column the sample falls in. A sample
+  exactly on a wall belongs to the column on its positive side. Derivatives with respect to the
+  raster's values are exact; the column choice is not differentiated.
+- **Not yet.** 2D cells, shape structures, tensor materials and solves that merged layers into a
+  half-space refuse it by name; the current result API's `field` does not take it yet.
+
 ## Earlier-interface field calls
 
 The earlier `wavebit.compat.legacy` interface keeps `solver.reconstruct_field` and

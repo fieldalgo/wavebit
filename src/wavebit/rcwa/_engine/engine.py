@@ -4780,7 +4780,65 @@ class CoreFactorizationMixin:
             'the field after re-solving. Call solve() again first.')
 
     @device_scoped
-    def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('incident',)):
+    def _refuse_continuity(self):
+        """Refuse ``discontinuous='continuity'`` where it is not built yet, by name."""
+        if self._grating_type not in (0, 1):
+            raise NotImplementedError(
+                "discontinuous='continuity' is built for 1D gratings (the TE/TM and conical "
+                'paths) so far; a 2D cell still takes the Fourier sum.')
+        if self.modeling_path != ModelingPath.RASTER:
+            raise NotImplementedError(
+                "discontinuous='continuity' reads eps at the sample points from a raster "
+                'structure; a shape structure is not supported yet.')
+        if self._has_tensor_materials():
+            raise NotImplementedError(
+                "discontinuous='continuity' divides D_x by a scalar eps; a tensor material "
+                'couples D_x to more than E_x and is refused.')
+        if self._merged_field_state is not None:
+            raise NotImplementedError(
+                "discontinuous='continuity' is not available after a solve that merged layers "
+                'into its half-spaces.')
+
+    def _continuity_rows(self, sample_x, backside):
+        """``eps`` of each kernel layer record at the x samples, for the continuity rule.
+
+        One entry per ``layer_info_list`` record, in its order: a ``(n_x,)`` array where the
+        layer varies along x, ``None`` where it does not -- a uniform layer keeps the Fourier
+        sum, bit for bit, since there is nothing for the rule to change there. The raster's
+        column ``j`` covers ``[j, j+1) * period / n_columns`` from the cell's negative-x edge, so
+        a sample is read from the column it falls in, periodically. A sample exactly on a wall
+        between two permittivities belongs to the column on its positive side.
+        """
+        from wavebit.rcwa._engine.field_result import _host_value
+        xp = self.xp
+        structure = self.structure
+        n_columns = structure.shape[-1]
+        period = _host_value(_lattice.periods_of(self.lattice)[0])
+        if is_count(sample_x):
+            corner = _np.linspace(0., 1., int(sample_x))
+        else:
+            points = _host_value(sample_x)
+            if points is None or period is None:
+                raise ValueError("discontinuous='continuity' needs concrete sample_x and period "
+                                 'to choose the raster column under each sample.')
+            corner = _np.asarray(points, dtype=float) / float(period) + 0.5
+        # Half a part in 1e9 lifts a sample that rounding put just below a column edge it sits on.
+        columns = _np.floor(corner * n_columns + 1e-9).astype(int) % n_columns
+        rows = []
+        for layer in range(structure.shape[0]):
+            row = structure[layer, 0]
+            values = _host_value(row)
+            if values is not None and _np.all(values == values.flat[0]):
+                rows.append(None)
+            else:
+                index = as_array(xp, columns, device=_device_of(row))
+                rows.append(xp.take(row, index, axis=0))
+        # The 1D kernels append records from the top public layer down; a backside (public
+        # top) incidence solves the mirrored scene, which reverses that.
+        return rows if backside else rows[::-1]
+
+    def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('incident',),
+                          discontinuous='fourier'):
         """Reconstruct the field from the state left behind by the last solve.
 
         ``sample_x`` / ``sample_y`` / ``sample_z`` each take either a **count** -- a uniform
@@ -4797,6 +4855,13 @@ class CoreFactorizationMixin:
         assigns an interface to the layer above it. The normal components ``E_z`` and ``H_z``
         may jump across material interfaces. With explicit ``sample_z`` the returned z axis is
         exactly the request, in the caller's order, rather than ``sample_z * n_layers``.
+
+        ``discontinuous`` chooses how the component normal to a patterned layer's walls is
+        rebuilt: ``'fourier'`` (the default) sums its own coefficients, which ring at every wall;
+        ``'continuity'`` sums the continuous ``D_x`` series and divides by ``eps`` at each sample
+        (P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357 (1998); RETICOLO's ``champ=1``). It
+        changes ``E_x`` in patterned layers only, on the 1D TM and conical paths of a raster
+        structure, and is refused elsewhere (:meth:`_refuse_continuity`).
 
         ``incidences`` names which of the incidences the solve carries to reconstruct, one
         leading axis entry each, **in the order asked for**: ``'incident'`` is the incidence the
@@ -4834,6 +4899,11 @@ class CoreFactorizationMixin:
         """
         self._require_field_declaration()
         self._reject_stale_field_scene()
+        if discontinuous not in ('fourier', 'continuity'):
+            raise ValueError(f"discontinuous must be 'fourier' or 'continuity', not {discontinuous!r}.")
+        continuity = discontinuous == 'continuity'
+        if continuity:
+            self._refuse_continuity()
         if self._merged_field_state is not None:
             return self._merged_field_cell(sample_x, sample_y, sample_z, incidences)
         # Top illumination walks downward, so restate public heights in that propagation
@@ -4846,19 +4916,22 @@ class CoreFactorizationMixin:
             sample_z = to_mirrored_z(sample_z, self.thickness)
         kx, ky = self.order_kxy()
 
+        eps_rows = self._continuity_rows(sample_x, backside) if continuity else None
         if self._grating_type == 0:
             sample_y = 1
             field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list,
                                   self.lattice, self.tetm_index,
                                   sample_x=sample_x, sample_y=sample_y, sample_z=sample_z,
                                   incidences=incidences,
-                                  interface_side='left' if backside else 'right')
+                                  interface_side='left' if backside else 'right',
+                                  eps_rows=eps_rows)
         elif self._grating_type == 1:
             field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1,
                                           self.layer_info_list, self.lattice,
                                           sample_x=sample_x, sample_y=sample_y,
                                           sample_z=sample_z, incidences=incidences,
-                                          interface_side='left' if backside else 'right')
+                                          interface_side='left' if backside else 'right',
+                                          eps_rows=eps_rows)
         elif self._formulation_assigned == Formulation.FIRST_ORDER:
             # The grating type cannot answer this: the first-order path sets it to 2 as well,
             # so branching on it alone would hand a first-order solve to the second-order
