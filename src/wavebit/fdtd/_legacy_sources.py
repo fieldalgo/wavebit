@@ -626,6 +626,8 @@ def GaussianBeam(*args, **kwargs):
 
 @_eager_under_torch_compile
 def ModeSource(*args, **kwargs):
-    """Refused by name: a waveguide mode source is stage 7."""
-    raise NotImplementedError('fd.ModeSource belongs to stage 7 (beams and mode sources). '
-                              'Stage 2 has fdtd.CurrentDipole, fd.PlaneWave and fd.TFSF.')
+    """Refused by name: a waveguide mode source (stage 7) is on the public surface only."""
+    raise NotImplementedError('fd.ModeSource (stage 7, beams and mode sources) is not on the '
+                              'engine surface: the public wavebit.fdtd.ModeSource launches a '
+                              'mode of wavebit.fdtd.solve_modes. Stage 2 has '
+                              'fdtd.CurrentDipole, fd.PlaneWave and fd.TFSF.')

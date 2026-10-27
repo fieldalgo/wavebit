@@ -272,11 +272,13 @@ class Scene:
                              f'and must be unique; repeated: {dup}.')
         object.__setattr__(self, 'monitors', monitors)
         from wavebit.fdtd._legacy_sources import SOURCE_TYPES
-        if isinstance(self.sources, SOURCE_TYPES):
+        from wavebit.fdtd._mode_source import ModeSheet
+        if isinstance(self.sources, SOURCE_TYPES + (ModeSheet,)):
             object.__setattr__(self, 'sources', (self.sources,))
         sources = tuple(self.sources)
         for src in sources:
-            if not isinstance(src, SOURCE_TYPES):
+            # A ModeSheet is the public ModeSource's lowering, never an engine declaration.
+            if not isinstance(src, SOURCE_TYPES + (ModeSheet,)):
                 raise TypeError(f'Scene(sources=...): every entry is an fdtd.CurrentDipole, '
                                 f'fd.PlaneWave or fd.TFSF; got {public_name(src)}.')
         names = [src.name for src in sources]

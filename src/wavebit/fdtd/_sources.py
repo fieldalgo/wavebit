@@ -2,7 +2,7 @@
 from wavebit._common.declarations import spec
 from ._structure import tuples
 
-__all__ = ['GaussianPulse', 'PlaneWave', 'CurrentDipole', 'TFSF', 'InitialField']
+__all__ = ['GaussianPulse', 'PlaneWave', 'CurrentDipole', 'TFSF', 'ModeSource', 'InitialField']
 
 
 @spec
@@ -99,3 +99,40 @@ class TFSF:
     amplitude: object = 1.
     phase: object = 0.
     delay_seconds: object = 0.
+
+
+@spec(positional=('name',), renamed={'delay': 'delay_seconds'})
+class ModeSource:
+    """A waveguide mode launched one way from a plane across the guide.
+
+    ``fdtd.ModeSource('src', plane=fdtd.Plane(z=-2.), direction='+z', mode=0,
+    pulse=fdtd.GaussianPulse(wavelength=1.55, frequency_sigma_hz=2e13))``. ``mode`` indexes the
+    modes :func:`solve_modes` finds on ``plane`` at the pulse's centre wavelength (0 is the
+    largest index); the plane, its window and its refusals are the solver's. ``direction`` is
+    ``'+'`` or ``'-'`` the plane's normal axis. ``amplitude`` is in square-root watts (per metre
+    of each invariant axis): a continuous wave of this amplitude carries ``amplitude**2`` watts.
+    ``phase`` is radians and ``delay_seconds`` delays the pulse.
+
+    The plane is a one-sided total-field/scattered-field sheet whose incident field is the mode:
+    at the centre wavelength it launches exactly that mode, exactly one way; across the band it
+    launches what a :class:`ModeMonitor` with ``source=`` this source's name reports as
+    ``injected``, and leaks what it reports as ``leakage``, both computed exactly for the grid.
+    """
+    name: str
+    plane: object
+    pulse: GaussianPulse
+    direction: str = '+z'
+    mode: int = 0
+    amplitude: object = 1.
+    phase: object = 0.
+    delay_seconds: object = 0.
+
+    def __post_init__(self):
+        import numpy as np
+        from wavebit.errors import ValidationError
+        if (isinstance(self.mode, bool) or not isinstance(self.mode, (int, np.integer))
+                or self.mode < 0):
+            raise ValidationError('ModeSource(mode=...) is a mode index, an integer >= 0',
+                                  code='source.mode', path=f'sources.{self.name}.mode',
+                                  actual=self.mode)
+        object.__setattr__(self, 'mode', int(self.mode))
