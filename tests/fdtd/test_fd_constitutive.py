@@ -358,12 +358,8 @@ def test_plan_checks_surfaces_at_common_nodes_too():
     a, b = [s.support(grid) for s in shapes]
     box = tuple((max(x[0], y[0]), min(x[1], y[1])) for x, y in zip(a, b))
     assert _shared_surface_voxels(*(s.body() for s in shapes), grid, box)[0] == 0
-    # Door 5 marks it; since C10 the disjoint pair is clipped there rather than refused, and
-    # the clip's write set is that one common node and no Yee point.
-    plan = quiet(fd.plan, scene)
-    (record,) = plan.clips
-    assert {family: count for family, count, *_ in record.counts} == {
-        'Ex': 0, 'Ey': 0, 'Ez': 0, 'E*': 1}
+    with pytest.raises(ValueError, match='same voxel: 1.*E common'):
+        quiet(fd.plan, scene)
 
 
 def test_loss_and_mirror_doors_cover_the_interpolation_halo():

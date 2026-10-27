@@ -90,9 +90,13 @@ POLYHEDRAL = {
                                                       angle=11), 12.)),
 }
 
+S7_DIMER = (fd.Structure(fd.Sphere(radius=.25, center=(-.2625, 0., .021)), 12.),
+            fd.Structure(fd.Sphere(radius=.25, center=(.2625, 0., .021)), 2.25))
+
 SPHERICAL = {
-    'S7 dimer': (fd.Structure(fd.Sphere(radius=.25, center=(-.2625, 0., .021)), 12.),
-                 fd.Structure(fd.Sphere(radius=.25, center=(.2625, 0., .021)), 2.25)),
+    'sphere beside a box': (fd.Structure(fd.Box(size=(.3, .3, .3), center=(-.2017, .013, .007)),
+                                         4.),
+                            fd.Structure(fd.Sphere(radius=.2, center=(.1604, -.011, .019)), 12.)),
     'sphere sunk': (substrate(), fd.Structure(fd.Sphere(radius=.2, center=(.013, -.007, .12)), 12.)),
     'sphere touching': (substrate(), fd.Structure(fd.Sphere(radius=.2, center=(.013, -.007, .2)),
                                                   12.)),
@@ -267,8 +271,11 @@ def test_fills_with_a_sphere_are_what_quadrature_says(name):
         points, fills = written(plan, record, c)
         for p, got in zip(points, fills):
             lo, hi = p - dx / 2, p + dx / 2
-            if isinstance(sa.shape, fd.Sphere):
-                fa = _disc_column(sa.shape, lo, hi, -np.inf, np.inf) / dx ** 3
+            if sa.shape.center[0] < -.1:            # the box beside the sphere: apart
+                b = sa.shape
+                box = np.prod([max(0.0, min(hi[k], b.center[k] + b.size[k] / 2)
+                                   - max(lo[k], b.center[k] - b.size[k] / 2)) for k in range(3)])
+                fa = box / dx ** 3
                 fb = _disc_column(sb.shape, lo, hi, -np.inf, np.inf) / dx ** 3
                 want = (fa, fb, 1 - fa - fb)
             else:
@@ -375,12 +382,13 @@ REFUSED = {
                                                         center=(0., 0., .2)), 12.)),
                     'flush joint'),
     'one sphere twice': ((fd.Structure(fd.Sphere(radius=.2, center=(.013, -.007, .021)), 12.),) * 2,
-                         'neither is flat'),
+                         'two curved surfaces'),
     'union of one material': ((substrate(eps=4.), fd.Structure(fd.Box(size=(.3, .25, .4),
                                                                       center=(.013, -.007, .18)), 4.)),
                               'one material'),
     'cylinder lying across a face': ((substrate(), fd.Structure(fd.Cylinder(
         radius=.12, height=.5, axis='x', center=(0., .011, .1)), 12.)), 'lying across'),
+    'two curved surfaces (the S7 dimer)': (S7_DIMER, 'two curved surfaces'),
     'magnetic member': ((substrate(), fd.Structure(fd.Sphere(radius=.2, center=(.013, -.007, .12)),
                                                    fd.Material(eps=12., mu=1.5))), 'declares mu'),
     'a third body in a written voxel': (
@@ -402,23 +410,24 @@ def test_what_is_not_shown_right_stays_refused(name):
 
 def test_three_surfaces_in_one_voxel_stay_refused():
     """Two clips that would write one point: a voxel holding three smoothed surfaces."""
-    # three balls 0.0005 apart pairwise: the hole between them is one voxel holding all three
-    trio = (fd.Structure(fd.Sphere(radius=.15, center=(-0.1502554076, -0.0867500000, .011)), 12.),
-            fd.Structure(fd.Sphere(radius=.15, center=(0.1502554076, -0.0867500000, .011)), 2.25),
-            fd.Structure(fd.Sphere(radius=.15, center=(0.0000000000, 0.1735000000, .011)), 4.))
-    with pytest.raises(ValueError, match='ClipOverlapRefused|listed after|fractional ground'):
+    # three unturned boxes whose faces meet in one corner voxel, a hair apart (no flush faces):
+    # every pair is flat there, so each pair alone is a clip, and the corner holds all three
+    trio = (fd.Structure(fd.Box(size=(.3, .6, .3), center=(-.1427, .013, .011)), 12.),
+            fd.Structure(fd.Box(size=(.3, .3, .3), center=(.1583, -.1361, .011)), 2.25),
+            fd.Structure(fd.Box(size=(.3, .3, .3), center=(.1583, .1649, .011)), 4.))
+    with pytest.raises(ValueError, match='structures\[2\] is listed after the first pair member'):
         quiet(fd.plan, scene_of(trio, n=32, periodic=False))
 
 
 def test_traced_geometry_on_a_member_is_refused_by_name():
     import jax
-    pair = SPHERICAL['S7 dimer']
-    scene = scene_of(pair, n=32, periodic=False)
+    pair = SPHERICAL['sphere sunk']
+    scene = scene_of(pair, n=32)
     plan = quiet(fd.plan, scene)
 
     def lowered(radius):
-        moving = fd.Structure(fd.Sphere(radius=radius, center=(.2625, 0., .021),
-                                        range=((0., .55), (-.28, .28), (-.26, .30))), 2.25)
+        moving = fd.Structure(fd.Sphere(radius=radius, center=(.013, -.007, .12),
+                                        range=((-.23, .26), (-.23, .22), (-.1, .34))), 12.)
         return fd.lower(scene.replace(structures=(pair[0], moving)), plan, 'jax')['be'].sum()
     with pytest.raises(ValueError, match='halo|range|traced'):
         jax.grad(lowered)(jax.numpy.asarray(.25))
@@ -476,11 +485,11 @@ def test_a_moved_body_is_refused_against_the_plan():
 # ---------------------------------------------------------------------------------------------
 
 def _dipole():
-    return (fd.Dipole('d', center=(.031, .017, .27), component='Ex',
+    return (fd.Dipole('d', center=(.031, .017, .45), component='Ex',
                       band=fd.Band(wavelength=4.0, df=.05)),)
 
 
-GATE4 = {'dimer': SPHERICAL['S7 dimer'], 'sunk': SPHERICAL['sphere sunk'],
+GATE4 = {'beside': SPHERICAL['sphere beside a box'], 'sunk': SPHERICAL['sphere sunk'],
          'box sunk': POLYHEDRAL['box sunk']}
 
 
@@ -522,7 +531,7 @@ def _evolve(scene, plan, backend, eps=None, medium=None):
 
 def test_fields_after_forty_steps_agree_across_backends():
     """Registered: at most 1e-11 relative, dipole-driven clip scene."""
-    scene = scene_of(GATE4['dimer'], n=32, periodic=False, steps=40, sources=_dipole())
+    scene = scene_of(GATE4['sunk'], n=32, steps=40, sources=_dipole())
     plan = quiet(fd.plan, scene)
     want = _evolve(scene, plan, 'numpy')
     for backend in ('jax', 'torch'):
@@ -538,9 +547,9 @@ def test_material_derivatives_through_the_clip(medium):
     """Registered: AD within 1e-6 of a central difference at relative step 1e-4, on JAX and on
     Torch, and JAX within 1e-10 of Torch. ``medium`` 0 and 1 are the pair, 2 the ground."""
     import jax
-    scene = scene_of(GATE4['dimer'], n=32, periodic=False, steps=40, sources=_dipole())
+    scene = scene_of(GATE4['sunk'], n=32, steps=40, sources=_dipole())
     plan = quiet(fd.plan, scene)
-    value = (12., 2.25, 1.)[medium]
+    value = (2.25, 12., 1.)[medium]
 
     def loss(eps, name):
         state = _evolve(scene, plan, name, eps=eps, medium=medium)
@@ -617,7 +626,7 @@ def test_the_node_tensor_is_the_three_medium_projection():
     """At every written common node: ``K = 1/<eps> I + (<1/eps> - 1/<eps>) P`` from the
     record's fills and ``P``, written here with the plain means (not the clip's
     cancellation-free form), against what ``constitutive.lower`` hands the star lift."""
-    scene, plan, record = planned(SPHERICAL['S7 dimer'], periodic=False)
+    scene, plan, record = planned(SPHERICAL['sphere sunk'])
     nodes = {}
     constitutive.lower(scene, plan, runtime('numpy'), nodes=nodes)
     (term,) = plan.constitutive
@@ -625,7 +634,7 @@ def test_the_node_tensor_is_the_three_medium_projection():
     box = tuple(reversed(term.box))
     mask = record.write[3]
     assert mask.any()
-    e = (12., 2.25, 1.)
+    e = (2.25, 12., 1.)
     checked = 0
     for idx in zip(*np.nonzero(mask)):
         f = record.fills[(3, slice(None)) + idx]

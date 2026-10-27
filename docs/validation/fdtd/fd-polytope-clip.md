@@ -208,3 +208,107 @@ wavelength))`, inside that hard cap: each run continues until every field and me
 fallen below 1e-3 of its own peak over a full window, or reaches the cap, which the row records.
 Bands, grids, wavelengths and the pass rules are unchanged; the flux-decay validity mark of
 Amendment 2 still applies.
+
+## Results (2026-10-28)
+
+Implementation: `src/wavebit/fdtd/_prepare/clip.py`, wired into door 5 of
+`src/wavebit/fdtd/_prepare/checks.py`, the painters of `coefficients.py` and `constitutive.py`,
+and a `Plan.clips` field omitted from the skeleton when empty. Tests:
+`tests/fdtd/test_fd_clip.py`. Study and records: `studies/fdtd/subpixel_polytope_clip/`
+(the report printed below is `records/fdtd_subpixel_polytope_clip_report.log`). CPU, float64,
+NumPy 2.5.4, JAX 0.12.0.1, Torch 2.14.1+cpu, Python 3.13.
+
+**Verdict.** Gates 1, 3 and 4 pass. Gate 2 passes arm L (both polarisations) and arm P, and
+**fails arm D** on both of its criteria. The registered consequence of D's failure is applied:
+**a voxel that two curved surfaces share (a sphere or a cylinder's wall against another) stays
+refused by name**, even where its shared volume is exact. What C10 answers is therefore a pair
+of bodies at least one of whose surfaces is flat in each shared voxel: planar layers at a
+sub-cell gap, a box or prism beside another, and any body resting on, raised just above or
+sunk into the face of an unturned `Box`.
+
+### Gate 1: geometry and rule -- passes
+
+Every registered tolerance holds in `tests/fdtd/test_fd_clip.py`: polyhedral fills within
+2e-12 of a voxel and exposed interface area and moment within 2e-9 `dx^2` of the polytope
+oracle, over the three admitted cases; sphere fills within 1e-10 of a voxel of adaptive
+quadrature (a sphere beside a box, touching a substrate, sunk into it); the laminate's
+components within 1e-12; the two-phase reduction bit for bit. Two defects were found by these
+tests while writing them and fixed before any measurement: a flush test that read an overlap of
+two back-to-back faces as flush, and a buried face whose exposed area came out -3e-12 `dx^2`
+and gave the node tensor an eigenvalue below its floor. Twenty product mutations -- each made,
+run against its tests, watched to fail and restored byte for byte -- were all caught.
+
+### Gate 3: every existing two-media scene unchanged -- passes
+
+The thirteen-scene dump of plan skeletons and lowered parameters is byte-identical to `main`
+183baf37 (digest `d69d3c0b...`, 116 arrays). The four stage freezers reproduce their committed
+goldens and write nothing; their printed drift (at most a few 1e-15 of a peak, inside the 1e-12
+budget, from the installed versions) is identical, line for line, to the same freezers run on
+183baf37 in the same environment. The goldens' SHA-256 are unchanged.
+
+### Gate 4: backends and derivatives -- passes
+
+Coefficients on NumPy, eager and compiled JAX and Torch agree within 1e-12 relative; fields
+after 40 steps of a dipole-driven clip scene within 1e-11; material derivatives on JAX and
+Torch within 1e-6 of a central difference at relative step 1e-4, and JAX within 1e-10 of Torch,
+for each of the pair's media and the ground. Traced geometry on a member is refused by name.
+
+### Gate 2, arm L: the planar stack -- passes
+
+Band-RMS reflectance error against the transfer matrix (21 wavelengths in [0.8, 1.2]); every
+run's monitor decayed below 3e-9.
+
+| Cells per unit | Clip voxels | s: band error | p: band error | Control L0, s | Control L0, p |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 28 | 3 | 1.62e-2 | 1.09e-2 | 3.31e-2 | 2.63e-2 |
+| 40 | 1 | 8.81e-3 | 7.47e-3 | 1.49e-2 | 1.35e-2 |
+| 56 | 3 | 2.82e-3 | 1.94e-3 | 8.70e-3 | 6.73e-3 |
+| 80 | 2 | 2.75e-3 | 2.28e-3 | 5.69e-3 | 4.76e-3 |
+| 112 | 1 | 1.19e-3 | 8.82e-4 | 2.07e-3 | 1.75e-3 |
+| 160 | 2 | 5.78e-4 | 4.55e-4 | 1.30e-3 | 1.05e-3 |
+| **Fitted order / scatter** | | **1.866 / 49.6%** | **1.817 / 63.0%** | 1.852 / 24.5% | 1.856 / 26.2% |
+
+Both polarisations meet the registered 1.8; the control without any clip voxel converges at
+the same order, so the clip adds no order loss on parallel layers. The scatter is large:
+56 to 80 cells is non-monotone in both polarisations, and the per-wavelength orders range from
+1.13 to 2.76. The fitted orders are what the rule reads, not a guarantee at every wavelength.
+A re-run on the committed source reproduced every printed digit.
+
+### Gate 2, arm D: the S7 dimer -- fails
+
+Relative error of the scattering cross-section against the 80-cell reference. A dash is a
+(grid, wavelength) the resolution door refuses; every run stopped by the decay rule, all
+monitors below 1.3e-7.
+
+| Wavelength | 20 | 24 | 28 | 32 | 40 | 56 | Ratio to the 40/56 law at the clip grids |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 1.0 | -- | -- | -- | 2.82e-1 | 1.67e-1 | 6.12e-2 | 32: 0.87 |
+| 1.1 | -- | -- | -- | 3.27e-2 | 2.01e-2 | 7.79e-3 | 32: 0.87 |
+| 1.2 | -- | -- | 1.40e-1 | 1.07e-1 | 7.86e-2 | 2.97e-2 | 28: 0.63, 32: 0.72 |
+| 1.3 | -- | -- | 4.33e-2 | 1.02e-2 | 7.76e-3 | 1.47e-4 | 28: 0.08, 32: 0.09 |
+| 1.4 | -- | 1.80e-3 | 8.57e-4 | 9.64e-4 | 5.26e-4 | 1.20e-4 | 24: 0.36, 28: 0.34, 32: 0.69 |
+| 1.5 | -- | 9.04e-3 | 6.03e-3 | 5.57e-3 | 3.71e-3 | 9.67e-4 | 24: 0.32, 28: 0.39, 32: 0.62 |
+| 1.6 | 3.49e-2 | 2.46e-2 | 1.92e-2 | 1.51e-2 | 1.03e-2 | 3.21e-3 | 0.30 to 0.67 |
+| 1.7 | 7.92e-2 | 5.44e-2 | 4.61e-2 | 3.33e-2 | 2.34e-2 | 7.86e-3 | 0.36 to 0.69 |
+| 1.8 | 6.61e-2 | 3.83e-2 | 3.22e-2 | 2.03e-2 | 1.36e-2 | 3.95e-3 | 0.38 to 0.66 |
+| 1.9 | 1.94e-1 | 1.21e-1 | 1.09e-1 | 6.97e-2 | 4.98e-2 | 1.67e-2 | 0.41 to 0.69 |
+| 2.0 | 9.34e-2 | 5.63e-2 | 5.26e-2 | 3.13e-2 | 2.29e-2 | 7.87e-3 | 0.45 to 0.74 |
+
+The clip writes 32, 32, 24 and 24 electric voxels at 20, 24, 28 and 32 cells and none from
+40. **Criterion (a) fails**: twelve (grid, wavelength) pairs are refused by the resolution door
+at 20, 24 and 28 cells. **Criterion (b) fails at eight of eleven wavelengths**: at the
+clip-writing grids the error lies 0.08 to 0.49 times the power law through the 40- and 56-cell
+errors, outside the registered factor of 2. The band error over the five wavelengths every grid
+shares (1.6 to 2.0) falls 9.36e-2, 5.89e-2, 5.19e-2, 3.40e-2, 2.40e-2, 7.91e-3 from 20 to 56
+cells, a fitted order of 2.32 with 19.9% scatter. The instrument check holds: at 40 cells the
+narrow and broadband runs agree to 3.9e-4, 2.9e-6 and 1.1e-4 at wavelengths 1.0, 1.5 and 2.0.
+
+**What the failure says, and what it does not.** The clip-writing grids are not worse than the
+law: they are better than it, by a factor of 2 to 12. The law is fitted through two grids, 40
+and 56, against a reference only 1.43 times finer than the second of them, so its error at 56
+is understated and its slope steepened (fitted orders through all six grids read 2.2 to 3.0,
+and 7.7 at wavelength 1.3, where the 56-cell error nearly crosses zero). That reading is an
+explanation offered after the fact and is not used to set the verdict aside: the rule was
+registered with its consequence, and the consequence is applied. Answering two curved surfaces
+would need a gate that passes -- a finer reference or a reference-free statistic, registered
+before it is run.
