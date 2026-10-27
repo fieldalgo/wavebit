@@ -2,7 +2,7 @@
 # Seeded from the install logs of main run 39984885892 (051bcae, all jobs green), Python 3.12.15.
 # Replace it with
 # `python tools/ci_constraints.py freeze tests`, by pull request.
-# A distribution missing here (one another OS adds) installs at its newest version.
+# A distribution missing here installs at its newest version.
 absl-py==2.5.1
 array-api-compat==1.15.0
 contourpy==1.4.0
@@ -37,7 +37,7 @@ scipy==1.18.1
 setuptools==78.1.0
 six==1.17.0
 sympy==1.14.0
-torch==2.14.1
+torch==2.14.1+cpu
 tqdm==4.70.1
 typing-extensions==4.16.0
 tzdata==2026.5

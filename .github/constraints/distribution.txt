@@ -2,7 +2,7 @@
 # Seeded from the install logs of main run 39984885892 (051bcae, all jobs green), Python 3.12.15;
 # setuptools, which the log does not show for the isolated build, is the newest release on that date. Replace it with
 # `python tools/ci_constraints.py freeze distribution`, by pull request.
-# A distribution missing here (one another OS adds) installs at its newest version.
+# A distribution missing here installs at its newest version.
 array-api-compat==1.15.0
 build==1.6.1
 certifi==2026.10.23
