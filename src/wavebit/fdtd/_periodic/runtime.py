@@ -4,247 +4,129 @@ Use the same Array API namespaces and graph-preserving conversion as RCWA.
 Only execution/checkpointing differs here; Maxwell/ADE/CPML equations stay in
 wavebit.fdtd._periodic.grid and must not be duplicated by a backend.
 """
-import dataclasses
-import functools
 import threading
-import types
-import warnings
 
 import numpy as np
 
 from wavebit._common.backend import as_array
 from wavebit._common.backend import lift_jax_x64
 
-# Compiled eager scan programs, keyed by structure and scan length; least recently used
-# first. See _eager_scan.
+# Compiled JAX scan programs, least recently used first. See JaxTimeLoop._run.
 _SCAN_PROGRAMS = {}
 _SCAN_PROGRAMS_MAX = 64
 # Whichever thread solves reads and writes the cache; a `pop` racing an eviction could otherwise
 # raise `KeyError`, or change the dict's size under the eviction loop.
 _SCAN_LOCK = threading.Lock()
-_API_WARNED = []
-_FUNCTION_TYPES = (types.FunctionType, types.MethodType, types.BuiltinFunctionType,
-                   functools.partial)
 
 
-@functools.lru_cache(maxsize=None)
-def _jax_api():
-    """The JAX names the program key reads, or ``None`` when this JAX no longer has one of them.
+class Step:
+    """One time step held as data: ``build(runtime, settings, arrays)`` returns ``step(state, n)``.
 
-    The jaxpr types are read off two tiny public traces (``jax.make_jaxpr``) rather than
-    imported from ``jax.extend``: from jax 0.12.0, importing ``jax.extend`` adds entries to
-    JAX's tracing context, so importing it partway through a session made every compiled
-    program miss its cache once -- a user's ``jax.jit`` around the first solve traced twice,
-    and the next solve's eager operations all compiled again (measured 2026-10-19). Reading
-    the types off traces changes nothing (checked on jax 0.11.0 and 0.12.0: the same classes
-    ``jax.extend.core`` names, and an unchanged context). Not all are public promises, so a
-    JAX that moves one costs the sharing, never the solve: :func:`_eager_scan` warns once and
-    runs the plain ``lax.scan``.
+    ``build`` is a module-level function, ``settings`` a hashable value of plain Python numbers,
+    tuples and slices, and ``arrays`` a pytree of the step's arrays. ``fdtd_grid`` used to hand
+    the time loop a fresh closure on every call; an eager ``lax.scan`` caches its executable on
+    the traced body, which hashes by identity, so every solve compiled again. Held as data, the
+    same program shape has the same builder and equal settings on every call, and the JAX loop
+    runs it through one plain ``jax.jit`` that receives the arrays as arguments
+    (:meth:`JaxTimeLoop._run`). NumPy and Torch simply call it.
+
+    A leaf of ``arrays`` that is a Python or NumPy scalar rather than an array (an absorber-free
+    ``ah`` is the float ``1.0``) is treated as part of the program, exactly as a closure would
+    have baked it in, and not as an argument.
     """
-    try:
-        import jax
-        closed = jax.make_jaxpr(lambda x: x * 2.)(1.)
-        literal = closed.jaxpr.eqns[0].invars[1]
-        if not hasattr(literal, 'val'):   # a constant that is no longer a literal atom
-            return None
-        api = types.SimpleNamespace(
-            Tracer=jax.core.Tracer, typeof=jax.typeof, eval_jaxpr=jax.core.eval_jaxpr,
-            ClosedJaxpr=type(closed), Jaxpr=type(closed.jaxpr), Literal=type(literal))
-    except (ImportError, AttributeError, IndexError):
-        return None
-    api.functions = _FUNCTION_TYPES + _wrapped_function_types(jax)
-    return api
+
+    def __init__(self, build, runtime, settings, arrays, offset=0):
+        self.build, self.runtime, self.settings, self.arrays = build, runtime, settings, arrays
+        self.offset = offset
+        self._bound = None
+
+    def shifted(self, start):
+        """This step with every time index advanced by the static integer ``start``."""
+        return Step(self.build, self.runtime, self.settings, self.arrays, self.offset+start)
+
+    def __call__(self, state, n):
+        if self._bound is None:
+            self._bound = _bind(self.build, self.runtime, self.settings, self.arrays, self.offset)
+        return self._bound(state, n)
 
 
-def _wrapped_function_types(jax):
-    """JAX's wrapped-function class, read off a ``custom_jvp`` trace, or ``()`` if none shows.
+def _bind(build, runtime, settings, arrays, offset):
+    step = build(runtime, settings, arrays)
+    if offset:
+        return lambda state, n: step(state, n+offset)
+    return step
 
-    A ``custom_jvp`` equation carries its rule as a ``WrappedFun`` parameter (jax 0.11.0 and
-    0.12.0). Missing it costs only sharing: :func:`_param_key` would hash such a rule instead
-    of refusing it, which keys every call apart.
+
+def _static_key(v):
+    """``v`` as a cache key, by type and value; ``TypeError`` when it cannot be one.
+
+    Floats enter by bit pattern, so ``-0.0`` is not ``0.0``; the type enters too, so ``1``,
+    ``1.0`` and ``True`` -- equal and equally hashed in Python -- are three keys, as they are
+    three programs.
     """
-    try:
-        @jax.custom_jvp
-        def probe(x):
-            return x
-        probe.defjvp(lambda primals, tangents: (primals[0], tangents[0]))
-        params = jax.make_jaxpr(probe)(1.).jaxpr.eqns[0].params
-    except Exception:
-        return ()
-    return tuple({type(v) for v in params.values() if type(v).__name__ == 'WrappedFun'})
-
-
-def _eager_scan(f, init, xs):
-    """``jax.lax.scan(f, init, xs)``, compiled once per program instead of once per closure.
-
-    An eager ``lax.scan`` dispatches through ``xla_primitive_callable`` (jax 0.11.0, in JAX's
-    dispatch module), whose cache key holds the traced body jaxpr, and a jaxpr
-    hashes by identity. ``fdtd_grid`` builds a fresh ``step`` closure on every call, so every
-    eager scan traced to a new jaxpr and ran XLA again: 8 compilations on every scene solve,
-    which contains 2 distinct programs (4 when it records a field). Here the body is traced
-    once, and its closed-over arrays become explicit arguments of one jitted program (closure
-    conversion; ``jax.closure_convert`` is JAX's own form of it). The program is keyed on the
-    jaxpr's structure (``_program_key``) and on the scan's length: an equal key means the same
-    equations, literals, shapes and trip count, so the program runs on this call's arrays
-    exactly as a fresh compile would. Python scalars (``dt``, a record offset) are literals in
-    the jaxpr, so a changed one is a different key. The length is in the key so that a sweep of
-    tail lengths (``checkpoint_steps``) is one entry per length under the LRU bound, rather than
-    one entry whose jit grows a compiled copy per length where the bound cannot see it. A cached
-    program holds none of the arrays it was first traced with (:func:`_without_consts`).
-
-    Falls back to the plain call whenever sharing could not be exact: inside a trace (nothing
-    is dispatched here then), when a closed-over value is a tracer (eager AD), when a carry is
-    weakly typed (``lax.scan`` would retrace it promoted), when the key cannot see every value
-    the program depends on (``_Unshareable``), and when this JAX lacks a name the key reads
-    (warned once).
-    """
-    import jax
-    leaves = jax.tree.leaves((init, xs))
-    # Inside a trace nothing is dispatched, so the plain scan is exact: return before the key's
-    # names are resolved. Resolving them is a session-wide side effect (it used to import
-    # ``jax.extend``, which from jax 0.12.0 made a user's ``jax.jit`` around the first solve
-    # trace twice; see :func:`_jax_api`), and a trace is the wrong place for one.
-    if any(isinstance(v, jax.core.Tracer) for v in leaves):
-        return jax.lax.scan(f, init, xs)
-    api = _jax_api()
-    if api is None:
-        if not _API_WARNED:
-            _API_WARNED.append(True)
-            warnings.warn(
-                'wavebit: this JAX moved a name the eager-scan program cache reads, so every '
-                'eager FDTD scan compiles again on each call, as it did before the cache. The '
-                'answers are unaffected.', RuntimeWarning, stacklevel=2)
-        return jax.lax.scan(f, init, xs)
-    lengths = tuple(np.shape(x)[:1] for x in jax.tree.leaves(xs))
-    if (not lengths or () in lengths
-            or any(isinstance(v, api.Tracer) for v in leaves)):
-        return jax.lax.scan(f, init, xs)
-    row = jax.tree.map(lambda x: jax.ShapeDtypeStruct(x.shape[1:], x.dtype), xs)
-    closed, shape = jax.make_jaxpr(f, return_shape=True)(init, row)
-    if (any(isinstance(c, api.Tracer) for c in closed.consts)
-            or any(api.typeof(v).weak_type for v in leaves)):
-        return jax.lax.scan(f, init, xs)
-    out_tree = jax.tree.structure(shape)
-    try:
-        key = (_program_key(closed.jaxpr), jax.tree.structure((init, xs)), out_tree, lengths)
-    except _Unshareable:
-        return jax.lax.scan(f, init, xs)
-    with _SCAN_LOCK:
-        program = _SCAN_PROGRAMS.pop(key, None)
-        if program is None:
-            program = _scan_program(_without_consts(closed.jaxpr), out_tree)
-        _SCAN_PROGRAMS[key] = program
-        while len(_SCAN_PROGRAMS) > _SCAN_PROGRAMS_MAX:
-            del _SCAN_PROGRAMS[next(iter(_SCAN_PROGRAMS))]
-    return program(closed.consts, init, xs)
-
-
-def _without_consts(jaxpr):
-    """``jaxpr`` holding no constants of its own; the cached program is handed them per call.
-
-    jax 0.11 made ``ClosedJaxpr`` and ``Jaxpr`` one class, so ``closed.jaxpr`` is ``closed``
-    itself, the first call's closed-over arrays included. A cached program that closed over it
-    kept those arrays alive on the device -- about 120 KB per program at resolution 20, up to 64
-    programs -- although it never reads them: ``eval_jaxpr`` takes the constants it is handed.
-    """
-    if getattr(jaxpr, 'consts', None):
-        return jaxpr.replace(consts=[])
-    return jaxpr
-
-
-def _scan_program(jaxpr, out_tree):
-    import jax
-
-    def scan_program(consts, init, xs):
-        def body(carry, x):
-            flat = jax.core.eval_jaxpr(jaxpr, consts, *jax.tree.leaves((carry, x)))
-            return jax.tree.unflatten(out_tree, flat)
-        return jax.lax.scan(body, init, xs)
-    return jax.jit(scan_program)
-
-
-class _Unshareable(Exception):
-    """A traced body whose program the key cannot see whole; it runs unshared."""
-
-
-def _param_key(v):
-    """One equation parameter as part of a key, or ``_Unshareable`` when the key cannot see it."""
-    api = _jax_api()
-    if isinstance(v, (api.Jaxpr, api.ClosedJaxpr)):
-        # jax 0.11 made the two one class, so a nested *Jaxpr* can carry constants -- an inner
-        # `jax.jit` closing over an array puts that array here. The branch that used to check
-        # sat below the Jaxpr branch, reachable only on a JAX where they were two classes, and
-        # the key then handed a second call the first call's constants: [4, 8, 12] where
-        # [40, 80, 120] was asked, silently (measured 2026-09-12).
-        if getattr(v, 'consts', None):
-            raise _Unshareable
-        return ('jaxpr', _program_key(v if isinstance(v, api.Jaxpr) else v.jaxpr))
     if isinstance(v, (tuple, list)):
-        return (type(v), tuple(_param_key(w) for w in v))
-    if isinstance(v, np.ndarray):
-        return (np.ndarray, v.dtype.str, v.shape, v.tobytes())
+        return (type(v), tuple(_static_key(w) for w in v))
     if isinstance(v, (float, complex, np.inexact)):
         return (type(v), np.asarray(v).tobytes())
-    if isinstance(v, api.functions):
-        # A rule the primitive calls -- a custom_jvp's jvp, a custom_vjp's bwd, a callback -- is
-        # rebuilt by every trace. It hashes, so it would not raise below; it would key every
-        # call apart instead: a compile per call, and a cache filling with programs that nothing
-        # asks for again, evicting the ones that are asked for.
-        raise _Unshareable
-    if dataclasses.is_dataclass(v) and not isinstance(v, type) and any(
-            isinstance(getattr(v, field.name), api.functions) for field in dataclasses.fields(v)):
-        # A callback primitive (pure_callback, io_callback, debug.callback) carries the caller's
-        # function inside a frozen dataclass. That hashes, and compares the function by identity,
-        # so it gets past both checks here and would key every call apart just the same.
-        raise _Unshareable
-    try:
-        hash(v)
-    except TypeError:
-        raise _Unshareable from None
+    if isinstance(v, np.ndarray):
+        raise TypeError('an array is not a static value')
+    hash(v)
     return (type(v), v)
 
 
-def _program_key(jaxpr):
-    """Structural identity of a jaxpr: equal keys are one program.
+def _signature(tree):
+    """Tree structure, shapes and dtypes: what a jit compiles one executable for."""
+    import jax
+    leaves, structure = jax.tree.flatten(tree)
+    return structure, tuple((np.shape(v), str(getattr(v, 'dtype', type(v)))) for v in leaves)
 
-    Built like the key JAX's eager dispatch caches executables on (primitive and parameters,
-    ``xla_primitive_callable``), except that a nested jaxpr enters by structure instead of by
-    identity: variables by position, literals by bit pattern (so ``-0.0`` is not ``0.0``),
-    avals and effects by value. A nested jaxpr carrying constants, a function-valued parameter,
-    or one with no hash raises ``_Unshareable`` (:func:`_param_key`).
 
-    Any other parameter enters by its own equality. An enum member, a dtype, the empty device
-    mesh a ``jit`` equation names and JAX's forwarding tuples all compare equal across traces --
-    the only parameter kinds the FDTD body holds besides plain values, checked 2026-09-12 -- but
-    an object built afresh by each trace and compared by identity would key every call apart:
-    no wrong answer, only the compile per call this cache exists to remove. Equation contexts
-    are compared by their own equality too, which jax 0.11 backs by interning them; a JAX whose
-    contexts stopped comparing equal would cost the sharing, never the answer.
+def _chunk_scan(step, state, ns):
+    def block(current, row):
+        import jax
+        return jax.lax.scan(step, current, row)[0], None
+    import jax
+    return jax.lax.scan(jax.checkpoint(block), state, ns)
+
+
+def _step_scan(step, state, ns):
+    import jax
+    return jax.lax.scan(step, state, ns)
+
+
+def _record_scan(runtime, step, state, indices, interval, checkpoint_steps, capture):
+    import jax
+
+    def block(current, index):
+        start = 1+index*interval
+        current = runtime.advance(lambda value, n: step(value, n+start),
+                                  current, interval, checkpoint_steps)
+        return current, capture(current)
+    return jax.lax.scan(jax.checkpoint(block), state, indices)
+
+
+def _scan_program(kind, build, runtime, settings, structure, constants, offset, extra):
+    """``jax.jit`` of one scan over a :class:`Step`, taking every array as an argument.
+
+    Nothing reaches the compiled program but its arguments and the static values in its cache
+    key: the builder, the settings, the scalar leaves, the offset and the scan's own static
+    options. So two calls with equal keys and equal argument shapes and dtypes are one program.
     """
-    api = _jax_api()
-    names = {}
+    import jax
 
-    def bind(variables):
-        avals = []
-        for v in variables:
-            names[v] = len(names)
-            avals.append(v.aval)
-        return tuple(avals)
+    def scan_program(dynamic, state, xs):
+        values = iter(dynamic)
+        leaves = [next(values) if c is _ARRAY else c for c in constants]
+        step = _bind(build, runtime, settings, jax.tree.unflatten(structure, leaves), offset)
+        if kind == 'chunks':
+            return _chunk_scan(step, state, xs)
+        if kind == 'steps':
+            return _step_scan(step, state, xs)
+        return _record_scan(runtime, step, state, xs, *extra)
+    return jax.jit(scan_program)
 
-    def atom(v):
-        if isinstance(v, api.Literal):
-            value = np.asarray(v.val)
-            return ('literal', value.dtype.str, value.shape, value.tobytes(), v.aval)
-        return names[v]
 
-    head = (bind(jaxpr.constvars), bind(jaxpr.invars), frozenset(jaxpr.effects))
-    equations = []
-    for eqn in jaxpr.eqns:
-        inputs = tuple(atom(v) for v in eqn.invars)
-        params = tuple((name, _param_key(v)) for name, v in sorted(eqn.params.items()))
-        equations.append((eqn.primitive, inputs, params, eqn.ctx, frozenset(eqn.effects),
-                          bind(eqn.outvars)))
-    return head, tuple(equations), tuple(atom(v) for v in jaxpr.outvars)
+_ARRAY = object()
 
 
 class NumpyTimeLoop:
@@ -317,13 +199,11 @@ class JaxTimeLoop(NumpyTimeLoop):
         if self.device is not None:
             state = jax.tree.map(lambda v: jax.device_put(v, self.device), state)
         chunks, tail = divmod(steps, checkpoint_steps)
-        def block(current, ns):
-            return jax.lax.scan(step, current, ns)[0], None
         if chunks:
             ns = self.array(np.arange(chunks*checkpoint_steps).reshape(chunks, checkpoint_steps))
-            state = _eager_scan(jax.checkpoint(block), state, ns)[0]
+            state = self._run('chunks', step, state, ns)[0]
         if tail:
-            state = _eager_scan(step, state, self.array(np.arange(chunks*checkpoint_steps, steps)))[0]
+            state = self._run('steps', step, state, self.array(np.arange(chunks*checkpoint_steps, steps)))[0]
         return state
 
     def advance_recorded(self, step, state, steps, checkpoint_steps, interval, capture):
@@ -333,19 +213,64 @@ class JaxTimeLoop(NumpyTimeLoop):
         state, _ = step(state, 0)
         first = capture(state)[None]
         count = (steps-1)//interval
-        def block(current, index):
-            start = 1+index*interval
-            current = self.advance(lambda value, n: step(value, n+start),
-                                   current, interval, checkpoint_steps)
-            return current, capture(current)
         if count:
-            state, samples = _eager_scan(jax.checkpoint(block), state, self.array(np.arange(count)))
+            state, samples = self._run('record', step, state, self.array(np.arange(count)),
+                                       (interval, checkpoint_steps, capture))
             first = self.xp.concat((first, samples), axis=0)
         start = 1+count*interval
         if start < steps:
-            state = self.advance(lambda current, n: step(current, n+start),
-                                 state, steps-start, checkpoint_steps)
+            shifted = (step.shifted(start) if isinstance(step, Step)
+                       else lambda current, n: step(current, n+start))
+            state = self.advance(shifted, state, steps-start, checkpoint_steps)
         return state, first
+
+    def _run(self, kind, step, state, xs, extra=()):
+        """One scan of ``step``: a cached ``jax.jit`` program for a :class:`Step`, else plain.
+
+        ``kind`` is ``'chunks'`` (checkpointed rows of steps), ``'steps'`` or ``'record'``. The
+        program is keyed on static values alone -- the builder, its settings and scalar leaves,
+        the offset, the scan's options, this loop's device -- and on the shapes and dtypes of
+        its arguments, so a repeated solve of one program shape compiles nothing, and a cached
+        program holds none of the arrays it ran on. The shapes are in the key so that a sweep
+        of scan lengths or grid sizes is one entry per program under the LRU bound, rather than
+        one entry whose jit grows a compiled copy per shape where the bound cannot see it.
+
+        Anything else runs the plain ``lax.scan``, which is exact and only compiles again on
+        each call: a plain function, settings that cannot be a key, and any call holding a
+        tracer. Inside a user's ``jax.jit`` nothing is dispatched here, and a nested jit would
+        change that user's compiled program (measured on jax 0.12.0: the same bytes out, from a
+        larger program with more temporary memory); eager AD keeps the path it had before.
+        """
+        import jax
+        leaves, structure = jax.tree.flatten(getattr(step, 'arrays', ()))
+        if (not isinstance(step, Step) or any(isinstance(v, jax.core.Tracer) for v in
+                                              leaves + jax.tree.leaves((state, xs)))):
+            return self._plain(kind, step, state, xs, extra)
+        is_array = [isinstance(v, (jax.Array, np.ndarray)) for v in leaves]
+        dynamic = [v for v, a in zip(leaves, is_array) if a]
+        constants = tuple(_ARRAY if a else v for v, a in zip(leaves, is_array))
+        try:
+            key = (kind, step.build, type(self), self.device, _static_key(step.settings),
+                   structure, _static_key(tuple(v for v in constants if v is not _ARRAY)),
+                   tuple(is_array), step.offset, _static_key(extra[:2]), extra[2:],
+                   _signature((dynamic, state, xs)))
+            hash(key)
+        except TypeError:
+            return self._plain(kind, step, state, xs, extra)
+        with _SCAN_LOCK:
+            program = _SCAN_PROGRAMS.pop(key, None)
+            if program is None:
+                program = _scan_program(kind, step.build, self, step.settings, structure,
+                                        constants, step.offset, extra)
+            _SCAN_PROGRAMS[key] = program
+            while len(_SCAN_PROGRAMS) > _SCAN_PROGRAMS_MAX:
+                del _SCAN_PROGRAMS[next(iter(_SCAN_PROGRAMS))]
+        return program(dynamic, state, xs)
+
+    def _plain(self, kind, step, state, xs, extra):
+        if kind == 'record':
+            return _record_scan(self, step, state, xs, *extra)
+        return (_chunk_scan if kind == 'chunks' else _step_scan)(step, state, xs)
 
 
 class TorchTimeLoop(NumpyTimeLoop):
