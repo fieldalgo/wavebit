@@ -193,3 +193,18 @@ campaign's budget. The instrument is therefore:
 
 Every row records its decay diagnostic; a row whose flux monitor has not decayed below
 1e-4 is reported as unsettled. The pass rules are unchanged.
+
+## Amendment 3 (2026-10-27, arm D stopping rule; before any reference row exists)
+
+Under Amendment 2 the first narrow-band rows read flux-monitor decays of 2.1e-8 and 3.5e-12
+(24 cells, wavelengths 1.4 and 1.5) but 2.2e-3 at 32 cells and wavelength 1.0: a fixed length
+of 90 periods does not settle a wavelength near a slowly ringing resonance of the epsilon-12
+sphere, and the broadband runs' 40 periods would settle less. Those rows were taken with a
+superseded instrument; they are kept, unused, in
+`studies/fdtd/subpixel_polytope_clip/records/dimer_superseded_amendment2.jsonl`, and no
+reference (40, 56, 80 cells) row had been produced. **Every arm D run now stops by the engine's
+state-amplitude rule**, `Run(time=600, decay=Decay(threshold=1e-3, window=2 x the longest
+wavelength))`, inside that hard cap: each run continues until every field and memory group has
+fallen below 1e-3 of its own peak over a full window, or reaches the cap, which the row records.
+Bands, grids, wavelengths and the pass rules are unchanged; the flux-decay validity mark of
+Amendment 2 still applies.
