@@ -275,3 +275,12 @@ differences above were already seen; the combination below was not computed): th
 derivative, by `jax.grad` and by Torch autograd, against the fourth-order combination
 `(4 D(h/2) - D(h))/3` of central differences at `h = 3e-4` and `h/2`, to a relative 1e-7.
 
+MM6, registered after a mutation run showed that MM1 cannot see how a finite span is
+cut out of the plane (every MM1 window spans its whole cross-section), and before it
+was run: the MM1 slab with its `PEC` faces at x = ±4.5 µm, launched as in MM1 (modes 0
+and 1, both directions), read by a `ModeMonitor` and a `FluxMonitor` whose planes span
+only x = (-3, 3) µm. The window's walls then truncate the run's mode where its field is
+small but not zero, so the limits are looser than MM1's: the opposite direction and the
+other mode each at most 1e-8 of the launched amplitude, and the launched mode's
+spectral energy equal to the flux on the same span to a relative 1e-8.
+
