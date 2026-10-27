@@ -41,6 +41,7 @@ def _core(kind, eps=EPS_CORE):
 
 
 def _setup(dx, *, mirrored=False, kind='slab', amplitude=1., phase=0., delay=0., scatterer=None,
+           mode=0, monitor_modes=1,
            core_eps=EPS_CORE, pulse=None, monitors=None, source_kw=None, periods=PERIODS,
            duration=None):
     """Setup S (or its mirror, or the S5 joint) at spacing ``dx``."""
@@ -52,7 +53,7 @@ def _setup(dx, *, mirrored=False, kind='slab', amplitude=1., phase=0., delay=0.,
                                       material=Material(epsilon=scatterer)),)
     z_source, direction = (2., '-z') if mirrored else (-2., '+z')
     source = fdtd.ModeSource('src', plane=fdtd.Plane(z=z_source), pulse=pulse or _pulse(),
-                             direction=direction, mode=0, amplitude=amplitude, phase=phase,
+                             direction=direction, mode=mode, amplitude=amplitude, phase=phase,
                              delay_seconds=delay, **(source_kw or {}))
     if monitors is None:
         if mirrored:
@@ -60,7 +61,8 @@ def _setup(dx, *, mirrored=False, kind='slab', amplitude=1., phase=0., delay=0.,
         else:
             places = (('p1', 1.), ('p2', 2.), ('q', -1. if kind == 'joint' else -3.))
         monitors = tuple(fdtd.ModeMonitor(name, plane=fdtd.Plane(z=z), wavelengths=LAMBDAS,
-                                          modes=1, source='src') for name, z in places)
+                                          modes=monitor_modes, source='src')
+                         for name, z in places)
     problem = fdtd.Problem(
         units=Units(length='um'),
         scene=fdtd.Scene(
@@ -89,10 +91,10 @@ def _np(value):
     return np.asarray(value)
 
 
-def _P(spectrum, distance):
+def _P(spectrum, distance, mode=0):
     """The mode's grid propagation factor over ``distance`` um at each wavelength (the run's
     Fourier convention is exp(+i omega t), so a wave advancing by d gains exp(+i beta d))."""
-    beta = 2 * np.pi * _np(spectrum.effective_index)[:, 0] / np.asarray(LAMBDAS)
+    beta = 2 * np.pi * _np(spectrum.effective_index)[:, mode] / np.asarray(LAMBDAS)
     return np.exp(1j * beta * distance)
 
 
@@ -133,6 +135,31 @@ def test_s1_the_mirrored_source_injects_as_predicted():
     error = np.abs(_np(m.backward)[:, 0] - injected * _P(m, 4.)) / np.abs(injected)
     print('S1 mirrored: |backward - predicted| / |injected| =', error)
     assert np.all(error <= 1e-5), error
+    # Added after registration, at S2's and S3's limits: the prediction follows the sheet
+    # whatever it holds, so the mirrored source is also held to one-way launch and 1 W at the
+    # centre wavelength.
+    leakage = float(np.abs(_np(m.leakage)[CENTRE] / injected[CENTRE]) ** 2)
+    f0 = float(_np(m.frequencies_hz)[CENTRE])
+    power = float(_np(m.backward_energy)[CENTRE, 0]) / (2 * _unit_spectrum(f0) ** 2) - 1
+    print(f'S1 mirrored: leakage power {leakage:.2e}, backward energy / expected - 1 = {power:.2e}')
+    assert leakage <= 1e-12 and abs(power) <= 2e-5, (leakage, power)
+
+
+@pytest.mark.slow
+def test_s1_a_tm_mode_is_injected_as_predicted():
+    # Added after registration, at S1's, S2's and S3's limits: TE0 has no Ex or Hy, so the
+    # sheet's other two corrections are exercised by TM0 (mode 1 here) alone.
+    _quiet()
+    result = _run(*_setup(.05, mode=1, monitor_modes=2))
+    p2 = result['p2']
+    injected = _np(p2.injected)
+    error = np.abs(_np(p2.forward)[:, 1] - injected * _P(p2, 4., mode=1)) / np.abs(injected)
+    leakage = float(np.abs(_np(p2.leakage)[CENTRE] / injected[CENTRE]) ** 2)
+    f0 = float(_np(p2.frequencies_hz)[CENTRE])
+    power = float(_np(p2.forward_energy)[CENTRE, 1]) / (2 * _unit_spectrum(f0) ** 2) - 1
+    print(f'S1 TM0: |forward - predicted| / |injected| = {error}; leakage power {leakage:.2e}; '
+          f'forward energy / expected - 1 = {power:.2e}')
+    assert np.all(error <= 1e-5) and leakage <= 1e-12 and abs(power) <= 2e-5, (error, leakage, power)
 
 
 @pytest.mark.slow
