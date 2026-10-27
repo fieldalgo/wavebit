@@ -185,6 +185,12 @@ Modes of the discrete Yee system on a plane across a uniform cross-section; see 
 
 .. autoclass:: wavebit.fdtd.WaveguideMode
    :members:
+
+.. autoclass:: wavebit.fdtd.ModeMonitor
+   :members:
+
+.. autoclass:: wavebit.fdtd.ModeSpectrum
+   :members:
 ```
 ## Native-grid and periodic-stack formulations
 

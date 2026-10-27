@@ -56,7 +56,7 @@ from wavebit._common.pytrees import register_dataclass
 from wavebit.errors import UnsupportedFeatureError, ValidationError
 from wavebit.units import Z0
 
-__all__ = ['solve_modes', 'WaveguideMode', 'WaveguideModes']
+__all__ = ['solve_modes', 'WaveguideMode', 'WaveguideModes', 'ModeSpectrum']
 
 #: A truncating window edge (an ``Open`` face or a finite plane span) admits a mode only when
 #: its largest transverse E on the outermost cells is at most this fraction of its peak.
@@ -139,6 +139,37 @@ class WaveguideModes(Declaration):
 
     def __iter__(self):
         return iter(self.modes)
+
+
+@spec
+class ModeSpectrum(Declaration):
+    """What a :class:`ModeMonitor` measured: each mode's share of the run, both ways, per wavelength.
+
+    Arrays are ``(wavelengths, modes)``. ``forward_energy`` and ``backward_energy`` are the
+    two-sided pulse spectral energies (``units``: J/Hz, or per metre of each invariant axis)
+    carried toward the plane's ``+`` and ``-`` normal by each mode, scaled exactly as a
+    :class:`FluxMonitor` scales its flux, so that for a field made only of these modes
+    ``sum(forward_energy - backward_energy)`` over the modes is the flux. ``forward`` and
+    ``backward`` are the complex amplitudes, in the square root of those units, of the modes as
+    :func:`solve_modes` returns them at that wavelength (``modes[i]`` holds them, with their
+    phase convention); ``|forward|**2`` is ``forward_energy``. ``effective_index`` is each
+    mode's index on the grid.
+    """
+    wavelengths: tuple
+    frequencies_hz: object
+    effective_index: object
+    forward: object
+    backward: object
+    forward_energy: object
+    backward_energy: object
+    units: str
+    modes: tuple = ()
+    metadata: object = field(default_factory=dict)
+
+    def __post_init__(self):
+        register_dataclass(type(self))
+        object.__setattr__(self, 'modes', tuple(self.modes))
+        object.__setattr__(self, 'metadata', frozen_mapping(self.metadata))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -327,29 +358,20 @@ def _leaves(value):
         yield value
 
 
-def _check_static_inputs(problem, numerics):
-    """Refuse a traced or gradient-carrying input: the eigensolve does not differentiate."""
-    if numerics.geometry_ranges:
-        _refuse('solve_modes is a host eigensolve and does not differentiate; a structure with '
-                'Numerics(geometry_ranges=...) traces its geometry. Solve the modes from concrete '
-                'geometry.', 'mode.traced', 'numerics.geometry_ranges')
+def _traced_leaf(material):
+    """The name of the first traced or gradient-carrying field of ``material``, or ``None``."""
     from wavebit.materials import Material, ConductiveMaterial, DispersiveMaterial
-    materials = [('scene.background', problem.scene.background)] + [
-        ('scene.structures.' + s.name + '.material', s.material) for s in problem.scene.structures]
-    for path, material in materials:
-        names = ()
-        if isinstance(material, Material):
-            names = ('epsilon', 'mu')
-        elif isinstance(material, ConductiveMaterial):
-            names = ('epsilon', 'mu', 'conductivity')
-        elif isinstance(material, DispersiveMaterial):
-            names = ('epsilon_inf', 'mu')
-        for name in names:
-            for leaf in _leaves(getattr(material, name, None)):
-                if _traced(leaf):
-                    _refuse(f'{path}.{name} is traced or carries a gradient. solve_modes is a '
-                            f'host eigensolve and does not differentiate; pass concrete '
-                            f'material values.', 'mode.traced', path + '.' + name)
+    names = ()
+    if isinstance(material, Material):
+        names = ('epsilon', 'mu')
+    elif isinstance(material, ConductiveMaterial):
+        names = ('epsilon', 'mu', 'conductivity')
+    elif isinstance(material, DispersiveMaterial):
+        names = ('epsilon_inf', 'mu')
+    for name in names:
+        if any(_traced(leaf) for leaf in _leaves(getattr(material, name, None))):
+            return name
+    return None
 
 
 def _side(face, truncated_span, path):
@@ -416,7 +438,9 @@ def solve_modes(problem, *, numerics, plane, wavelength, count=1, backend='numpy
     transverse spans, which truncate it with a wall. Across an ``Open`` face or a span, a mode
     must be confined: its transverse E on the outermost cells at most 1e-3 of its peak.
     ``backend`` chooses the array type of the returned fields; the eigensolve itself runs once
-    on the host with SciPy and does not differentiate (traced inputs are refused).
+    on the host with SciPy and does not differentiate: a traced or gradient-carrying value in a
+    structure that reaches the plane, or in the wavelength, is refused. Structures that do not
+    reach the plane play no part in the solve.
     """
     from ._api import _issue
     from ._spelling import public as _public_spelling
@@ -430,50 +454,118 @@ def solve_modes(problem, *, numerics, plane, wavelength, count=1, backend='numpy
         raise public from exc
 
 
+def _check_count(count, path='count'):
+    if isinstance(count, bool) or not isinstance(count, (int, np.integer)) or count < 1:
+        raise ValidationError('count is a positive integer', code='mode.count', path=path,
+                              actual=count)
+    return int(count)
+
+
+def _check_wavelength(wavelength, path='wavelength'):
+    if _traced(wavelength):
+        _refuse('the wavelength is traced or carries a gradient; the mode solve is a host '
+                'eigensolve and does not differentiate', 'mode.traced', path)
+    try:
+        lam = static_float('solve_modes', 'wavelength', wavelength)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError(str(exc), code='mode.wavelength', path=path) from exc
+    if not (math.isfinite(lam) and lam > 0):
+        raise ValidationError('the wavelength is a positive length', code='mode.wavelength',
+                              path=path, actual=wavelength)
+    return lam
+
+
 def _solve(problem, numerics, plane, wavelength, count, backend):
+    if backend not in ('numpy', 'jax', 'torch'):
+        raise ValidationError("backend is 'numpy', 'jax' or 'torch'", code='mode.backend',
+                              path='backend', actual=backend)
+    count = _check_count(count)
+    lam = _check_wavelength(wavelength)
+    window = prepare_window(problem, numerics, plane, lam)
+    modes = solve_window(window, lam, count)
+    # A mode normalized to unit flux in the kernel's units carries ``measure`` watts
+    # (src/wavebit/fdtd/_result.py::_measure): rescale to 1 W (per metre of each invariant axis).
+    scale = 1.0 / math.sqrt(window.measure)
+    modes = [(q, beta, {k: v * scale for k, v in f.items()}, residual, edge)
+             for q, beta, f, residual, edge in modes]
+    return _package(problem, window, lam, modes, backend)
+
+
+@dataclass(frozen=True)
+class Window:
+    """Everything a mode solve on one plane needs, independent of the wavelength.
+
+    ``eps``/``mu`` are the local ``u, v, w`` diagonal coefficients on the window (kernel units);
+    ``ranges[a]`` the window's cell range along each axis (``(k, k + 1)`` along ``w``);
+    ``sides`` the transverse neighbour rules; ``measure`` the watts per unit kernel flux.
+    """
+
+    w: int
+    u: int
+    v: int
+    k: int
+    ranges: dict
+    sides: tuple
+    eps: dict
+    mu: dict
+    dx: float
+    dt: float
+    low: tuple
+    measure: float
+    length_unit: float
+
+
+def window_plane(problem, numerics, plane):
+    """``plane`` with explicit spans wherever the mode window is narrower than the grid axis.
+
+    The window is the physical cross-section, or the plane's own spans: along an axis with an
+    ``Open`` face that is narrower than the allocated grid, which a flux plane over the window
+    has to say (a full-axis flux plane may not read the absorbing layers).
+    """
+    from . import _boundaries as boundaries
+    from ._kernel.grid import cell_count
+    dx = static_float('Numerics', 'grid.spacing', numerics.grid.spacing)
+    w = plane.axis
+    spans = {}
+    for a in range(3):
+        if a == w:
+            continue
+        name = _AXES[a]
+        span = plane.extent(a)
+        faces = [problem.scene.boundaries.face(name + s) for s in '-+']
+        if span is None and any(isinstance(f, boundaries.Open) for f in faces):
+            n = cell_count(problem.scene.domain.size[a], dx)
+            lo = problem.scene.domain.center[a] - n * dx / 2
+            span = (lo, lo + n * dx)
+        if span is not None:
+            spans[name] = tuple(span)
+    if not spans:
+        return plane
+    return type(plane)(**{_AXES[w]: plane.position}, **spans)
+
+
+def prepare_window(problem, numerics, plane, wavelength):
+    """The :class:`Window` of ``plane``: the solve's static part, refused where it must be.
+
+    Only the structures whose support reaches the window (one node layer either side of the
+    plane) are kept for the coefficients: painting is in declaration order and a structure that
+    does not reach a cell does not change it, so the window's coefficients are the full
+    scene's. That keeps a traced structure elsewhere -- an optimized scatterer downstream --
+    out of the host eigensolve, while one that reaches the plane is refused.
+    """
     from ._problem import Problem
-    from ._numerics import Numerics
-    from . import _geometry as geometry
+    from ._numerics import Numerics, Duration, PML
+    from . import _geometry as geometry, _monitors as monitors
+    from ._lower_public import lower_problem
+    from ._execution import _planned
+    from ._prepare.coefficients import build
+    from ._runtime import runtime
+    from ._kernel.grid import Grid
     if not isinstance(problem, Problem) or not isinstance(numerics, Numerics):
         raise ValidationError('expected fdtd.Problem and fdtd.Numerics', code='problem.type',
                               path='problem')
     if not isinstance(plane, geometry.Plane):
         raise ValidationError('expected fdtd.Plane', code='mode.plane', path='plane')
-    if backend not in ('numpy', 'jax', 'torch'):
-        raise ValidationError("backend is 'numpy', 'jax' or 'torch'", code='mode.backend',
-                              path='backend', actual=backend)
-    if isinstance(count, bool) or not isinstance(count, (int, np.integer)) or count < 1:
-        raise ValidationError('count is a positive integer', code='mode.count', path='count',
-                              actual=count)
-    count = int(count)
-    if _traced(wavelength):
-        _refuse('the wavelength is traced or carries a gradient; solve_modes is a host '
-                'eigensolve and does not differentiate', 'mode.traced', 'wavelength')
-    try:
-        lam = static_float('solve_modes', 'wavelength', wavelength)
-    except (TypeError, ValueError) as exc:
-        raise ValidationError(str(exc), code='mode.wavelength', path='wavelength') from exc
-    if not (math.isfinite(lam) and lam > 0):
-        raise ValidationError('the wavelength is a positive length', code='mode.wavelength',
-                              path='wavelength', actual=wavelength)
-    _check_static_inputs(problem, numerics)
-
-    from ._lower_public import lower_problem
-    from ._execution import _planned
-    from ._prepare.coefficients import build
-    from ._runtime import runtime
-    scene, metadata = lower_problem(problem, numerics)
-    plan, _ = _planned(scene)
-    grid = plan.grid
-    if plan.constitutive:
-        _refuse('the scene has coupled smoothed (constitutive) material, whose off-diagonal '
-                'cross coupling solve_modes does not model; it admits cell-snapped bodies and '
-                'smoothed bodies that lower to a diagonal medium only.', 'mode.material')
-    for index, structure in enumerate(scene.structures):
-        if getattr(structure, 'discretisation', 'voxel') == 'stencil':
-            _refuse("the scene uses discretization='stencil', whose extended operator "
-                    'solve_modes does not model.', 'mode.material', 'numerics.discretization')
-
     w = plane.axis
     u, v = (w + 1) % 3, (w + 2) % 3
     bounds = problem.scene.boundaries
@@ -481,13 +573,20 @@ def _solve(problem, numerics, plane, wavelength, count, backend):
         raise ValidationError(f'the plane is across the InvariantAxis {_AXES[w]!r}; a mode '
                               f'propagates along a resolved axis.', code='mode.plane',
                               path='plane')
+    leaf = _traced_leaf(problem.scene.background)
+    if leaf:
+        _refuse(f'scene.background.{leaf} is traced or carries a gradient; the mode solve is a '
+                f'host eigensolve and does not differentiate.', 'mode.traced',
+                'scene.background.' + leaf)
+
+    # The full scene, lowered only for its grid and its structures' supports.
+    full, metadata = lower_problem(problem, numerics)
+    grid = Grid.from_domain(full.domain.size, full.domain.center, full.resolution.dx)
     pad = metadata['padding_cells']
     low = metadata['physical_domain']['low']
     size = metadata['physical_domain']['size']
-    phys = {}
-    for a in range(3):
-        n0 = int(pad[_AXES[a] + '-'])
-        phys[a] = (n0, n0 + int(round(size[a] / grid.dx)))
+    phys = {a: (int(pad[_AXES[a] + '-']), int(pad[_AXES[a] + '-']) + int(round(size[a] / grid.dx)))
+            for a in range(3)}
     position = float(plane.position)
     if not (low[w] - 1e-9 * grid.dx <= position <= low[w] + size[w] + 1e-9 * grid.dx):
         raise ValidationError('the plane is outside the physical domain',
@@ -516,22 +615,70 @@ def _solve(problem, numerics, plane, wavelength, count, backend):
             # A span across part of a periodic axis is no longer periodic: both ends truncate.
             pair = [Side('wall', truncates=True), Side('wall', truncates=True)]
         sides.append(tuple(pair))
+    layers = [kk for kk in (k - 1, k, k + 1) if 0 <= kk < grid.n[w]]
     ranges[w] = (k, k + 1)
+    box = {u: ranges[u], v: ranges[v], w: (min(layers), max(layers) + 1)}
 
-    rt = runtime('numpy')
-    coefficients = build(scene, plan, rt)
+    kept = []
+    for declared, lowered in zip(problem.scene.structures, full.structures):
+        support = lowered.shape.support(grid)
+        if not all(support[a][0] < box[a][1] and support[a][1] > box[a][0] for a in range(3)):
+            continue
+        path = 'scene.structures.' + declared.name
+        if declared.name in numerics.geometry_ranges:
+            _refuse(f'{path} reaches the plane and traces its geometry '
+                    f'(Numerics(geometry_ranges=...)); the mode solve is a host eigensolve and '
+                    f'does not differentiate.', 'mode.traced', path)
+        leaf = _traced_leaf(declared.material)
+        if leaf:
+            _refuse(f'{path}.material.{leaf} is traced or carries a gradient and the structure '
+                    f'reaches the plane; the mode solve is a host eigensolve and does not '
+                    f'differentiate. Structures that do not reach the plane may be traced.',
+                    'mode.traced', path + '.material.' + leaf)
+        if numerics.discretization == 'stencil' and type(declared.shape) is geometry.Sphere:
+            _refuse("a structure with discretization='stencil' reaches the plane; its extended "
+                    'operator is not a diagonal medium the mode solve models.', 'mode.material',
+                    'numerics.discretization')
+        kept.append(declared)
+
+    # The coefficients of the window: the same grid, the kept structures only.
+    absorber = numerics.absorber
+    if isinstance(absorber, PML) and absorber.wavelength is None:
+        absorber = absorber.replace(wavelength=wavelength)
+    reduced = problem.replace(scene=problem.scene.replace(structures=tuple(kept)), sources=(),
+                              outputs=monitors.Outputs(), initial=None)
+    settings = numerics.replace(geometry_ranges={}, stopping=None, checkpoint_steps=None,
+                                duration=Duration(steps=1), absorber=absorber, memory_bound=None,
+                                discretization='voxel')
+    try:
+        scene, _ = lower_problem(reduced, settings)
+    except ValidationError as exc:
+        if exc.code != 'numerics.junction':
+            raise
+        # The non-default junction policy's flush pair does not reach the plane.
+        scene, _ = lower_problem(reduced, settings.replace(junction='split'))
+    plan, _ = _planned(scene)
+    if plan.constitutive:
+        _refuse('a structure reaching the plane is coupled smoothed (constitutive) material, '
+                'whose off-diagonal cross coupling the mode solve does not model; cell-snapped '
+                'bodies and unturned smoothed Box faces, which lower to a diagonal medium, are '
+                'admitted.', 'mode.material')
+    if plan.grid != grid:
+        raise ValidationError('the mode window did not reproduce the run grid',
+                              code='mode.convergence', path='solve_modes')
+
+    coefficients = build(scene, plan, runtime('numpy'))
     shape4 = (3, plan.nz, plan.ny, plan.nx)
     arrays = {}
     for name in ('ae', 'be', 'ah', 'bh'):
         value = coefficients[name]
         if not isinstance(value, (np.ndarray, float, int, np.floating)):
-            _refuse('a material coefficient is traced; solve_modes needs concrete values',
-                    'mode.traced', 'scene')
+            _refuse('a material coefficient on the plane is traced; the mode solve needs '
+                    'concrete values', 'mode.traced', 'scene')
         arrays[name] = np.broadcast_to(np.asarray(value, dtype=np.float64), shape4)
     ratio = plan.dt / plan.dx
     eps, mu = {}, {}
-    window = {a: ranges[a] for a in (u, v)}
-    layers = [kk for kk in (k - 1, k, k + 1) if 0 <= kk < grid.n[w]]
+    window = {u: ranges[u], v: ranges[v]}
     for local, c in (('u', u), ('v', v), ('w', w)):
         for name, store in (('be', eps), ('bh', mu)):
             slices = [_component_slice(arrays[name], c, w, kk, {**window, w: (kk, kk + 1)})
@@ -550,59 +697,63 @@ def _solve(problem, numerics, plane, wavelength, count, backend):
                 s = _component_slice(arrays[name], c, w, kk, {**window, w: (kk, kk + 1)})
                 if not np.all(s == 1.0):
                     _refuse('the window holds a conductive or absorbing medium (a lossy '
-                            'update coefficient); solve_modes admits lossless media only, '
+                            'update coefficient); the mode solve admits lossless media only, '
                             'and a lossy or leaky mode is not a mode of this solver.',
                             'mode.material', 'scene')
     _refuse_dispersive(scene, grid, window, w, layers)
-
-    omega = 2.0 * math.pi / lam
-    omega_d = 2.0 * math.sin(omega * plan.dt / 2.0) / plan.dt
-    q2s, fields, residuals = discrete_modes(eps, mu, tuple(sides), grid.dx, omega_d, count)
-
-    invariant = [a for a, s in zip((u, v), sides) if s[0].kind == 'invariant']
+    invariant = sum(1 for s in sides if s[0].kind == 'invariant')
     L = problem.units.length_unit_meters
-    dA = 1.0
-    for a, s in zip((u, v), sides):
-        if s[0].kind != 'invariant':
-            dA *= grid.dx
-    weights = np.full(eps['u'].shape, dA)
+    measure = L ** (2 - invariant) / (Z0 * grid.dx ** invariant)
+    return Window(w=w, u=u, v=v, k=k, ranges=ranges, sides=tuple(sides), eps=eps, mu=mu,
+                  dx=grid.dx, dt=plan.dt, low=grid.low, measure=measure, length_unit=L)
+
+
+def solve_window(window, wavelength, count):
+    """The ``count`` largest-index confined modes at ``wavelength``, in kernel units.
+
+    Each is ``(q, beta, fields, residual, edge_ratio)``, the local fields normalized so that the
+    kernel's flux (:func:`wavebit.fdtd._post.plane_flux`: ``0.5 sum E_t x H_mean dx^2``, with
+    ``H_mean = cos(beta dx/2) H``) is 1 along ``+w``.
+    """
+    dx = window.dx
+    omega = 2.0 * math.pi / wavelength
+    omega_d = 2.0 * math.sin(omega * window.dt / 2.0) / window.dt
+    q2s, fields, residuals = discrete_modes(window.eps, window.mu, window.sides, dx, omega_d,
+                                            count)
+    weights = np.full(window.eps['u'].shape, dx * dx)
     modes = []
     for index, (q2, f, residual) in enumerate(zip(q2s, fields, residuals)):
         if len(modes) == count:
             break
-        if f is None or not (0 < q2 < (2.0 / grid.dx) ** 2):
+        if f is None or not (0 < q2 < (2.0 / dx) ** 2):
             break
         if residual > RESIDUAL:
             _refuse(f'mode {index}: the eigen-residual {residual:.2g} exceeds {RESIDUAL:g}',
                     'mode.convergence')
-        edge = _edge_ratio(f, sides)
+        edge = _edge_ratio(f, window.sides)
         if edge > CONFINEMENT:
             break
         q = math.sqrt(q2)
-        beta = (2.0 / grid.dx) * math.asin(q * grid.dx / 2.0)
-        cos = math.cos(beta * grid.dx / 2.0)
-        N = cross_product(f, f, weights)
-        power = 0.5 * N * cos * L ** (2 - len(invariant)) / Z0
-        if not power > 0:
-            _refuse(f'mode {index} carries its power against its phase velocity; solve_modes '
+        beta = (2.0 / dx) * math.asin(q * dx / 2.0)
+        cos = math.cos(beta * dx / 2.0)
+        flux = 0.5 * cross_product(f, f, weights) * cos
+        if not flux > 0:
+            _refuse(f'mode {index} carries its power against its phase velocity; the mode solve '
                     f'admits forward modes only.', 'mode.convergence')
-        scale = 1.0 / math.sqrt(power)
+        scale = 1.0 / math.sqrt(flux)
         # Phase: the largest transverse E entry positive.
         Et = np.concatenate([f['Eu'].real.ravel(), f['Ev'].real.ravel()])
         if Et[np.argmax(np.abs(Et))] < 0:
             scale = -scale
-        f = {key: value * scale for key, value in f.items()}
-        modes.append((q, beta, f, residual, edge))
+        modes.append((q, beta, {key: value * scale for key, value in f.items()}, residual, edge))
     if len(modes) < count:
-        _refuse(f'solve_modes found {len(modes)} confined mode(s) at wavelength {lam:g}, fewer '
-                f'than count = {count}. A mode is admitted while its index stays above the '
-                f'grid limit and, across an Open face or a plane span, its transverse E on the '
-                f'outermost cells stays within {CONFINEMENT:g} of its peak; a mode beyond that '
-                f'is leaky, near cutoff or a mode of the truncated box. Ask for fewer modes or '
-                f'widen the cross-section.', 'mode.count', 'count')
-
-    return _package(problem, plan, grid, w, u, v, k, ranges, lam, omega, omega_d, modes,
-                    backend, sides)
+        _refuse(f'the mode solve found {len(modes)} confined mode(s) at wavelength '
+                f'{wavelength:g}, fewer than count = {count}. A mode is admitted while its index '
+                f'stays above the grid limit and, across an Open face or a plane span, its '
+                f'transverse E on the outermost cells stays within {CONFINEMENT:g} of its peak; '
+                f'a mode beyond that is leaky, near cutoff or a mode of the truncated box. Ask '
+                f'for fewer modes or widen the cross-section.', 'mode.count', 'count')
+    return modes
 
 
 def _edge_ratio(f, sides):
@@ -657,9 +808,11 @@ def _to_backend(array, backend):
     return torch.from_numpy(np.ascontiguousarray(array))
 
 
-def _package(problem, plan, grid, w, u, v, k, ranges, lam, omega, omega_d, modes, backend, sides):
+def _package(problem, window, lam, modes, backend):
     from ._kernel.grid import OFFSETS
-    L = problem.units.length_unit_meters
+    u, v, w, ranges, sides = window.u, window.v, window.w, window.ranges, window.sides
+    L = window.length_unit
+    omega = 2.0 * math.pi / lam
     names = {0: 'x', 1: 'y', 2: 'z'}
     local = {'u': u, 'v': v, 'w': w}
     # Array axes in storage order (z, y, x) with w dropped.
@@ -670,7 +823,7 @@ def _package(problem, plan, grid, w, u, v, k, ranges, lam, omega, omega_d, modes
         for c in range(3):
             off = OFFSETS[field_name][c]
             coordinates[field_name + names[c]] = {
-                names[a]: grid.low[a] + (np.arange(*ranges[a]) + 0.5 * off[a]) * grid.dx
+                names[a]: window.low[a] + (np.arange(*ranges[a]) + 0.5 * off[a]) * window.dx
                 for a in (u, v)}
     out = []
     for index, (q, beta, f, residual, edge) in enumerate(modes):
@@ -678,11 +831,7 @@ def _package(problem, plan, grid, w, u, v, k, ranges, lam, omega, omega_d, modes
         for name, c in local.items():
             for field_name, store, scale in (('E', E, 1.0), ('H', H, 1.0 / Z0)):
                 arr = f[field_name + name]                     # (Nu, Nv)
-                # (u, v) -> storage order of the two transverse axes.
-                if stored == (u, v):
-                    data = arr
-                else:
-                    data = arr.T
+                data = arr if stored == (u, v) else arr.T      # to the storage order
                 store[field_name + names[c]] = _to_backend(np.ascontiguousarray(data * scale),
                                                            backend)
         Eu, Ev = np.abs(f['Eu']) ** 2, np.abs(f['Ev']) ** 2
@@ -693,11 +842,92 @@ def _package(problem, plan, grid, w, u, v, k, ranges, lam, omega, omega_d, modes
             E=E, H=H, polarization=polarization, power_watts=1.0,
             metadata={'q': q, 'residual': residual, 'edge_ratio': edge}))
     invariant = tuple(names[a] for a, s in zip((u, v), sides) if s[0].kind == 'invariant')
+    omega_d = 2.0 * math.sin(omega * window.dt / 2.0) / window.dt
     return WaveguideModes(
-        modes=tuple(out), axis=names[w], position=grid.low[w] + k * grid.dx, wavelength=lam,
-        axes=axes, coordinates=coordinates,
-        metadata={'spacing': grid.dx, 'time_step': plan.dt, 'omega_discrete': omega_d,
-                  'node_index': k, 'window': {names[a]: ranges[a] for a in (u, v)},
+        modes=tuple(out), axis=names[w], position=window.low[w] + window.k * window.dx,
+        wavelength=lam, axes=axes, coordinates=coordinates,
+        metadata={'spacing': window.dx, 'time_step': window.dt, 'omega_discrete': omega_d,
+                  'node_index': window.k, 'window': {names[a]: ranges[a] for a in (u, v)},
                   'invariant_axes': invariant,
                   'power_units': 'W' if not invariant else ('W/m' if len(invariant) == 1 else 'W/m^2'),
                   'sides': {names[a]: (s[0].kind, s[1].kind) for a, s in zip((u, v), sides)}})
+
+
+# ---------------------------------------------------------------------------------------------
+# ModeMonitor
+# ---------------------------------------------------------------------------------------------
+
+def _local(acc, layout, window, label):
+    """The ``(nf, N_u, N_v)`` window part of one plane accumulator, in local ``(u, v)`` order.
+
+    ``acc`` is ``(nf, nz', ny', nx')``. A finite span reads one node more than the window has
+    cells (its high wall), which a mode is zero on; it is dropped.
+    """
+    import wavebit.fdtd._post as _post
+    w, u, v = window.w, window.u, window.v
+    value = _post._mean_planes(acc, w) if label.startswith('H') else acc
+    dims = [0] + [3 - a for a in (u, v, w)]           # (nf, u, v, w) from (nf, z, y, x)
+    value = value.permute(*dims) if hasattr(value, 'permute') else _xp(value).transpose(value, dims)
+    Nu = window.ranges[u][1] - window.ranges[u][0]
+    Nv = window.ranges[v][1] - window.ranges[v][0]
+    return value[:, :Nu, :Nv, 0]
+
+
+def _xp(value):
+    from wavebit._common.backend import array_namespace
+    return array_namespace(value)
+
+
+def mode_spectrum(problem, numerics, monitor, value, plan, rt, spectral_factor, units_label,
+                  length_units):
+    """The :class:`ModeSpectrum` of public ``monitor`` from its engine flux plane ``value``."""
+    from wavebit.units import C0
+    plane = window_plane(problem, numerics, monitor.plane)
+    window = prepare_window(problem, numerics, plane, monitor.wavelengths[0])
+    if abs(window.dt - plan.dt) > 1e-14 * plan.dt or abs(window.dx - plan.dx) > 1e-14 * plan.dx:
+        raise ValidationError('the mode window did not reproduce the run time step',
+                              code='mode.convergence', path='outputs.' + monitor.name)
+    acc, layout = value.accumulators, value.layout
+    if layout.P != window.w or layout.k != window.k:
+        raise ValidationError('the mode window and the flux plane disagree',
+                              code='mode.convergence', path='outputs.' + monitor.name)
+    fields = {label: _local(acc[label], layout, window, label) for label in ('Eu', 'Ev', 'Hu', 'Hv')}
+    xp = rt.xp
+    dA = window.dx * window.dx
+    root = math.sqrt(spectral_factor)
+    forward, backward, indices, solved = [], [], [], []
+    for i, lam in enumerate(monitor.wavelengths):
+        modes = solve_window(window, float(lam), monitor.modes)
+        a_row, b_row, n_row = [], [], []
+        for q, beta, f, residual, edge in modes:
+            cos = math.cos(beta * window.dx / 2.0)
+            N = 2.0 / cos                                  # 0.5 * N * cos = 1 (unit flux)
+            hv = rt.array(f['Hv'].real * dA, 'complex128')
+            hu = rt.array(f['Hu'].real * dA, 'complex128')
+            eu = rt.array(f['Eu'].real * dA, 'complex128')
+            ev = rt.array(f['Ev'].real * dA, 'complex128')
+            X = xp.sum(fields['Eu'][i] * hv - fields['Ev'][i] * hu)
+            Y = xp.sum(eu * fields['Hv'][i] - ev * fields['Hu'][i])
+            a_row.append(0.5 * (X / N + Y / (N * cos)) * root)
+            b_row.append(0.5 * (X / N - Y / (N * cos)) * root)
+            n_row.append(beta / (2.0 * math.pi / float(lam)))
+        forward.append(xp.stack(a_row))
+        backward.append(xp.stack(b_row))
+        indices.append(n_row)
+        scale = 1.0 / math.sqrt(window.measure)            # to the 1 W of solve_modes
+        solved.append(_package(problem, window, float(lam),
+                               [(q, beta, {k: v * scale for k, v in f.items()}, r, e)
+                                for q, beta, f, r, e in modes], 'numpy'))
+    forward, backward = xp.stack(forward), xp.stack(backward)
+    names = {0: 'x', 1: 'y', 2: 'z'}
+    return ModeSpectrum(
+        wavelengths=tuple(monitor.wavelengths),
+        frequencies_hz=np.asarray([C0 / (w * problem.units.length_unit_meters)
+                                   for w in monitor.wavelengths]),
+        effective_index=np.asarray(indices), forward=forward, backward=backward,
+        forward_energy=xp.abs(forward) ** 2, backward_energy=xp.abs(backward) ** 2,
+        units=units_label, modes=tuple(solved),
+        metadata={'axis': names[window.w], 'position': window.low[window.w] + window.k * window.dx,
+                  'forward_direction': '+' + names[window.w], 'amplitude_units':
+                  'sqrt(' + units_label + ')', 'length_units': length_units,
+                  'pairing': 'node-plane E with the mean of the two H half planes, as FluxMonitor'})

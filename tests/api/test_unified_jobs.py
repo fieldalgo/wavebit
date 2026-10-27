@@ -190,7 +190,7 @@ def test_every_public_fdtd_declaration_has_a_tag_and_round_trips():
     from wavebit import fdtd, jobs
     registry = jobs._registry()
     results = {'Prepared', 'Result', 'SpectralFlux', 'FarFieldSpectrum', 'WaveguideMode',
-               'WaveguideModes'}
+               'WaveguideModes', 'ModeSpectrum'}
     for name in fdtd.__all__:
         obj = getattr(fdtd, name)
         if isinstance(obj, type) and dataclasses.is_dataclass(obj) and name not in results:

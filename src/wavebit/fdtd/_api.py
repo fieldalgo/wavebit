@@ -401,6 +401,19 @@ def _issue(exc):
     return ValidationError(str(exc),code='fdtd.invalid',path='problem')
 
 
+def _check_mode_monitors(problem,numerics):
+    """Each ModeMonitor's static refusals before any field advances (src/wavebit/fdtd/_modes.py).
+
+    The window -- its faces, its uniformity along the axis, its admitted media -- is fixed by the
+    declaration; the per-wavelength mode solve runs when the result is adapted.
+    """
+    from ._monitors import ModeMonitor
+    from ._modes import prepare_window, window_plane
+    for m in problem.outputs.monitors:
+        if isinstance(m,ModeMonitor):
+            prepare_window(problem,numerics,window_plane(problem,numerics,m.plane),m.wavelengths[0])
+
+
 def _changed(signature,prepared):
     """The public path of the first prepared-structure entry that differs (``scene.domain``)."""
     for key,value in signature.items():
@@ -444,6 +457,7 @@ def check(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
             _cuda_scope(problem,numerics,execution,scene=scene)
             plan,_=_planned(scene,schedule=schedule,compact_poles=_compact_poles(problem,execution))
             _signature(problem,numerics)
+            _check_mode_monitors(problem,numerics)
             return _report(problem,numerics,execution,scene,plan,metadata)
     except (TypeError,ValueError,NotImplementedError) as exc:
         return CheckReport(issues=(_issue(exc).issue,))
@@ -521,6 +535,7 @@ def prepare(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
             _cuda_scope(problem,numerics,execution,scene=scene)
             plan,_=_planned(scene,schedule=schedule,compact_poles=_compact_poles(problem,execution))
             signature=_signature(problem,numerics)
+            _check_mode_monitors(problem,numerics)
             report=_report(problem,numerics,execution,scene,plan,metadata)
         except (TypeError,ValueError,NotImplementedError) as exc:
             raise _issue(exc) from exc

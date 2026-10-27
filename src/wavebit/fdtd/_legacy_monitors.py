@@ -345,11 +345,12 @@ MONITOR_TYPES = (Record, Flux, Field, Diffraction, FarField)
 
 @_eager_under_torch_compile
 def ModeMonitor(*args, **kwargs):
-    """Refused by name: mode overlaps are stage 7."""
-    raise NotImplementedError('fd.ModeMonitor (mode overlaps) belongs to stage 7, with '
-                              'fd.ModeSource. Stage 3 has fdtd.TimeSeriesMonitor, '
-                              'fdtd.FluxMonitor, fdtd.FieldMonitor, fdtd.FarFieldMonitor '
-                              'and fdtd.DiffractionMonitor.')
+    """Refused by name: mode overlaps (stage 7) are on the public surface only."""
+    raise NotImplementedError('fd.ModeMonitor (mode overlaps, stage 7) is not on the engine '
+                              'surface: the public wavebit.fdtd.ModeMonitor computes them, from '
+                              'the modes of wavebit.fdtd.solve_modes. Stage 3 has '
+                              'fdtd.TimeSeriesMonitor, fdtd.FluxMonitor, fdtd.FieldMonitor, '
+                              'fdtd.FarFieldMonitor and fdtd.DiffractionMonitor.')
 
 
 @spec(positional=('threshold',))

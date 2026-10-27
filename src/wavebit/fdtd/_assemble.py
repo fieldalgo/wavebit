@@ -390,7 +390,7 @@ def monitor_results(scene, plan, state, rt, sources, params=None):
                 layout = plane_layout(where, grid, m.plane.axis, m.plane.position, extents)
                 flux = _post.plane_flux(rt, obs[m.name], layout, grid.dx)
                 out[m.name] = FluxResult(name=m.name, wavelengths=m.wavelengths, flux=flux,
-                                         faces=None)
+                                         faces=None, accumulators=obs[m.name], layout=layout)
         elif isinstance(m, Field):
             points = field_points(m, grid)
             out[m.name] = FieldResult(

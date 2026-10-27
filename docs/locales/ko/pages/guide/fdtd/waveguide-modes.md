@@ -82,6 +82,32 @@ modes.axes, modes.coordinates['Ex']  # ('y', 'x')와 그 점들의 좌표
   비었거나 밖으로 나간 범위.
 - `mode.count`, `mode.convergence`: 요청보다 적은 갇힌 모드, 잔차가 1e-8을 넘는 고유쌍.
 
+## 실행에서 모드 재기: `ModeMonitor`
+
+```python
+outputs = fdtd.Outputs(monitors=(
+    fdtd.ModeMonitor('out', plane=fdtd.Plane(z=3.), wavelengths=(1.5, 1.55), modes=2),))
+spectrum = fdtd.run(problem.replace(outputs=outputs), numerics=numerics)['out']
+spectrum.forward_energy, spectrum.backward_energy   # (파장, 모드), J/Hz
+spectrum.forward, spectrum.backward                  # 복소 진폭, sqrt(J/Hz)
+spectrum.effective_index, spectrum.modes[0][0]       # 사영에 쓴 모드
+```
+
+측정기는 각 파장에서 `solve_modes`와 똑같이 면의 모드를 풀고, 실행의 푸리에 변환 장을 그
+모드들에 사영합니다. 노드 면의 E와 두 H 반 칸 면의 평균을 짝짓는데, `FluxMonitor`와 같은
+방식입니다. 모드들이 격자 위에서 정확히 직교하므로, 사영은 다른 모드(소멸파 모드 포함)의
+섞임 없이 각 모드와 각 방향을 나눕니다. `forward_energy`와 `backward_energy`는 면의 `+`·`-`
+법선 쪽으로 나르는 양측 펄스 스펙트럼 에너지이며 단위는 `FluxMonitor.spectral_energy`와
+같습니다. 사영한 모드들만으로 이루어진 장이라면 모드에 대한
+`sum(forward_energy - backward_energy)`가 플럭스입니다. 투과율은 기준 실행의 같은 양(모드
+광원이 있으면 그 주입 스펙트럼)으로 나누어 얻습니다.
+
+면은 도파관의 균일한 구간을 가로질러야 하며, 창·면·거부는 `solve_modes`와 같습니다. 면에
+닿는 구조는 구체값이어야 합니다. 다른 구조는 추적된 값을 지닐 수 있으므로, 예를 들어 광원과
+측정기 사이의 산란체를 통해 에너지를 미분할 수 있습니다(중앙 차분과의 비교는
+[검증 기록](../../validation/fdtd/fd-waveguide-modes.md)). `Open` 면을 가로지르면 창은 물리
+단면이고, 측정기는 흡수층 칸을 읽지 않습니다.
+
 ## 정확도
 
 등록한 검사와 측정 결과는 [검증 기록](../../validation/fdtd/fd-waveguide-modes.md)에

@@ -4,14 +4,17 @@ Every monitor is named, and its result is read back as ``result[name]``. The fou
 monitors keep the raw pulse Fourier transform; see the reference for each result's units and
 normalization.
 """
+import numpy as np
+
 from wavebit._common.backend import eager_under_torch_compile
+from wavebit.errors import ValidationError
 from wavebit._common.declarations import order_pair, spec
 from . import _legacy_monitors
 from ._spelling import Spoken
 from ._structure import tuples
 
 __all__ = ['TimeSeriesMonitor', 'FieldMonitor', 'FluxMonitor', 'DiffractionMonitor',
-           'FarFieldMonitor', 'Outputs']
+           'FarFieldMonitor', 'ModeMonitor', 'Outputs']
 
 
 @eager_under_torch_compile
@@ -131,6 +134,33 @@ class FarFieldMonitor:
 
     def __post_init__(self):
         object.__setattr__(self, 'wavelengths', tuples(self.wavelengths))
+
+
+@spec(positional=('name',))
+class ModeMonitor:
+    """A monitor that projects the fields on a plane onto the waveguide modes there, at chosen wavelengths.
+
+    ``fdtd.ModeMonitor('t', plane=fdtd.Plane(z=1.0), wavelengths=(1.55,), modes=2)`` is read back
+    as ``result['t']``, an :class:`fdtd.ModeSpectrum`: for each wavelength and each of the
+    ``modes`` largest-index modes :func:`solve_modes` finds on the plane, the amplitude and the
+    two-sided pulse spectral energy (J/Hz, as a :class:`FluxMonitor` reports it) travelling
+    toward the plane's ``+`` normal and toward its ``-`` normal. The plane is a mode plane:
+    across a uniform section of the guide, with the same transverse window and the same
+    refusals as :func:`solve_modes`. ``wavelengths`` are vacuum wavelengths in ``Problem.units``.
+    """
+    name: str
+    plane: object
+    wavelengths: tuple
+    modes: int = 1
+
+    def __post_init__(self):
+        object.__setattr__(self, 'wavelengths', tuples(self.wavelengths))
+        if (isinstance(self.modes, bool) or not isinstance(self.modes, (int, np.integer))
+                or self.modes < 1):
+            raise ValidationError('ModeMonitor(modes=...) is the number of modes, a positive '
+                                  'integer', code='monitor.modes',
+                                  path=f'outputs.{self.name}.modes', actual=self.modes)
+        object.__setattr__(self, 'modes', int(self.modes))
 
 
 @spec

@@ -90,6 +90,35 @@ Each refusal is a structured error with its code:
 - `mode.count`, `mode.convergence`: fewer confined modes than requested; an eigenpair whose
   residual exceeds 1e-8.
 
+## Measuring modes in a run: `ModeMonitor`
+
+```python
+outputs = fdtd.Outputs(monitors=(
+    fdtd.ModeMonitor('out', plane=fdtd.Plane(z=3.), wavelengths=(1.5, 1.55), modes=2),))
+spectrum = fdtd.run(problem.replace(outputs=outputs), numerics=numerics)['out']
+spectrum.forward_energy, spectrum.backward_energy   # (wavelengths, modes), J/Hz
+spectrum.forward, spectrum.backward                  # complex amplitudes, sqrt(J/Hz)
+spectrum.effective_index, spectrum.modes[0][0]       # the modes it projected on
+```
+
+At each wavelength the monitor solves the plane's modes exactly as `solve_modes` would and
+projects the run's Fourier-transformed fields onto them: the node-plane E and the mean of
+the two H half planes, the pairing a `FluxMonitor` uses. Because the modes are exactly
+orthogonal on the grid, the projection separates each mode and each direction without
+crosstalk from the other modes, including the evanescent ones. `forward_energy` and
+`backward_energy` are the two-sided pulse spectral energies carried toward the plane's `+`
+and `-` normal, in the units of `FluxMonitor.spectral_energy`; for a field made only of the
+projected modes, `sum(forward_energy - backward_energy)` over the modes is the flux. Divide by
+the same quantity from a reference run (or, with a mode source, by its injected spectrum) to
+get a transmission.
+
+The plane must cross a uniform section of the guide, with the window, faces and refusals of
+`solve_modes`. A structure that reaches the plane must be concrete. Other structures may
+carry traced values, so the energies differentiate through, say, a scatterer between source
+and monitor (measured against central differences in the
+[validation record](../../validation/fdtd/fd-waveguide-modes.md)). Across an `Open` face the
+window is the physical cross-section; the monitor reads no absorbing cells.
+
 ## Accuracy
 
 The registered checks and their measured results are in the
