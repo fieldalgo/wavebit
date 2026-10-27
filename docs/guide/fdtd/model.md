@@ -223,12 +223,14 @@ three with one rule: harmonic across the interfaces, arithmetic along them, whic
 parallel layers. It does so only where the volume the two bodies share in that cell is computed
 exactly:
 
-- bodies that provably do not overlap: a dimer with a gap smaller than a cell, a sphere resting
-  on a substrate, two boxes or prisms side by side with a sub-cell gap;
+- bodies that provably do not overlap: a sphere resting on a substrate or beside a box, two
+  boxes or prisms side by side with a sub-cell gap;
 - bodies whose surfaces are both flat in that cell;
 - any body sunk into, or standing just above, the face of an unturned `Box`.
 
-Everything else keeps the refusal, by name: a flush joint the junction rule does not cover (two
+Everything else keeps the refusal, by name: a cell two curved surfaces share (two spheres, or a
+sphere and a cylinder wall: a dimer with a sub-cell gap is refused, because its registered
+convergence gate did not pass), a flush joint the junction rule does not cover (two
 coincident faces, such as a `Prism` or a turned `Box` standing on a face), curved bodies that
 overlap, overlapping bodies of one material (write them as one body), three smoothed surfaces in
 one cell, a third structure reaching the cell unless it is listed earlier and fills the cell
@@ -759,6 +761,8 @@ for the protocol and [stopping/absorbers](stopping-and-absorbers.md) for numeric
   RCWA and at what convergence order.
 - [The polytope clip](../../validation/fdtd/fd-polytope-clip.md) — two smoothed bodies in one cell, and
   what was measured.
+- [The stage 4 report](../../validation/fdtd/fd-stage4-report.md) — the status of every stage-4 commit,
+  including the gates not passed.
 - [Radiation consistent with the Yee lattice](../../validation/fdtd/fd-lattice-radiation.md) — the far-field transform.
 - The film studies (for example [one Drude or Lorentz film](../../validation/fdtd/fd-single-pole-film.md)) — the bounded
   scopes for lossy and dispersive layers.
