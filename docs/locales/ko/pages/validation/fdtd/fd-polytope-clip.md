@@ -192,7 +192,7 @@ window=가장 긴 파장의 2배))`, 그 상한 안에서 모든 장과 기억 �
 1e-3 아래로 떨어지거나 상한에 닿을 때까지 계속하며, 그 결과를 행에 기록합니다. 대역, 격자,
 파장, 합격 규칙은 바꾸지 않으며, 수정 2의 플럭스 감쇠 유효성 표시도 그대로 적용합니다.
 
-## 결과 (2026-10-28)
+## 결과 (2026-10-27)
 
 구현: `src/wavebit/fdtd/_prepare/clip.py`. `src/wavebit/fdtd/_prepare/checks.py`의 5번 문,
 `coefficients.py`와 `constitutive.py`의 칠하기, 비어 있으면 골격에서 빠지는 `Plan.clips` 필드에

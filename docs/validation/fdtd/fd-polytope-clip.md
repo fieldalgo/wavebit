@@ -209,7 +209,7 @@ fallen below 1e-3 of its own peak over a full window, or reaches the cap, which 
 Bands, grids, wavelengths and the pass rules are unchanged; the flux-decay validity mark of
 Amendment 2 still applies.
 
-## Results (2026-10-28)
+## Results (2026-10-27)
 
 Implementation: `src/wavebit/fdtd/_prepare/clip.py`, wired into door 5 of
 `src/wavebit/fdtd/_prepare/checks.py`, the painters of `coefficients.py` and `constitutive.py`,
