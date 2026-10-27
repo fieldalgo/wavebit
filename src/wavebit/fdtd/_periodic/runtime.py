@@ -78,7 +78,8 @@ def _signature(tree):
     """Tree structure, shapes and dtypes: what a jit compiles one executable for."""
     import jax
     leaves, structure = jax.tree.flatten(tree)
-    return structure, tuple((np.shape(v), str(getattr(v, 'dtype', type(v)))) for v in leaves)
+    return structure, tuple((np.shape(v), str(getattr(v, 'dtype', type(v))),
+                             getattr(v, 'weak_type', None)) for v in leaves)
 
 
 def _chunk_scan(step, state, ns):
@@ -236,15 +237,19 @@ class JaxTimeLoop(NumpyTimeLoop):
         one entry whose jit grows a compiled copy per shape where the bound cannot see it.
 
         Anything else runs the plain ``lax.scan``, which is exact and only compiles again on
-        each call: a plain function, settings that cannot be a key, and any call holding a
-        tracer. Inside a user's ``jax.jit`` nothing is dispatched here, and a nested jit would
+        each call: a plain function, a builder that closes over values, settings that cannot be
+        a key, and any call holding a tracer. Inside a user's ``jax.jit`` nothing is dispatched here, and a nested jit would
         change that user's compiled program (measured on jax 0.12.0: the same bytes out, from a
         larger program with more temporary memory); eager AD keeps the path it had before.
         """
         import jax
         leaves, structure = jax.tree.flatten(getattr(step, 'arrays', ()))
-        if (not isinstance(step, Step) or any(isinstance(v, jax.core.Tracer) for v in
-                                              leaves + jax.tree.leaves((state, xs)))):
+        # A builder that closes over a value would bake it into the cached program unseen by the
+        # key, and a later call would get the first call's value back: only a builder whose
+        # inputs are all its arguments is shared.
+        if (not isinstance(step, Step) or getattr(step.build, '__closure__', None)
+                or any(isinstance(v, jax.core.Tracer) for v in
+                       leaves + jax.tree.leaves((state, xs)))):
             return self._plain(kind, step, state, xs, extra)
         is_array = [isinstance(v, (jax.Array, np.ndarray)) for v in leaves]
         dynamic = [v for v, a in zip(leaves, is_array) if a]

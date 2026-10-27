@@ -177,6 +177,8 @@ def test_a_step_built_with_a_custom_rule_or_callback_is_shared_exactly():
     import jax.numpy as jnp
 
     def build(runtime, settings, arrays):
+        import jax.numpy as jnp
+
         @jax.custom_jvp
         def g(x):
             return jnp.sin(x)
@@ -228,6 +230,26 @@ def test_unkeyable_settings_run_the_plain_scan():
     step = time_domain.Step(build, loop, {'shift': 1.}, {})
     got = loop._run('steps', step, jnp.zeros(2), jnp.arange(3.))[0]
     np.testing.assert_array_equal(np.asarray(got), [6., 6.])
+    assert not time_domain._SCAN_PROGRAMS
+
+
+def test_a_builder_closing_over_a_value_is_not_shared():
+    """The key sees a builder by identity, not what it closes over. One builder reading an array
+    from a closure cell would hand a second call the first call's array -- the old structural key
+    measured [4, 8, 12] where [40, 80, 120] was asked (2026-09-12) -- so it runs unshared."""
+    import jax.numpy as jnp
+    loop = time_domain.JaxTimeLoop()
+    held = [None]
+
+    def build(runtime, settings, arrays):
+        value = held[0]
+        return lambda carry, n: (carry + value, None)
+    time_domain._SCAN_PROGRAMS.clear()
+    for value, want in (([1., 2., 3.], [4., 8., 12.]), ([10., 20., 30.], [40., 80., 120.])):
+        held[0] = jnp.array(value)
+        step = time_domain.Step(build, loop, None, {})
+        got = loop._run('steps', step, jnp.zeros(3), jnp.arange(4.))[0]
+        np.testing.assert_array_equal(np.asarray(got), want)
     assert not time_domain._SCAN_PROGRAMS
 
 
