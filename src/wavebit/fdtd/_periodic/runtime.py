@@ -192,7 +192,15 @@ class JaxTimeLoop(NumpyTimeLoop):
         self.device = device
 
     def conditional(self, predicate, yes, no, operand):
+        """``lax.cond``, or the chosen branch directly when ``predicate`` is a Python bool.
+
+        A time step given a Python index (the recorded loop's eager first step) has a known
+        predicate; an eager ``lax.cond`` on it would compile a fresh program on every solve,
+        because its branches are new closures each time.
+        """
         import jax
+        if isinstance(predicate, (bool, np.bool_)):
+            return yes(operand) if predicate else no(operand)
         return jax.lax.cond(predicate, yes, no, operand)
 
     def advance(self, step, state, steps, checkpoint_steps):

@@ -78,6 +78,21 @@ E0 = np.zeros((3, 16, 2, 2))
 E0[1] = np.exp(-((np.arange(16)-8)/2.)**2)[:, None, None]
 
 
+def test_a_repeated_recorded_subsampled_solve_runs_no_compiler():
+    """A recorded solve runs its first step eagerly, with a Python index. With ``dft_subsample``
+    above one that step's monitor update was an eager ``lax.cond`` on new branch closures, so
+    every solve compiled ``jit(cond)`` again although the predicate was a known Python bool."""
+    def solve(eps):
+        return _legacy_wavebit_fdtd_grid(np.full((16, 2, 2), eps), spacing=(1., 1., 1.), dt=.2,
+                                         steps=57, electric=E0, wavelengths=[20.], monitor_z=[3],
+                                         checkpoint_steps=7, record_field=4, dft_subsample=3,
+                                         backend='jax')
+    solve(2.)
+    with CompileLog() as log:
+        solve(2.5)
+    assert log.names == [], log.names
+
+
 def grid(dt, eps):
     out = _legacy_wavebit_fdtd_grid(np.full((16, 2, 2), eps), spacing=(1., 1., 1.), dt=dt, steps=43,
                             electric=E0, wavelengths=[20., 24.], monitor_z=[3],
