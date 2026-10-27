@@ -481,7 +481,10 @@ def _solve(problem, numerics, plane, wavelength, count, backend):
                               path='backend', actual=backend)
     count = _check_count(count)
     lam = _check_wavelength(wavelength)
-    window = prepare_window(problem, numerics, plane, lam)
+    from . import _geometry as geometry
+    if not isinstance(plane, geometry.Plane):
+        raise ValidationError('expected fdtd.Plane', code='mode.plane', path='plane')
+    window = prepare_window(problem, numerics, window_plane(problem, numerics, plane), lam)
     modes = solve_window(window, lam, count)
     # A mode normalized to unit flux in the kernel's units carries ``measure`` watts
     # (src/wavebit/fdtd/_result.py::_measure): rescale to 1 W (per metre of each invariant axis).
@@ -518,9 +521,12 @@ class Window:
 def window_plane(problem, numerics, plane):
     """``plane`` with explicit spans wherever the mode window is narrower than the grid axis.
 
-    The window is the physical cross-section, or the plane's own spans: along an axis with an
-    ``Open`` face that is narrower than the allocated grid, which a flux plane over the window
-    has to say (a full-axis flux plane may not read the absorbing layers).
+    The window is the physical cross-section, or the plane's own spans. Along an axis with an
+    ``Open`` face it stops **one cell inside** the physical edge on that side: the window's
+    edge node is its wall, and a flux plane over the window reads that node, which on the
+    physical edge would be the absorbing layer's first (a flux plane may not read a layer).
+    :func:`solve_modes` and :class:`ModeMonitor` use the same window, so they solve the same
+    modes.
     """
     from . import _boundaries as boundaries
     from ._kernel.grid import cell_count
@@ -536,7 +542,8 @@ def window_plane(problem, numerics, plane):
         if span is None and any(isinstance(f, boundaries.Open) for f in faces):
             n = cell_count(problem.scene.domain.size[a], dx)
             lo = problem.scene.domain.center[a] - n * dx / 2
-            span = (lo, lo + n * dx)
+            span = (lo + (dx if isinstance(faces[0], boundaries.Open) else 0.0),
+                    lo + n * dx - (dx if isinstance(faces[1], boundaries.Open) else 0.0))
         if span is not None:
             spans[name] = tuple(span)
     if not spans:

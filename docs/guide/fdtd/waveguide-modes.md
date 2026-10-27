@@ -68,7 +68,7 @@ A degenerate pair (a square guide's two polarizations) is returned already ortho
 | --- | --- |
 | `PEC`, `PMC` | The kernel's own wall, where the kernel puts it (a PMC wall lies half a cell off a low face). |
 | `Periodic` | Periodic, when the window spans the axis. |
-| `Open` | A wall at the physical domain's edge. A mode is admitted only if its transverse E on the outermost cells is at most 1e-3 of its peak; a leaky mode, one near cutoff, or a mode of the truncated box is not. |
+| `Open` | A wall one cell inside the physical domain's edge (the window's edge node is the wall, and a flux plane over the window must not read the absorbing layer). A mode is admitted only if its transverse E on the outermost cells is at most 1e-3 of its peak; a leaky mode, one near cutoff, or a mode of the truncated box is not. |
 | `InvariantAxis` | The one-dimensional (slab) limit, for `k = 0`. |
 | `Bloch`, `MirrorSymmetry`, `InvariantAxis` with `k != 0` | Refused (`mode.boundary`). |
 
@@ -117,7 +117,8 @@ The plane must cross a uniform section of the guide, with the window, faces and 
 carry traced values, so the energies differentiate through, say, a scatterer between source
 and monitor (measured against central differences in the
 [validation record](../../validation/fdtd/fd-waveguide-modes.md)). Across an `Open` face the
-window is the physical cross-section; the monitor reads no absorbing cells.
+window stops one cell inside the physical edge, for the monitor and for `solve_modes` alike;
+the monitor reads no absorbing cells.
 
 ## Accuracy
 

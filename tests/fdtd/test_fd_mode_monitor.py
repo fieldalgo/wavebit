@@ -320,3 +320,27 @@ def test_mm5_a_plane_outside_the_domain_is_refused():
     with pytest.raises(WavebitError) as info:
         fdtd.run(problem, numerics=numerics)
     assert 'outside' in str(info.value)
+
+
+# ---------------------------------------------------------------------------------------------
+# Across an Open face
+# ---------------------------------------------------------------------------------------------
+
+def test_a_monitor_across_open_faces_reads_the_window_solve_modes_solves():
+    """The window stops one cell inside an Open face's physical edge, for both, so the monitor's
+    flux plane reads no absorbing cell and its modes are exactly the ones solve_modes returns."""
+    _quiet()
+    problem = _problem((9., .05, .4), (0., 0., 0.),
+                       fdtd.Boundaries(x=fdtd.Open(), y=fdtd.InvariantAxis(), z=fdtd.Periodic()),
+                       structures=(fdtd.Structure('core', shape=fdtd.SnappedSlab(x=(-.75, .75)),
+                                                  material=Material(epsilon=N1 ** 2)),),
+                       background=N2 ** 2,
+                       initial=fdtd.InitialField(E=(None, lambda x, y, z: np.exp(-(x / .5) ** 2), None)),
+                       outputs=fdtd.Outputs(monitors=(
+                           fdtd.ModeMonitor('m', plane=fdtd.Plane(z=.1), wavelengths=(1.55,), modes=2),)))
+    numerics = _numerics(.05, 20, 1.55)
+    spectrum = fdtd.run(problem, numerics=numerics)['m']
+    solved = fdtd.solve_modes(problem, numerics=numerics, plane=fdtd.Plane(z=.1), wavelength=1.55,
+                              count=2)
+    assert [m.effective_index for m in spectrum.modes[0]] == [m.effective_index for m in solved]
+    assert solved.metadata['window']['x'] == (13, 191)   # physical cells [12, 192), one off each side

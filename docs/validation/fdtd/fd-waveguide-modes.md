@@ -310,3 +310,12 @@ overlap, reading one H half plane instead of their mean, dropping the spectral s
 window (MM5); solving the window with every structure instead of those that reach it
 (MM4b); summing six modes instead of seven (MM2b).
 
+### The window across an Open face (2026-10-27)
+
+A `ModeMonitor` across an `Open` face was first refused at run time. Its flux plane read
+the window's edge node, which on the physical edge is the absorbing layer's first node.
+The window now stops one cell inside the physical edge on each `Open` side, for the
+monitor and for `solve_modes`, and a regression test holds the two to the same modes.
+The M3 slab, whose faces are `Open`, was re-run with the moved walls: every quoted
+digit above is unchanged (the field there is below 1e-9 of its peak).
+
