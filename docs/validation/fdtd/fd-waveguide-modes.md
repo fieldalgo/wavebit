@@ -99,6 +99,26 @@ M6, backends. The arrays returned for `backend='numpy'`, `'jax'` and `'torch'`
 are equal to the bit: the eigensolve runs once on the host and the result is
 converted.
 
+## Registered addition (2026-10-27, before computing)
+
+Mutation testing of the first tests showed that M1-M4 cannot see two defects that
+matter: a mode built with a permittivity sampled at the wrong Yee point, and a
+propagation constant read from `q` without the `asin`. Both keep a symmetric
+slab second order. The direct check is that a solved mode is an eigenmode of the
+time stepper itself, so this criterion is added before it is first run:
+
+M7, the mode is a mode of the run. A 1 µm by 0.5 µm `SnappedBox` core of
+`epsilon = 4` in a 3 µm by 3 µm `PEC` box (spacing 0.05 µm, wavelength 1 µm), and
+the M3 slab with `PEC` instead of `Open` faces at 0.05 µm, each with a `Bloch`
+propagation axis whose `k` is the mode's `beta` over eight cells. The run starts
+from the mode (E at t = 0, H at -dt/2, each component at its own Yee point) and
+takes 100 steps. Every component of the final E and H must equal the mode advanced
+by `exp(-i omega t)` to within 1e-10 of the largest value of that field, for the
+two largest-index modes of each guide.
+
+M1 and M2 compute `Omega` from the time step `fdtd.check` reports, not from the
+solver's own output.
+
 ## Results
 
 Pending. Results are added below, beside the criteria, once computed.
