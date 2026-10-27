@@ -703,7 +703,7 @@ def polygon_shape(where, vertices):
                                  'where they meet at a point: two convex prisms that share no '
                                  'volume are answered where their surfaces share voxels, but two '
                                  'that share a face are a flush joint check_smoothed refuses -- '
-                                 'so keep a voxel between those, or wait for the CSG spellings.')
+                                 'so keep a voxel between them, or wait for the CSG spellings.')
     following = _np.roll(read, -1, axis=0)
     area = .5 * float(_np.sum(read[:, 0] * following[:, 1] - following[:, 0] * read[:, 1]))
     if area == 0:
