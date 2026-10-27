@@ -73,7 +73,7 @@ Eigenproblem sizes are 2·(2n+1)² square.
 | (20,20) | 1 | shape | jax eager | does not fit: passed 13.1 GB in its first step | | | | | | | | > 12.7 | |
 | (20,20) | 1 | shape | **jax jit** | 394.3 | 379.9 | 377.4 | 16.95 | 362.9 | (torch does not fit) | 14.4 | | 10.9 | |
 | (20,20) | 1 | raster | torch | 215.7 (1 step, at the ceiling) | | | 1.57 | | | | | 12.8 | |
-| (20,20) | 1 | raster | **jax jit** | RASTER_JIT_PENDING | | | | | | | | | |
+| (20,20) | 1 | raster | **jax jit** | 358.1 | 344.0 | 342.4 | 2.40 | 341.6 | **≈0.63x** (vs torch's one step) | 14.1 | never | 10.4 | |
 | (20,20) | 2 | shape | torch | does not fit: passed 12.7 GB in its first step; skipped | | | | | | | | > 12.3 | |
 | (20,20) | 2 | raster | torch | does not fit: passed 12.7 GB in its first step; skipped | | | | | | | | > 12.3 | |
 
@@ -90,6 +90,8 @@ Notes on the rows:
 - **(20,20) one-layer raster torch** completed one step (215.7 s, +12.8 GB, about 13.2 GiB resident)
   in the shared-process run before the next arm was OOM-killed. Run alone, it passed the
   13.1 GiB guard, so it fits only with no margin.
+- **(20,20) one-layer raster, jax eager** was not run, at the user's request: on the shape path it
+  passed 13.1 GB in its first step.
 - **(20,20) two layers** do not fit this machine on either path; they stopped at the guard on
   torch's first step and were not run further.
 - **An earlier (15,15) one-layer shape pass** (rounds 0–2 before its round-3 failure; first in
