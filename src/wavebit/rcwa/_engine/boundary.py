@@ -717,7 +717,7 @@ def _continued_endpoints(xp, a, e, l2, valid, pair, scale):
     field lost its mirror symmetry and ``sum(T)`` swung between 0.11 and 0.68 over a 7% change of
     a width where the hard field reads 0.27 to 0.28.
 
-    ``pair`` labels each interval's material pair. Returns three booleans per interval: an
+    ``pair`` labels each interval's material pair, a static sequence of ints. Returns three booleans per interval: an
     interval of its pair, valid, parallel and not a repeat, passes through its start; through
     its end; it repeats an earlier interval of its pair (the same two endpoints, either
     orientation). An interval of zero length continues nothing.
@@ -732,14 +732,39 @@ def _continued_endpoints(xp, a, e, l2, valid, pair, scale):
     rounding, so the zero came and went with an ulp, and across the junction's perpendicular it
     would step by the two pairs' own mixing -- a moving step, which this field exists to remove.
     """
+    tol2 = (_SAME_POINT*scale)**2
+    # Every relation below holds only between two intervals of one pair, so each pair's block is
+    # formed on its own rather than as one (intervals x intervals) array: the same elementwise
+    # tests, a third of the work for two painted 256-gons over a box (8800 intervals in three
+    # pairs). ``pair`` is static, a label per interval, so the blocks are too.
+    labels = [int(p) for p in pair]
+    blocks = {}
+    for i, label in enumerate(labels):
+        blocks.setdefault(label, []).append(i)
+    if len(blocks) == 1:
+        return _continued_in_pair(xp, a, e, l2, valid, tol2)
+    starts, ends, repeats = [], [], []
+    order = []
+    for indices in blocks.values():
+        index = xp.asarray(indices, dtype=xp.int64)
+        found = _continued_in_pair(xp, a[index], e[index], l2[index], valid[index], tol2)
+        starts.append(found[0])
+        ends.append(found[1])
+        repeats.append(found[2])
+        order.extend(indices)
+    # Back to the intervals' own order.
+    back = xp.asarray(sorted(range(len(order)), key=order.__getitem__), dtype=xp.int64)
+    return tuple(xp.concat(parts)[back] for parts in (starts, ends, repeats))
+
+
+def _continued_in_pair(xp, a, e, l2, valid, tol2):
+    """:func:`_continued_endpoints` for intervals that all belong to one material pair."""
     m = a.shape[0]
     start, end = a, a + e
-    tol2 = (_SAME_POINT*scale)**2
     cross = e[:, None, 0]*e[None, :, 1] - e[:, None, 1]*e[None, :, 0]
     parallel = cross*cross <= _SAME_POINT**2*l2[:, None]*l2[None, :]
     index = xp.arange(m)
     other = (index[:, None] != index[None, :]) & valid[None, :] & parallel
-    same = pair[:, None] == pair[None, :]
 
     def on(points):
         """``points[k]`` lies on interval ``j``: within ``tol`` of its line, between its ends."""
@@ -751,8 +776,8 @@ def _continued_endpoints(xp, a, e, l2, valid, pair, scale):
 
     start_on, end_on = on(start), on(end)
     # k repeats j when each holds the other's two endpoints.
-    repeat = other & same & start_on & end_on & xp.permute_dims(start_on & end_on, (1, 0))
-    through = other & same & ~repeat
+    repeat = other & start_on & end_on & xp.permute_dims(start_on & end_on, (1, 0))
+    through = other & ~repeat
     return (xp.any(through & start_on, axis=1), xp.any(through & end_on, axis=1),
             xp.any(repeat & (index[None, :] < index[:, None]), axis=1))
 
@@ -873,8 +898,7 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
     for number, indices in enumerate(groups.values()):
         for i in indices:
             pair[i] = number
-    straight = _continued_endpoints(xp, A, E, L2, xp.sum(E*E, axis=1) > 0.,
-                                    xp.asarray(pair, dtype=xp.int64), scale)
+    straight = _continued_endpoints(xp, A, E, L2, xp.sum(E*E, axis=1) > 0., pair, scale)
     candidates = []
     for key, indices in groups.items():
         index = xp.asarray(indices, dtype=xp.int64)
