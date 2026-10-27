@@ -87,6 +87,44 @@ def _continue_box(item, shape, pad, physical_low, physical_high,
                          center=tuple((a+b)/2 for a,b in zip(low,high)))
 
 
+def _continue_snapped(item, shape, pad, physical_low, physical_high, allocated_high, allocated_low,
+                      dx):
+    """A cell-snapped body declared to run straight through the Open faces of one axis.
+
+    A waveguide core: a ``SnappedBox`` that reaches the named physical faces and continues,
+    unchanged in its cross-section, through their absorbing layers. Its cells along that axis
+    are the same in every layer, so no interface lies inside the layer -- the condition the
+    engine's absorbing-layer rule asks (``_prepare/checks.py::check_absorbing_layers``). Each
+    named face's PML stays matched to its own medium (the background, unless
+    ``PML(reference_media=)`` names another): a core is not the medium the layer is graded for.
+    A smoothed body is not admitted here (a smoothed rod through a PML is refused; see
+    ``docs/guide/fdtd/waveguide-modes.md``), and neither is a body that touches an Open face of
+    another axis, which the caller's rule below still refuses.
+    """
+    path = 'scene.structures.' + item.name
+    def refuse(message):
+        raise UnsupportedFeatureError(message, code='fdtd.padding_continuation', path=path)
+    axes = {face[0] for face in item.continuation}
+    if len(axes) != 1:
+        refuse('a continued SnappedBox runs through the Open faces of one axis only')
+    axis_name = next(iter(axes))
+    axis = 'xyz'.index(axis_name)
+    low, high = list(shape.low), list(shape.high)
+    for face in item.continuation:
+        if not pad[face]:
+            refuse(f'continuation must name an Open face with absorbing padding; {face!r} has none')
+        if face[1] == '-':
+            if not low[axis] <= physical_low[axis] + 1e-9 * dx:
+                refuse(f'the continued SnappedBox must reach the physical face {face!r}')
+            low[axis] = allocated_low[axis] - 2 * dx
+        else:
+            if not high[axis] >= physical_high[axis] - 1e-9 * dx:
+                refuse(f'the continued SnappedBox must reach the physical face {face!r}')
+            high[axis] = allocated_high[axis] + 2 * dx
+    return shape.replace(size=tuple(b - a for a, b in zip(low, high)),
+                         center=tuple((a + b) / 2 for a, b in zip(low, high)))
+
+
 def _pulse(value, units):
     if not isinstance(value, sources.GaussianPulse):
         raise ValidationError('expected GaussianPulse', code='source.pulse', path='sources.pulse')
@@ -320,7 +358,25 @@ def lower_problem(problem, numerics, *, plan=None):
     for item in scene.structures:
         material = lower_material(item.material, units=units)
         shape = _geometry(item.shape, numerics.geometry_ranges.get(item.name))
-        if item.continuation:
+        if item.continuation and isinstance(shape, old_geometry.Region):
+            # A cell-snapped core through the faces of its own axis; the faces keep their match.
+            shape = _continue_snapped(item, shape, pad, physical_low, physical_high,
+                                      allocated_high, allocated_low, dx)
+        elif item.continuation and isinstance(shape, old_geometry.Slab):
+            # A slab runs the whole box on its other two axes already; naming their faces is
+            # the explicit consent the crossing check below asks for. Its own axis keeps the
+            # half-space rule.
+            if any(face[0] == shape.axis for face in item.continuation):
+                raise UnsupportedFeatureError(
+                    'a SnappedSlab continues through its own axis by reaching the face (a '
+                    'half-space); continuation names faces of the two axes it runs along',
+                    code='fdtd.padding_continuation', path='scene.structures.'+item.name)
+            for face in item.continuation:
+                if not pad[face]:
+                    raise UnsupportedFeatureError(
+                        f'continuation must name an Open face with absorbing padding; {face!r} has none',
+                        code='fdtd.padding_continuation', path='scene.structures.'+item.name)
+        elif item.continuation:
             shape = _continue_box(item, shape, pad, physical_low, physical_high,
                                   allocated_low, allocated_high, dx)
             for face in item.continuation:
@@ -336,9 +392,10 @@ def lower_problem(problem, numerics, *, plan=None):
                     bounds[index] = allocated_low[axis] if index == 0 else allocated_high[axis]
                     faces[face] = material
             shape = shape.replace(**{axis_name:tuple(bounds)})
-            # A slab cutting an orthogonal open face is heterogeneous along that face.
-            if any(n for f,n in pad.items() if f[0] != axis_name):
-                raise UnsupportedFeatureError('a slab crossing an orthogonal Open face has no homogeneous PML continuation', code='fdtd.padding_continuation', path='scene.structures.'+item.name)
+            # A slab cutting an orthogonal open face is heterogeneous along that face, unless
+            # the structure declares that it continues through it (a slab waveguide).
+            if any(n for f,n in pad.items() if f[0] != axis_name and f not in item.continuation):
+                raise UnsupportedFeatureError('a slab crossing an orthogonal Open face has no homogeneous PML continuation; a slab waveguide declares continuation=(...) for the faces it runs through', code='fdtd.padding_continuation', path='scene.structures.'+item.name)
         elif any(pad.values()):
             # Supported bodies are fully contained in the physical region; their lowerer
             # subsequently applies the stricter Yee/interpolation halo clearance checks.
