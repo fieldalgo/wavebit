@@ -251,3 +251,27 @@ deviations away) and `cutoff=1e-9`, and the monitors read 1.036 µm. The run mus
 report the fields settled, and the seven-mode sum must equal the flux to a relative
 1e-6 at both monitors.
 
+### MM4 outcome and a registered replacement (2026-10-27)
+
+MM4 as registered **failed**: run for 800 steps (enough for the pulse's leading part to
+cross the +z monitor; a reverse-mode derivative keeps every step), `jax.grad` gave
+8.794522e-20 J/Hz per unit permittivity, and the central difference at the registered
+step `3e-4` gave a value 9.6e-6 higher (limit 1e-6). The registered step was too coarse.
+The central difference against the same `jax.grad` value at five steps:
+
+| Step | Relative difference |
+| --- | --- |
+| 3e-3 | 9.57e-4 |
+| 1e-3 | 1.06e-4 |
+| 3e-4 | 9.57e-6 |
+| 1e-4 | 1.06e-6 |
+| 3e-5 | 1.26e-7 |
+
+The difference falls as the square of the step: the central difference's own truncation
+error, converging on the AD value. Torch was not evaluated before this diagnosis.
+
+MM4b, registered after this diagnosis and before it was run (JAX's plain central
+differences above were already seen; the combination below was not computed): the MM4
+derivative, by `jax.grad` and by Torch autograd, against the fourth-order combination
+`(4 D(h/2) - D(h))/3` of central differences at `h = 3e-4` and `h/2`, to a relative 1e-7.
+
