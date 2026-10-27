@@ -74,6 +74,9 @@ class Report:
     #: star lift of each diagonal-rule constitutive term (``stars.lift``).
     lifts: tuple = ()
     junctions: tuple = ()
+    #: ((first, second, written, apart, flat pair, axis-flat member), ...): C10's clipped
+    #: pairs (``clip.report_rows``); empty for every scene without one, which prints nothing.
+    clips: tuple = ()
     #: (requested cap steps, amplitude threshold, requested window, window steps), or None.
     stopping: object = None
 
@@ -150,6 +153,11 @@ class Report:
                 out.append(f"  junction on structures[{face}] at {letter} = {plane:g} "
                            f"(its {letter}{sign} face): {rule}, {count} voxels "
                            f"({rim} on the rim), {beside} beside the base")
+        for first, second, written, apart, pair, axis in self.clips:
+            if row.index in (first, second):
+                other = second if row.index == first else first
+                out.append(f'  clip with structures[{other}]: {written} electric voxels '
+                           f'({apart} apart, {pair} both flat, {axis} beside a Box face)')
         sizes = dict((name, (p, s)) for name, p, s in self.term_bytes)
         for name in row.terms:
             p, s = sizes.get(name, (None, None))
@@ -275,6 +283,7 @@ def report(scene, p=None, params=None):
                        for t in p.constitutive)
     monitors, solves = _monitor_lines(scene, p)
     from wavebit.fdtd._prepare.junction import report_rows as junction_rows
+    from wavebit.fdtd._prepare.clip import report_rows as clip_rows
     stopping = None
     if p.decay is not None:
         from wavebit.fdtd._decay import window_steps
@@ -284,6 +293,7 @@ def report(scene, p=None, params=None):
     return Report(cells=grid.n, requested_size=requested, size=grid.size, dx=p.dx, dt=p.dt,
                   stopping=stopping,
                   discretisations=_discretisation_lines(p), junctions=junction_rows(p),
+                  clips=clip_rows(p),
                   steps=p.steps, duration=p.steps * p.dt, dtype=p.dtype,
                   bytes_per_state=(2 * 3 * p.cells * itemsize + psi + flux_memory
                                    + polarization_memory),

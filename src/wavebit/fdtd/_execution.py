@@ -63,10 +63,12 @@ def _program(plan):
     """
     terms = tuple(_stripped(t) for t in plan.terms)
     junctions = tuple(_stripped(r) for r in plan.junctions)
+    clips = tuple(_stripped(r) for r in plan.clips)
     if (all(a is b for a, b in zip(terms, plan.terms))
-            and all(a is b for a, b in zip(junctions, plan.junctions))):
+            and all(a is b for a, b in zip(junctions, plan.junctions))
+            and all(a is b for a, b in zip(clips, plan.clips))):
         return plan
-    return dataclasses.replace(plan, terms=terms, junctions=junctions)
+    return dataclasses.replace(plan, terms=terms, junctions=junctions, clips=clips)
 
 
 def _stripped(term):

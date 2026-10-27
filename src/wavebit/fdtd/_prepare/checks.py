@@ -420,8 +420,16 @@ def check_smoothed(scene, grid):
     creased interface *within* one body (a prism edge, a block corner) is one painter and is
     handled exactly, not refused. A flush Cylinder or unturned Box on an unturned Box face
     is the narrow exception: ``junction.classify`` certifies the whole shared set and
-    returns static write masks for a separate split or staircase lowering. Every other
-    shared pair retains this refusal.
+    returns static write masks for a separate split or staircase lowering.
+
+    **C10 answers the rest where it can be shown right** (``clip.classify``): a pair the
+    junction does not recognise as flush is clipped -- exact per-medium fills and one
+    projection over both interfaces, written over the same marked points -- wherever the two
+    bodies' shared volume in every marked voxel is exact (proved apart, both flat, or one an
+    unturned Box face). A flush joint, a curved overlap, a union of one material, a third
+    structure in a written voxel, a lossy, magnetic or anisotropic medium, the stencil, and a
+    pair the junction recognises but refuses keep this refusal, with the clip's reason
+    appended. ``docs/validation/fdtd/fd-polytope-clip.md`` holds the registered gates.
 
     **6. No smoothed surface in a voxel a cell-snapped face cuts** (C4). A snapped shape gives
     whole cells, so the three components whose Yee point lies on one of its faces have a voxel
@@ -441,6 +449,9 @@ def check_smoothed(scene, grid):
     exact share of each voxel (three 1-D overlaps; a face on the domain's own wall is no
     face), the body's fill only where that share is fractional and the body's surface within
     reach, both against :data:`_CLIP_ROUNDOFF`.
+
+    Returns ``(junctions, clips)``: the flush pairs ``junction.classify`` certified and the
+    pairs ``clip.classify`` answered, each a tuple of static records for ``Plan``.
     """
     from wavebit.fdtd._legacy_boundaries import Axis1D
     from wavebit.fdtd._legacy_boundaries import Bloch
@@ -641,8 +652,9 @@ def check_smoothed(scene, grid):
                     f'whose material is not mixed at all. The tensor form is stage 5\'s, and '
                     f'study S1 found no robust order it buys (docs/validation/fdtd/fd-subpixel-occupancy.md), '
                     f'so nothing schedules it.')
+    import wavebit.fdtd._prepare.clip as clip
     import wavebit.fdtd._prepare.junction as junction
-    junctions = []
+    junctions, clips = [], []
     for i in range(len(smoothed)):
         for j in range(i + 1, len(smoothed)):
             (ia, sa, ba), (ib, sb, bb) = smoothed[i], smoothed[j]
@@ -659,6 +671,17 @@ def check_smoothed(scene, grid):
             if isinstance(record, junction.Junction):
                 junctions.append(record)
                 continue
+            if isinstance(junction._roles(scene, grid, ia, ib), str):
+                # Not a flush standing pair: C10's clip may answer it where it is exact.
+                _, _, marks = _shared_surface_voxels(ba, bb, grid, shared,
+                                                     include_common=True, masks=True)
+                answer = clip.classify(scene, grid, ia, ib, marks)
+                if isinstance(answer, clip.Clip):
+                    clips.append(answer)
+                    continue
+                why = f'The C10 clip does not answer it either: {answer}. '
+            else:
+                why = ('The C10 clip leaves a flush standing pair to the junction rule. ')
             _, field, c, point, fa, fb = worst
             raise ValueError(
                 f'structures[{ia}] ({public_description(sa.shape)}) and structures[{ib}] '
@@ -684,7 +707,9 @@ def check_smoothed(scene, grid):
                 f'fd.Difference, which resolve the two into one surface before any fill is '
                 f'taken -- are not on the public door. Study S7 counted what this door '
                 f'leaves: no single body and no canonical dimer reaches three media in a '
-                f'voxel; the polytope clip that would answer them is C10, conditional. '
+                f'voxel. {why}C10 answers a pair whose shared volume is exact in every such '
+                f'voxel (proved apart, both flat there, or one an unturned Box face) '
+                f'(docs/validation/fdtd/fd-polytope-clip.md). '
                 f'No junction rule covers this pair: {record}. The junction rules '
                 f"(Structure(junction=), default 'split') cover a Cylinder or an unturned "
                 f'Box standing flush on a smoothed, unturned Box face.')
@@ -716,7 +741,8 @@ def check_smoothed(scene, grid):
                 f'structure\'s faces. For a flush pillar, spell the substrate as a smoothed, '
                 f"unturned fd.Box: Structure(junction=) uses 'split' by default. A "
                 f'cell-snapped substrate stays refused under a smoothed pillar.')
-    return junction.finish(scene, junctions)
+    junctions = junction.finish(scene, junctions)
+    return junctions, clip.finish(clips, junctions)
 
 
 #: The exact clip's own round-off: the floor of :func:`_clip_tolerance`, which doors 3 and 5 read
@@ -2188,6 +2214,8 @@ def notes(scene, plan, rows=None, lifted=None):
     out += _smoothed_notes(scene, plan, rows)
     from wavebit.fdtd._prepare.junction import notes as junction_notes
     out += junction_notes(scene, plan)
+    from wavebit.fdtd._prepare.clip import notes as clip_notes
+    out += clip_notes(scene, plan)
     out += _lift_notes(scene, plan, lifted)
     out += _clipping_notes(scene, plan)
     out += _cells_across_notes(scene, plan)

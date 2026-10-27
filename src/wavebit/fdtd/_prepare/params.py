@@ -136,6 +136,8 @@ def lower(scene, plan, rt='numpy', device=None):
     validate_hybrid_resolution(scene, plan.grid)
     from wavebit.fdtd._prepare.junction import refuse_mismatch
     refuse_mismatch(scene, plan)
+    from wavebit.fdtd._prepare.clip import refuse_mismatch as refuse_clip_mismatch
+    refuse_clip_mismatch(scene, plan)
     from wavebit.fdtd._prepare.shape_ranges import refuse_mismatch as refuse_range_mismatch
     refuse_range_mismatch(scene, plan)
     from wavebit.fdtd._prepare.shape_ranges import validate as validate_shapes
