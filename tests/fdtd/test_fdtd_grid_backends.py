@@ -106,3 +106,48 @@ def test_tensor_phase_sequence_preserves_graph_and_matches_stacked_input():
     torch.testing.assert_close(a,b)
     torch.testing.assert_close(ga,gb)
     assert ga.abs()>0
+
+
+_X64_PROBE = '''
+import sys, jax, numpy as np
+from wavebit.fdtd._periodic.grid import fdtd_grid
+assert not jax.config.jax_enable_x64
+E0 = np.zeros((3, 8, 2, 2)); E0[1, 4] = 1.
+def solve(eps):
+    return fdtd_grid(eps, spacing=(1., 1., 1.), dt=.2, steps=9, electric=E0,
+                     checkpoint_steps=4, backend='jax')['E']
+mode = sys.argv[1]
+try:
+    if mode == 'eager':
+        out = solve(np.full((8, 2, 2), 2.))
+        print(out.dtype, jax.config.jax_enable_x64)
+    elif mode == 'jit':
+        run = jax.jit(solve)
+        run(np.full((8, 2, 2), 2.)); run(np.full((8, 2, 2), 2.5))
+        print('no error')
+    else:
+        jax.grad(lambda e: abs(solve(e)).sum())(np.full((8, 2, 2), 2.))
+        print('no error')
+except RuntimeError as error:
+    print('refused', 'jax_enable_x64' in str(error), jax.config.jax_enable_x64)
+'''
+
+
+@pytest.mark.parametrize('mode,expected', [
+    ('eager', 'complex128 True'), ('jit', 'refused True False'), ('grad', 'refused True False')])
+def test_a_jax_solve_reached_under_a_transform_with_x64_off_is_refused(mode, expected):
+    """With x64 off, an eager solve lifts the 32-bit cap itself, as it always has. Under a JAX
+    transform it is too late: the caller's trace already holds its inputs at 32 bits. Lifting
+    there ran the solve on rounded inputs, and a ``jax.jit`` holding the process's first solve
+    failed on its second call with a 32-/64-bit input mismatch. It is now refused with the
+    public API's message, and the setting is left alone. Only a fresh process starts with x64
+    off."""
+    pytest.importorskip('jax')
+    import os
+    import subprocess
+    import sys
+    out = subprocess.run([sys.executable, '-c', _X64_PROBE, mode], capture_output=True,
+                         text=True, encoding='utf-8', timeout=600,
+                         env={**os.environ, 'JAX_ENABLE_X64': '0'})
+    assert out.returncode == 0, out.stderr[-3000:]
+    assert out.stdout.strip() == expected, (out.stdout, out.stderr[-2000:])
