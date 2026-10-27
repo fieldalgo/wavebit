@@ -176,3 +176,46 @@ low-wall tangential-E mask (M2); dropping the cosine factor of the power (M3); d
 the PMC high-face masks (M4); reading `eps_u` for `eps_w`, swapping `eps_u` and `eps_v`,
 taking `beta = q`, flipping the sign of `E_w`, returning `Z0 H` for `H` (M7); disabling
 each refusal (M5); and returning NumPy arrays for `backend='jax'` (M6).
+
+## ModeMonitor: registered acceptance criteria (2026-10-27, before computing)
+
+`fdtd.ModeMonitor(name, plane=..., wavelengths=..., modes=n)` projects the run's
+DFT fields on its plane (the node-plane E and the mean of the two H half planes, as
+a `FluxMonitor` pairs them) onto the first `n` modes the solver returns at each
+wavelength. With `X = sum (E_u h_v - E_v h_u) dA` and `Y = sum (e_u H_v - e_v H_u) dA`
+for a mode `(e, h)` normalized to unit kernel flux (`N = sum e . h dA = 2/cos(beta dx/2)`),
+orthogonality gives the forward and backward amplitudes
+`a = (X/N + Y/(N cos))/2` and `b = (X/N - Y/(N cos))/2` exactly for a field made of
+modes. `|a|^2` and `|b|^2`, scaled as a `FluxMonitor` scales its flux, are the
+two-sided pulse spectral energies (J/Hz) carried forward and backward by the mode.
+
+MM1, exact direction separation through the public path. In the three M7 guides
+(snapped box, slab, smoothed box) with a `Bloch` axis of eight cells whose `k` is
+`+beta` (or `-beta`), a run of 200 steps starting from mode 0 or mode 1 travelling
+`+z` (or `-z`), and a `ModeMonitor` with `modes=2` at the mode's own wavelength:
+the opposite direction and the other mode each at most 1e-10 of the launched
+amplitude, and the launched mode's spectral energy equal to a `FluxMonitor`'s on
+the same plane to a relative 1e-10.
+
+MM2, completeness against the flux. A hollow `PEC` guide 1 µm by 0.5 µm filled with
+`epsilon = 2.25`, spacing 0.05 µm, `Open` along z with the default PML, a
+`CurrentDipole` (`Ey`, off-centre so that it excites the guide's modes of both
+parities) and monitors 3 µm on each side at wavelength 1.05 µm, where seven modes
+propagate. For every monitor, the sum over the seven modes of forward minus
+backward spectral energy equals the `FluxMonitor` spectral energy on the same plane
+to a relative 1e-6. The run is long enough for its decay diagnostic to report the
+fields settled.
+
+MM3, backends. NumPy, JAX and Torch give the same MM2 amplitudes to a relative
+1e-12 of the largest.
+
+MM4, derivatives. In the MM2 guide with a `SnappedBox` block of `epsilon = 3`
+between the dipole and the +z monitor (not reaching either monitor plane), the
+derivative of mode 0's forward spectral energy with respect to that permittivity,
+by `jax.grad` and by Torch autograd, agrees with the central difference at step
+`1e-4 * epsilon` to a relative 1e-6.
+
+MM5, refusals by name: a monitor plane where the medium changes along the axis
+(`mode.nonuniform`); a traced or gradient-carrying structure that reaches the
+monitor plane (`mode.traced`); more modes than are confined (`mode.count`); a
+non-positive `modes` (`monitor.modes`); a plane outside the physical domain.
