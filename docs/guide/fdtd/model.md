@@ -329,7 +329,7 @@ type per axis or a `(low, high)` pair.
 
 | Face | Meaning |
 | --- | --- |
-| `Open()` | outgoing: a PML outside the physical domain, matched to the uniform medium that reaches the face. Only uniform media may reach it — the background, or a `SnappedSlab` across that axis; a finite body touching it, or a `SnappedSlab` crossing an orthogonal `Open()` face, is refused. |
+| `Open()` | outgoing: a PML outside the physical domain, matched to the uniform medium that reaches the face. Only uniform media may reach it — the background, a `SnappedSlab` across that axis, or an unturned `Box` that declares `Structure.continuation` and reaches more than one cell past both transverse faces; any other finite body touching it, or a slab or continued `Box` crossing an orthogonal `Open()` face, is refused (see [General-scene limits](#general-scene-limits)). |
 | `Periodic()` | both faces wrap with no phase; normal incidence in a periodic cell. |
 | `Bloch(phase=φ)` or `Bloch(k=k)` | both faces wrap with a phase; the run becomes complex (twice the memory and work). `Bloch.from_source(source, units=...)` writes the faces an oblique `PlaneWave` needs. |
 | `PEC()` / `PMC()` | tangential E / tangential H vanishes on the wall. A structure reaching past one is clipped, with `GeometryClippedWarning`. |
@@ -490,8 +490,15 @@ Reversed or zero-width intervals are refused when constructing `Plane`.
 - **Placement.** Sources and monitors must lie inside the physical domain; a closed `FluxMonitor` box and
   a `FarFieldMonitor` box keep clear of structures as their rows above describe.
 
-Passing these rules is an admission check, not a convergence result. The answer still has to be
-refined in `dx` and in duration until the quantity you need stops changing.
+Passing these rules is an admission check, not a convergence result. Check convergence in your
+own scene: vary the grid spacing `dx`, the run duration, the absorber's thickness and strength
+(`PML(cells=..., reflection=...)`) and the way the source starts (`GaussianPulse(cutoff=...)` and
+`delay_seconds`; a later start needs a longer `Duration`, which counts from zero), one at a time,
+until the quantity you need stops changing. Two grids do not show convergence; check that the
+trend holds over three or more. Conclusions can differ between quantities — time-domain field
+maxima, energy through a plane, spectra — so check the quantity you actually need. If an error
+does not fall as the grid is refined, the way the source starts and the absorber are worth
+checking first.
 
 ## Warnings
 
@@ -695,6 +702,7 @@ declared top face differs from the closed form by 0.163 rad at 0.8 µm, and by 0
 tangential field (see [Cell-snapped shapes](#cell-snapped-shapes-snappedslab-and-snappedbox)). Written with a
 coating of 0.105 µm instead, the same scene would warn `geometry.cell_snapped` and run as 0.1 µm.
 
+(fdtd-model-general-scene-limits)=
 ## General-scene limits
 
 - CUDA is limited to the [documented Torch scope](../../validation/fdtd/general-cuda.md);
@@ -703,6 +711,16 @@ coating of 0.105 µm instead, the same scene would warn `geometry.cell_snapped` 
   Constructive solid geometry (union, intersection, difference) and tilted extrusion axes are unsupported.
 - No Gaussian beams, mode sources or mode monitors.
 - No smoothed lossy or dispersive bodies outside flat films.
+- **A body narrower than the cross-section cannot continue into an absorbing layer.** Only
+  uniform media continue into an `Open()` face's PML: the background, a `SnappedSlab` across that
+  axis, and an unturned `Box` that declares `Structure.continuation` and reaches more than one cell
+  past both transverse faces (a substrate; see [smoothed substrates](substrate-gradients.md)). A
+  finite body that touches an `Open()` face is refused — a `Cylinder`, `Prism` or `Sphere`, or a
+  `Box` or `SnappedBox` core — and so is a smoothed body that ends so close to the face that its
+  smoothed edge reaches the layer. A waveguide whose core, round or rectangular, continues into
+  the absorber is therefore not supported yet, and no date is set. Ending the core before the
+  absorber, with its smoothed edge clear of the layer, avoids the refusal, but the end face then
+  reflects, so the scene solves a different problem.
 
 Custom static geometry implements `fdtd.Shape`; prepared reuse checks its declared instance state.
 Its cell support must stay clear of Open padding. See the [migration guide](../../migration/index.md)
