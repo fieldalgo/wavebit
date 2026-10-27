@@ -79,6 +79,14 @@ focus, Rayleigh range 3.14 µm) the beam's radius is 1.19 µm, so on the outermo
 (`source.beam_size`). That cross-section is widened to ±3.5 µm in x and y (the beam is then
 2e-4 of its peak there). Everything else in G4 is as registered.
 
+Second amendment to G4's three-dimensional case, again before it computed anything: with a
+1 µm waist the source refused it (`source.beam_size`). The angular spectrum is 5e-5 of its
+peak at the light line, and in three dimensions the ripple of its cut stays at 2.8e-7 of the
+peak at the edge of the largest transform grid the source builds (2^24 points), above its
+1e-7. The waist is 1.5 µm, as in Setup B. The cross-section is then ±4.5 µm in x and y, so
+the beam (radius 1.56 µm at the sheet) is 3e-4 of its peak on the outermost cells. The
+monitor spans ±4.4 µm. The limit is unchanged.
+
 Amendment to G3, before it was first run: with a 0.6 µm waist the focal field's angular
 spectrum is still 3% of its peak at the light line, where the beam's propagating part is cut,
 and that part rings out as 1/r. The source refuses such a beam (`source.beam_size`): its
