@@ -1848,14 +1848,16 @@ def _public_layer_remedy(name):
     """
     return (f'The body ends before the Open face; what reaches the layer is its smoothed edge, '
             f'the cells over which its surface is averaged. Move its end farther from the face, '
-            f'until fdtd.check no longer refuses it. Only a uniform medium can run through the '
-            f'layer: a fixed, unturned fdtd.Box that reaches the face, whose fdtd.Structure '
-            f'declares continuation=({name!r},), and that reaches more than one cell past both '
-            f'transverse faces, which must not be Open (a substrate), or an fdtd.SnappedSlab({name[0]}=...) that reaches the face when no face '
-            f'on another axis is Open. Nothing else can: not an fdtd.SnappedBox, a turned '
-            f'fdtd.Box, an fdtd.Cylinder or fdtd.Prism, nor any body narrower than the '
-            f'cross-section, such as a waveguide core. Running those into an absorbing layer is '
-            f'not supported yet, and no date is set.')
+            f'until fdtd.check no longer refuses it. Only a medium uniform along {name[0]} can run '
+            f'through the layer: a fixed, unturned fdtd.Box that reaches the face, whose '
+            f'fdtd.Structure declares continuation=({name!r},), and that reaches more than one '
+            f'cell past both transverse faces, which must not be Open (a substrate); an '
+            f'fdtd.SnappedSlab({name[0]}=...) that reaches the face when no face on another axis is '
+            f'Open; or a cell-snapped waveguide core -- an fdtd.SnappedBox that reaches the face '
+            f'and declares continuation=({name!r}, ...) along {name[0]}, or an fdtd.SnappedSlab '
+            f'naming the faces it runs through. Nothing else can: not a turned fdtd.Box, an '
+            f'fdtd.Cylinder or fdtd.Prism, nor a smoothed body narrower than the cross-section. '
+            f'Running those into an absorbing layer is not supported yet, and no date is set.')
 
 
 def _background(scene):

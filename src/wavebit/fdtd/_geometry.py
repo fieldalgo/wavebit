@@ -156,9 +156,13 @@ class Structure:
     """A named physical body and its shared material model.
 
     ``fdtd.Structure('film', shape=fdtd.SnappedSlab(z=(0., 0.2)), material=Material(epsilon=2.25))``.
-    ``continuation`` explicitly extends a fixed, unturned :class:`Box` through named Open
-    faces (for example ``('z-',)`` for a substrate). The Box must fill both transverse
-    directions; finite scatterers cannot continue into an absorber.
+    ``continuation`` explicitly extends a body through named Open faces. A fixed, unturned
+    :class:`Box` that fills both transverse directions continues as a substrate (``('z-',)``),
+    and those faces' PML is matched to it. A :class:`SnappedBox` waveguide core that reaches the
+    faces of one axis continues through them with its cross-section unchanged
+    (``('z-', 'z+')``), and a :class:`SnappedSlab` names the faces of the axes it runs along; their
+    PML stays matched to its own medium. No other finite body continues into an absorber: a
+    smoothed core narrower than the cross-section is refused.
     """
     name: str
     shape: object
