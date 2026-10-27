@@ -106,3 +106,89 @@ Traceback (most recent call last):
                ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
 torch._C._LinAlgError: linalg.svd: The algorithm failed to converge because the input matrix is ill-conditioned or has too many repeated singular values (error code: 1).
 # /home/user/wavebit/studies/rcwa/optimization_step_scale/optimization_step_scale.py --orders 15 --layers 1 --path raster --rounds 3 --arms torch,torch-compile,jax-grad,jax-jit --threads 4 --out studies/rcwa/optimization_step_scale/records/optimization_step_scale.jsonl
+/home/user/wavebit/.venv/lib/python3.13/site-packages/array_api_compat/torch/_aliases.py:221: UserWarning: torch.asarray: unspecified requires_grad now defaults to obj.requires_grad instead of False. Pass requires_grad=False explicitly to get the old behavior and silence this warning. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/utils/tensor_new.cpp:1737.)
+  return torch.asarray(obj, dtype=dtype, device=device, copy=copy, **kwargs)
+/home/user/wavebit/studies/rcwa/optimization_step_scale/optimization_step_scale.py:253: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:820.)
+  return float(value), v.grad.numpy().copy()
+round 0 torch         step   41.210 s  modeling    0.382 s  +4.70 GB  T0 0.993379861756
+/home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_dynamo/variables/functions.py:2762: UserWarning: Dynamo detected a call to a `functools.lru_cache`-wrapped function at '_helpers.py:790'. Dynamo ignores the cache wrapper and directly traces the wrapped function. Silent incorrectness is only a *potential* risk, not something we have observed. Enable TORCH_LOGS=+dynamo for a DEBUG stack trace.
+
+This call originates from:
+  File "/home/user/wavebit/.venv/lib/python3.13/site-packages/array_api_compat/common/_helpers.py", line 790, in array_namespace
+    xp, info = _cls_to_namespace(cast(Hashable, type(x)), api_version, use_compat)
+               ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  torch._dynamo.utils.warn_once(msg)
+/home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_dynamo/variables/functions.py:2762: UserWarning: Dynamo detected a call to a `functools.lru_cache`-wrapped function at '_helpers.py:655'. Dynamo ignores the cache wrapper and directly traces the wrapped function. Silent incorrectness is only a *potential* risk, not something we have observed. Enable TORCH_LOGS=+dynamo for a DEBUG stack trace.
+
+This call originates from:
+  File "/home/user/wavebit/.venv/lib/python3.13/site-packages/array_api_compat/common/_helpers.py", line 655, in _cls_to_namespace
+    _issubclass_fast(cls_, "numpy", "ndarray")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  torch._dynamo.utils.warn_once(msg)
+/home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_dynamo/variables/functions.py:2762: UserWarning: Dynamo detected a call to a `functools.lru_cache`-wrapped function at '_helpers.py:656'. Dynamo ignores the cache wrapper and directly traces the wrapped function. Silent incorrectness is only a *potential* risk, not something we have observed. Enable TORCH_LOGS=+dynamo for a DEBUG stack trace.
+
+This call originates from:
+  File "/home/user/wavebit/.venv/lib/python3.13/site-packages/array_api_compat/common/_helpers.py", line 656, in _cls_to_namespace
+    or _issubclass_fast(cls_, "numpy", "generic")
+       ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  torch._dynamo.utils.warn_once(msg)
+/home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_dynamo/variables/functions.py:2762: UserWarning: Dynamo detected a call to a `functools.lru_cache`-wrapped function at '_helpers.py:674'. Dynamo ignores the cache wrapper and directly traces the wrapped function. Silent incorrectness is only a *potential* risk, not something we have observed. Enable TORCH_LOGS=+dynamo for a DEBUG stack trace.
+
+This call originates from:
+  File "/home/user/wavebit/.venv/lib/python3.13/site-packages/array_api_compat/common/_helpers.py", line 674, in _cls_to_namespace
+    if _issubclass_fast(cls_, "cupy", "ndarray"):
+       ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  torch._dynamo.utils.warn_once(msg)
+/home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_dynamo/variables/functions.py:2762: UserWarning: Dynamo detected a call to a `functools.lru_cache`-wrapped function at '_helpers.py:682'. Dynamo ignores the cache wrapper and directly traces the wrapped function. Silent incorrectness is only a *potential* risk, not something we have observed. Enable TORCH_LOGS=+dynamo for a DEBUG stack trace.
+
+This call originates from:
+  File "/home/user/wavebit/.venv/lib/python3.13/site-packages/array_api_compat/common/_helpers.py", line 682, in _cls_to_namespace
+    if _issubclass_fast(cls_, "torch", "Tensor"):
+       ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  torch._dynamo.utils.warn_once(msg)
+/home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_dynamo/variables/functions.py:2762: UserWarning: Dynamo detected a call to a `functools.lru_cache`-wrapped function at '_helpers.py:126'. Dynamo ignores the cache wrapper and directly traces the wrapped function. Silent incorrectness is only a *potential* risk, not something we have observed. Enable TORCH_LOGS=+dynamo for a DEBUG stack trace.
+
+This call originates from:
+  File "/home/user/wavebit/.venv/lib/python3.13/site-packages/array_api_compat/common/_helpers.py", line 126, in is_numpy_array
+    _issubclass_fast(cls, "numpy", "ndarray")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  torch._dynamo.utils.warn_once(msg)
+/home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_dynamo/variables/functions.py:2762: UserWarning: Dynamo detected a call to a `functools.lru_cache`-wrapped function at '_helpers.py:127'. Dynamo ignores the cache wrapper and directly traces the wrapped function. Silent incorrectness is only a *potential* risk, not something we have observed. Enable TORCH_LOGS=+dynamo for a DEBUG stack trace.
+
+This call originates from:
+  File "/home/user/wavebit/.venv/lib/python3.13/site-packages/array_api_compat/common/_helpers.py", line 127, in is_numpy_array
+    or _issubclass_fast(cls, "numpy", "generic")
+       ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+
+  torch._dynamo.utils.warn_once(msg)
+/home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_dynamo/variables/functions.py:2762: UserWarning: Dynamo detected a call to a `functools.lru_cache`-wrapped function at '_helpers.py:290'. Dynamo ignores the cache wrapper and directly traces the wrapped function. Silent incorrectness is only a *potential* risk, not something we have observed. Enable TORCH_LOGS=+dynamo for a DEBUG stack trace.
+
+This call originates from:
+  File "/home/user/wavebit/.venv/lib/python3.13/site-packages/array_api_compat/common/_helpers.py", line 290, in is_mparray_array
+    return _issubclass_fast(cls, "mparray", "MPArray")
+
+  torch._dynamo.utils.warn_once(msg)
+/home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_dynamo/variables/functions.py:2762: UserWarning: Dynamo detected a call to a `functools.lru_cache`-wrapped function at '_helpers.py:155'. Dynamo ignores the cache wrapper and directly traces the wrapped function. Silent incorrectness is only a *potential* risk, not something we have observed. Enable TORCH_LOGS=+dynamo for a DEBUG stack trace.
+
+This call originates from:
+  File "/home/user/wavebit/.venv/lib/python3.13/site-packages/array_api_compat/common/_helpers.py", line 155, in is_cupy_array
+    return _issubclass_fast(cls, "cupy", "ndarray")
+
+  torch._dynamo.utils.warn_once(msg)
+/home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_dynamo/variables/functions.py:2762: UserWarning: Dynamo detected a call to a `functools.lru_cache`-wrapped function at '_helpers.py:179'. Dynamo ignores the cache wrapper and directly traces the wrapped function. Silent incorrectness is only a *potential* risk, not something we have observed. Enable TORCH_LOGS=+dynamo for a DEBUG stack trace.
+
+This call originates from:
+  File "/home/user/wavebit/.venv/lib/python3.13/site-packages/array_api_compat/common/_helpers.py", line 179, in is_torch_array
+    return _issubclass_fast(cls, "torch", "Tensor")
+
+  torch._dynamo.utils.warn_once(msg)
+/home/user/wavebit/.venv/lib/python3.13/site-packages/torch/_inductor/lowering.py:2774: UserWarning: Torchinductor does not support code generation for complex operators. Performance may be worse than eager.
+  warnings.warn(
+round 0 torch-compile step   46.874 s  modeling   20.590 s  +4.31 GB  T0 0.993379861756

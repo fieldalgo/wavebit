@@ -279,7 +279,7 @@ def main():
             arms['jax-jit'] = (jax_arm(loss_j, True), jax_arm(model_j, True))
 
     # ------------------------------------------------------------------ interleaved rounds
-    record = {name: dict(step=[], model=[], step_mem=[], model_mem=[], value=[], grad=[])
+    record = {name: dict(step=[], model=[], step_mem=[], model_mem=[], value=[], grad=[], errors=[])
               for name in arms}
     names = list(arms)
     for k in range(ARGS.rounds + 1):
@@ -292,20 +292,30 @@ def main():
                 CURRENT.update(orders=n, layers=layers, path=ARGS.path, arm=name, part=part, round=k)
                 with Peak() as peak:
                     t0 = time.perf_counter()
-                    value, grad = fn(x)
+                    try:
+                        value, grad = fn(x)
+                    except Exception as exc:
+                        # A step that raises is a result too (a solver failing at one design
+                        # point): record it and keep the other arms and rounds.
+                        value = grad = None
+                        record[name]['errors'].append(dict(round=k, part=part,
+                                                           error=f'{type(exc).__name__}: {str(exc)[:200]}'))
+                        print(f'round {k} {name:13s} {part} FAILED: {type(exc).__name__}: {str(exc)[:200]}',
+                              flush=True)
                     seconds = time.perf_counter() - t0
-                record[name][part].append(seconds)
+                record[name][part].append(None if value is None else seconds)
                 record[name][part + '_mem'].append((peak.peak - peak.before) / 2**30)
                 if part == 'step':
                     record[name]['value'].append(value)
                     # Raster gradients are 128x128 per layer: keep a fixed projection of them.
-                    g = np.asarray(grad, dtype=np.float64).ravel()
+                    g = None if grad is None else np.asarray(grad, dtype=np.float64).ravel()
                     record[name]['grad'].append(
-                        g.tolist() if g.size <= 4 else
+                        None if g is None else g.tolist() if g.size <= 4 else
                         [float(g @ np.random.default_rng(1).standard_normal(g.size))])
-            print(f'round {k} {name:13s} step {record[name]["step"][-1]:8.3f} s'
-                  + ('' if ARGS.no_split else f'  modeling {record[name]["model"][-1]:8.3f} s')
-                  + f'  +{record[name]["step_mem"][-1]:.2f} GB  T0 {record[name]["value"][-1]:.12f}',
+            fmt = lambda t: '  failed ' if t is None else f'{t:8.3f}'
+            print(f'round {k} {name:13s} step {fmt(record[name]["step"][-1])} s'
+                  + ('' if ARGS.no_split else f'  modeling {fmt(record[name]["model"][-1])} s')
+                  + f'  +{record[name]["step_mem"][-1]:.2f} GB  T0 {record[name]["value"][-1]}',
                   flush=True)
 
     # ------------------------------------------------------------------ summary
@@ -314,18 +324,22 @@ def main():
                    harmonics=(2 * n + 1) ** 2, machine=machine(),
                    maxrss_gb=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, arms={})
     ref = next(iter(record.values()))
+    ok = lambda xs: [t for t in xs if t is not None]
     for name, r in record.items():
-        warm = r['step'][1:]
-        entry = dict(first=r['step'][0], median=statistics.median(warm), min=min(warm),
-                     steps=r['step'], peak_step_gb=max(r['step_mem']),
-                     value_spread=max(abs(a - b) for a, b in zip(r['value'], ref['value'])),
-                     grad_spread=max(abs(a - b) / max(abs(b), 1e-300)
-                                     for ga, gb in zip(r['grad'], ref['grad'])
-                                     for a, b in zip(ga, gb)))
+        warm = ok(r['step'][1:])
+        pairs = [(a, b) for a, b in zip(r['value'], ref['value']) if a is not None and b is not None]
+        gpairs = [(a, b) for ga, gb in zip(r['grad'], ref['grad']) if ga is not None and gb is not None
+                  for a, b in zip(ga, gb)]
+        entry = dict(first=r['step'][0], median=statistics.median(warm) if warm else None,
+                     min=min(warm) if warm else None, steps=r['step'], errors=r['errors'],
+                     peak_step_gb=max(r['step_mem']),
+                     value_spread=max((abs(a - b) for a, b in pairs), default=None),
+                     grad_spread=max((abs(a - b) / max(abs(b), 1e-300) for a, b in gpairs), default=None))
         if not ARGS.no_split:
-            mwarm = r['model'][1:]
-            entry.update(model_first=r['model'][0], model_median=statistics.median(mwarm),
-                         model_min=min(mwarm), peak_model_gb=max(r['model_mem']))
+            mwarm = ok(r['model'][1:])
+            entry.update(model_first=r['model'][0],
+                         model_median=statistics.median(mwarm) if mwarm else None,
+                         model_min=min(mwarm) if mwarm else None, peak_model_gb=max(r['model_mem']))
         summary['arms'][name] = entry
     print(json.dumps(summary['arms'], indent=1))
     with open(ARGS.out, 'a') as fh:
