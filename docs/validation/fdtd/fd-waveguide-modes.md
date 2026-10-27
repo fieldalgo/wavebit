@@ -119,6 +119,13 @@ two largest-index modes of each guide.
 M1 and M2 compute `Omega` from the time step `fdtd.check` reports, not from the
 solver's own output.
 
+A further M7 case, registered after the mutation run that showed why and before it
+was first run: for a cell-snapped core each component's permittivity array is the
+same index for index, so reading one component's coefficient in place of another's
+changes nothing there. The same M7 criterion therefore also holds for a smoothed
+`Box` core of 1.03 µm by 0.51 µm, whose faces lie between cells and whose
+per-component averages differ.
+
 ## Results
 
 Pending. Results are added below, beside the criteria, once computed.
