@@ -81,4 +81,42 @@ at that wavelength (from `solve_modes`), in the run's Fourier convention.
 
 ## Results
 
-Pending.
+Measured with `tests/fdtd/test_fd_mode_source.py` on NumPy (JAX and Torch where named),
+double precision. Wavelengths are listed as 1.45 / 1.55 / 1.65 µm.
+
+| Criterion | Limit | 0.05 µm | 0.025 µm | Verdict |
+| --- | --- | --- | --- | --- |
+| S1 `forward(p2)` against the injected amplitude carried 4 µm | 1e-5 of `|injected|` | 2.7e-11 / 1.3e-14 / 2.3e-11 | 1.1e-11 / 7.2e-13 / 1.2e-11 | passed |
+| S1 mirrored source (`-z`) | 1e-5 | 2.7e-11 / 1.3e-14 / 2.3e-11 | | passed |
+| S2 `backward(q)` against the leakage and the transmitted reflection | 1e-6 of `|injected|` | 7.7e-14 / 2.8e-15 / 1.5e-12 | 4.8e-14 / 6.5e-15 / 1.2e-12 | passed |
+| S2 predicted leakage power at 1.55 µm | 1e-12 | 6.8e-29 | 1.2e-29 | passed |
+| S2 predicted leakage power at 1.45 / 1.65 µm | reported | 1.4e-6 / 1.5e-6 | 1.3e-6 / 1.4e-6 | |
+| S3 `forward_energy(p2)` against `2 A^2 |W(f0)|^2` | 2e-5 | -1.2e-13 | -1.2e-13 | passed |
+| S4 run index against the solver's grid index | 1e-9 | 1.969150425958 both | 1.959408135484 both | passed |
+| S4 error against the exact TE0 index, observed order | at least 1.8 | 1.29e-2 | 3.19e-3 | passed (order 2.02) |
+| S5 TE0 transmission, mode matching `T_mm = 0.955057` | 5e-3 at 0.05, 2e-3 at 0.025, smaller | 0.954677 (3.8e-4) | 0.954959 (9.8e-5) | passed |
+| S5 TE0 reflection, mode matching `R_mm = 3.3287e-4` | 0.2 `R_mm` at 0.025, smaller than at 0.05 | 3.5366e-4 (6.2 %) | 3.3777e-4 (1.5 %) | passed |
+| S6 JAX / Torch against NumPy | 1e-12 | 5.9e-16 / 1.3e-15 (worst) | | passed |
+| S7 derivatives against extrapolated central differences | 1e-6 | pending | | |
+| S8 refusals by code | as listed | all eleven raised | | passed |
+
+The mode-matching oracle in S5 is converged in its own discretization before it is used:
+halving the number of modes, and widening the box from 12 to 18 µm with more modes, each
+moves `T_mm` by less than 2e-4 and `R_mm` by less than 2 %, the test's own check.
+
+Added after registration, as further tests at registered limits (no limit changed). Two
+deliberate breaks were not caught by the registered tests:
+- a `-z` source whose H patterns were not signed for its direction. The exact prediction
+  follows whatever the sheet holds, so S1 alone cannot see it;
+- the sign of the corrections fed by Ex and Hy. TE0 has neither component.
+
+The mirrored source is now also held to S2's one-way limit at the centre wavelength
+(6.8e-29) and to S3's power limit (-1.2e-13). A TM0 launch (mode 1) is held to S1, S2 and S3
+(3.5e-11, 6.2e-29, -1.3e-13). Both breaks, and the sign of the Ex-fed correction, then
+failed. In all, sixteen deliberate breaks of the source were caught: the H row's half-cell
+phase, the 1 W scaling, the H patterns' direction sign, each prediction formula and the
+leakage's sign, each correction's sign, the H plane's side, the kernel's row offsets, the
+monitor's `source=` check, the sheet clearance, the direction check, and the mode window
+re-entering its own source. Each time the source was restored byte for byte. One parameter is
+bounded by no limit: the H row's half-cell group delay changes only the off-centre leakage,
+which S2 reports rather than limits, and the exact prediction follows it.
