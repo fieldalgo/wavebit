@@ -127,6 +127,39 @@ runs along. The guided mode then enters the absorbing layer without meeting an e
 measured reflection is in the [validation record](../../validation/fdtd/fd-waveguide-through-pml.md).
 A smoothed core is refused at an `Open` face.
 
+## Launching a mode: `ModeSource`
+
+```python
+source = fdtd.ModeSource('src', plane=fdtd.Plane(z=-2.), direction='+z', mode=0,
+                         pulse=fdtd.GaussianPulse(wavelength=1.55, frequency_sigma_hz=1.5e13))
+monitor = fdtd.ModeMonitor('t', plane=fdtd.Plane(z=2.), wavelengths=(1.55,), source='src')
+# ... run ...
+t = result['t']
+t.forward_energy[:, 0] / t.injected_energy   # the TE0 power transmission
+```
+
+`ModeSource` launches mode `mode` of `solve_modes` on `plane`, solved at the pulse's centre
+wavelength, toward `direction` (`'+'` or `'-'` the plane's normal). The plane has the window,
+faces and refusals of `solve_modes`. `amplitude` is in square-root watts (per metre of each
+invariant axis): a continuous wave of amplitude `A` carries `A**2` watts. `phase` is in
+radians, and `delay_seconds` delays the pulse.
+
+The plane is a one-sided total-field/scattered-field sheet whose incident field is the mode.
+At the pulse's centre wavelength it launches exactly that mode, exactly one way. At other
+wavelengths in the band it also launches a little of the mode the other way, because the
+profile and the half-cell phase it uses are the centre's. Both parts are known exactly for
+the grid: a `ModeMonitor` with `source=` reports them as `injected` (the source's way) and
+`leakage` (the other way), as complex amplitudes of the source's mode on the source's plane,
+with `injected_energy` and `leakage_energy`. Divide a monitor's `forward_energy` by
+`injected_energy` for a transmission; nothing needs a reference run.
+
+Other modes of the guide are not launched at the centre wavelength. Away from it the profile
+projects a little onto other modes of the same symmetry; a monitor that reads several modes
+shows them. A monitor within one cell of the sheet is refused (`monitor.source_sheet`): the
+field jumps there. A structure that reaches the source plane must be concrete. The source's
+`amplitude`, `phase` and `delay_seconds`, and structures elsewhere, may carry traced values.
+The pulse wavelength may not, because the mode is solved at it.
+
 ## Accuracy
 
 The registered checks and their measured results are in the

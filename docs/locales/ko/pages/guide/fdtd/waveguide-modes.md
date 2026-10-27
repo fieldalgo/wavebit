@@ -115,6 +115,37 @@ continuation=('z-', 'z+'))`, 또는 슬래브가 뻗어 있는 축의 면을 지
 [검증 기록](../../validation/fdtd/fd-waveguide-through-pml.md)에 있습니다. 스무딩 코어는 `Open`
 면에서 거절됩니다.
 
+## 모드 내보내기: `ModeSource`
+
+```python
+source = fdtd.ModeSource('src', plane=fdtd.Plane(z=-2.), direction='+z', mode=0,
+                         pulse=fdtd.GaussianPulse(wavelength=1.55, frequency_sigma_hz=1.5e13))
+monitor = fdtd.ModeMonitor('t', plane=fdtd.Plane(z=2.), wavelengths=(1.55,), source='src')
+# ... 실행 ...
+t = result['t']
+t.forward_energy[:, 0] / t.injected_energy   # TE0 전력 투과율
+```
+
+`ModeSource`는 펄스 중심 파장에서 `plane` 위에 푼 `solve_modes`의 `mode`번 모드를
+`direction`(면 법선의 `'+'` 또는 `'-'`) 쪽으로 내보냅니다. 면의 창, 경계면, 거부는
+`solve_modes`와 같습니다. `amplitude`의 단위는 와트의 제곱근입니다(불변 축이 있으면 그 축
+미터당). 진폭 `A`인 연속파는 `A**2` 와트를 나릅니다. `phase`는 라디안이고 `delay_seconds`는
+펄스를 늦춥니다.
+
+면은 입사장이 모드인, 한쪽만 있는 전체장/산란장(TFSF) 시트입니다. 펄스 중심 파장에서는 정확히
+그 모드를, 정확히 한쪽으로만 내보냅니다. 대역의 다른 파장에서는 쓰는 단면과 반 칸 위상이 중심
+파장의 것이어서 반대쪽으로도 모드를 조금 내보냅니다. 두 부분 모두 격자에 대해 정확히 알려져
+있습니다. `source=`를 준 `ModeMonitor`가 이를 `injected`(광원 방향)와 `leakage`(반대 방향)로,
+광원 면에서 광원 모드의 복소 진폭으로 보고하며 `injected_energy`와 `leakage_energy`도 줍니다.
+측정기의 `forward_energy`를 `injected_energy`로 나누면 투과율이 됩니다. 기준 실행은 필요
+없습니다.
+
+중심 파장에서는 도파관의 다른 모드를 내보내지 않습니다. 중심에서 벗어나면 단면이 같은 대칭의
+다른 모드에 조금 투영되며, 여러 모드를 읽는 측정기에 나타납니다. 시트에서 한 칸 안쪽의
+측정기는 거부됩니다(`monitor.source_sheet`). 거기서는 장이 불연속입니다. 광원 면에 닿는 구조는
+구체값이어야 합니다. 광원의 `amplitude`, `phase`, `delay_seconds`와 다른 곳의 구조는 추적된
+값을 지닐 수 있습니다. 펄스 파장은 안 됩니다. 모드를 그 파장에서 풀기 때문입니다.
+
 ## 정확도
 
 등록한 검사와 측정 결과는 [검증 기록](../../validation/fdtd/fd-waveguide-modes.md)에
