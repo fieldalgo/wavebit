@@ -78,6 +78,7 @@ def _parse():
                     help='orders:layers at which --sweep keeps the torch-compile arm')
     ap.add_argument('--mem-limit-gb', type=float, default=None,
                     help='abort and record the peak once the resident set passes this (default 95%% of RAM or of the memory cgroup limit, whichever is lower)')
+    ap.add_argument('--report', action='store_true', help='print the markdown tables from --out')
     ap.add_argument('--kernels', action='store_true',
                     help='time the dense kernels alone (eig, solve, matmul) at each order\'s eig size')
     ap.add_argument('--out', default=str(ROOT / 'artifacts' / 'studies' / 'optimization_step_scale.jsonl'))
@@ -152,6 +153,7 @@ def sweep():
 
 PAGE = os.sysconf('SC_PAGE_SIZE')
 CURRENT = {}      # what is running, for the memory-limit record
+ON_LIMIT = []     # callbacks that save what finished before a memory-limit stop
 
 
 def rss():
@@ -180,6 +182,8 @@ class Peak:
                                              before_gb=self.before / 2**30,
                                              limit_gb=MEM_LIMIT / 2**30)) + '\n')
                 print(f'memory limit: {self.peak / 2**30:.2f} GB resident during {CURRENT}', flush=True)
+                for callback in ON_LIMIT:
+                    callback()
                 os._exit(3)
 
     def __exit__(self, *exc):
@@ -298,6 +302,14 @@ def main():
     # ------------------------------------------------------------------ interleaved rounds
     record = {name: dict(step=[], model=[], step_mem=[], model_mem=[], value=[], grad=[], errors=[])
               for name in arms}
+    def write_summary(partial=False):
+        summary = summarize(n, layers, record, partial)
+        print(json.dumps({a: {k: v for k, v in e.items() if k not in ('values', 'grads')}
+                          for a, e in summary['arms'].items()}, indent=1), flush=True)
+        with open(ARGS.out, 'a') as fh:
+            fh.write(json.dumps(summary) + '\n')
+
+    ON_LIMIT.append(lambda: write_summary(partial=True))
     names = list(arms)
     for k in range(ARGS.rounds + 1):
         x = point(k + 1)
@@ -335,72 +347,104 @@ def main():
                   + f'  +{record[name]["step_mem"][-1]:.2f} GB  T0 {record[name]["value"][-1]}',
                   flush=True)
 
-    # ------------------------------------------------------------------ summary
+    write_summary()
+
+
+def summarize(n, layers, record, partial=False):
+    """One JSON line per configuration: per arm, the first call apart from the rest."""
     import resource
-    summary = dict(orders=n, layers=layers, path=ARGS.path, rounds=ARGS.rounds,
+    summary = dict(orders=n, layers=layers, path=ARGS.path, rounds=ARGS.rounds, partial=partial,
                    harmonics=(2 * n + 1) ** 2, machine=machine(),
                    maxrss_gb=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20, arms={})
-    ref = next(iter(record.values()))
     ok = lambda xs: [t for t in xs if t is not None]
+    ref = next(iter(record.values()))
     for name, r in record.items():
+        if not r['step']:
+            continue
         warm = ok(r['step'][1:])
         pairs = [(a, b) for a, b in zip(r['value'], ref['value']) if a is not None and b is not None]
         gpairs = [(a, b) for ga, gb in zip(r['grad'], ref['grad']) if ga is not None and gb is not None
                   for a, b in zip(ga, gb)]
+        # Values and gradients are kept per round, so arms run in separate processes (same
+        # parameter at the same round) can still be compared by --report.
         entry = dict(first=r['step'][0], median=statistics.median(warm) if warm else None,
                      min=min(warm) if warm else None, steps=r['step'], errors=r['errors'],
-                     peak_step_gb=max(r['step_mem']),
+                     values=r['value'], grads=r['grad'],
+                     peak_step_gb=max(r['step_mem'], default=None),
                      value_spread=max((abs(a - b) for a, b in pairs), default=None),
                      grad_spread=max((abs(a - b) / max(abs(b), 1e-300) for a, b in gpairs), default=None))
-        if not ARGS.no_split:
+        if not ARGS.no_split and r['model']:
             mwarm = ok(r['model'][1:])
             entry.update(model_first=r['model'][0],
                          model_median=statistics.median(mwarm) if mwarm else None,
-                         model_min=min(mwarm) if mwarm else None, peak_model_gb=max(r['model_mem']))
+                         model_min=min(mwarm) if mwarm else None,
+                         peak_model_gb=max(r['model_mem'], default=None))
         summary['arms'][name] = entry
-    print(json.dumps(summary['arms'], indent=1))
-    with open(ARGS.out, 'a') as fh:
-        fh.write(json.dumps(summary) + '\n')
+    return summary
 
 
-def kernels():
-    """The dense kernels a step is made of, alone, at the size of each order's eigenproblem.
+def report():
+    """Markdown tables from --out. Later records of the same (configuration, arm) win, so a
+    rerun or an arm run alone supersedes the attempt it replaces."""
+    best, limits, kernels_ = {}, {}, None
+    for line in open(ARGS.out):
+        rec = json.loads(line)
+        if 'kernels' in rec:
+            kernels_ = rec['kernels']
+            continue
+        key = (rec['orders'], rec['layers'], rec['path'])
+        if 'exceeded_gb' in rec:
+            limits[key + (rec['arm'],)] = rec
+        for arm, entry in rec.get('arms', {}).items():
+            best[key + (arm,)] = entry
+            if not rec.get('partial'):          # a partial summary sits beside its limit record
+                limits.pop(key + (arm,), None)
+    if kernels_:
+        print('| orders | matrix | kernel | torch (s) | jax (s) | jax / torch |\n|---|---|---|---|---|---|')
+        for k in kernels_:
+            print(f"| ({k['orders']},{k['orders']}) | {k['size']} | {k['kernel']} | {k['torch']:.2f} "
+                  f"| {k['jax']:.2f} | {k['jax'] / k['torch']:.2f}x |")
+        print()
+    f = lambda v, d=1: '—' if v is None else f'{v:.{d}f}'
+    def spread(e, ref):
+        # Same round, same parameter value, whichever process each arm ran in.
+        if not ref or 'values' not in e or 'values' not in ref:
+            return e.get('grad_spread')
+        rel = [abs(a - b) / max(abs(b), 1e-300) for ga, gb in zip(e['grads'], ref['grads'])
+               if ga is not None and gb is not None for a, b in zip(ga, gb)]
+        return max(rel, default=None)
 
-    A 2D layer's eigenproblem is ``2*(2n+1)**2`` square. Each kernel is timed on the library
-    each backend calls -- torch on its MKL, jax through XLA (eig and solve via jaxlib's LAPACK
-    kernels, matmul via XLA's own dot) -- with the same thread count.
-    """
-    import numpy as np
-    import torch
-    import jax
-    jax.config.update('jax_enable_x64', True)
-    import jax.numpy as jnp
-    torch.set_num_threads(ARGS.threads)
-    rows = []
-    for n in sorted({int(c.split(':')[0]) for c in ARGS.configs.split(',')}):
-        m = 2 * (2 * n + 1) ** 2
-        rng = np.random.default_rng(0)
-        a = rng.standard_normal((m, m)) + 1j * rng.standard_normal((m, m))
-        ta, ja = torch.tensor(a), jnp.asarray(a)
-        jeig, jsolve, jmm = jax.jit(jnp.linalg.eig), jax.jit(jnp.linalg.solve), jax.jit(jnp.matmul)
-        cases = {'eig': (lambda: torch.linalg.eig(ta), lambda: jax.block_until_ready(jeig(ja))),
-                 'solve': (lambda: torch.linalg.solve(ta, ta), lambda: jax.block_until_ready(jsolve(ja, ja))),
-                 'matmul': (lambda: ta @ ta, lambda: jax.block_until_ready(jmm(ja, ja)))}
-        for kernel, (tf, jf) in cases.items():
-            row = dict(orders=n, size=m, kernel=kernel)
-            for who, f in (('torch', tf), ('jax', jf)):
-                f()
-                samples = []
-                for _ in range(3):
-                    t0 = time.perf_counter()
-                    f()
-                    samples.append(time.perf_counter() - t0)
-                row[who] = min(samples)
-            print(json.dumps(row), flush=True)
-            rows.append(row)
-    with open(ARGS.out, 'a') as fh:
-        fh.write(json.dumps(dict(kernels=rows, machine=machine())) + '\n')
+    print('| orders | layers | path | arm | first (s) | median (s) | min (s) | modeling (s) | solve (s) '
+          '| vs torch | compile (s) | break-even (steps) | peak (GB) | failed rounds | grad vs torch |')
+    print('|' + '---|' * 15)
+    for key in sorted({k[:3] for k in best} | {k[:3] for k in limits}):
+        torch_ = best.get(key + ('torch',))
+        for arm in ('torch', 'torch-compile', 'jax-grad', 'jax-jit'):
+            cfg = f'| ({key[0]},{key[0]}) | {key[1]} | {key[2]} | {arm} '
+            if key + (arm,) in limits:
+                r = limits[key + (arm,)]
+                print(cfg + f"| exceeded the {r['limit_gb']:.1f} GB ceiling in round {r['round']} ({r['part']}) "
+                      + '| ' * 7 + f"| > {r['exceeded_gb'] - r['before_gb']:.1f} | | |")
+                continue
+            e = best.get(key + (arm,))
+            if e is None:
+                continue
+            solve = None if e.get('model_median') is None else e['median'] - e['model_median']
+            ratio = compile_ = even = None
+            if torch_ and torch_['median'] and arm != 'torch':
+                ratio = torch_['median'] / e['median']
+            if arm == 'jax-jit':
+                compile_ = e['first'] - e['median']
+                if torch_ and torch_['median']:
+                    gain = torch_['median'] - e['median']
+                    even = '' if gain <= 0 else f'{max(1.0, compile_ / gain):.0f}'
+                    even = even or 'never'
+            failed = ','.join(sorted({str(x['round']) for x in e.get('errors', [])})) or ''
+            print(cfg + f"| {f(e['first'])} | {f(e['median'])} | {f(e['min'])} | {f(e.get('model_median'), 2)} "
+                  f"| {f(solve)} | {'' if ratio is None else f'{ratio:.2f}x'} | {f(compile_)} "
+                  f"| {even or ''} | {f(e['peak_step_gb'])} | {failed} "
+                  f"| {'' if arm == 'torch' else (lambda g: '—' if g is None else f'{g:.0e}')(spread(e, torch_))} |")
 
 
 if __name__ == '__main__':
-    kernels() if ARGS.kernels else sweep() if ARGS.sweep else main()
+    report() if ARGS.report else kernels() if ARGS.kernels else sweep() if ARGS.sweep else main()
