@@ -1364,9 +1364,10 @@ Two consequences worth knowing before touching those generators:
 
 ## What each golden was frozen with
 
-A golden archive holds arrays and no version stamp, and the suite never runs an oracle, so the
-build that produced the numbers is recorded here. RETICOLO's rows name V10 in the table above,
-and PyMoosh's its 4.0.1.
+A golden archive holds arrays and no version stamp, and the suite never runs an oracle (the one
+exception, the S4 probe nodes in `tests/rcwa/test_resonant_nvf_probe.py`, runs only where S4 is
+installed and reads no golden), so the build that produced the numbers is recorded here.
+RETICOLO's rows name V10 in the table above, and PyMoosh's its 4.0.1.
 
 | Golden | Frozen with | When |
 | --- | --- | --- |
