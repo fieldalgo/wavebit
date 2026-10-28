@@ -45,6 +45,7 @@ from wavebit.rcwa._engine.parametric import _sampled_coeffs
 from wavebit.materials.response import as_material
 from wavebit._common.backend import checked_float
 from wavebit.rcwa._engine.factorization import check_normal_grid
+from wavebit.rcwa._engine.factorization import inverse_rule_bound
 from wavebit.rcwa._engine.geometry import StaleGeometryError
 from wavebit.lattice import reduced_basis
 from wavebit.lattice import reduction_transform
@@ -1367,7 +1368,7 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, shap
                                   dtype=cdtype), cdtype)
     eps_c = xp.where(is_dc, eps_bg, zero)
     inv_c = xp.where(is_dc, 1.0 / eps_bg, zero)
-    eps_bound = xp.abs(eps_bg)
+    epsilons = [eps_bg]
 
     for material, polys in regions:
         eps_s = xp.astype(xp.asarray(as_material(material, 'shape material').epsilon,
@@ -1377,7 +1378,9 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, shap
             ft = ft + xp.astype(polygon_ft(xp, V, KY, KX, lattice), cdtype)
         eps_c = eps_c + (eps_s - eps_bg) * ft
         inv_c = inv_c + (1.0 / eps_s - 1.0 / eps_bg) * ft
-        eps_bound = xp.maximum(eps_bound, xp.abs(eps_s))
+        epsilons.append(eps_s)
+
+    eps_bound = inverse_rule_bound(xp, epsilons)
 
     if laurent:
         from wavebit.rcwa._engine.parametric import laurent_from_coeffs

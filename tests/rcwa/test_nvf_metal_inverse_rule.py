@@ -189,6 +189,58 @@ def test_a_layer_where_the_floor_does_not_bind_never_takes_singular_vectors(monk
     assert not calls
 
 
+@pytest.mark.parametrize('values, passive', [
+    pytest.param([12.25, 1.0], True, id='silicon-like rod in air'),
+    pytest.param([4.0 + 0.3j, 2.25], True, id='absorbing disk in glass'),
+    pytest.param([AU_807, 1.0], False, id='gold beside air'),
+    pytest.param([0.2 + 2.0j, 0.2 - 2.0j], False, id='gain beside loss'),
+    pytest.param([1j, 2.25], False, id='Re eps = 0 is outside the proof'),
+])
+def test_the_floor_is_decided_from_the_materials_where_the_proof_covers_them(values, passive):
+    """A layer of passive dielectrics gets no floor at all -- ``None``, which is the floored
+    closing bit for bit there -- so no singular value of ``<1/eps>`` is computed; anything the
+    proof under ``INVERSE_RULE_BOUND`` does not cover keeps the bound, ``max |eps|``."""
+    bound = F.inverse_rule_bound(np, [np.asarray(v, dtype=np.complex128) for v in values])
+    if passive:
+        assert bound is None
+    else:
+        assert bound == pytest.approx(max(abs(v) for v in values))
+
+
+def test_an_unreadable_permittivity_keeps_the_bound():
+    """Under ``jax.jit`` the values cannot be read, so the floor is decided from the matrix as
+    before rather than assumed away."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    out = jax.jit(lambda e: F.inverse_rule_bound(jnp, [e, jnp.asarray(1.0 + 0j)]))(jnp.asarray(12.25 + 0j))
+    assert float(out) == pytest.approx(12.25)
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'torch'])
+def test_a_passive_dielectric_solve_takes_no_singular_values(monkeypatch, backend):
+    """End to end, on the shape path: a dielectric disk solves without ``svdvals`` or ``svd``
+    of ``<1/eps>``. That those are the floored closing's numbers bit for bit is
+    :func:`test_the_floor_never_binds_on_a_passive_dielectric_and_the_tensor_is_bit_identical`."""
+    if backend == 'torch':
+        pytest.importorskip('torch')
+    par, cfg = disks(4.0 + 0.3j, 852.0)
+
+    def T():
+        s = _legacy_wavebit_rcwa(backend=backend, structure=par, truncation_order=(3, 3), **cfg)
+        return np.asarray(s.solve().T)
+
+    reference = T()
+    calls = []
+
+    def refuse(*args, **kwargs):
+        calls.append(1)
+        raise AssertionError('a passive dielectric layer took singular values')
+
+    monkeypatch.setattr(F, '_floor_singular_values', refuse)
+    assert np.array_equal(T(), reference)
+    assert not calls
+
+
 def test_where_the_floor_binds_a_failing_torch_svd_is_taken_by_numpy(monkeypatch):
     """Where the floor binds the factors are needed, and they are constants to the derivative
     rule (taken from a detached matrix), so NumPy's SVD on the host is an exact substitute for a
