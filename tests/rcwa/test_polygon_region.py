@@ -336,6 +336,10 @@ def _painted_mean(case):
             + (e1 - 1.) * _area(over))
 
 
+#: The planner's first nudge direction and its normal: an edge along ``_D`` is an edge at 1 rad.
+_D, _N = np.array([np.cos(1.), np.sin(1.)]), np.array([-np.sin(1.), np.cos(1.)])
+
+
 def _gon_over_a_box_corner():
     """A 60-degree box with one corner exactly on a short edge of a 64-gon painted over it."""
     from wavebit._common.geometry.polygon import ellipse_verts
@@ -349,7 +353,8 @@ def _gon_over_a_box_corner():
 #: Two regions each, the later painting over the earlier: a box across the L's arm, the L over
 #: part of a triangle, the box the bug report found refused in metres instead of summed, and a
 #: box corner on an edge 0.009 long, which an on-edge test in length units held on the edge
-#: through every nudge in um and m.
+#: through every nudge in um and m; and two contacts along an edge at 1 rad, parallel to the first
+#: nudge, which were refused in every unit until the second direction resolved them.
 PAINTINGS = {
     'box over L': ((L_SHAPE, 6.25), (('box', .05, -.2, .5, .12, .3), 9.)),
     'L over triangle': ((TRIANGLE, 2.), (L_SHAPE, 6.25)),
@@ -358,6 +363,12 @@ PAINTINGS = {
         (((.1, -.35), (.45, -.35), (.45, -.1), (.3, -.1), (.3, .3), (.1, .3)), 4.),
         (('box', .4, .1, .2, .2, 0.), 9.)),
     'polygonised ellipse over a box corner on its edge': _gon_over_a_box_corner(),
+    'triangle over a triangle sharing an edge at 1 rad': (
+        (tuple(map(tuple, np.array([-.2 * _D, .2 * _D, .2 * _D - .3 * _N]))), 4.),
+        (tuple(map(tuple, np.array([-.1 * _D, .1 * _D, -.15 * _N]))), 9.)),
+    'triangle touching the side of a Rectangle(angle=1.0)': (
+        (('box', 0., 0., .4, .2, 1.), 4.),
+        (tuple(map(tuple, np.array([.1 * _N, .25 * _N + .1 * _D, .25 * _N - .1 * _D]))), 9.)),
 }
 
 
