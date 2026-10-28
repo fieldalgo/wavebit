@@ -70,6 +70,14 @@ z = -2 µm의 `ModeSource('src')`, 방향 `+z`, 모드 0(TE0), 진폭 1(미터�
   추적된 펄스 파장(`mode.traced`), 엔진 자리표시자 `fd.ModeSource`(공개 광원을 알려주는
   `NotImplementedError`).
 
+S7 수정(어떤 미분도 계산하기 전): 등록한 대로(설정 S, 약 1만 2천 스텝)라면 역방향 미분이 모든
+스텝을 저장해 여기 JAX에서 스텝당 약 8 MB가 필요합니다. 첫 시도는 미분을 하나도 계산하기 전에
+메모리 부족으로 종료되었고, `Numerics(checkpoint_steps=)`는 Torch CUDA에서만 허용됩니다. 그래서
+모드 솔버 기록의 MM4b처럼, 미분과 중앙 차분을 같은 잘린 실행에 대해 구합니다: 같은 슬래브를 담은
+5 µm × 4 µm 물리 영역(x, z `Open`, 12칸 `PML`), z = -1 µm의 광원, 1.55 µm를 읽는 z = +0.5 µm의
+`p2`, `cutoff = 1e-3`·`frequency_sigma_hz = 2e13`인 설정 S의 펄스, `Duration(steps=1200)`, 그리고
+(1.2, 0, -0.25) µm 중심의 유전율 3.0 산란체. 네 가지 미분, 차분 간격, 1e-6 한계는 등록한 그대로입니다.
+
 ## 결과
 
 `tests/fdtd/test_fd_mode_source.py`로 NumPy(이름을 적은 곳은 JAX와 Torch), 배정밀도에서

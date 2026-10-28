@@ -94,6 +94,14 @@ ripple stays above 1e-7 of the peak on any transform grid it builds. G3's waist 
 instead (the spectrum is 5e-5 of its peak at the light line). Everything else in G3, the
 limits included, is as registered.
 
+Amendment to G7, before any derivative was computed: for the reason S7's amendment in
+`fd-mode-source.md` states (reverse mode keeps every step; a full Setup B run does not fit
+in memory here), the derivatives and central differences are of the same truncated run: a
+9 µm by 3 µm physical domain (x and z `Open`, 12-cell `PML`), the sheet at z = -1 µm, the
+flux and the probe at z = +1 µm, the pulse with `cutoff = 1e-3`, `Duration(steps=1000)`, and
+the scatterer (permittivity 2.0) centred at (2, 0, 0) µm. The four derivatives, the steps and
+the 1e-6 limit are as registered.
+
 ## Results
 
 Measured with `tests/fdtd/test_fd_gaussian_beam.py` on NumPy (JAX and Torch where named),
