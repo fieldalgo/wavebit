@@ -300,7 +300,9 @@ its file in the tool's `reference.imported_by`
 ## Goldens
 
 `golden_*.npz` are frozen outputs; each has a `gen_goldens_*.py` beside it that regenerates it.
-They are checked in so the tests run anywhere.
+They are checked in so the tests run anywhere. Each external golden in `references/` also has a
+`golden_<x>.reference.json` provenance record beside it
+([format](references/README.md)); a golden frozen again updates its record in the same change.
 
 **Regenerating a golden is not a way to make a failing test pass.** A golden captured the
 behaviour of an implementation that was believed correct at the time; rewriting it converts a
