@@ -480,6 +480,38 @@ def test_the_periodic_fdtd_scene_refuses_a_polygon_by_name():
                          check=lambda valid, message: None, integration='area')
 
 
+#: A parallelogram with edges at 1 rad and at 2.3 rad to the x axis and a smaller one fitted into
+#: its corner, so that a nudge along either angle slides the smaller one along a shared edge.
+_D1, _D2 = np.array([np.cos(1.), np.sin(1.)]), np.array([np.cos(2.3), np.sin(2.3)])
+IN_THE_CORNER = tuple(np.array([0. * _D1, a * _D1, a * _D1 + b * _D2, b * _D2]) - .15 * (_D1 + _D2)
+                      for a, b in ((.3, .3), (.12, .1)))
+@pytest.mark.parametrize('length,scale', [('um', 1.), ('nm', 1e3), ('m', 1e-6)])
+@pytest.mark.parametrize('pad,named', [(False, 'Layer 0: region 1 cannot be painted over region 0'),
+                                       (True, 'Layer 0: region 2 cannot be painted over region 1')])
+def test_a_painting_the_planner_cannot_resolve_is_refused_with_a_code(length, scale, pad, named):
+    """A contact the planner cannot resolve reached ``prepare`` and ``run`` as the clipper's
+    private exception, uncoded. It is the ``rcwa.unsupported`` engine refusal now, the same in
+    every unit, naming the layer and the two regions that meet -- under a pad too, where the
+    region being cut when it failed is the pad, and the contact is between the two above it.
+    """
+    from wavebit._common.geometry.clipper import DegenerateClipError
+    regions = tuple(region(tuple(map(tuple, v * scale)), e)
+                    for v, e in zip(IN_THE_CORNER, (4., 9.)))
+    if pad:
+        regions = (region(rcwa.Rectangle(size=(.95 * scale, .95 * scale)), 2.),) + regions
+    p = rcwa.Problem(units=Units(length=length),
+                     stack=rcwa.Stack(period=(scale, scale),
+                                      layers=(rcwa.Layer(thickness=.3 * scale, regions=regions),)),
+                     excitation=rcwa.Excitation(wavelength=1.3 * scale,
+                                                sources=(rcwa.PlaneWave(polarization='s'),)))
+    for door in (rcwa.prepare, rcwa.run):
+        with pytest.raises(UnsupportedFeatureError) as caught:
+            door(p, numerics=rcwa.Numerics(orders=(1, 1), factorization='laurent'))
+        assert (caught.value.code, caught.value.path) == ('rcwa.unsupported', 'problem')
+        assert named in caught.value.message
+        assert isinstance(caught.value.__cause__, DegenerateClipError)
+
+
 # ------------------------------------------------------------- frozen geometry and staleness
 
 def _engine_structure(vertices, cx=.3):
