@@ -1811,6 +1811,34 @@ def _nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, dtype, de
 INVERSE_RULE_BOUND = 2.0
 
 
+def inverse_rule_bound(xp, values):
+    """The ``eps_bound`` an NVF layer of permittivities ``values`` hands :func:`_nvf_assemble`.
+
+    ``max |eps|`` over ``values`` (arrays or scalars of ``xp``), or ``None`` -- no floor at all --
+    where every value can be read and is a passive dielectric (``Re eps > 0``, ``Im eps >= 0``).
+    There the floor provably never binds (``INVERSE_RULE_BOUND``) and the unfloored closing is the
+    floored one bit for bit, so deciding from the materials spares the layer every singular value
+    of ``<1/eps>``: a values-only SVD of the full ``n x n`` matrix, against a check on a handful
+    of numbers. A metal, a gain medium, a value on the boundary of that set (``Re eps = 0``) or a
+    value that cannot be read (a ``jax.jit`` trace, a ``torch.func.vmap`` lane) keeps the bound,
+    and :func:`_floor_singular_values` decides from the matrix as before. Reading through a
+    ``jax.grad`` tracer or a grad-tracking tensor changes no derivative: where the floor does not
+    bind it is the identity, of every order.
+    """
+    passive = None
+    bound = None
+    for v in values:
+        v = _no_gradient(v) if hasattr(v, 'shape') else v
+        ok = xp.all((xp.real(v) > 0) & (xp.imag(v) >= 0))
+        passive = ok if passive is None else passive & ok
+    if _concrete(passive) is True:
+        return None
+    for v in values:
+        m = xp.max(xp.abs(v))
+        bound = m if bound is None else xp.maximum(bound, m)
+    return bound
+
+
 def _floor_singular_values(xp, B, floor):
     """``B`` with every singular value below ``floor`` raised to it; left and right vectors kept.
 
@@ -2516,7 +2544,7 @@ def nvf_conv_matrices(xp, eps_matrix, normal_x, normal_y, half_width_u, half_wid
     return _nvf_assemble(xp, ep_dir, ep_inv,
                          *_nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, C, dev,
                                          magnitude=magnitude),
-                         eps_bound=xp.max(xp.abs(eps_matrix)))
+                         eps_bound=inverse_rule_bound(xp, [eps_matrix]))
 
 
 def nvf_conv_matrices_integrated(xp, eps_comp, x, y, normal_x, normal_y, half_width_u, half_width_v,
@@ -2538,7 +2566,7 @@ def nvf_conv_matrices_integrated(xp, eps_comp, x, y, normal_x, normal_y, half_wi
     return _nvf_assemble(xp, ep_dir, ep_inv,
                          *_nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, C, dev,
                                          magnitude=magnitude),
-                         eps_bound=xp.max(xp.abs(eps_comp)))
+                         eps_bound=inverse_rule_bound(xp, [eps_comp]))
 
 
 def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=None,
