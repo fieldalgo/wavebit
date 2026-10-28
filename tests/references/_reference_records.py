@@ -24,7 +24,7 @@ import numpy as np
 SCHEMA = 'wavebit.reference-values/1'
 SUFFIX = '.reference.json'
 MAX_RECORD = 1 << 20
-MAX_PAYLOAD = 512 << 10
+MAX_PAYLOAD = 1 << 20    # 512 KiB until 2026-10-28; raised by the maintainer for a 743 KB golden
 COMPARISONS = ('same-discretization', 'different-discretization', 'structure-oracle')
 EXECUTIONS = ('separate-process', 'in-process', 'unknown')
 STATUSES = ('complete', 'reconstructed')
