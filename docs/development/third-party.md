@@ -163,6 +163,27 @@ The Mode column says how CI meets each tool:
 
 No tool runs in required CI today.
 
+Each entry in `tools/third_party_licenses.json` records its mode as
+`reference.mode`, and a tool that is not permissive also lists every file that
+loads it in `reference.imported_by`. Where such a tool (GPL, AGPL, LGPL or
+another copyleft license) may be loaded depends on the file's path:
+
+| Files | May load it |
+| --- | --- |
+| `src/wavebit/`, `examples/`, the tutorial notebooks | never |
+| `tools/`, `docs/**/*.py`, every `conftest.py` and every other test helper under `tests/` | never; run it as a separate program |
+| test modules, `tests/**/test_*.py` | only inside a test, fixture or function, never at module level (a module-level `try` or `if` counts) and never by a module-level `importorskip` |
+| generators and workers, `tests/references/{gen,refine,check}_*.py` and `tests/references/interface/`, and `studies/` | at any level |
+
+A test or helper may import a generator, worker or study module at module level
+only if that module loads no such tool at module level (the body of
+`if __name__ == "__main__":` does not count). One exception: a test module
+marked `research` as a whole that must also run under `python -m unittest`
+alone, like the NGSolve files, may guard a module-level import with
+`try`/`except ImportError` or an `if`, never with `importorskip`.
+`tests/api/test_reference_zones.py` checks all of this over the git-tracked
+files, and compares the Mode column below with `reference.mode`.
+
 | Tool | SPDX | Mode | How it is used |
 | --- | --- | --- | --- |
 | `Meep` | GPL-2.0-or-later | stored | FDTD reference through its documented Python API; the generators and bridges under `tests/references/` run by hand in a separate Meep environment. Two bridges load Wavebit in the Meep process: `tests/references/interface/validate_grid_meep.py` imports it, and `tests/references/interface/meep_rotation.py` imports a study's density helper |
