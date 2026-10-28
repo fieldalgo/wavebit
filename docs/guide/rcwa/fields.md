@@ -198,6 +198,14 @@ M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). The default, `'fourier'`, is unchang
     across a wall normal to y it reads the two sides off two different rows, each row's
     operator built for that row's walls alone, so there `E_x` steps where it should be
     continuous.
+    - The error sits on one side: in the row that lacks its neighbour's walls, such as the
+      air row under a block. Near the boundary the field there carries the neighbour's
+      jumps, and that row's operator rings on them as a plain sum would.
+    - The ringing band narrows with the order, about `P/(2N+1)` wide, but its height at the
+      boundary does not.
+    - The same step appears at any row boundary where the two rows differ somewhere, even
+      where the material is the same on both sides: 13 to 17% of the field at order 16 in
+      the test cells below.
   - Measured on three cells — a 3.5-index square, a 2.5-index checkerboard with four-way
     corners, and a lossy L-shape at oblique incidence — at orders 4, 8, 12 and 16, each jump
     relative to the larger side, at the middle of each pixel edge:
@@ -215,9 +223,18 @@ M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). The default, `'fourier'`, is unchang
     inside a wall normal to the component, or absorbed power beside a sidewall. Keep the
     default where a component runs along walls normal to the other axis and you need it
     continuous there, as in a smooth field map or a tangential boundary value. Away from walls
-    either rule will do. A reconstruction right on both kinds of wall would split `E` at each
-    point into the part normal to the local wall, read from `D`, and the part along it, read
-    from `E`. Wavebit does not have one yet.
+    either rule will do.
+  - Splitting `E` at each sample does not escape the trade. The split takes the part normal
+    to the local wall from the continuity rule and the part along it from the default.
+    - That makes both wall conditions hold away from corners.
+    - But along a tangential wall it takes the default's value, which converges there more
+      slowly than the continuity rule's better side.
+    - Within about `P/(2N+1)` of a corner, both defects come back at full size at every
+      order.
+    - Normal-vector-field projections of the `D` and `E` series did no better with Wavebit's
+      raster normal fields.
+  - Near a corner the field is singular, and no rule built from the truncated series has
+    been found that is right there on both kinds of wall.
 - **Why use it.** It is RETICOLO's `res3` rule (`parm.res1.champ=1`): with it the RETICOLO field
   goldens agree to 1e-13 on every slot of the 1D and conical cases, `E_x` included, where the
   default differs by 7e-2 to 1e-1, and to 4e-11 on every slot of a two-layer crossed grating,
