@@ -79,6 +79,17 @@ at that wavelength (from `solve_modes`), in the run's Fourier convention.
   pulse wavelength (`mode.traced`); the engine placeholder `fd.ModeSource`
   (`NotImplementedError` naming the public source).
 
+Amendment to S7, before any derivative was computed: as registered (Setup S, about 12k
+steps) the reverse-mode runs keep every step and need about 8 MB a step on JAX here; a first
+attempt was killed for memory with no derivative computed, and `Numerics(checkpoint_steps=)`
+is admitted only on Torch CUDA. As for MM4b in the mode-solver record, the derivatives and
+the central differences are taken of the same truncated run instead: a 5 µm by 4 µm
+physical domain (x and z `Open`, 12-cell `PML`) holding the same slab, the source at
+z = -1 µm, `p2` at z = +0.5 µm reading 1.55 µm, the pulse of Setup S with `cutoff = 1e-3`
+and `frequency_sigma_hz = 2e13`, `Duration(steps=1200)`, and the scatterer, of permittivity
+3.0, centred at (1.2, 0, -0.25) µm. The four derivatives, the steps and the 1e-6 limit are as
+registered.
+
 ## Results
 
 Measured with `tests/fdtd/test_fd_mode_source.py` on NumPy (JAX and Torch where named),
