@@ -1,0 +1,154 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_native_grid_external",
+  "physics": "fdtd",
+  "comparison": "same-discretization",
+  "role": "Meep + FDTDX native-grid Yee updates (external outputs only, no Wavebit outputs)",
+  "references": [
+    {
+      "tool": "Meep",
+      "version": "1.34.0",
+      "build": null,
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "GPL-2.0-or-later",
+      "source": "https://github.com/NanoComp/meep",
+      "install": {
+        "kind": null,
+        "command": null
+      },
+      "settings": "worker tests/references/interface/validate_grid_meep.py --backend meep; 1D periodic cell length 32, Courant 0.4, eps_averaging=True, CustomSource pulse, duration 18 (runtime control 20 at resolution 40), no PML",
+      "discretization": "Meep 1D Yee grid at resolutions 20/40/80",
+      "arrays": [
+        "meep-grid-*",
+        "wavelengths",
+        "metadata"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": true,
+        "reference_inputs_built_from_product_objects": false
+      }
+    },
+    {
+      "tool": "FDTDX",
+      "version": "0.6.2",
+      "build": null,
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "MIT",
+      "source": "https://github.com/ymahlau/fdtdx",
+      "install": {
+        "kind": null,
+        "command": null
+      },
+      "settings": "worker tests/references/interface/validate_grid_fdtdx.py --backend fdtdx; native update_H then update_E for 37 steps, CPU float64, Courant 0.2, deterministic nonuniform diagonal eps/mu (rng seed 2419)",
+      "discretization": "FDTDX 9x7x5 periodic uniform grid, spacing 1; arrays transposed (z,y,x)<->(x,y,z)",
+      "arrays": [
+        "fdtdx_*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": true,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/interface/freeze_grid_references.py",
+    "sha256": null,
+    "command": "\"$WAVEBIT_PYTHON\" tests/references/interface/freeze_grid_references.py --input artifacts/native-grid-reference --output artifacts/native-grid-reference/external.npz",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-09-07",
+  "environment": {
+    "python": null,
+    "numpy": null
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/interface/freeze_grid_references.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_native_grid_external.npz",
+    "format": "npz",
+    "file_sha256": "a20c75aa943d3b240b4f3ba74bf680e725a60507b25aa0225e69161687ba2dc8",
+    "arrays": [
+      "fdtdx_E",
+      "fdtdx_H",
+      "fdtdx_finite_difference",
+      "fdtdx_gradient",
+      "fdtdx_value",
+      "meep-grid-20_fields",
+      "meep-grid-20_power",
+      "meep-grid-40_fields",
+      "meep-grid-40_power",
+      "meep-grid-80_fields",
+      "meep-grid-80_power",
+      "meep-grid-runtime_fields",
+      "meep-grid-runtime_power",
+      "metadata",
+      "wavelengths"
+    ]
+  },
+  "values_sha256": "5ca3bbe8fcf372abe7c6ce162bcf69c01c55c16fab630c7c5a4362e259ef9057",
+  "content_sha256": "313ead5d31793cbac40ecb586ba4b9c8c1e4e7fcfa7db141967c42de53943eba",
+  "consumers": [
+    "tests/fdtd/test_fdtd_scene_backends.py",
+    "tests/references/test_native_grid_external.py",
+    "tests/references/test_native_torch_external.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[].source": "tools/third_party_licenses.json external_tools.<tool>.url",
+    "references[].execution": "tests/references/README.md:1277-1285 (Meep run by hand in its own environment) / README row 'separate Meep and FDTDX interpreters'",
+    "comparison": "README.md:1464-1474 (transfer differences 2.5e-13/8.3e-14 at res 40/80; 'two Yee implementations' share discretization error), 1481-1482 (FDTDX 1.7e-16)",
+    "role": "README.md:121,1448-1449",
+    "references[0].version": "metadata key JSON: meep-grid-*.version",
+    "references[1].version": "metadata key JSON: fdtdx-grid.version",
+    "references[*].arrays": "archive keys; freeze_grid_references.py:46-57 (wavelengths written from the Meep JSON; metadata covers both tools and is assigned to Meep here)",
+    "references[0].settings": "validate_grid_meep.py:24-46,82; README.md:1456-1462,1497-1500",
+    "references[1].settings": "validate_grid_fdtdx.py:17-50; README.md:1477-1481,1501",
+    "references[0].independence": "validate_grid_meep.py:7 (module-level `from wavebit.fdtd._periodic.grid import fdtd_grid`); tools/third_party_licenses.json Meep.use",
+    "references[1].independence": "validate_grid_fdtdx.py:7 (module-level wavebit import, current file); inputs from numpy rng :25-28",
+    "generator": "README.md:1503",
+    "generated_date": "README.md:1446 section heading '(2026-09-07)'"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "not recorded",
+    "environment.python": "not recorded",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "metadata has version and FDTDX update_sha256 only",
+    "references[0].install.command": "README.md:1491-1492 says only 'separate Python environments' ($MEEP_PYTHON, $FDTDX_PYTHON); no install command",
+    "references[0].install.kind": "README.md:1491-1492 says only 'separate Python environments' ($MEEP_PYTHON, $FDTDX_PYTHON); no install command",
+    "references[0].modified.description": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified",
+    "references[0].modified.value": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified",
+    "references[1].build": "metadata has version and FDTDX update_sha256 only",
+    "references[1].install.command": "README.md:1491-1492 says only 'separate Python environments' ($MEEP_PYTHON, $FDTDX_PYTHON); no install command",
+    "references[1].install.kind": "README.md:1491-1492 says only 'separate Python environments' ($MEEP_PYTHON, $FDTDX_PYTHON); no install command",
+    "references[1].modified.description": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified",
+    "references[1].modified.value": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified"
+  }
+}
