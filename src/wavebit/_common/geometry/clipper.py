@@ -69,8 +69,15 @@ FLIP_A = True
 FLIP_B = False
 
 
-class DegenerateClipError(RuntimeError):
-    """A configuration this clipper does not handle (touching, collinear overlap)."""
+class DegenerateClipError(NotImplementedError):
+    """A configuration this clipper does not handle (touching, collinear overlap).
+
+    A ``NotImplementedError``, because that is what it is: a request the planner cannot express
+    yet, not a defect of the input. ``prepare`` and ``run`` therefore report it as
+    ``rcwa.unsupported`` rather than letting a private class escape; :func:`resolve_painting`
+    names the two regions. ``Prepared.run`` refuses new values it cannot plan the way it refuses
+    any that leave its record, as ``prepared.topology``.
+    """
 
 
 class StalePlanError(RuntimeError):
@@ -380,8 +387,7 @@ def plan_difference_robust(A, B, steps=_NUDGE_STEPS):
         return plan, replay(np, plan, A, B), s
 
     raise DegenerateClipError(
-        'no nudge in the ladder resolved this configuration; the shapes may be identical '
-        'or share a whole edge in a way this clipper cannot express')
+        'no nudge in the ladder resolved this contact')
 
 
 # ==================================================================== painting
@@ -523,6 +529,11 @@ def resolve_painting(shapes):
     a clockwise outline would be its own hole: the transform is signed, and S4, which takes
     its polygons as given, solves a clockwise rectangle as a different structure (``sum(T)``
     0.859 against 0.974, measured) without a word.
+
+    A contact the nudge ladder cannot resolve is refused with :class:`DegenerateClipError`
+    naming the two regions: ``j``, the one being painted, and the earlier region whose outline
+    it meets (:func:`_met_region`), which is not always the region being cut -- an outline
+    between them may have left its edge in that region as a hole.
     """
     table = Table(shapes)
     ids = []
@@ -536,12 +547,50 @@ def resolve_painting(shapes):
         for j in range(i + 1, len(shapes)):
             nxt = []
             for lp in region:
-                nxt.extend(subtract_loop(table, lp, ids[j]))
+                try:
+                    nxt.extend(subtract_loop(table, lp, ids[j]))
+                except DegenerateClipError as error:
+                    met = _met_region(table, lp, ids, j, i)
+                    raise DegenerateClipError(
+                        f'region {j} cannot be painted over region {met} '
+                        f'(regions counted from 0 in the order declared): the boundary planner '
+                        f'found no consistent way to cut one outline by the other where they '
+                        f'touch exactly: along an edge at, or within about 2e-5 rad of, 1 rad to '
+                        f'the x axis, the direction it shifts an outline in to decide a contact, '
+                        f'or so far from the cell that the coordinates cannot resolve the shift. '
+                        f'Move region {j} by a small fraction of its size.'
+                    ) from error
             region = nxt
             if not region:
                 break
         regions.append(region)
     return table.recs, regions
+
+
+def _met_region(table, loop, ids, j, fallback):
+    """The earlier region whose outline region ``j`` could not be cut against, for a message.
+
+    The loop that failed is built from the outlines it was cut by as well as its own, so the
+    culprit is looked for among those: the first whose outline alone, against ``j``'s, is
+    unresolvable too. Only reached on a refusal, so the cost does not matter.
+    """
+    owners, seen, todo = set(), set(), list(loop)
+    while todo:
+        row = todo.pop()
+        if row in seen:
+            continue
+        seen.add(row)
+        rec = table.recs[row]
+        if rec[0] == 'src':
+            owners.add(rec[1])
+        else:
+            todo.extend(rec[1:])
+    for k in sorted(owners - {j}):
+        try:
+            plan_difference_robust(table.poly(ids[k]), table.poly(ids[j]))
+        except DegenerateClipError:
+            return k
+    return fallback
 
 
 def region_area(xp, region, vals):

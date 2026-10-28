@@ -92,7 +92,8 @@ def _plan(layer, lattice, index):
         return ('primitive', gamma)
     # Even disjoint shapes need an actual-interface plan for tensor contacts:
     # all nine components participate in deciding whether a seam survives.
-    interfaces = boundary.plan_layer(shapes,lattice)
+    with boundary.naming_the_layer(index):
+        interfaces = boundary.plan_layer(shapes,lattice)
     if not overlap and any(s.get('type', 'rectangle') in _ELLIPSE_TYPES for s in shapes):
         gamma = P.plan_gamma(shapes,lattice)
         if gamma is None:
@@ -481,7 +482,8 @@ def checked_layers(solver, geometry):
                     raise StaleGeometryError('tensor shapes changed; freeze_geometry() again')
                 P.check_gamma_plan_still_fits(layer,solver.lattice,plan[1],index)
             else:
-                boundary.check_plan_still_fits(shapes,solver.lattice,plan[1])
+                with boundary.naming_the_layer(index):
+                    boundary.check_plan_still_fits(shapes,solver.lattice,plan[1])
                 if plan[0]=='disjoint':
                     P.check_no_plan_still_fits(layer,solver.lattice,index)
                     if len(plan) == 3:

@@ -25,7 +25,8 @@ def check_shape_record(layers, lattice, geometry, factorization, projector):
             if plan is None:
                 parametric.check_no_plan_still_fits(layer, lattice, index)
             else:
-                boundary.check_plan_still_fits(layer.get('shapes', []), lattice, plan)
+                with boundary.naming_the_layer(index):
+                    boundary.check_plan_still_fits(layer.get('shapes', []), lattice, plan)
         if factorization == 'nvf' and gammas is not None and (plan is None or projector == 'circular'):
             parametric.check_gamma_plan_still_fits(
                 layer, lattice, gammas[index], index, dyadic=projector == 'circular')

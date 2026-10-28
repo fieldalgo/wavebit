@@ -103,7 +103,7 @@ A layer is either painted with regions over a background or sampled as a raster,
 | --- | --- | --- | --- |
 | `thickness` | required | a finite, real, nonnegative length | negative, complex or not finite: `layer.thickness`, at check |
 | `background` | `Material(epsilon=1.)` on a region layer | the material model where no region paints | beside `epsilon`: `layer.ambiguous`, at construction; a bare number: `material.type`, at check |
-| `regions` | `()` | a tuple of `rcwa.Region`; a later region paints over an earlier one, the same in any length unit | anything but `Region`s: `layer.regions`; beside `epsilon`: `layer.ambiguous`, both at construction |
+| `regions` | `()` | a tuple of `rcwa.Region`; a later region paints over an earlier one, the same in any length unit | anything but `Region`s: `layer.regions`; beside `epsilon`: `layer.ambiguous`, both at construction; two regions the boundary planner cannot paint one over the other (outlines touching along an edge at, or within about 2e-5 rad of, 1 rad to the x axis, or written so far from the cell that their coordinates cannot resolve the planner's nudge): `rcwa.unsupported`, at prepare |
 | `epsilon` | `None` | a sampled relative-permittivity raster of shape `(Ny, Nx)`, complex allowed; one row is a 1D grating, and `(Ny, Nx, 3, 3)` holds a tensor per pixel. Every raster layer of a stack has the same shape | `Material` objects inside the array, or raster layers of different shapes: `rcwa.invalid`, at check |
 | `mu` | `None` | the relative-permeability raster beside `epsilon`, the same shape. On a region layer a permeability belongs to each `Material` | without `epsilon`: `layer.mu_without_raster`, at construction |
 
@@ -321,7 +321,9 @@ the engine's message kept: `rcwa.invalid` / `rcwa.unsupported`, `fdtd.invalid` /
 `fdtd.unsupported`, `native.invalid` / `native.unsupported` (`fdtd.native`) and
 `periodic.invalid` / `periodic.unsupported` (`fdtd.periodic`). The `.unsupported` code is an
 `UnsupportedFeatureError` (an engine `NotImplementedError`); the `.invalid` code a
-`ValidationError`. `check` reports the same code that `prepare`, `run` and `Prepared.run` raise.
+`ValidationError`. `check` reports the same code that `prepare`, `run` and `Prepared.run` raise,
+except for a painting the boundary planner cannot resolve: `check` does not plan the painting (see
+`regions` above).
 A failure constructed without a code takes its class's default: `input.invalid`
 (`ValidationError`), `feature.unsupported` (`UnsupportedFeatureError`), `problem.incompatible`
 (`IncompatibleProblemError`) or `numerical.failure` (`NumericalError`); no Wavebit refusal relies

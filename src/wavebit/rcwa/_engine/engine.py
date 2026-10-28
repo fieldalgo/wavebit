@@ -5610,7 +5610,8 @@ class CoreFactorizationMixin:
             plans = []
             for index, layer in enumerate(self.structure):
                 if _parametric.layer_needs_resolving(layer, cell):
-                    plans.append(_boundary.plan_layer(layer.get('shapes', []), cell))
+                    with _boundary.naming_the_layer(index):
+                        plans.append(_boundary.plan_layer(layer.get('shapes', []), cell))
                 else:
                     plans.append(None)
             # Recorded whether or not anything needed a plan. The entry *is* the decision:

@@ -552,6 +552,19 @@ for a box across an L in a 1 um cell), an earlier region taken as covered, or th
 -- and touching outlines were refused with a private exception in cells up to about 0.1 mm
 (identical ones up to 1 cm), while `rcwa.check` passed and `R + T` stayed 1.
 
+**A painting the clipper cannot resolve is refused.** Where an outline's vertex lies exactly on
+another outline, the clipper decides the contact by nudging one outline by 1e-9 to 5e-8 of the
+pair's size along `(cos 1, sin 1)`, for planning only, and replays the plan on the outlines as
+declared. A contact along an edge parallel to that direction -- an edge at 1 rad to the x axis,
+as a `Rectangle(angle=1.0)` has, or within about 2e-5 rad of it, a band that widens far from the
+cell -- slides along itself under every nudge and is left unresolved. `rcwa.prepare` and
+`rcwa.run` then refuse with `UnsupportedFeatureError`, code `rcwa.unsupported`, naming the layer and the two
+regions that meet; move the later one by a small fraction of its size. `rcwa.check` does not plan
+the painting and does not see it: planning took 0.26 s for two overlapping 256-vertex circles
+over a rectangle (measured 2026-10-28), which `check` leaves to `prepare`. A prepared calculation
+run on values it cannot plan refuses them as it refuses any that leave its record
+(`prepared.topology`), with the same message.
+
 **The outline must be simple**: at least three finite vertices, no zero-length edge, no edge
 doubling back, no two edges crossing or touching, and an area. A bow tie would be integrated with
 winding numbers of both signs, its lobes cancelling. Checked at the declaration when the values

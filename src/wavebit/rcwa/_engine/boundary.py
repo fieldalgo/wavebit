@@ -34,6 +34,8 @@ removed block path, while tying on axis-aligned overlap, where a staircase has n
 lose.
 """
 
+import contextlib
+
 from wavebit._common.geometry.periodic import fold_into_cell
 import wavebit._common.geometry.clipper as _clipper
 from wavebit._common.geometry.interfaces import plan_interfaces
@@ -1502,6 +1504,16 @@ def plan_layer(shapes, lattice, n_poly=POLYGON_VERTICES):
     regs = [(None, [_clipper.loop_verts(np, lp, vals) for lp in region]) for region in regions]
     interfaces = plan_interfaces(regs, lattice, transform)
     return recs, regions, transform, interfaces
+
+
+@contextlib.contextmanager
+def naming_the_layer(index):
+    """Name the layer in a painting refusal: :func:`~.clipper.resolve_painting` sees one layer's
+    regions and can name only those."""
+    try:
+        yield
+    except _clipper.DegenerateClipError as error:
+        raise _clipper.DegenerateClipError(f'Layer {index}: {error}') from error
 
 
 def _concrete_basis(lattice):
