@@ -83,7 +83,7 @@
     "Meep": {
       "spdx": "GPL-2.0-or-later",
       "url": "https://github.com/NanoComp/meep",
-      "use": "FDTD reference solver run in its own interpreter; frozen numbers in tests/references/",
+      "use": "FDTD reference solver; its generators and bridges under tests/references/ run by hand in a separate Meep environment, and two bridges load Wavebit in the Meep process (tests/references/interface/validate_grid_meep.py imports it at module level, tests/references/interface/meep_rotation.py through a study's density helper); frozen numbers in tests/references/",
       "forbidden_imports": [
         "meep"
       ]
@@ -91,7 +91,7 @@
     "S4": {
       "spdx": "GPL-2.0-or-later",
       "url": "https://github.com/victorliu/S4",
-      "use": "RCWA reference solver run in its own interpreter; frozen numbers in tests/references/",
+      "use": "RCWA reference solver; the gen_goldens_s4*.py generators run by hand, and FieldAlgo's fork build (s4-fieldalgo) is imported in the same process by studies/rcwa/nvf_resonant_spectrum/resonant_nvf_probe.py and by the 11 nodes of tests/rcwa/test_resonant_nvf_probe.py, which skip where S4 is absent (CI installs none); frozen numbers in tests/references/",
       "forbidden_imports": [
         "S4"
       ]

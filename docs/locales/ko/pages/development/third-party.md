@@ -141,17 +141,27 @@ Wavebit 자체 휠과 sdist에는 네이티브 파일이 없습니다. 휠은 `p
 읽습니다. 비교 내용은
 [레퍼런스 사례](https://github.com/fieldalgo/wavebit/blob/main/tests/references/README.md)에 있습니다.
 
-| 도구 | SPDX | 쓰임새 |
-| --- | --- | --- |
-| `Meep` | GPL-2.0-or-later | 문서화된 Python API로 쓰는 FDTD 레퍼런스. `tests/references/`의 생성기·브리지는 손으로 실행 |
-| `S4` | GPL-2.0-or-later | RCWA 레퍼런스. `gen_goldens_s4*.py` 생성기는 손으로 실행하고, 배포하지 않는 일부 시험·연구는 S4를 직접 부르며 없으면 건너뜀 |
-| `Octave` | GPL-3.0-or-later | RETICOLO를 별도 프로세스로 실행. 우리 `.m` 래퍼는 Octave 안에서 돌며 Wavebit을 부르지 않음 |
-| `RETICOLO` | CC-BY-4.0 | Octave 안에서 실행하는 RCWA 레퍼런스로, 배포하지 않음. 저작자 표시와 이력은 [LICENSE](https://github.com/fieldalgo/wavebit/blob/main/LICENSE) |
-| `oct2py` | MIT | Octave 프로세스를 구동하는 Python 드라이버 |
-| `fmmax` | MIT | 별도 환경의 RCWA 레퍼런스 |
-| `FDTDX` | MIT | 별도 환경의 FDTD 레퍼런스 |
-| `PyMoosh` | MIT | 일회용 환경의 다층막 레퍼런스 |
-| `NGSolve` | LGPL-2.1-only | NVF 연구용 선택 FEM 레퍼런스. 설치 바이너리에 GPL-2.0-or-later UMFPACK 코드도 들어 있어 그 환경은 재배포하지 않음 |
+방식 열은 CI가 각 도구를 어떻게 다루는지 말합니다.
+
+- **stored(저장값)**: 도구는 CI 밖에서 손으로 실행하고, 필수 CI는 `tests/references/`에
+  커밋된 수치와 Wavebit을 비교합니다.
+- **local(로컬)**: 도구가 설치된 곳에서는 시험이 같은 프로세스에서 불러오고, 없으면
+  건너뜁니다. CI는 이 도구들을 하나도 설치하지 않으므로 이 시험을 돌리지 않으며, 건너뜀은
+  통과의 근거가 아닙니다.
+
+지금 필수 CI에서 실행되는 도구는 없습니다.
+
+| 도구 | SPDX | 방식 | 쓰임새 |
+| --- | --- | --- | --- |
+| `Meep` | GPL-2.0-or-later | stored | 문서화된 Python API로 쓰는 FDTD 레퍼런스. `tests/references/`의 생성기·브리지는 별도 Meep 환경에서 손으로 실행. 브리지 둘은 Meep 프로세스에서 Wavebit을 불러옴: `tests/references/interface/validate_grid_meep.py`는 직접, `tests/references/interface/meep_rotation.py`는 연구의 밀도 도우미를 통해 |
+| `S4` | GPL-2.0-or-later | stored (골든 3개); local (시험 노드 11개) | RCWA 레퍼런스. `gen_goldens_s4*.py` 생성기는 손으로 실행. FieldAlgo 포크 빌드(`s4-fieldalgo`)를 `studies/rcwa/nvf_resonant_spectrum/resonant_nvf_probe.py`와 `tests/rcwa/test_resonant_nvf_probe.py`의 노드 11개가 같은 프로세스에서 불러오며, 없으면 건너뜀 |
+| `Octave` | GPL-3.0-or-later | stored | RETICOLO를 별도 프로세스로 실행. 우리 `.m` 래퍼는 Octave 안에서 돌며 Wavebit을 부르지 않음 |
+| `RETICOLO` | CC-BY-4.0 | stored | Octave 안에서 실행하는 RCWA 레퍼런스로, 배포하지 않음. 저작자 표시와 이력은 [LICENSE](https://github.com/fieldalgo/wavebit/blob/main/LICENSE) |
+| `oct2py` | MIT | stored | Octave 프로세스를 구동하는 Python 드라이버 |
+| `fmmax` | MIT | stored | 별도 환경의 RCWA 레퍼런스 |
+| `FDTDX` | MIT | stored | 별도 환경의 FDTD 레퍼런스 |
+| `PyMoosh` | MIT | stored | 일회용 환경의 다층막 레퍼런스 |
+| `NGSolve` | LGPL-2.1-only | local (research 등급) | NVF 연구용 선택 FEM 레퍼런스. 이를 불러오는 `tests/rcwa/test_nvf_*` 파일 8개는 문서화된 import 가드가 있는 research 시험. 설치 바이너리에 GPL-2.0-or-later UMFPACK 코드도 들어 있어 그 환경은 재배포하지 않음 |
 
 ### 과거 비교
 
