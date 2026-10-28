@@ -1,0 +1,110 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_s4",
+  "physics": "rcwa",
+  "comparison": "same-discretization",
+  "role": "external oracle (second implementation of the fmmax/S4 lineage)",
+  "references": [
+    {
+      "tool": "S4",
+      "version": "0.1.0+b98c80e",
+      "build": "s4-fieldalgo 0.1.0+b98c80e: FieldAlgo's fork of S4 1.1 (victorliu/S4), built against Accelerate for Python 3.12; b98c80e is a commit of the fork's unpublished history; release tag v0.1.0 (3940533) on fieldalgo/S4 has a byte-identical S4/ source tree",
+      "modified": {
+        "value": true,
+        "description": "FieldAlgo fork of S4 1.1 (not upstream victorliu/S4); what the fork changes is not described in the repository"
+      },
+      "spdx": "GPL-2.0-or-later",
+      "source": "https://github.com/fieldalgo/S4",
+      "install": {
+        "kind": "fork build",
+        "command": null
+      },
+      "settings": "uniform anisotropic slab (real tensors only) between vacuum; WL 580, period 260, thickness 240; tensor passed as SWAP @ eps @ SWAP; total power flux per incident polarisation via GetPowerFlux, [R_s, T_s, R_p, T_p]",
+      "discretization": "NumBasis=1 (uniform slab, zeroth order only; no truncation on either side)",
+      "arrays": [
+        "*"
+      ],
+      "execution": "in-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_s4.py",
+    "sha256": null,
+    "command": "conda run -n wavebit python tests/references/gen_goldens_s4.py",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-08-10",
+  "environment": {
+    "python": "3.12",
+    "numpy": null,
+    "other": "S4 extension s4-fieldalgo 0.1.0+b98c80e (Accelerate) in the project env"
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_s4.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_s4.npz",
+    "format": "npz",
+    "file_sha256": "d713d38949a2eac7d20273af7eeea4b29d52017ab89af0166dc08d06e3c6d91b",
+    "arrays": [
+      "antisymmetric_53deg",
+      "antisymmetric_normal",
+      "antisymmetric_strong_17deg",
+      "biaxial_23deg",
+      "isotropic_41deg",
+      "isotropic_normal",
+      "symmetric_offdiag_53deg",
+      "symmetric_offdiag_normal"
+    ]
+  },
+  "values_sha256": "f796c93eb107bfb3234dd90d068ca25e8006596685ea0e52763427fbcc3a3c1d",
+  "content_sha256": "ffbdbed5785b82ca0097409aa5c247129dd3bde860bdbe0f69b826465e204bce",
+  "consumers": [
+    "tests/references/test_s4_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[0].version": "tests/references/README.md:1374",
+    "references[0].build": "tests/references/README.md:1374",
+    "references[0].source": "tests/references/README.md:1374 (tag v0.1.0 on fieldalgo/S4); upstream victorliu/S4 also in tools/third_party_licenses.json external_tools.S4.url",
+    "references[0].modified": "tests/references/README.md:1374 ('FieldAlgo's fork of S4 1.1')",
+    "references[0].install": "tests/references/README.md:1374 ('build that tag to reproduce these goldens')",
+    "environment": "tests/references/README.md:1374",
+    "comparison": "tests/references/README.md:7-9 (another RCWA, neither side truncates); gen_goldens_s4.py:76 NumBasis=1",
+    "role": "tests/references/README.md:104 ('S4 (same lineage, C++)'); gen_goldens_s4.py:8-14",
+    "references[0].settings": "tests/references/gen_goldens_s4.py:47-88",
+    "references[0].execution": "gen_goldens_s4.py:75 'import S4' inside the generator process",
+    "references[0].independence": "gen_goldens_s4.py imports only sys, pathlib, tools.repository_paths, numpy and S4; no wavebit import; cases are literal numpy tensors (lines 54-69)",
+    "generator.command": "tests/references/gen_goldens_s4.py:6",
+    "generated_date": "tests/references/README.md:1374 (When column); README.md:1389-1390 says the S4 archives came back bit for bit when refrozen on 2026-10-15",
+    "arrays": "archive keys: 8 case names, each [R_s, T_s, R_p, T_p]"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "README.md 'What each golden was frozen with' and the generator docstring; no numpy version recorded",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].install.command": "README.md:1374 says only 'build that tag'; no build/install command in README.md, the generators or docs/development/third-party.md"
+  }
+}
