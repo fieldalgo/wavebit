@@ -179,7 +179,7 @@ def source_terms(scene, plan):
 
 
 def _mode_sheet_term(scene, plan, src, row):
-    """The kernel term of a mode sheet (``_kernel/mode_sheet.py``): four correction slabs."""
+    """The kernel term of a mode or beam sheet (``src/wavebit/fdtd/_kernel/mode_sheet.py``)."""
     from wavebit.fdtd._kernel.mode_sheet import ModeSheetTerm
     w, u, v = src.axis, (src.axis + 1) % 3, (src.axis + 2) % 3
     (u0, u1), (v0, v1) = src.window
