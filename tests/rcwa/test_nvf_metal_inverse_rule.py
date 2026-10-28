@@ -157,6 +157,61 @@ def test_the_floor_binds_on_gold_and_on_a_few_modes_only():
     assert not np.array_equal(lifted, B)
 
 
+def _failing_torch_svd(monkeypatch):
+    """Make ``torch.linalg.svd`` raise as MKL's did, and count the calls."""
+    torch = pytest.importorskip('torch')
+    calls = []
+
+    def svd(*args, **kwargs):
+        calls.append(1)
+        raise torch.linalg.LinAlgError('linalg.svd: The algorithm failed to converge')
+
+    # The array namespace holds its own reference to the builtin, so that is the one to replace.
+    monkeypatch.setattr(array_namespace(torch.zeros(1)).linalg, 'svd', svd)
+    return torch, calls
+
+
+@pytest.mark.parametrize('differentiated', [False, True], ids=['value', 'autograd'])
+def test_a_layer_where_the_floor_does_not_bind_never_takes_singular_vectors(monkeypatch,
+                                                                             differentiated):
+    """Whether the floor binds needs the singular values only, so a passive dielectric layer --
+    where it never binds -- is handed back without a full SVD. Not a speed detail: PyTorch's
+    (MKL's) vector-computing SVD failed to converge on the ``<1/eps>`` of a circle in air at 961
+    harmonics (radius 161.48 nm, 600 nm cell, eps 12.25; condition 12.25, two tight clusters of
+    singular values), which made an ordinary design point of an optimization raise, where the
+    values-only SVD and NumPy's succeed. That scene takes minutes; a failing SVD stands in."""
+    par, cfg = disks(4.0 + 0.3j, 852.0)
+    _, B, _ = matrices(par, cfg, 4)
+    torch, calls = _failing_torch_svd(monkeypatch)
+    Bt = torch.tensor(B, requires_grad=differentiated)
+    out = _floor_singular_values(array_namespace(Bt), Bt, 1.0 / (INVERSE_RULE_BOUND * largest_eps(par)))
+    assert out is Bt
+    assert not calls
+
+
+def test_where_the_floor_binds_a_failing_torch_svd_is_taken_by_numpy(monkeypatch):
+    """Where the floor binds the factors are needed, and they are constants to the derivative
+    rule (taken from a detached matrix), so NumPy's SVD on the host is an exact substitute for a
+    PyTorch one that raises: same floored matrix, same gradient."""
+    torch = pytest.importorskip('torch')
+    par, cfg = holes(AU_807, 807.0)
+    _, B, _ = matrices(par, cfg, 6)
+    floor = 1.0 / (INVERSE_RULE_BOUND * largest_eps(par))
+
+    def floored():
+        Bt = torch.tensor(B, requires_grad=True)
+        out = _floor_singular_values(array_namespace(Bt), Bt, floor)
+        out.real.sum().backward()
+        return out.detach().numpy(), Bt.grad.numpy()
+
+    expected, expected_grad = floored()
+    _, calls = _failing_torch_svd(monkeypatch)
+    value, grad = floored()
+    assert calls
+    assert np.allclose(value, expected, rtol=0, atol=1e-12)
+    assert np.allclose(grad, expected_grad, rtol=0, atol=1e-10)
+
+
 # --------------------------------------------------------------- what it does to the solve
 
 def test_gold_disks_return_less_than_they_receive():

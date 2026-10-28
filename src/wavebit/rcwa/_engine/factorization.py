@@ -1871,7 +1871,23 @@ def _floor_singular_values(xp, B, floor):
     magnitude floor on a real eigenvalue cannot be continuous through zero; any loss turns the
     jump into a steep but continuous turn.
     """
-    U, s, Vh = xp.linalg.svd(_no_gradient(B))
+    # Whether the floor binds needs the singular values alone, and wherever that can be read --
+    # everywhere but a `jax.jit` trace or a `torch.func.vmap` lane -- a layer where it does not
+    # is `B` itself, as both branches below return it. Every passive dielectric layer is one,
+    # and stopping here spares it the singular *vectors*: not only time, but a failure.
+    # MKL's vector-computing SVD (PyTorch's) failed to converge on the `<1/eps>` of one circle
+    # in air at 961 harmonics -- radius 161.48 nm in a 600 nm cell, eps 12.25, a Hermitian
+    # matrix of condition 12.25 whose singular values sit in two tight clusters -- where its
+    # values-only SVD, NumPy's and LAPACK's gesvd all succeed.
+    # The answer is read only where it can be; a one-element probe asks that first, so a jit
+    # trace, which could not use the values, does not pay for them.
+    detached = _no_gradient(B)
+    if _concrete(xp.all(xp.isfinite(detached[..., :1, :1]))) is not None:
+        values = xp.linalg.svdvals(detached)
+        if _concrete(xp.any(values < as_array(xp, _no_gradient(floor), dtype=values.dtype,
+                                               device=_device(xp, values)))) is False:
+            return B
+    U, s, Vh = _svd(xp, detached)
     floor = as_array(xp, floor, dtype=s.dtype, device=_device(xp, s))
     clip = s < _no_gradient(floor)
     lifted = (U * xp.astype(xp.maximum(s, _no_gradient(floor)), U.dtype)[..., None, :]) @ Vh
@@ -1892,6 +1908,24 @@ def _floor_singular_values(xp, B, floor):
         floored = _torch_floor()(B, floor, U, s, Vh, lifted, clip, dual)
         return floored if binds else xp.where(xp.any(clip), floored, B)
     return xp.where(xp.any(clip), _jax_floor()(B, floor, U, s, Vh, lifted, clip), B)
+
+
+def _svd(xp, B):
+    """``xp.linalg.svd`` of a detached ``B``, through NumPy's LAPACK where PyTorch's fails.
+
+    The factors are constants to every derivative rule here (:func:`_floor_singular_values`
+    takes them from a detached matrix), so where they were computed changes no derivative.
+    PyTorch's raises ``torch.linalg.LinAlgError`` on a matrix MKL's divide-and-conquer driver
+    does not converge on; NumPy's, on the same matrix, did.
+    """
+    try:
+        return xp.linalg.svd(B)
+    except RuntimeError:
+        if 'torch' not in xp.__name__:
+            raise
+        import numpy as np
+        U, s, Vh = np.linalg.svd(B.cpu().numpy())
+        return tuple(as_array(xp, a, device=_device(xp, B)) for a in (U, s, Vh))
 
 
 #: What a second derivative through a floored layer raises with.
