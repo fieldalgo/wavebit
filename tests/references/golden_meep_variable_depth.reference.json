@@ -1,0 +1,134 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_meep_variable_depth",
+  "physics": "fdtd",
+  "comparison": "different-discretization",
+  "role": "Meep moving total depth sensitivities (structure oracle), grid 80",
+  "references": [
+    {
+      "tool": "Meep",
+      "version": "1.34.0",
+      "build": null,
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "GPL-2.0-or-later",
+      "source": "https://github.com/NanoComp/meep",
+      "install": {
+        "kind": null,
+        "command": null
+      },
+      "settings": "resolution 80; durations 50/70; perturbation steps 0.0001/5e-05; subpixel_tol 1e-08; layer_smoothing 0.025; transverse_cells 1; Courant 0.4; PML thickness 1",
+      "discretization": "Meep 3D Yee grid, resolution 80 (dx 1/80), transverse 0.0125, z length 10, z PML 1, Courant 0.4",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/interface/meep_halfspace.py",
+    "sha256": null,
+    "command": "python tests/references/interface/meep_halfspace.py --parameter depth --smoothing .025 --resolution 80 --output artifacts/meep-variable-depth.npz",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": null,
+  "environment": {
+    "python": "3.12.14",
+    "numpy": "2.5.2",
+    "other": "Meep 1.34.0 (separate Meep environment)"
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/interface/meep_halfspace.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_meep_variable_depth.npz",
+    "format": "npz",
+    "file_sha256": "8bddbbf9ae42fe87f7186204b5404a2a07d1f2a823e924038a395643dc68cf85",
+    "arrays": [
+      "amplitudes",
+      "background",
+      "cell_length",
+      "courant",
+      "deltas",
+      "dimensions",
+      "durations",
+      "epsilon",
+      "jacobians",
+      "layer_smoothing",
+      "monitor_z",
+      "mu",
+      "parameter_names",
+      "parameters",
+      "pml_thickness",
+      "pulse_peak",
+      "pulse_width",
+      "reference_depth",
+      "reference_plane",
+      "resolution",
+      "source_end",
+      "source_z",
+      "subpixel_tol",
+      "thickness",
+      "transverse_cells",
+      "transverse_period",
+      "version",
+      "wavelengths"
+    ]
+  },
+  "values_sha256": "101445adecb703ce16016dad084d0c71dbe01a6328dea547799f0c82f085ac17",
+  "content_sha256": "9fa40e3369c85caf90930dbcde663b56edb0c1f7b3362ab0f5ca3ca63706758b",
+  "consumers": [
+    "tests/references/test_meep_variable_depth.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "physics": "tests/references/README.md:9-14 (Meep rows are FDTD)",
+    "comparison": "tests/references/README.md:9-14: Meep rows are FDTD; both sides carry a grid error; no statement that grids match (row at tests/references/README.md:98); docs compare different Wavebit/Meep grids",
+    "role": "tests/references/README.md:98",
+    "references[0].version": "archive key `version` = 1.34.0",
+    "references[0].settings": "archive keys (resolution, durations, deltas, subpixel_tol, smoothing, profile_grid, courant, pml_thickness)",
+    "references[0].discretization": "archive keys resolution/dimensions/period/cell_length/pml_thickness/courant",
+    "references[0].arrays": "single Meep reference per archive; all keys produced by one bridge run",
+    "references[0].execution": "tests/references/README.md:96-97,1277-1285 and docs ('separate Meep installation/interpreter'); bridges run by hand in a separate Meep interpreter, never imported by tests",
+    "references[0].independence.product_loaded_in_reference_process": "tests/references/interface/meep_halfspace.py:6-25 imports only argparse/sys/warnings/pathlib/numpy/meep; no wavebit or studies import",
+    "references[0].independence.reference_inputs_built_from_product_objects": "Scene built entirely inside tests/references/interface/meep_halfspace.py from hard-coded constants and CLI flags",
+    "generator.path": "tests/references/README.md:98, tests/references/interface/README.md",
+    "generator.command": "docs/validation/fdtd/fdtd-variable-depth.md:191",
+    "consumers": "tests/references/test_meep_variable_depth.py:16-18 builds f'golden_meep_variable_depth{suffix}.npz' for '_coarse','','_refined'; base also loaded literally at :49",
+    "environment": "docs/validation/fdtd/fdtd-variable-depth.md:176-177"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "generated_utc": "not in tests/references/README.md, the golden itself or its generator (record reconstructed 2026-10-28)",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "No build string recorded for this golden; Only install command in the repo is tests/references/README.md:1292 `conda create -y -n meep -c conda-forge pymeep`, stated 'for the record' in the crossed/1D generator section; not tied to these bridge goldens. Build string nompi_py312h46debac_101 at docs/guide/fdtd/fdtd.md:153 belongs to the 1D benchmark.",
+    "references[0].install.command": "Only install command in the repo is tests/references/README.md:1292 `conda create -y -n meep -c conda-forge pymeep`, stated 'for the record' in the crossed/1D generator section; not tied to these bridge goldens. Build string nompi_py312h46debac_101 at docs/guide/fdtd/fdtd.md:153 belongs to the 1D benchmark.",
+    "references[0].install.kind": "Only install command in the repo is tests/references/README.md:1292 `conda create -y -n meep -c conda-forge pymeep`, stated 'for the record' in the crossed/1D generator section; not tied to these bridge goldens. Build string nompi_py312h46debac_101 at docs/guide/fdtd/fdtd.md:153 belongs to the 1D benchmark.",
+    "references[0].modified.description": "Searched tests/references/README.md, interface/README.md, docs/validation/fdtd/*.md and docs/development/third-party.md for unmodified/patched/build statements: none for these goldens. Docs say only 'separate/separately installed Meep' and 'public API only'.",
+    "references[0].modified.value": "Searched tests/references/README.md, interface/README.md, docs/validation/fdtd/*.md and docs/development/third-party.md for unmodified/patched/build statements: none for these goldens. Docs say only 'separate/separately installed Meep' and 'public API only'."
+  }
+}
