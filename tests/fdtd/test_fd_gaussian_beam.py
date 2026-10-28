@@ -344,13 +344,28 @@ G7_STEPS = {'amplitude': 1e-3, 'phase': 1e-3, 'delay': 1e-17, 'scatterer': 3e-4}
 
 
 def _g7_outputs(point, backend):
-    problem, numerics = _setup(.05, amplitude=point['amplitude'], phase=point['phase'],
-                               delay=point['delay'], scatterer=point['scatterer'],
-                               monitors=(fdtd.FluxMonitor('flux', plane=fdtd.Plane(z=3., x=(-5.9, 5.9)),
-                                                          wavelengths=(1.,)),
-                                         fdtd.FieldMonitor('probe', wavelengths=(1.,),
-                                                           plane=fdtd.Plane(z=3., x=(-.05, .05)),
-                                                           components=('Ey',))))
+    """G7 as amended before computing (the record): a truncated run in a 9 um x 3 um domain,
+    so that reverse mode, which keeps every step, fits in memory. The derivatives and the
+    central differences are of this same function."""
+    dx = .05
+    structures = (fdtd.Structure('block', shape=fdtd.SnappedBox(size=(.4, 1., .4), center=(2., 0., 0.)),
+                                 material=Material(epsilon=point['scatterer'])),)
+    pulse = fdtd.GaussianPulse(wavelength=1.0, frequency_sigma_hz=SIGMA_HZ, cutoff=1e-3)
+    beam = fdtd.GaussianBeam('b', plane=fdtd.Plane(z=-1.), pulse=pulse, waist=1.5, focus=(0., 0., 0.),
+                             polarization='y', direction='+z', amplitude=point['amplitude'],
+                             phase=point['phase'], delay_seconds=point['delay'])
+    problem = fdtd.Problem(
+        units=Units(length='um'),
+        scene=fdtd.Scene(domain=fdtd.Domain(size=(9., dx, 3.)),
+                         boundaries=fdtd.Boundaries(x=fdtd.Open(), y=fdtd.InvariantAxis(), z=fdtd.Open()),
+                         structures=structures),
+        sources=(beam,),
+        outputs=fdtd.Outputs(monitors=(
+            fdtd.FluxMonitor('flux', plane=fdtd.Plane(z=1., x=(-4.4, 4.4)), wavelengths=(1.,)),
+            fdtd.FieldMonitor('probe', wavelengths=(1.,), plane=fdtd.Plane(z=1., x=(-.05, .05)),
+                              components=('Ey',)))))
+    numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=dx), duration=fdtd.Duration(steps=1000),
+                             absorber=fdtd.PML(cells=12, wavelength=1.))
     result = fdtd.run(problem, numerics=numerics, backend=backend)
     probe = result['probe']
     x = np.asarray(probe.coordinates['Ey'][0]).ravel()

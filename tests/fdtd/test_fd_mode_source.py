@@ -328,10 +328,27 @@ S7_STEPS = {'amplitude': 1e-3, 'phase': 1e-3, 'delay': 1e-17, 'scatterer': 3e-4}
 
 
 def _s7_outputs(point, backend):
-    problem, numerics = _setup(.05, amplitude=point['amplitude'], phase=point['phase'],
-                               delay=point['delay'], scatterer=point['scatterer'],
-                               monitors=(fdtd.ModeMonitor('p2', plane=fdtd.Plane(z=2.),
-                                                          wavelengths=(1.55,), source='src'),))
+    """S7 as amended before computing (the record): a truncated run in a 5 um x 4 um domain,
+    so that reverse mode, which keeps every step, fits in memory. The derivatives and the
+    central differences are of this same function."""
+    dx = .05
+    structures = _core('slab') + (fdtd.Structure('block', shape=fdtd.SnappedBox(size=(.4, 1., .4),
+                                                                               center=(1.2, 0., -.25)),
+                                                 material=Material(epsilon=point['scatterer'])),)
+    pulse = fdtd.GaussianPulse(wavelength=1.55, frequency_sigma_hz=2e13, cutoff=1e-3)
+    source = fdtd.ModeSource('src', plane=fdtd.Plane(z=-1.), pulse=pulse, direction='+z', mode=0,
+                             amplitude=point['amplitude'], phase=point['phase'],
+                             delay_seconds=point['delay'])
+    problem = fdtd.Problem(
+        units=Units(length='um'),
+        scene=fdtd.Scene(domain=fdtd.Domain(size=(5., dx, 4.)), background=Material(epsilon=EPS_CLAD),
+                         boundaries=fdtd.Boundaries(x=fdtd.Open(), y=fdtd.InvariantAxis(), z=fdtd.Open()),
+                         structures=structures),
+        sources=(source,),
+        outputs=fdtd.Outputs(monitors=(fdtd.ModeMonitor('p2', plane=fdtd.Plane(z=.5), wavelengths=(1.55,),
+                                                        source='src'),)))
+    numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=dx), duration=fdtd.Duration(steps=1200),
+                             absorber=fdtd.PML(cells=12, wavelength=1.55))
     p2 = fdtd.run(problem, numerics=numerics, backend=backend)['p2']
     return p2.forward_energy[0, 0], p2.forward[0, 0].real
 
