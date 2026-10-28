@@ -1,0 +1,109 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_reticolo_2d_field",
+  "physics": "rcwa",
+  "comparison": "same-discretization",
+  "role": "external oracle for the in-layer 2D field under both of RETICOLO res3's in-plane rules",
+  "references": [
+    {
+      "tool": "RETICOLO",
+      "version": "V10",
+      "build": null,
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "CC-BY-4.0",
+      "source": "https://doi.org/10.5281/zenodo.14631951",
+      "install": {
+        "kind": "manual",
+        "command": null
+      },
+      "settings": "res3 raw cell for every case of tests/references/_reticolo_2d_field_cases.py, champ=1 and champ=0; run in Octave through tests/references/interface/reticolo_res3_2d.m",
+      "discretization": "same truncation and raster on both sides (cases module)",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_reticolo_2d_field.py",
+    "sha256": null,
+    "command": "RETICOLO_PATH=... python tests/references/gen_goldens_reticolo_2d_field.py",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-10-27",
+  "environment": {
+    "python": null,
+    "numpy": null
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_reticolo_2d_field.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_reticolo_2d_field.npz",
+    "format": "npz",
+    "file_sha256": "3ab50c4767793711a5e676709b97c73c4fa4684bbc41966950de718cd23af58c",
+    "arrays": [
+      "champ0__0_0_p",
+      "champ0__0_0_s",
+      "champ0__25_30_p",
+      "champ0__25_30_s",
+      "champ1__0_0_p",
+      "champ1__0_0_s",
+      "champ1__25_30_p",
+      "champ1__25_30_s",
+      "o",
+      "x",
+      "y",
+      "z"
+    ]
+  },
+  "values_sha256": "5b69c570adab632d0263cc55d88e24988bca33088b3884da5e0508d0e2ef659a",
+  "content_sha256": "06574726630d417083c3f862d92fa5ccbb8b41780b36c7c0cc1d4d45af8c6dae",
+  "consumers": [
+    "tests/references/test_reticolo_2d_field_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[0].version": "gen_goldens_reticolo_2d_field.py docstring and its RETICOLO_PATH message (reticolo_allege_v10)",
+    "references[0].execution": "gen_goldens_reticolo_2d_field.py: Octave runs as a subprocess on interface/reticolo_res3_2d.m, no oct2py",
+    "references[0].independence": "the generator process imports numpy, scipy and the cases module only; the cases module imports numpy only",
+    "generated_date": "author date of the commit that added the golden (87cf1ada, landed on main as f9aa114c); no freeze date is documented",
+    "comparison": "tests/references/README.md row 'RETICOLO, the 2D field' (4e-11 at worst)",
+    "consumers": "tests/references/test_reticolo_2d_field_golden.py loads the file"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "no Octave, Python or numpy version is recorded for the freeze",
+    "environment.python": "no Octave, Python or numpy version is recorded for the freeze",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "no build or download date of the RETICOLO tree is recorded",
+    "references[0].install.command": "the generator only asks for RETICOLO_PATH; no install command is recorded",
+    "references[0].modified.description": "tests/references/README.md and the generator call the tree V10 and do not say whether it was changed",
+    "references[0].modified.value": "tests/references/README.md and the generator call the tree V10 and do not say whether it was changed"
+  }
+}
