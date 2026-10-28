@@ -1,0 +1,125 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_meep_crossed_metal_fine",
+  "physics": "fdtd",
+  "comparison": "structure-oracle",
+  "role": "separately measured Meep-120 tier tied to golden_meep_crossed_metal.npz by digest",
+  "references": [
+    {
+      "tool": "Meep",
+      "version": "1.34.0",
+      "build": null,
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "GPL-2.0-or-later",
+      "source": "https://github.com/NanoComp/meep",
+      "install": {
+        "kind": "conda",
+        "command": "conda create -y -n meep -c conda-forge pymeep"
+      },
+      "settings": "public API only; until_after_sources 120, gap 0.1, df_frac 0.2, PML 0.5, pad 0.6; originally separate s/p runs combined without changing values",
+      "discretization": "Meep 3D Yee cell at resolution 120",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/refine_meep_crossed_metal.py",
+    "sha256": null,
+    "command": "conda run -n meep python tests/references/refine_meep_crossed_metal.py --output artifacts/metal-fine.npz",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-10-20",
+  "environment": {
+    "python": null,
+    "numpy": null
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/refine_meep_crossed_metal.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_meep_crossed_metal_fine.npz",
+    "format": "npz",
+    "file_sha256": "6181b42d73180c66a1f7bc3fa11bda525f07263b5538e9525bc3561c1742d4e8",
+    "arrays": [
+      "coarse_reference_sha256",
+      "complete",
+      "df_frac",
+      "gap",
+      "meep_version",
+      "metal__120__p__R",
+      "metal__120__p__T",
+      "metal__120__p__leak",
+      "metal__120__p__purity",
+      "metal__120__p__r_p",
+      "metal__120__p__r_s",
+      "metal__120__p__t_p",
+      "metal__120__p__t_s",
+      "metal__120__s__R",
+      "metal__120__s__T",
+      "metal__120__s__leak",
+      "metal__120__s__purity",
+      "metal__120__s__r_p",
+      "metal__120__s__r_s",
+      "metal__120__s__t_p",
+      "metal__120__s__t_s",
+      "physics_harness_sha256",
+      "resolution",
+      "until_after_sources"
+    ]
+  },
+  "values_sha256": "35b4ca5fc181427f4f6667bf3ec05090f0059a18b525f4b34cfaeb3e108d70a8",
+  "content_sha256": "dce29d79b2a8cb4ef5c4b44bfb38dc9bf1314d2e3fa6033c0594b642354dab52",
+  "consumers": [
+    "tests/references/test_meep_crossed_metal_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[].source": "tools/third_party_licenses.json external_tools.<tool>.url",
+    "references[].execution": "tests/references/README.md:1277-1285 (Meep run by hand in its own environment) / README row 'separate Meep and FDTDX interpreters'",
+    "comparison": "README.md:7-14",
+    "role": "README.md:117,1438-1442",
+    "references[0].version": "archive key meep_version",
+    "references[0].arrays": "archive keys incl. physics_harness_sha256, coarse_reference_sha256, resolution, until_after_sources, gap, df_frac, meep_version, complete",
+    "references[0].settings": "archive keys until_after_sources, gap, df_frac; _meep_crossed_metal_case.py:15; README.md:1441-1442 (separate s/p runs combined)",
+    "references[0].discretization": "archive key resolution",
+    "references[0].independence": "refine_meep_crossed_metal.py imports :9-21 (no wavebit)",
+    "generator": "refine_meep_crossed_metal.py:3; README.md:1439-1440 says it 'reproduces' the tier (original measurement was separate s/p runs)",
+    "generated_date": "git log --format=%ad --date=short (shallow clone: git rev-parse --is-shallow-repository = true, 52 commits; every file's only visible commit is the boundary 980843c dated 2026-10-20, so this is the earliest visible commit date, not a generation date)"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "not recorded",
+    "environment.python": "not recorded",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "only meep_version recorded",
+    "references[0].modified.description": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified",
+    "references[0].modified.value": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified"
+  }
+}
