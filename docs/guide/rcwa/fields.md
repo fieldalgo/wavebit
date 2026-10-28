@@ -187,52 +187,81 @@ M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). The default, `'fourier'`, is unchang
   first, then Li's inverse rule along the raster row under the sample turns its x coefficients
   into those of `D_x`, which is summed along x and divided by `eps`. `E_y` is the same along the
   column under the sample.
-- **What it trades on a 2D cell.** Each rule is right on one kind of wall and wrong on the
-  other, and neither error goes away as the truncation grows. `E_x` meets two kinds of wall:
-  across a wall normal to x it is the normal component and must jump (`eps*E_x` is what stays
-  continuous), and across a wall normal to y it is tangential and must not jump.
-  - The default is continuous everywhere, so it is right across walls normal to y and wrong
-    across walls normal to x: there `eps*E_x` mismatches by the full contrast (75 to 92% of the
-    larger side in the three test cells below), and the sum rings beside the wall.
+- **What it trades on a 2D cell.** Continuity across one kind of wall, not accuracy, on the
+  one cell checked against an independent solver. `E_x` meets two kinds of wall: across a wall
+  normal to x it is the normal component and must jump (`eps*E_x` is what stays continuous),
+  and across a wall normal to y it is tangential and must not jump.
+  - The default is continuous everywhere. Across walls normal to x, `eps*E_x` mismatches by
+    the full contrast (75 to 92% of the larger side in the three test cells below) at every
+    order, and the sum rings beside the wall. Across walls normal to y it is continuous but
+    off on both sides.
   - The continuity rule makes `eps*E_x` continuous across walls normal to x, to 1e-7. But
     across a wall normal to y it reads the two sides off two different rows, each row's
-    operator built for that row's walls alone, so there `E_x` steps where it should be
+    operator built for that row's walls alone, so there `E_x` steps where the true field is
     continuous.
-    - The error sits on one side: in the row that lacks its neighbour's walls, such as the
-      air row under a block. Near the boundary the field there carries the neighbour's
-      jumps, and that row's operator rings on them as a plain sum would.
-    - The ringing band narrows with the order, about `P/(2N+1)` wide, but its height at the
-      boundary does not.
+    - Only one side is wrong: the side in the row that lacks its neighbour's walls, such as
+      the air row under a block. Near the boundary the field there carries the neighbour's
+      jumps, and that row's operator rings on them as a plain sum would. In a uniform row the
+      operator is the identity, so that side is exactly the default's value.
+    - The side in the row that holds the walls is right.
+    - The step is therefore not a new error. It is the default's error at that wall, removed
+      on one side and left on the other.
+    - At the middle of a wall the step shrinks slowly with the order. Near a corner it stays
+      large and swings with the order.
     - The same step appears at any row boundary where the two rows differ somewhere, even
-      where the material is the same on both sides: 13 to 17% of the field at order 16 in
-      the test cells below.
+      where the material is the same on both sides and the true field is smooth: 13 to 17%
+      of the field at order 16 in the test cells below.
   - Measured on three cells — a 3.5-index square, a 2.5-index checkerboard with four-way
     corners, and a lossy L-shape at oblique incidence — at orders 4, 8, 12 and 16, each jump
     relative to the larger side, at the middle of each pixel edge:
     - The step is 5 to 43% of the local field (median over walls) and up to 75% at the worst
       wall, beside corners.
-    - It shows no trend toward zero over that range. The default's mismatch across the other
-      walls does not shrink either.
-    - A higher order does not remove the step. It is the same kind of error as the one the
-      rule removes, moved to the other walls.
-  - More than one pixel away from any wall the two rules agree and converge together. There
-    the continuity rule is somewhat more accurate: RMS error 0.7 to 2.0% of the field at
-    order 16, against 1.5 to 2.3% for the default.
-  - The choice therefore depends on what you read and where. Use `'continuity'` for anything
-    built from the normal field at sidewalls: `D` or `eps*E_n` across a wall, the field just
-    inside a wall normal to the component, or absorbed power beside a sidewall. Keep the
-    default where a component runs along walls normal to the other axis and you need it
-    continuous there, as in a smooth field map or a tangential boundary value. Away from walls
-    either rule will do.
-  - Splitting `E` at each sample does not escape the trade. The split takes the part normal
-    to the local wall from the continuity rule and the part along it from the default.
-    - That makes both wall conditions hold away from corners.
-    - But along a tangential wall it takes the default's value, which converges there more
-      slowly than the continuity rule's better side.
-    - Within about `P/(2N+1)` of a corner, both defects come back at full size at every
-      order.
-    - Normal-vector-field projections of the `D` and `E` series did no better with Wavebit's
-      raster normal fields.
+    - Some of those points lie 25 nm from a corner, and over that range of orders the numbers
+      swing without a trend toward zero. The default's mismatch across the other walls does
+      not shrink either.
+  - Checked against a finite-element solution of the square cell (gyptis 1.2, second-order
+    edge elements, four mesh levels; period 400 nm, a 200 nm square of index 3.5 in a 150 nm
+    layer, normal incidence at 900 nm, mid-layer), at orders 4, 8, 12 and 16:
+    - Across a wall normal to y, at its middle and 0.3 nm to either side, the true `E_x` is
+      continuous. The continuity rule is off by 8.1, 2.6, 1.5 and 1.1% on the square's side
+      and by 79, 44, 31 and 25% on the air side. The default is off by the air side's amount
+      on both sides.
+    - Across a wall normal to x, at its middle, the continuity rule is off by 18, 10, 7 and 5%
+      on each side. The default is off by 44% on the air side and by more than five times the
+      local field on the square's side, at every order.
+    - Over a plane of samples through the layer, the RMS error is 8.6, 4.3, 2.8 and 2.0% of
+      the field for the continuity rule and 29, 21, 16 and 12.5% for the default. More than a
+      pixel from any wall it is 0.8% against 2.5% at order 16.
+    - The reference's own error is about 2e-4 of the field at the middle of a wall and 1e-3
+      away from walls. Within 1.5 nm of a corner it is 5 to 10% of the local field.
+  - The choice is therefore between continuity and accuracy. On the square the continuity
+    rule was as accurate as the default or better everywhere, at walls and away from them, and
+    it is the rule for anything built from the normal field at sidewalls: `D` or `eps*E_n`
+    across a wall, the field just inside a wall normal to the component, or absorbed power
+    beside a sidewall. For a tangential value at a wall normal to the other axis, read the
+    side whose row holds the walls. Keep the default only where a component must be
+    continuous along walls normal to the other axis, as in a smooth field map: it is
+    continuous there, not right. Only the one cell has been checked against an independent
+    solver.
+  - Three repairs were tried and measured against the same finite-element solution. None is
+    in Wavebit.
+    - Splitting `E` at each sample takes the part normal to the local wall from the
+      continuity rule and the part along it from the default. That makes both wall conditions
+      hold away from corners. But along a tangential wall it takes the default's value on both
+      sides, more than 20 times further from the true field than the continuity rule's right
+      side at order 16. Within about `P/(2N+1)` of a corner both defects come back at full size
+      at every order.
+    - Normal-vector-field projections of the `D` and `E` series, with Wavebit's raster normal
+      fields or with a smooth weight between the two wall directions, blur the wall value from
+      both sides. They were less accurate than the continuity rule on its right side of every
+      wall, near corners and over the plane. On a metal block both defects stayed near full
+      size.
+    - Correcting the wrong side toward the right side's wall value fixes the middle of the
+      wall: 0.6 and 1.1% from the true field at order 16 on the two sides. But it carries the
+      corner's jump along the wall's extension into the other row, where the true field is
+      smooth. 4 nm below the corner it is off by about half the local field at every order
+      from 4 to 16, where the continuity rule converges from 41 to 10%. Over the plane it is
+      less accurate than the continuity rule: 3.2% RMS against 2.0%.
   - Near a corner the field is singular, and no rule built from the truncated series has
     been found that is right there on both kinds of wall.
 - **Why use it.** It is RETICOLO's `res3` rule (`parm.res1.champ=1`): with it the RETICOLO field
