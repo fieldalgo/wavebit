@@ -554,11 +554,11 @@ for a box across an L in a 1 um cell), an earlier region taken as covered, or th
 
 **A painting the clipper cannot resolve is refused.** Where an outline's vertex lies exactly on
 another outline, the clipper decides the contact by nudging one outline by 1e-9 to 5e-8 of the
-pair's size along `(cos 1, sin 1)`, for planning only, and replays the plan on the outlines as
-declared. A contact along an edge parallel to that direction -- an edge at 1 rad to the x axis,
-as a `Rectangle(angle=1.0)` has, or within about 2e-5 rad of it, a band that widens far from the
-cell -- slides along itself under every nudge and is left unresolved. `rcwa.prepare` and
-`rcwa.run` then refuse with `UnsupportedFeatureError`, code `rcwa.unsupported`, naming the layer and the two
+pair's size, along `(cos 1, sin 1)` and, if that fails, along `(cos 2.3, sin 2.3)`, for planning
+only, and replays the plan on the outlines as declared. A contact along an edge parallel to a
+nudge slides along itself under it, so only a pair touching along edges within about 2e-5 rad of
+1 rad and of 2.3 rad to the x axis at once is left unresolved, a band that widens far from the
+cell. `rcwa.prepare` and `rcwa.run` then refuse with `UnsupportedFeatureError`, code `rcwa.unsupported`, naming the layer and the two
 regions that meet; move the later one by a small fraction of its size. `rcwa.check` does not plan
 the painting and does not see it: planning took 0.26 s for two overlapping 256-vertex circles
 over a rectangle (measured 2026-10-28), which `check` leaves to `prepare`. A prepared calculation

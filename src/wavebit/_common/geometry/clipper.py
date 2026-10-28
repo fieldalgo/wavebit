@@ -343,6 +343,11 @@ def signed_area(V):
 # A direction that is never axis-aligned and never parallel to a 45-degree edge, so nudging
 # along it breaks ties that grid-aligned designs create by construction.
 _NUDGE = np.array([np.cos(1.0), np.sin(1.0)])
+# Tried when every step along the first fails. A contact along an edge parallel to `_NUDGE` --
+# an edge at 1 rad, which `Rectangle(angle=1.0)` has -- slides along itself under every step of
+# it, and was refused until this direction moved it off; only a pair touching along edges
+# parallel to both at once is left.
+_NUDGE_ACROSS = np.array([np.cos(2.3), np.sin(2.3)])
 
 # Relative nudge sizes tried in order. They only ever decide *combinatorics*; see
 # `plan_difference_robust` for why none of this reaches the returned coordinates.
@@ -364,12 +369,13 @@ def plan_difference_robust(A, B, steps=_NUDGE_STEPS):
 
     What a tie-break can still change is the *interpretation* of a degenerate contact, and the
     two readings differ by a zero-area spur -- which contributes nothing to the area or to the
-    Fourier transform. Returns ``(plan, polygons, nudge_used)``.
+    Fourier transform. Returns ``(plan, polygons, nudge_used)``, the nudge as a fraction of the
+    pair's size along its direction (zero when none was needed).
     """
     A, B = np.asarray(A, float), np.asarray(B, float)
     try:
         plan, polys = plan_difference(A, B)
-        return plan, polys, 0.0
+        return plan, polys, np.zeros(2)
     except DegenerateClipError:
         pass
 
@@ -378,16 +384,17 @@ def plan_difference_robust(A, B, steps=_NUDGE_STEPS):
     span = float(max(A.max(0) - A.min(0)).max() if A.size else 0.0)
     span = max(span, float(max(B.max(0) - B.min(0)).max() if B.size else 0.0)) or 1.0
 
-    for s in steps:
-        try:
-            plan, _ = plan_difference(A, B + s * span * _NUDGE)
-        except DegenerateClipError:
-            continue
-        # Replay the nudged plan against the ORIGINAL vertices.
-        return plan, replay(np, plan, A, B), s
+    for direction in (_NUDGE, _NUDGE_ACROSS):
+        for s in steps:
+            try:
+                plan, _ = plan_difference(A, B + s * span * direction)
+            except DegenerateClipError:
+                continue
+            # Replay the nudged plan against the ORIGINAL vertices.
+            return plan, replay(np, plan, A, B), s * direction
 
     raise DegenerateClipError(
-        'no nudge in the ladder resolved this contact')
+        'no nudge along either direction resolved this contact')
 
 
 # ==================================================================== painting
@@ -555,10 +562,11 @@ def resolve_painting(shapes):
                         f'region {j} cannot be painted over region {met} '
                         f'(regions counted from 0 in the order declared): the boundary planner '
                         f'found no consistent way to cut one outline by the other where they '
-                        f'touch exactly: along an edge at, or within about 2e-5 rad of, 1 rad to '
-                        f'the x axis, the direction it shifts an outline in to decide a contact, '
-                        f'or so far from the cell that the coordinates cannot resolve the shift. '
-                        f'Move region {j} by a small fraction of its size.'
+                        f'touch exactly: along edges at, or within about 2e-5 rad of, 1 rad and '
+                        f'2.3 rad to the x axis at once, the two directions it shifts an outline '
+                        f'in to decide a contact, or so far from the cell that the coordinates '
+                        f'cannot resolve the shift. Move region {j} by a small fraction of its '
+                        f'size.'
                     ) from error
             region = nxt
             if not region:
