@@ -35,9 +35,32 @@ and a shape painted entirely inside another one was silently solved as a differe
 while staying Hermitian and conserving energy exactly. The conversion was also self-defeating --
 :func:`plan_difference` already emits a hole clockwise, and :func:`subtract_loop` was flipping
 it back.
+
+**Every tolerance is relative to the geometry it judges, so the plan does not depend on the
+length unit.** ``EPS`` used to be compared with cross products and coordinates as plain numbers --
+lengths squared and lengths -- so it meant something different in every unit: on a sub-micron
+design spelled in metres, the default unit, every pair of edges came out "parallel", no crossing
+was found, and an overlap was painted wrongly -- cut out as a hole, taken as covered, or left
+summed -- or the nudge ladder ran out and raised, with ``check`` passing and ``R + T = 1``. Now
+two edges are parallel when the sine of the angle between them is below ``EPS``
+(:func:`_seg_cross`), and a vertex is on an outline when it lies within ``EPS`` of that outline's
+own size from it (:func:`point_in_polygon`); neither is ever finer than the rounding of the
+coordinates it reads (:func:`_grain`). All of it is dimensionless, so the plan for ``2**k * x`` is
+the plan for ``x`` row for row, and a layout re-spelled in another unit plans the same up to the
+rounding of its decimal conversion.
+
+They are also **local**, and that is not incidental. Scaling the whole layer by its largest
+coordinate before planning is the obvious alternative and is wrong twice over: the scale then
+depends on where the cell sits, so a layout written whole periods away from it -- the same
+structure -- had true crossings read as parallel and painted wrongly; and it depends on every
+shape, so moving one shape across a power of two changed how two others were judged, which a
+frozen plan then reported as a topology change.
 """
+import math
+
 import numpy as np
 
+# Dimensionless: a sine, a fraction along a segment, or a distance in units of an outline's size.
 EPS = 1e-12
 
 # Entry/exit flag convention for the difference. Set empirically against a raster rather than
@@ -58,11 +81,34 @@ def _cross(p, q):
     return p[0] * q[1] - p[1] * q[0]
 
 
-def _seg_cross(a1, a2, b1, b2):
-    """Proper crossing of two open segments -> (t, u), else None."""
+#: Sixteen units in the last place, as a fraction of the largest coordinate.
+_ROUNDING = 16 * np.finfo(float).eps
+
+
+def _grain(*arrays):
+    """The rounding of coordinates this large: no tolerance can be finer than this.
+
+    The tolerances here are relative to the outlines they judge, so they shrink with a feature;
+    the rounding of the coordinates a feature is written in does not. Written a few thousand
+    feature sizes from the origin -- a layout moved by whole periods -- a vertex exactly on an
+    edge comes out several 1e-13 off it in um, outside ``EPS`` of a 0.15-wide outline, and the
+    walk then ran on decisions that disagreed with each other (``T`` 5e-2 off, measured).
+    """
+    return _ROUNDING * max(float(np.max(np.abs(V))) for V in arrays)
+
+
+def _seg_cross(a1, a2, b1, b2, l1, l2, grain):
+    """Proper crossing of two open segments -> (t, u), else None.
+
+    ``l1`` and ``l2`` are the segments' lengths and ``grain`` the rounding of their coordinates
+    (:func:`_grain`), both taken once per pair of outlines by :func:`_rings`.
+    """
     d1, d2 = a2 - a1, b2 - b1
     den = _cross(d1, d2)
-    if abs(den) < EPS:
+    # Parallel when the sine of the angle between them is below EPS, or when `den` is within the
+    # rounding of the coordinates it was formed from. `<=`, so that a zero-length edge -- both
+    # sides 0 -- is parallel rather than a division by zero.
+    if abs(den) <= max(EPS * l1 * l2, grain * (l1 + l2)):
         return None                                   # parallel or collinear
     diff = b1 - a1
     t = _cross(diff, d2) / den
@@ -77,14 +123,22 @@ def _seg_cross(a1, a2, b1, b2):
 
 
 def point_in_polygon(p, V):
-    """Crossing-number test. Boundary cases are rejected as degenerate."""
+    """Crossing-number test. Boundary cases are rejected as degenerate.
+
+    "On the boundary" means within ``EPS`` times the outline's own size of an edge, and never
+    closer than the coordinates' rounding (:func:`_grain`). A test on the cross product alone,
+    ``|(b - a) x (p - a)| < EPS``, is a distance below ``EPS / |b - a|``: in length units, and
+    longer the shorter the edge -- on a 64-gon's short edges in um it held a vertex that every
+    nudge had moved off the edge.
+    """
     n = len(V)
     inside = False
+    tol = max(EPS * float(np.max(V.max(0) - V.min(0))), _grain(V, p))
     for i in range(n):
         a, b = V[i], V[(i + 1) % n]
-        if abs(_cross(b - a, p - a)) < EPS and \
-           min(a[0], b[0]) - EPS <= p[0] <= max(a[0], b[0]) + EPS and \
-           min(a[1], b[1]) - EPS <= p[1] <= max(a[1], b[1]) + EPS:
+        if abs(_cross(b - a, p - a)) <= tol * math.hypot(b[0] - a[0], b[1] - a[1]) and \
+           min(a[0], b[0]) - tol <= p[0] <= max(a[0], b[0]) + tol and \
+           min(a[1], b[1]) - tol <= p[1] <= max(a[1], b[1]) + tol:
             raise DegenerateClipError('vertex lies exactly on the other polygon boundary')
         if (a[1] > p[1]) != (b[1] > p[1]):
             x = a[0] + (p[1] - a[1]) / (b[1] - a[1]) * (b[0] - a[0])
@@ -104,9 +158,12 @@ def _rings(A, B):
     na, nb = len(A), len(B)
     hits_a = [[] for _ in range(na)]
     hits_b = [[] for _ in range(nb)]
+    la = [math.hypot(*(A[(i + 1) % na] - A[i])) for i in range(na)]
+    lb = [math.hypot(*(B[(j + 1) % nb] - B[j])) for j in range(nb)]
+    grain = _grain(A, B)
     for i in range(na):
         for j in range(nb):
-            r = _seg_cross(A[i], A[(i + 1) % na], B[j], B[(j + 1) % nb])
+            r = _seg_cross(A[i], A[(i + 1) % na], B[j], B[(j + 1) % nb], la[i], lb[j], grain)
             if r is not None:
                 t, u = r
                 pt = A[i] + t * (A[(i + 1) % na] - A[i])
@@ -309,8 +366,10 @@ def plan_difference_robust(A, B, steps=_NUDGE_STEPS):
     except DegenerateClipError:
         pass
 
-    span = float(max(A.max(0) - A.min(0)).max() if A.size else 1.0)
-    span = max(span, float(max(B.max(0) - B.min(0)).max() if B.size else 1.0), 1e-12)
+    # The pair's own size, so the nudge is the same fraction of it in every unit. Only a pair
+    # with no extent at all, which no outline that passed `polygon_defect` is, falls back to 1.
+    span = float(max(A.max(0) - A.min(0)).max() if A.size else 0.0)
+    span = max(span, float(max(B.max(0) - B.min(0)).max() if B.size else 0.0)) or 1.0
 
     for s in steps:
         try:

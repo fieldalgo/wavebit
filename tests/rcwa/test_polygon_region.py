@@ -23,7 +23,7 @@ os.environ.setdefault('JAX_ENABLE_X64', '1')
 import numpy as np
 import pytest
 
-from wavebit import Material, rcwa
+from wavebit import Material, Units, rcwa
 from wavebit.rcwa._factory import rcwa as _legacy_wavebit_rcwa
 from wavebit.errors import IncompatibleProblemError, UnsupportedFeatureError, ValidationError
 
@@ -307,6 +307,84 @@ def test_a_polygon_paints_over_a_region_and_under_one():
         assert abs(built - _mean_epsilon(shapes[::-1])) > 1e-2   # the order is the painting
 
 
+def _painted(scale, length, case):
+    """One painted layer from ``PAINTINGS``, every length multiplied by ``scale``."""
+    def geometry(spec):
+        if spec[0] == 'box':
+            _, cx, cy, lx, ly, angle = spec
+            return rcwa.Rectangle(size=(lx * scale, ly * scale), center=(cx * scale, cy * scale),
+                                  angle=angle)
+        return rcwa.Polygon(vertices=tuple((x * scale, y * scale) for x, y in spec))
+    layer = rcwa.Layer(thickness=.4 * scale, background=Material(1.),
+                       regions=tuple(region(geometry(g), e) for g, e in PAINTINGS[case]))
+    return rcwa.Problem(units=Units(length=length),
+                        stack=rcwa.Stack(layers=(layer,), bottom=Material(2.25),
+                                         period=(scale, scale)),
+                        excitation=rcwa.Excitation(wavelength=1.3 * scale, sources=(
+                            rcwa.PlaneWave(theta=.35, phi=.6, polarization='s'),)))
+
+
+def _painted_mean(case):
+    """``<eps>`` of a ``PAINTINGS`` layer from Green's-theorem areas, which share nothing with
+    the clipper."""
+    from wavebit._common.geometry.overlap import polygon_intersection
+    from wavebit._common.geometry.polygon import rect_verts
+    (under, e0), (over, e1) = PAINTINGS[case]
+    under, over = (np.asarray(rect_verts(np, *g[1:])) if g[0] == 'box' else np.asarray(g)
+                   for g in (under, over))
+    return (1. + (e0 - 1.) * (_area(under) - polygon_intersection(under, over, 1e-12)[0])
+            + (e1 - 1.) * _area(over))
+
+
+def _gon_over_a_box_corner():
+    """A 60-degree box with one corner exactly on a short edge of a 64-gon painted over it."""
+    from wavebit._common.geometry.polygon import ellipse_verts
+    gon = np.asarray(ellipse_verts(np, .0524139475264455, .0843644987235117, .19130764018455063,
+                                   .16384685936997645, .5235987755982988, 64))
+    box = ('box', .057851650540178, .1421205263084714, .09238232698180014, .21906341970310506,
+           1.0471975511965976)
+    return ((box, 4.), (tuple(map(tuple, gon)), 9.))
+
+
+#: Two regions each, the later painting over the earlier: a box across the L's arm, the L over
+#: part of a triangle, the box the bug report found refused in metres instead of summed, and a
+#: box corner on an edge 0.009 long, which an on-edge test in length units held on the edge
+#: through every nudge in um and m.
+PAINTINGS = {
+    'box over L': ((L_SHAPE, 6.25), (('box', .05, -.2, .5, .12, .3), 9.)),
+    'L over triangle': ((TRIANGLE, 2.), (L_SHAPE, 6.25)),
+    'box over L near the edge': (
+        # the outline `L_NEAR_THE_EDGE`, which is defined below the tests that use this table
+        (((.1, -.35), (.45, -.35), (.45, -.1), (.3, -.1), (.3, .3), (.1, .3)), 4.),
+        (('box', .4, .1, .2, .2, 0.), 9.)),
+    'polygonised ellipse over a box corner on its edge': _gon_over_a_box_corner(),
+}
+
+
+@pytest.mark.parametrize('length,scale', [('m', 1e-9), ('m', 1e-6), ('m', 1e-3), ('um', 1.),
+                                          ('nm', 1e3), ('m', 1e3)])
+@pytest.mark.parametrize('case', list(PAINTINGS))
+def test_a_painting_is_the_same_in_any_length_unit(case, length, scale):
+    """The same layout spelled in any unit paints the same layer and solves the same.
+
+    The planner compared its tolerances with lengths and areas as plain numbers, so in the
+    default unit, metres, a sub-micron overlap was painted wrongly -- the box cut out of the L as
+    a hole, the triangle taken as covered: ``<eps>`` 9.5e-3 and 9.3e-2 off -- or refused with a
+    private exception (the box near the edge, and the box corner on the 64-gon's edge), while
+    ``check`` passed and ``R + T`` stayed 1.
+    Planning now reads them relative to the outlines it judges.
+    """
+    from wavebit.rcwa import operators
+    epx = np.asarray(operators.assemble(_painted(scale, length, case),
+                                        numerics=LAURENT).epsilon[0].epx)
+    epx = epx[0] if epx.ndim == 3 else epx
+    mean = epx[epx.shape[0] // 2, epx.shape[1] // 2].real
+    assert abs(mean - _painted_mean(case)) < 1e-13, mean
+    reference = efficiencies(rcwa.run(_painted(1., 'm', case), numerics=LAURENT))
+    assert gap(efficiencies(rcwa.run(_painted(scale, length, case), numerics=LAURENT)),
+               reference) < 1e-12
+
+
 # ------------------------------------------------------------------------------- refusals
 
 #: A U whose right arm reaches into the next copy's left arm.
@@ -465,6 +543,36 @@ def test_the_lifecycle_replays_moved_vertices_and_refuses_a_changed_painting():
     with pytest.raises(IncompatibleProblemError) as error:
         prepared.run(live(onto))
     assert error.value.issue.code == 'prepared.topology'
+
+
+def test_moving_one_region_leaves_how_two_others_are_painted():
+    """Two rotated boxes touching corner to corner, and a small square elsewhere in the cell.
+
+    Each contact is judged on its own pair. With the layer scaled by its largest coordinate for
+    planning, moving the square's edge across x = 1 in the cell's frame changed how the two
+    boxes' contact was read, and the preparation refused the move as a topology change.
+    """
+    cell = 1.2
+
+    def box(cx, cy, lx, ly, angle):
+        return rcwa.Rectangle(size=(lx, ly), center=(cx - cell / 2, cy - cell / 2), angle=angle)
+
+    def layout(edge):
+        regions = (region(box(.46046370366608047, .4575047770503867, .24458258820914708,
+                              .25062090039513996, 1.0471975511965976), 4.),
+                   region(box(.5597759597229324, .4263373448297414, .22735072559901187,
+                              .18603952836162518, .5235987755982988), 9.),
+                   region(box(edge - .01, .05, .02, .02, 0.), 2.))
+        layer = rcwa.Layer(thickness=.4, background=Material(1.), regions=regions)
+        return rcwa.Problem(units=Units(length='um'),
+                            stack=rcwa.Stack(layers=(layer,), bottom=Material(2.25),
+                                             period=(cell, cell)),
+                            excitation=rcwa.Excitation(wavelength=1.3, sources=(
+                                rcwa.PlaneWave(theta=.35, phi=.6, polarization='s'),)))
+
+    prepared = rcwa.prepare(layout(.99), numerics=LAURENT)
+    assert gap(efficiencies(prepared.run(layout(1.01))),
+               efficiencies(rcwa.run(layout(1.01), numerics=LAURENT))) < 1e-13
 
 
 def test_the_lifecycle_differentiates_jax_vertices_under_grad_and_refuses_them_under_jit():

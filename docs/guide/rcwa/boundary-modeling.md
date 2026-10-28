@@ -534,6 +534,24 @@ downstream branches on the sign of an area. Taken as given, a clockwise outline 
 hole -- which is what S4 does: its `SetRegionPolygon` solved a clockwise rectangle at `sum(T)`
 0.859 against the 0.974 of the same list counter-clockwise, without a word.
 
+**The plan is the same in any length unit.** The clipper decides when two edges are parallel and
+when a vertex lies on an outline with a tolerance that is relative to what it judges: two edges
+are parallel when the sine of the angle between them is below 1e-12, and a vertex is on an outline
+when it lies within 1e-12 of that outline's own size from it (`clipper.point_in_polygon`). A
+layout spelled `2**k` times larger plans row for row the same, one re-spelled in nm, um or m
+paints the same regions up to the rounding of its decimal conversion, and a contact is judged on
+its own pair, not on the rest of the layer. Neither tolerance is finer than sixteen units in the
+last place of the coordinates it reads. A region may be written whole periods from the cell, but
+its coordinates then carry its outline more coarsely, and hundreds to thousands of periods out
+that rounding can still misjudge an exact contact or refuse the layer (`rcwa.invalid`, from the
+interface plan), as it could before; write regions near the cell, which their centres are
+measured from. Until 2026-10-28 the tolerance was compared with cross products and coordinates in
+the problem's unit. In the default unit, metres, an overlap in a cell of up to a few micrometres
+was painted wrongly -- the later region cut out of the earlier one as a hole (`<eps>` 9.5e-3 off
+for a box across an L in a 1 um cell), an earlier region taken as covered, or the overlap summed
+-- and touching outlines were refused with a private exception in cells up to about 0.1 mm
+(identical ones up to 1 cm), while `rcwa.check` passed and `R + T` stayed 1.
+
 **The outline must be simple**: at least three finite vertices, no zero-length edge, no edge
 doubling back, no two edges crossing or touching, and an area. A bow tie would be integrated with
 winding numbers of both signs, its lobes cancelling. Checked at the declaration when the values
@@ -680,7 +698,8 @@ Neither of the two algorithms this path is built on originates here.
   Graphics **17**(2), 71–83 (1998).
   [doi:10.1145/274363.274364](https://doi.org/10.1145/274363.274364) — the clipping, in
   `src/wavebit/_common/geometry/clipper.py`. What is added here is the degeneracy handling: plain GH has no answer when
-  a vertex lies *on* an edge, which grid-snapped designs produce constantly.
+  a vertex lies *on* an edge, which grid-snapped designs produce constantly. Its tolerances are
+  relative to the outlines they judge, so the plan does not depend on the length unit.
 - S.-W. Lee, R. Mittra, *Fourier transform of a polygonal shape function and its application in
   electromagnetics*, IEEE Transactions on Antennas and Propagation **31**(1), 99–103 (1983) —
   the divergence-theorem transform, in `src/wavebit/_common/geometry/polygon.py`.

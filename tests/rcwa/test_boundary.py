@@ -154,6 +154,90 @@ def test_resolved_regions_are_disjoint_on_a_fine_raster():
     assert hits.max() <= 1, f'{int((hits > 1).sum())} pixels claimed twice'
 
 
+#: Layouts that put each kind of planning decision in play: crossing edges, one outline inside
+#: another, flush edges with a bar painted across them, and a polygonised curve over a box.
+LAYOUTS = {
+    'crossing': [rect_verts(np, *p[:5]) for p in TWO_RODS],
+    'enclosed': [rect_verts(np, .5, .5, .6, .6, 0.), rect_verts(np, .5, .5, .2, .2, .3)],
+    'flush': [rect_verts(np, .3, .5, .2, .4, 0.), rect_verts(np, .5, .5, .2, .4, 0.),
+              rect_verts(np, .4, .5, .6, .1, 0.)],
+    'curve': [rect_verts(np, .45, .5, .5, .3, 0.), ellipse_verts(np, .6, .55, .3, .2, .4, 64)],
+    'small circles': [ellipse_verts(np, .495, .5, .04, .04, 0., 256),
+                      ellipse_verts(np, .51, .505, .04, .04, 0., 256)],
+    # Four rotated boxes with exact contacts, from a random contact sweep: written 4096 periods
+    # out, an on-edge window finer than the coordinates' rounding missed them and T moved 5e-2.
+    'four boxes': [np.array(V) for V in (
+        [(.3868420016618892, .6114670908806403), (.3034938741082476, .6667218611118328),
+         (.16535694853026633, .45835154222772867), (.24870507608390802, .40309677199653615)],
+        [(.42898203764556303, .40356274420338906), (.26228578253827967, .5140722846657741),
+         (.2346583974226834, .4723982208889533), (.40135465252996677, .36188868042656824)],
+        [(.539957550314801, .38998203774901746), (.37326129520751766, .5004915782114024),
+         (.3456339100919214, .4588175144345816), (.5123301651992048, .34830797397219665)],
+        [(.31754055276947213, .5974204122194158), (.10917023388536796, .735557337797397),
+         (-.001339306577017016, .5688610826901137), (.20703101230708718, .43072415711213247)])],
+}
+
+
+def _plan(shapes, scale):
+    return _c.resolve_painting([np.asarray(V, float) * scale for V in shapes])
+
+
+@pytest.mark.parametrize('layout', list(LAYOUTS))
+def test_the_plan_is_the_same_at_any_power_of_two_scale(layout):
+    """The planner's tolerances are read relative to the layout, never in the caller's unit.
+
+    They were compared with cross products and lengths as plain numbers, so a sub-micron layout
+    spelled in metres -- the default unit -- found no crossing at all and summed the overlap
+    instead of painting it, or ran out of nudges and raised. Scaling by a power of two is exact,
+    so the plan has to come out identical, row for row.
+    """
+    shapes = LAYOUTS[layout]
+    expected = _plan(shapes, 1.)
+    for k in (-60, -40, -30, -20, -10, -1, 1, 10, 20, 40):
+        assert _plan(shapes, 2. ** k) == expected, k
+
+
+@pytest.mark.parametrize('layout', list(LAYOUTS))
+def test_the_painted_areas_are_the_same_in_any_length_unit(layout):
+    """A decimal change of unit rounds the vertices, so rows may differ; the regions may not."""
+    shapes = LAYOUTS[layout]
+
+    def areas(scale):
+        scaled = [np.asarray(V, float) * scale for V in shapes]
+        recs, regions = _c.resolve_painting(scaled)
+        vals = _c.eval_table(np, recs, scaled)
+        return np.array([_c.region_area(np, region, vals) for region in regions]) / scale ** 2
+
+    expected = areas(1.)
+    for scale in (1e-9, 1e-6, 1e-3, 1e3, 1e9):
+        assert np.abs(areas(scale) - expected).max() < 1e-13, scale
+
+
+@pytest.mark.parametrize('layout', list(LAYOUTS))
+def test_the_painted_areas_do_not_depend_on_where_the_layout_is_written(layout):
+    """Whole periods away from the cell is the same structure, and these layouts plan as one.
+
+    A tolerance read relative to the coordinates rather than to the outlines it judges -- the
+    layer scaled by its largest coordinate, say -- shrinks as the layout moves away from the
+    origin: two 0.02-wide circles 256 periods out lost both crossings that way and one of them
+    was planned as entirely covered. One finer than the coordinates' rounding fails the other
+    way, on the four boxes' exact contacts 4096 periods out. How far out a layout still plans as
+    at the cell is limited by that rounding, here as before; these offsets are within it.
+    """
+    shapes = [np.asarray(V, float) for V in LAYOUTS[layout]]
+
+    def areas(offset):
+        # Planned where it is written, replayed where it started: the shoelace on coordinates
+        # thousands of periods out would lose more to cancellation than a planning error.
+        recs, regions = _c.resolve_painting([V + offset for V in shapes])
+        vals = _c.eval_table(np, recs, shapes)
+        return np.array([_c.region_area(np, region, vals) for region in regions])
+
+    expected = areas(0.)
+    for offset in (256., 4096., -4096.):
+        assert np.abs(areas(offset) - expected).max() < 1e-13, offset
+
+
 def test_plan_replays_against_moved_vertices():
     """The plan holds indices, not coordinates, so it survives the shapes moving."""
     regs, plan = resolve(xnp, TWO_RODS)
