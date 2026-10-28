@@ -83,7 +83,7 @@
     "Meep": {
       "spdx": "GPL-2.0-or-later",
       "url": "https://github.com/NanoComp/meep",
-      "use": "FDTD reference solver; its generators and bridges under tests/references/ run by hand in a separate Meep environment, and two bridges load Wavebit in the Meep process (tests/references/interface/validate_grid_meep.py imports it at module level, tests/references/interface/meep_rotation.py through a study's density helper); frozen numbers in tests/references/",
+      "use": "FDTD reference solver; its generators and bridges under tests/references/ run by hand in a separate Meep environment, and four bridges load Wavebit in the Meep process (tests/references/interface/validate_grid_meep.py and validate_grid_dispersive.py import it at module level; meep_rotation.py and meep_adjoint_rotation.py import a study's density helper, which imports it); frozen numbers in tests/references/",
       "forbidden_imports": [
         "meep"
       ],
@@ -168,7 +168,7 @@
     "FDTDX": {
       "spdx": "MIT",
       "url": "https://github.com/ymahlau/fdtdx",
-      "use": "FDTD reference in a separate environment",
+      "use": "FDTD reference in a separate environment; the tests/references/interface/validate_grid_fdtdx*.py workers import Wavebit at module level in the FDTDX process",
       "forbidden_imports": [
         "fdtdx"
       ],
