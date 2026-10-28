@@ -52,7 +52,7 @@ def _refuse_at_all_doors(valid, bad, numerics, path, message):
 def test_unknown_source_is_refused_before_reading_its_name(source):
     valid = _problem()
     _refuse_at_all_doors(valid, valid.replace(sources=(source,)), _numerics('periods'),
-                         'sources[0]', 'expected PlaneWave, CurrentDipole or TFSF')
+                         'sources[0]', 'expected PlaneWave, CurrentDipole, TFSF, ModeSource or GaussianBeam')
 
 
 @pytest.mark.parametrize('name', [None, 1, [], ''])
