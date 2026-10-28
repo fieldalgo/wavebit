@@ -186,13 +186,13 @@ files, and compares the Mode column below with `reference.mode`.
 
 | Tool | SPDX | Mode | How it is used |
 | --- | --- | --- | --- |
-| `Meep` | GPL-2.0-or-later | stored | FDTD reference through its documented Python API; the generators and bridges under `tests/references/` run by hand in a separate Meep environment. Two bridges load Wavebit in the Meep process: `tests/references/interface/validate_grid_meep.py` imports it, and `tests/references/interface/meep_rotation.py` imports a study's density helper |
+| `Meep` | GPL-2.0-or-later | stored | FDTD reference through its documented Python API; the generators and bridges under `tests/references/` run by hand in a separate Meep environment. Four bridges load Wavebit in the Meep process: `tests/references/interface/validate_grid_meep.py` and `tests/references/interface/validate_grid_dispersive.py` import it, and `tests/references/interface/meep_rotation.py` and `tests/references/interface/meep_adjoint_rotation.py` import a study's density helper, which imports it |
 | `S4` | GPL-2.0-or-later | stored (3 goldens); local (11 test nodes) | RCWA reference; the `gen_goldens_s4*.py` generators run by hand. FieldAlgo's fork build (`s4-fieldalgo`) is imported in the same process by `studies/rcwa/nvf_resonant_spectrum/resonant_nvf_probe.py` and the 11 nodes of `tests/rcwa/test_resonant_nvf_probe.py`, which skip when it is absent |
 | `Octave` | GPL-3.0-or-later | stored | Runs RETICOLO as a separate process. Our `.m` wrappers run inside Octave and never call Wavebit |
 | `RETICOLO` | CC-BY-4.0 | stored | RCWA reference run inside Octave; not shipped. Attribution and history in [LICENSE](https://github.com/fieldalgo/wavebit/blob/main/LICENSE) |
 | `oct2py` | MIT | stored | Python driver for the Octave process |
 | `fmmax` | MIT | stored | RCWA reference in a separate environment |
-| `FDTDX` | MIT | stored | FDTD reference in a separate environment |
+| `FDTDX` | MIT | stored | FDTD reference in a separate environment; the `tests/references/interface/validate_grid_fdtdx*.py` workers import Wavebit in the FDTDX process |
 | `PyMoosh` | MIT | stored | Multilayer reference in a throwaway environment |
 | `NGSolve` | LGPL-2.1-only | local (research tier) | Optional FEM reference for NVF research studies; the eight `tests/rcwa/test_nvf_*` files that import it are research tests with a documented import guard. Its installed binaries also carry GPL-2.0-or-later UMFPACK code, so that environment is never redistributed |
 
