@@ -243,7 +243,7 @@ M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). The default, `'fourier'`, is unchang
     continuous along walls normal to the other axis, as in a smooth field map: it is
     continuous there, not right. Only the one cell has been checked against an independent
     solver.
-  - Three repairs were tried and measured against the same finite-element solution. None is
+  - Four repairs were tried and measured against the same finite-element solution. None is
     in Wavebit.
     - Splitting `E` at each sample takes the part normal to the local wall from the
       continuity rule and the part along it from the default. That makes both wall conditions
@@ -262,6 +262,15 @@ M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). The default, `'fourier'`, is unchang
       smooth. 4 nm below the corner it is off by about half the local field at every order
       from 4 to 16, where the continuity rule converges from 41 to 10%. Over the plane it is
       less accurate than the continuity rule: 3.2% RMS against 2.0%.
+    - Tapering that correction to zero within the same distance of the wall's ends stops the
+      carried jump: 4 nm below the corner it matches the continuity rule to three digits, and
+      `eps*E_n` stays continuous across every wall. On this cell's 8x8 raster it is the most
+      accurate rule tried, 7.4, 3.6, 2.0 and 1.5% RMS over the plane. It is not a property of
+      the structure, though. The correction's widths are capped at half a pixel, so on a 64x64
+      drawing of the same square its gain over the plane is gone at order 8. A relative change
+      of about 1e-5 in one pixel's permittivity turns the mid-wall fix off, so the field is
+      not differentiable in the raster values. And it differs from the RETICOLO reference the
+      continuity rule is pinned to by 5.6 to 7.3% of the largest field value.
   - Near a corner the field is singular, and no rule built from the truncated series has
     been found that is right there on both kinds of wall.
 - **Why use it.** It is RETICOLO's `res3` rule (`parm.res1.champ=1`): with it the RETICOLO field
