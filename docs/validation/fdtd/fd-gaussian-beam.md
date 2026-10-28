@@ -120,7 +120,7 @@ double precision.
 | G5 predicted backward per forward at 1.0 µm | 1e-12 | 1.4e-13 | 8.5e-14 | passed |
 | G5 predicted backward per forward at 0.95 / 1.05 µm | reported | 2.6e-7 / 2.8e-7 | 2.5e-7 / 2.8e-7 | |
 | G6 JAX / Torch against NumPy, flux and axis | 1e-12 | 2.3e-16, 1.0e-15 / 1.1e-16, 1.2e-15 | | passed |
-| G7 derivatives against extrapolated central differences | 1e-6 | pending | | |
+| G7 derivatives against extrapolated central differences (amended truncated run), JAX and Torch: amplitude / phase / delay / scatterer | 1e-6 | < 1e-10 / < 1e-10 / 2.4e-10 / 1.3e-10 | | passed |
 | G8 refusals by code | as listed | all raised | | passed |
 
 **G2 failed as registered.** The largest Gouy-phase difference from the continuum at
