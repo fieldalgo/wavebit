@@ -86,7 +86,19 @@
       "use": "FDTD reference solver; its generators and bridges under tests/references/ run by hand in a separate Meep environment, and two bridges load Wavebit in the Meep process (tests/references/interface/validate_grid_meep.py imports it at module level, tests/references/interface/meep_rotation.py through a study's density helper); frozen numbers in tests/references/",
       "forbidden_imports": [
         "meep"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "stored"
+        ],
+        "imported_by": [
+          "tests/references/gen_goldens_meep_*.py",
+          "tests/references/check_meep_*.py",
+          "tests/references/refine_meep_*.py",
+          "tests/references/interface/*meep*.py",
+          "tests/references/interface/validate_grid_dispersive.py"
+        ]
+      }
     },
     "S4": {
       "spdx": "GPL-2.0-or-later",
@@ -94,25 +106,51 @@
       "use": "RCWA reference solver; the gen_goldens_s4*.py generators run by hand, and FieldAlgo's fork build (s4-fieldalgo) is imported in the same process by studies/rcwa/nvf_resonant_spectrum/resonant_nvf_probe.py and by the 11 nodes of tests/rcwa/test_resonant_nvf_probe.py, which skip where S4 is absent (CI installs none); frozen numbers in tests/references/",
       "forbidden_imports": [
         "S4"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "stored",
+          "local"
+        ],
+        "imported_by": [
+          "tests/references/gen_goldens_s4*.py",
+          "studies/rcwa/nvf_resonant_spectrum/resonant_nvf_probe.py",
+          "tests/rcwa/test_resonant_nvf_probe.py"
+        ]
+      }
     },
     "Octave": {
       "spdx": "GPL-3.0-or-later",
       "url": "https://octave.org",
       "use": "runs RETICOLO as a separate process driven by oct2py",
-      "forbidden_imports": []
+      "forbidden_imports": [],
+      "reference": {
+        "mode": [
+          "stored"
+        ]
+      }
     },
     "RETICOLO": {
       "spdx": "CC-BY-4.0",
       "url": "https://doi.org/10.5281/zenodo.14631951",
       "use": "RCWA reference run inside Octave; not shipped",
-      "forbidden_imports": []
+      "forbidden_imports": [],
+      "reference": {
+        "mode": [
+          "stored"
+        ]
+      }
     },
     "oct2py": {
       "spdx": "MIT",
       "url": "https://github.com/blink1073/oct2py",
       "use": "Python driver for Octave in the RETICOLO comparisons",
-      "forbidden_imports": []
+      "forbidden_imports": [],
+      "reference": {
+        "mode": [
+          "stored"
+        ]
+      }
     },
     "fmmax": {
       "spdx": "MIT",
@@ -120,7 +158,12 @@
       "use": "RCWA reference in a separate environment",
       "forbidden_imports": [
         "fmmax"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "stored"
+        ]
+      }
     },
     "FDTDX": {
       "spdx": "MIT",
@@ -128,7 +171,12 @@
       "use": "FDTD reference in a separate environment",
       "forbidden_imports": [
         "fdtdx"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "stored"
+        ]
+      }
     },
     "PyMoosh": {
       "spdx": "MIT",
@@ -136,7 +184,12 @@
       "use": "multilayer reference in a throwaway environment",
       "forbidden_imports": [
         "PyMoosh"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "stored"
+        ]
+      }
     },
     "NGSolve": {
       "spdx": "LGPL-2.1-only",
@@ -145,7 +198,28 @@
       "forbidden_imports": [
         "ngsolve",
         "netgen"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "local"
+        ],
+        "imported_by": [
+          "tests/rcwa/test_nvf_cell_corrector.py",
+          "tests/rcwa/test_nvf_fem_affine_degree.py",
+          "tests/rcwa/test_nvf_fem_affine_geometry.py",
+          "tests/rcwa/test_nvf_fem_affine_scattering.py",
+          "tests/rcwa/test_nvf_fem_boundary_power.py",
+          "tests/rcwa/test_nvf_fem_boundary_storage.py",
+          "tests/rcwa/test_nvf_fem_reference.py",
+          "tests/rcwa/test_nvf_fem_space.py",
+          "studies/rcwa/nvf_cell_corrector/*.py",
+          "studies/rcwa/nvf_fem_quadrature/*.py",
+          "studies/rcwa/nvf_fem_reference/*.py",
+          "studies/rcwa/nvf_fem_space/*.py",
+          "studies/rcwa/nvf_gap_reference/*.py",
+          "studies/rcwa/nvf_mirror_reference/*.py"
+        ]
+      }
     },
     "inkstone": {
       "spdx": "AGPL-3.0-or-later",
@@ -154,7 +228,13 @@
       "agpl_review": "unmodified upstream release from PyPI; may run only in unshipped tests or studies that skip without it; never imported by src/wavebit, never a requirement or extra, never in a hosted service",
       "forbidden_imports": [
         "inkstone"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "past"
+        ],
+        "imported_by": []
+      }
     },
     "EMpy": {
       "spdx": "MIT",
@@ -162,7 +242,12 @@
       "use": "past black-box comparison (ElectroMagneticPython 2.2.3) of anisotropic transfer matrices; results cited in tests/references/README.md and docs/theory/rcwa/",
       "forbidden_imports": [
         "EMpy"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "past"
+        ]
+      }
     },
     "torcwa": {
       "spdx": "LGPL-3.0-or-later",
@@ -170,7 +255,13 @@
       "use": "past black-box RCWA comparison (0.1.4.2; license from its wheel's LICENSE); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
       "forbidden_imports": [
         "torcwa"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "past"
+        ],
+        "imported_by": []
+      }
     },
     "nannos": {
       "spdx": "GPL-3.0-or-later",
@@ -178,7 +269,13 @@
       "use": "past black-box RCWA comparison (2.6.4), public API and returned numbers only, source never read; results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
       "forbidden_imports": [
         "nannos"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "past"
+        ],
+        "imported_by": []
+      }
     },
     "grcwa": {
       "spdx": "GPL-3.0-only",
@@ -186,7 +283,13 @@
       "use": "past comparison by documentation and API only, not run (0.1.2; PyPI classifier 'GPLv3', no 'or later' stated); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
       "forbidden_imports": [
         "grcwa"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "past"
+        ],
+        "imported_by": []
+      }
     },
     "rcwa": {
       "spdx": "MIT",
@@ -194,13 +297,23 @@
       "use": "past black-box RCWA comparison of edmundsj's rcwa package (version not recorded); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
       "forbidden_imports": [
         "rcwa"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "past"
+        ]
+      }
     },
     "A-FMM": {
       "spdx": "MIT",
       "url": "https://pypi.org/project/A-FMM/",
       "use": "past comparison by reading, not run (version not recorded; PyPI A-FMM 0.1.2 is MIT); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
-      "forbidden_imports": []
+      "forbidden_imports": [],
+      "reference": {
+        "mode": [
+          "past"
+        ]
+      }
     },
     "tmm": {
       "spdx": "MIT",
@@ -208,7 +321,12 @@
       "use": "past black-box multilayer comparison (Byrnes tmm 0.2.0); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
       "forbidden_imports": [
         "tmm"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "past"
+        ]
+      }
     },
     "tmm-fast": {
       "spdx": "MIT",
@@ -216,7 +334,12 @@
       "use": "past black-box multilayer comparison (0.3.0); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
       "forbidden_imports": [
         "tmm_fast"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "past"
+        ]
+      }
     },
     "gyptis": {
       "spdx": "MIT",
@@ -224,7 +347,12 @@
       "use": "past black-box FEM comparison (1.2.0); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
       "forbidden_imports": [
         "gyptis"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "past"
+        ]
+      }
     },
     "chiuhans-rcwa": {
       "spdx": "MIT",
@@ -232,7 +360,12 @@
       "use": "past black-box RCWA comparison of Hans Chiu's rcwa package (version not recorded; license from its LICENSE.txt at a812dbe, checked 2026-10-20); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
       "forbidden_imports": [
         "rcwa"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "past"
+        ]
+      }
     },
     "rcwa4d": {
       "spdx": "MIT",
@@ -240,7 +373,12 @@
       "use": "past RCWA comparison, run after a local patch (version not recorded; license from its LICENSE and pyproject at 92ebd02, checked 2026-10-20); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
       "forbidden_imports": [
         "rcwa4d"
-      ]
+      ],
+      "reference": {
+        "mode": [
+          "past"
+        ]
+      }
     }
   },
   "bundled": {

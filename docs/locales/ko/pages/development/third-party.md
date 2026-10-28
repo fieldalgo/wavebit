@@ -151,6 +151,24 @@ Wavebit 자체 휠과 sdist에는 네이티브 파일이 없습니다. 휠은 `p
 
 지금 필수 CI에서 실행되는 도구는 없습니다.
 
+`tools/third_party_licenses.json`의 각 항목은 방식을 `reference.mode`에 적고, 허용형이 아닌
+도구는 그것을 불러오는 모든 파일을 `reference.imported_by`에도 적습니다. 그런 도구(GPL·AGPL·LGPL
+등 copyleft)를 어디서 불러올 수 있는지는 파일 경로가 정합니다.
+
+| 파일 | 불러올 수 있나 |
+| --- | --- |
+| `src/wavebit/`, `examples/`, 튜토리얼 노트북 | 안 됨 |
+| `tools/`, `docs/**/*.py`, 모든 `conftest.py`와 `tests/` 아래 다른 시험 도우미 | 안 됨. 별도 프로그램으로 실행 |
+| 시험 모듈 `tests/**/test_*.py` | 시험·fixture·함수 안에서만. 모듈 수준(모듈 수준 `try`·`if` 포함)과 모듈 수준 `importorskip`은 안 됨 |
+| 생성기·작업 스크립트 `tests/references/{gen,refine,check}_*.py`·`tests/references/interface/`, 그리고 `studies/` | 어느 수준이든 |
+
+시험이나 도우미가 생성기·작업 스크립트·연구 모듈을 모듈 수준에서 불러오려면, 그 모듈이 그런 도구를
+모듈 수준에서 불러오지 않아야 합니다(`if __name__ == "__main__":` 안은 세지 않음). 예외 하나:
+NGSolve 파일처럼 파일 전체가 `research`이고 `python -m unittest`만으로도 돌아야 하는 시험 모듈은
+모듈 수준 import를 `try`/`except ImportError`나 `if`로 감쌀 수 있습니다. `importorskip`은 안 됩니다.
+`tests/api/test_reference_zones.py`가 git이 추적하는 파일 전체에서 이를 검사하고, 아래 방식 열을
+`reference.mode`와 대조합니다.
+
 | 도구 | SPDX | 방식 | 쓰임새 |
 | --- | --- | --- | --- |
 | `Meep` | GPL-2.0-or-later | stored | 문서화된 Python API로 쓰는 FDTD 레퍼런스. `tests/references/`의 생성기·브리지는 별도 Meep 환경에서 손으로 실행. 브리지 둘은 Meep 프로세스에서 Wavebit을 불러옴: `tests/references/interface/validate_grid_meep.py`는 직접, `tests/references/interface/meep_rotation.py`는 연구의 밀도 도우미를 통해 |
