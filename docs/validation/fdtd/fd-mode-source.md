@@ -109,7 +109,7 @@ double precision. Wavelengths are listed as 1.45 / 1.55 / 1.65 µm.
 | S5 TE0 transmission, mode matching `T_mm = 0.955057` | 5e-3 at 0.05, 2e-3 at 0.025, smaller | 0.954677 (3.8e-4) | 0.954959 (9.8e-5) | passed |
 | S5 TE0 reflection, mode matching `R_mm = 3.3287e-4` | 0.2 `R_mm` at 0.025, smaller than at 0.05 | 3.5366e-4 (6.2 %) | 3.3777e-4 (1.5 %) | passed |
 | S6 JAX / Torch against NumPy | 1e-12 | 5.9e-16 / 1.3e-15 (worst) | | passed |
-| S7 derivatives against extrapolated central differences | 1e-6 | pending | | |
+| S7 derivatives against extrapolated central differences (amended truncated run), JAX and Torch: amplitude / phase / delay / scatterer | 1e-6 | < 1e-10 / < 1e-10 / 5e-11 / 1.1e-9 | | passed |
 | S8 refusals by code | as listed | all eleven raised | | passed |
 
 The mode-matching oracle in S5 is converged in its own discretization before it is used:
