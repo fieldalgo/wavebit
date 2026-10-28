@@ -1,0 +1,181 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_fmmax_laurent",
+  "physics": "rcwa",
+  "comparison": "same-discretization",
+  "role": "external oracle (identity after extrapolation)",
+  "references": [
+    {
+      "tool": "fmmax",
+      "version": "1.7.1",
+      "build": null,
+      "modified": {
+        "value": false,
+        "description": "pip-installed fmmax release, used as shipped ('stock' flavour)"
+      },
+      "spdx": "MIT",
+      "source": "https://github.com/facebookresearch/fmmax",
+      "install": {
+        "kind": "pip",
+        "command": "conda create -y -n fwref python=3.11 && conda run -n fwref pip install fmmax"
+      },
+      "settings": "eigensolve_isotropic_media, Formulation.FFT (plain Laurent, matches factorization='laurent'); WL 500, theta 11 deg, phi 0, thickness 240; 16-pixel raster upsampled R = 16/32/64/128 samples per pixel for Richardson extrapolation; rectangular cell, lossy metal, hexagonal cell; totals and per-order R/T per polarization; stock flavour",
+      "discretization": "explicit Expansion |m|,|n| <= 7 (15x15 orders, zeroth first), matching truncation_order=(7,7); midpoint-rule quadrature removed by extrapolation over R",
+      "arrays": [
+        "__levels",
+        "*__orders",
+        "*__stock__*"
+      ],
+      "execution": "in-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    },
+    {
+      "tool": "fmmax",
+      "version": "1.7.1",
+      "build": null,
+      "modified": {
+        "value": true,
+        "description": "fmmax 1.7.1 unmodified on disk, but for this flavour the generator rebinds fmmax.fft's jnp to a proxy namespace whose fft.fftfreq ignores the float32 request and returns float64 (runtime override of the pixel-centring phase precision; 'nothing of fmmax's is rewritten or copied')"
+      },
+      "spdx": "MIT",
+      "source": "https://github.com/facebookresearch/fmmax",
+      "install": {
+        "kind": "pip",
+        "command": "conda create -y -n fwref python=3.11 && conda run -n fwref pip install fmmax"
+      },
+      "settings": "eigensolve_isotropic_media, Formulation.FFT (plain Laurent, matches factorization='laurent'); WL 500, theta 11 deg, phi 0, thickness 240; 16-pixel raster upsampled R = 16/32/64/128 samples per pixel for Richardson extrapolation; rectangular cell, lossy metal, hexagonal cell; totals and per-order R/T per polarization; phase64 flavour",
+      "discretization": "explicit Expansion |m|,|n| <= 7 (15x15 orders, zeroth first), matching truncation_order=(7,7); midpoint-rule quadrature removed by extrapolation over R",
+      "arrays": [
+        "*__phase64__*"
+      ],
+      "execution": "in-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_fmmax_laurent.py",
+    "sha256": null,
+    "command": "conda run -n fwref python tests/references/gen_goldens_fmmax_laurent.py",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-09-27",
+  "environment": {
+    "python": "3.11",
+    "numpy": "2.4.6",
+    "other": "jax 0.10.2, jaxlib 0.10.2, conda env fwref; jax_enable_x64=True set by the generator"
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_fmmax_laurent.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_fmmax_laurent.npz",
+    "format": "npz",
+    "file_sha256": "bf15da26a1621b5baee5c1084cd3a7dea4ad3ba2f3a9e6a7f2738fb074a77203",
+    "arrays": [
+      "__levels",
+      "cross_eps6_hex__orders",
+      "cross_eps6_hex__phase64__R128__per_order",
+      "cross_eps6_hex__phase64__R128__totals",
+      "cross_eps6_hex__phase64__R16__per_order",
+      "cross_eps6_hex__phase64__R16__totals",
+      "cross_eps6_hex__phase64__R32__per_order",
+      "cross_eps6_hex__phase64__R32__totals",
+      "cross_eps6_hex__phase64__R64__per_order",
+      "cross_eps6_hex__phase64__R64__totals",
+      "cross_eps6_hex__stock__R128__per_order",
+      "cross_eps6_hex__stock__R128__totals",
+      "cross_eps6_hex__stock__R16__per_order",
+      "cross_eps6_hex__stock__R16__totals",
+      "cross_eps6_hex__stock__R32__per_order",
+      "cross_eps6_hex__stock__R32__totals",
+      "cross_eps6_hex__stock__R64__per_order",
+      "cross_eps6_hex__stock__R64__totals",
+      "hole_metal_rect__orders",
+      "hole_metal_rect__phase64__R128__per_order",
+      "hole_metal_rect__phase64__R128__totals",
+      "hole_metal_rect__phase64__R16__per_order",
+      "hole_metal_rect__phase64__R16__totals",
+      "hole_metal_rect__phase64__R32__per_order",
+      "hole_metal_rect__phase64__R32__totals",
+      "hole_metal_rect__phase64__R64__per_order",
+      "hole_metal_rect__phase64__R64__totals",
+      "hole_metal_rect__stock__R128__per_order",
+      "hole_metal_rect__stock__R128__totals",
+      "hole_metal_rect__stock__R16__per_order",
+      "hole_metal_rect__stock__R16__totals",
+      "hole_metal_rect__stock__R32__per_order",
+      "hole_metal_rect__stock__R32__totals",
+      "hole_metal_rect__stock__R64__per_order",
+      "hole_metal_rect__stock__R64__totals",
+      "rod_eps12_rect__orders",
+      "rod_eps12_rect__phase64__R128__per_order",
+      "rod_eps12_rect__phase64__R128__totals",
+      "rod_eps12_rect__phase64__R16__per_order",
+      "rod_eps12_rect__phase64__R16__totals",
+      "rod_eps12_rect__phase64__R32__per_order",
+      "rod_eps12_rect__phase64__R32__totals",
+      "rod_eps12_rect__phase64__R64__per_order",
+      "rod_eps12_rect__phase64__R64__totals",
+      "rod_eps12_rect__stock__R128__per_order",
+      "rod_eps12_rect__stock__R128__totals",
+      "rod_eps12_rect__stock__R16__per_order",
+      "rod_eps12_rect__stock__R16__totals",
+      "rod_eps12_rect__stock__R32__per_order",
+      "rod_eps12_rect__stock__R32__totals",
+      "rod_eps12_rect__stock__R64__per_order",
+      "rod_eps12_rect__stock__R64__totals"
+    ]
+  },
+  "values_sha256": "0428913e06b34021f9e8b615b61a6eea14c3b0fc17ce8853c018c014ac24287c",
+  "content_sha256": "99e8c49ba21a8e419c6c279e050c8f11efb36938f9b9452dcea40cd5500371fd",
+  "consumers": [
+    "tests/references/test_fmmax_laurent_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[*].version": "tests/references/README.md:1377-1384",
+    "references[*].source": "tools/third_party_licenses.json external_tools.fmmax.url",
+    "references[*].install": "tests/references/README.md:1347-1350 (fwref env); gen_goldens_fmmax.py:13",
+    "environment": "tests/references/README.md:1377 ('fmmax 1.7.1, jax and jaxlib 0.10.2, numpy 2.4.6, Python 3.11, in fwref'); README.md:1387 (fwref held exactly those versions since 2026-08-10)",
+    "references[*].execution": "generator imports fmmax in its own process (main())",
+    "references[*].independence": "generator and its _fmmax_*_cases.py helpers import numpy/jax/fmmax/tools.repository_paths only; _fmmax_cases.py:4-7 and README.md:1352-1355 ('fwref has no wavebit')",
+    "references[*].modified": "README.md:1347-1350 plain 'pip install fmmax' in fwref; no patch mentioned",
+    "comparison": "tests/references/README.md:110 and 598-615 ('identity, after two corrections')",
+    "role": "tests/references/README.md:598",
+    "references[*].settings": "gen_goldens_fmmax_laurent.py:1-33, 89-147; _fmmax_laurent_cases.py:39-44",
+    "references[1].modified": "gen_goldens_fmmax_laurent.py:17-27 and _float64_frequencies (lines 51-67)",
+    "arrays": "archive keys: <case>__{stock,phase64}__R<n>__{totals,per_order}, <case>__orders, __levels (52); __levels and __orders are shared metadata, assigned to the stock reference",
+    "generator.command": "tests/references/gen_goldens_fmmax_laurent.py:docstring (conda run -n fwref ...)",
+    "generated_date": "tests/references/README.md:1383"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "README.md fwref section and 'What each golden was frozen with'; no wheel/build identifier beyond the version",
+    "references[1].build": "README.md fwref section and 'What each golden was frozen with'; no wheel/build identifier beyond the version"
+  }
+}
