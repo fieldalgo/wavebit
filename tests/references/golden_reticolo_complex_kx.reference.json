@@ -1,0 +1,145 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_reticolo_complex_kx",
+  "physics": "rcwa",
+  "comparison": "same-discretization",
+  "role": "external oracle (complex transverse wavevector)",
+  "references": [
+    {
+      "tool": "RETICOLO",
+      "version": "V10",
+      "build": "reticolo_allege_v10 tree given by RETICOLO_PATH (outside the repository)",
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "CC-BY-4.0",
+      "source": "https://doi.org/10.5281/zenodo.14631951",
+      "install": {
+        "kind": "manual",
+        "command": null
+      },
+      "settings": "Octave host via oct2py; interface/Reticolo.py run_res2_all_modes -> reticolo_res2_all_modes.m with parm.res2.tolh/tolb = 1e6 (mode selection opened); 1D, complex theta; per-order efficiencies and zeroth-order reflection amplitude r0",
+      "discretization": "truncation_order 0 (interfaces) and 5 (gratings) per the test's CASES; all 2N+1 retained orders reported and checked",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": true
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_reticolo_complex_kx.py",
+    "sha256": null,
+    "command": "RETICOLO_PATH=/path/to/reticolo_allege_v10 python tests/references/gen_goldens_reticolo_complex_kx.py",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-10-02",
+  "environment": {
+    "python": null,
+    "numpy": null,
+    "other": "Octave (via oct2py); RETICOLO_PATH"
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_reticolo_complex_kx.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_reticolo_complex_kx.npz",
+    "format": "npz",
+    "file_sha256": "9ffe693a129cf521cfb9b2c7bc3220260ab3c8f858336996bea46d64562d5ab5",
+    "arrays": [
+      "te_grating_absorbing_halfspaces__eff_r",
+      "te_grating_absorbing_halfspaces__eff_t",
+      "te_grating_absorbing_halfspaces__order_r",
+      "te_grating_absorbing_halfspaces__order_t",
+      "te_grating_absorbing_halfspaces__r0",
+      "te_grating_lossless_top__eff_r",
+      "te_grating_lossless_top__eff_t",
+      "te_grating_lossless_top__order_r",
+      "te_grating_lossless_top__order_t",
+      "te_grating_lossless_top__r0",
+      "te_grating_lossless_top_below_axis__eff_r",
+      "te_grating_lossless_top_below_axis__eff_t",
+      "te_grating_lossless_top_below_axis__order_r",
+      "te_grating_lossless_top_below_axis__order_t",
+      "te_grating_lossless_top_below_axis__r0",
+      "te_interface_absorbing_top__eff_r",
+      "te_interface_absorbing_top__eff_t",
+      "te_interface_absorbing_top__order_r",
+      "te_interface_absorbing_top__order_t",
+      "te_interface_absorbing_top__r0",
+      "te_interface_lossless_top__eff_r",
+      "te_interface_lossless_top__eff_t",
+      "te_interface_lossless_top__order_r",
+      "te_interface_lossless_top__order_t",
+      "te_interface_lossless_top__r0",
+      "tm_grating_absorbing_halfspaces__eff_r",
+      "tm_grating_absorbing_halfspaces__eff_t",
+      "tm_grating_absorbing_halfspaces__order_r",
+      "tm_grating_absorbing_halfspaces__order_t",
+      "tm_grating_absorbing_halfspaces__r0",
+      "tm_grating_lossless_top__eff_r",
+      "tm_grating_lossless_top__eff_t",
+      "tm_grating_lossless_top__order_r",
+      "tm_grating_lossless_top__order_t",
+      "tm_grating_lossless_top__r0",
+      "tm_interface_absorbing_top__eff_r",
+      "tm_interface_absorbing_top__eff_t",
+      "tm_interface_absorbing_top__order_r",
+      "tm_interface_absorbing_top__order_t",
+      "tm_interface_absorbing_top__r0"
+    ]
+  },
+  "values_sha256": "e82da255d0978709e8b77c16e5aae49ca580cdc40c5b5b33314e75c7994d8017",
+  "content_sha256": "a3953fbe4c280a72b86d267bc925bc75c3cff137ad307821f8e5135753a1cc08",
+  "consumers": [
+    "tests/references/test_reticolo_complex_kx_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[0].version": "tests/references/README.md:86, 100, 1369-1370 ('RETICOLO's rows name V10'); generator docstring",
+    "references[0].build": "generator RETICOLO_PATH check ('set RETICOLO_PATH to a reticolo_allege_v10 directory')",
+    "references[0].source": "tools/third_party_licenses.json external_tools.RETICOLO.url; README.md:1310 (Zenodo V10 record 14631951)",
+    "references[0].install": "README.md:86 ('Octave + a RETICOLO V10 tree from its Zenodo record ... (RETICOLO_PATH)'); README.md:1336-1338 (kept outside the repository, pinned by RETICOLO_PATH)",
+    "references[0].execution": "tools/third_party_licenses.json external_tools.Octave.use ('runs RETICOLO as a separate process driven by oct2py'); docs/development/third-party.md:191",
+    "references[0].independence.product_loaded_in_reference_process": "docs/development/third-party.md:191 ('Our .m wrappers run inside Octave and never call Wavebit'). The Python driver process (oct2py) does import wavebit",
+    "comparison": "tests/references/README.md:102 (1e-16 .. 4e-15)",
+    "role": "tests/references/README.md:102",
+    "references[0].settings": "gen_goldens_reticolo_complex_kx.py:10-18, 54-82; interface/Reticolo.py:186-209; interface/reticolo_res2_all_modes.m:25-26",
+    "references[0].independence.reference_inputs_built_from_product_objects": "interface/Reticolo.py:12-33 (_index): every texture/half-space index handed to Octave is computed by wavebit.refractive_index_from_eps from the case's permittivity; cases themselves are numpy arrays (run_res2_all_modes, Reticolo.py:201)",
+    "generator imports": "gen_goldens_reticolo_complex_kx.py:58 interface.Reticolo (imports wavebit); :59 test_reticolo_complex_kx_golden (imports wavebit)",
+    "generator.command": "tests/references/gen_goldens_reticolo_complex_kx.py:7",
+    "generated_date": "tests/references/test_reticolo_complex_kx_golden.py:30-35: made 2026-09-26, regenerated 2026-10-02 when the lossless-top cases were added (first five cases kept bit for bit)",
+    "arrays": "archive keys: <case>__{order_r,order_t,eff_r,eff_t,r0} (40)"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "not in tests/references/README.md, the golden itself or its generator (record reconstructed 2026-10-28)",
+    "environment.python": "not recorded in README.md or the generators",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].install.command": "README.md:86/100 and generators: download from Zenodo and set RETICOLO_PATH; no command; Octave and oct2py install steps not documented",
+    "references[0].modified.description": "README.md and generator docstrings say 'version-pinned V10 tree' but not whether it is pristine (gen_goldens_reticolo.py:24-28 mentions an earlier modified V9 and a V9_pristine tree, both no longer used)",
+    "references[0].modified.value": "README.md and generator docstrings say 'version-pinned V10 tree' but not whether it is pristine (gen_goldens_reticolo.py:24-28 mentions an earlier modified V9 and a V9_pristine tree, both no longer used)"
+  }
+}
