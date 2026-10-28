@@ -19,6 +19,17 @@ machine that has the tools; what CI checks on every push is the committed number
 **Regenerating a golden is not a way to make a failing test pass.** These numbers did not come
 from this codebase, which is exactly what makes them worth having.
 
+Each `golden_<x>.npz` or `golden_<x>.json` has a provenance record beside it,
+`golden_<x>.reference.json` (format `wavebit.reference-values/1`): the tool, version and build
+that made the values, how it ran and whether Wavebit was loaded in its process, the generator
+and command, the environment and date where known, the tests that read the values, and the
+hashes of today's bytes. The records were reconstructed on 2026-10-28 from this README, the
+goldens' own keys and their generators (`provenance_status: reconstructed`); a field nobody
+recorded is null and `not_recorded` names what was consulted. Their format and audit are in
+`_reference_records.py`, and `tests/api/test_reference_values.py` fails when a golden has no
+record, a record no golden, or a golden's bytes differ from its record's hashes. A golden that
+is frozen again gets a `regeneration` entry with its reason in the same reviewed change.
+
 ## Source-specific metasurface regression records
 
 `fd_metasurface_rows.json` preserves the historical hard-source campaign.
@@ -1404,6 +1415,7 @@ golden, to be compared against these before it replaces them.
 | `interface/` — the RETICOLO bridge (`Reticolo.py` + our `.m` wrappers) | Octave or MATLAB, and RETICOLO |
 | `gen_goldens_*.py` — freeze the reference numbers | the oracle; run by hand, rarely |
 | `golden_*.npz` — the frozen numbers, committed | nothing |
+| `golden_*.reference.json` — where each golden came from, and the hashes that lock it | nothing; `tests/api/test_reference_values.py` checks them |
 | `test_*_golden.py` — the assertions | nothing; **run in CI everywhere** |
 | `interface/freeze_fd_stage0.py`, `_fd_stage0_cases.py` — freeze the `src/wavebit/fd/` kernel's own answers, per backend | the project env with NumPy, JAX and Torch; run by hand |
 | `fd_golden_stage0.npz` — those answers, committed; `tests/fdtd/test_fd_backends.py` holds them | nothing; **run in CI everywhere** |
