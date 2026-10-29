@@ -1,13 +1,13 @@
 # 01. What questions does Wavebit answer?
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 :::{note}
-The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
+The downloadable teaching scripts use the current `rcwa.Problem` / `rcwa.run` API, and so do the
+text and snippets of most chapters. Chapters 7 (materials), 8 (incident light), 9 (multiple waves
+and sources) and 14 (fields) still explain the earlier constructor, retired with `wavebit.compat`
+on 2026-10-15, and say so at their top. Some figures keep the earlier labels. Compare the
+[current getting-started guide](../../getting-started/index.md) and
+[migration guide](../../migration/index.md). Historical measurement files and their source
+provenance remain unchanged.
 :::
 
 “When light illuminates a periodically repeated nanostructure, where does it go, and how much goes in each direction?” This is the central question addressed by the RCWA calculations in this course. Given the wavelength, materials, geometry, layer thicknesses, incident direction, and polarization, Wavebit calculates the reflected and transmitted intensities by direction, complex amplitudes, and electromagnetic fields inside the structure. With JAX or PyTorch, you can also find how much a result changes when a design variable changes slightly.
