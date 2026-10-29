@@ -7,6 +7,7 @@ pure-torch reproducers (no wavebit, no `array_api_compat`) on torch 2.13.0, 2.14
 Targets:
 - `src/wavebit/_common/backend.py::linear_solve` — the solve every derivative-sensitive site goes through
 - `src/wavebit/_common/backend.py::eager_under_torch_compile` — the doors that keep wavebit out of a compiled graph
+- `src/wavebit/rcwa/_engine/factorization.py::_svd` — the NVF floor's SVD, retried with `?gesvd` (defect 6)
 - `pyproject.toml` — the torch floor (`torch>=2.14`), which decides which of these defects a user can meet
 - `tests/common/test_linear_solve_derivatives.py` — `test_pytorchs_own_rule_is_still_wrong`, the canary for defect 2
 - `tests/api/test_torch_compile.py` — `test_canary_inductor_compiles_the_eye_write_in_order`, the canary for defect 1
@@ -32,6 +33,10 @@ The two canaries above fail on purpose when torch fixes their defect. The Induct
 asserted only on macOS arm64, where it was measured, and skips elsewhere. On torch ≥ 2.14.1 it
 therefore fails on macOS arm64. That is the signal to measure a door-free compile (row 1). It is
 not a regression.
+
+A fifth defect raises instead of returning a wrong number, and it is not torch's own code: the
+MKL that the CPU wheels bundle fails to converge in its divide-and-conquer SVD on some
+well-conditioned matrices (section 6, [#202596](https://github.com/pytorch/pytorch/issues/202596)).
 
 ---
 
@@ -138,6 +143,37 @@ Tracing records each value-dependent decision as a constant and returns an outpu
 This is what tracing is, so no torch release changes it. Every door refuses it by name, and the
 refusal stays.
 
+## 6. Divide-and-conquer SVD in the bundled MKL — #202596
+
+Measured 2026-10-29 on Linux x86-64 (Intel Xeon, AVX-512), torch 2.13.0, 2.14.1, 2.15.0 and the
+2.16.0.dev20261029 nightly, all of which bundle MKL 2024.2. `torch.linalg.svd` (LAPACK `?gesdd`)
+raised `LinAlgError` on the 961×961 `<1/eps>` matrix of one circle in air (radius 161.48 nm,
+600 nm cell, ε 12.25, condition number 12.25), where `svdvals`, NumPy and SciPy succeeded.
+
+The cause is in LAPACK, not in torch. `DLASD2`'s deflation test, `ABS(D(J)-D(JPREV)).LE.TOL`,
+lets an inverted pair of nearly equal singular values through, and `DLASD4` then hits its
+iteration limit. This is Reference-LAPACK #1138, fixed by its PR #1140 (March 2026, in no
+reference release yet). Fed the same bidiagonal matrix, `dgesdd` failed in MKL 2021.4 to 2026.1
+and in reference LAPACK 3.12.0, and succeeded in MKL 2026.2 and OpenBLAS 0.3.34. The source has
+the old line in reference LAPACK 3.12.1 and OpenBLAS up to 0.3.30. Whether a dense matrix trips
+it depends on the last-bit rounding of the bidiagonal reduction, so it changes with the ISA path
+and the thread count and looks random to a caller.
+
+It reaches wavebit only through the NVF inverse-rule floor, which needs singular vectors on a
+layer where it binds (`rcwa/_engine/factorization.py::_svd`):
+
+- a layer of passive dielectrics skips the vector SVD wherever its singular values can be read;
+- an eager failure on a finite matrix, on any backend, is recomputed with the QR-based `?gesvd`
+  (SciPy's on the host for NumPy and torch, `SvdAlgorithm.QR` for JAX, whose `?gesdd` returns
+  NaN factors instead of raising) and announced with `wavebit.rcwa.diagnostics.SvdConvergenceWarning`;
+- under `jax.jit` nothing can be recomputed: the NaN factors leave the layer unfloored, and a
+  `jax.debug.callback` issues the same warning.
+
+The same bug reaches NumPy, SciPy and JAX (whose CPU LAPACK is SciPy's) wherever they link an
+affected LAPACK, such as the default MKL build on Anaconda's `defaults` channel; the PyPI wheels
+carry a fixed OpenBLAS. The retry can go when every LAPACK the supported installs can pick up
+carries the fix — not before, since NumPy and SciPy builds are not pinned to one LAPACK.
+
 ## What is not affected
 
 - An eager `backward()` (the ordinary optimisation loop), any JAX transform, `hessian`,
@@ -150,7 +186,7 @@ refusal stays.
 
 1. Run `tests/common/test_linear_solve_derivatives.py` and `tests/api/test_torch_compile.py`. A failing canary
    means torch fixed its defect.
-2. Re-run the upstream issues' reproducers (#200599, #200600) on the new version.
+2. Re-run the upstream issues' reproducers (#200599, #200600, #202596) on the new version.
 3. Only then narrow `linear_solve`'s gate, or measure a door-free compile, and raise the floor in
    `pyproject.toml` to the version that was measured. A workaround stays until the floor
    excludes every version with the defect.
