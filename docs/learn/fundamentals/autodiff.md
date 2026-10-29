@@ -43,14 +43,14 @@ The iteration reaches the lower bound imposed by `q≥0.03`. Repeated values aft
 
 {download}`06_torch_gradient.py <../../../examples/rcwa/learning/learn/06_torch_gradient.py>` calculates the same gradient with PyTorch. Read `q.grad` after `.backward()`; iterative optimization must reset accumulated gradients as intended. The JAX example in this course uses eager execution, not JIT.
 
-## Why JIT can require freeze_geometry
+## Why JIT needs a calculation prepared on concrete values
 
-Some geometry stages branch on concrete values to determine boundary connectivity or containment. Traced values do not always permit these decisions. `freeze_geometry()` computes this information from a concrete scene and supplies it as `StaticGeometry`.
+Some geometry stages branch on concrete values to determine boundary connectivity or containment. Traced values do not always permit these decisions. `rcwa.prepare(...)`, called on a concrete problem outside the traced function, makes those decisions once; `prepared.run(problem)` then runs the traced values through them.
 
 ```python
-# Conceptual JIT preparation after assigning a pattern with concrete values
-geometry = solver.freeze_geometry()
-# Pass geometry=geometry to a supported solve path afterward.
+# Conceptual JIT preparation: prepare on concrete values, outside the trace
+prepared = rcwa.prepare(problem, numerics=numerics, backend="jax")
+# Inside the jitted function, run the updated problem: prepared.run(updated_problem)
 ```
 
-This is a preparation sketch, not a complete JIT optimization example. Fixed geometry whose material values alone change can reuse the record. Refresh it when geometry, contact or covering relationships change. Shape and raster paths record different information, so the same criterion does not cover every motion. Validity comparisons may be unavailable inside JIT, making updates outside tracing essential to avoid silently using stale records. See the [compatibility differentiation manual](../../migration/autodiff-v1.md) and [NVF course](../nvf/index.md) for complete patterned JIT workflows.
+This is a preparation sketch, not a complete JIT optimization example. Fixed geometry whose material values alone change can reuse the preparation. Prepare again when geometry, contact or covering relationships change. Shape and raster paths record different information, so the same criterion does not cover every motion. Under `jax.jit` a traced shape is admitted only where `rcwa.Numerics(topology_check=...)` can check it; see [checked shape JIT](../../guide/rcwa/guarded-shape-jit.md), [differentiating a physical problem](../../guide/common/autodiff.md) and the [NVF course](../nvf/index.md).

@@ -59,7 +59,7 @@ Figure 12-1. Results for TE incidence on the first grating. Left: total reflecta
 
 The result array’s **columns correspond to order `m`, and its rows to order `n`.** `orders_u` identifies the order index of each column, and `orders_v` that of each row.
 
-In Chapter 4, `truncation_order=dict(x=10, y=0)` retains 21 orders from `m=-10` to `+10`, with `n=0`. The result array therefore has **1 row × 21 columns**.
+In Chapter 4, `rcwa.Numerics(orders=(10, 0))` retains 21 orders from `m=-10` to `+10`, with `n=0`. The result array therefore has **1 row × 21 columns**.
 
 ```python
 print(result.T.shape)    # (1, 21)

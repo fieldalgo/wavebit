@@ -33,7 +33,7 @@ Figure 6-1. A circle represented by pixels and by a circle shape
 | Raster direction-field construction method | `raster_normal_method` | How should directions be estimated from pixels and extended? | Raster NVF |
 | Shape projector-field sample count per axis | `shape_nvf_grid_size` | At how many points should the auxiliary vector and P be evaluated? | Shape NVF |
 | NVF projector construction | `nvf_projector` | How should the decomposition reference P be constructed? | Raster / shape NVF |
-| Retained Fourier orders | `truncation_order` | How many Fourier modes should the optical calculation retain? | Both input types |
+| Retained Fourier orders | `orders` | How many Fourier modes should the optical calculation retain? | Both input types |
 
 **The reference API uses the newer names.** The former `normal_method`, `normal_grid`, and `projector` were renamed to `raster_normal_method`, `shape_nvf_grid_size`, and `nvf_projector`, respectively. The former names are not accepted as aliases. `shape_nvf_grid` was only a candidate name, never an actual keyword. Option values and numerical algorithms are unchanged. The reference JobSpec schema version is **10**, and its Python constructor supplies that version. Older saved files require reversing the layer list together with the corresponding thickness and material arrays. Field-sample depth `d` becomes height `h_total − d`, and existing z-coupled tensors require the corresponding coordinate transformation as well. Here `h_total = sum(thickness)` is the total structure height. Changing only a version number does not preserve the same sample. See the [coordinate migration rules](../../reference/common/conventions.md).
 
@@ -80,6 +80,6 @@ The default is `max(1024, 4Nx+1, 4Ny+1)`. An explicitly supplied grid that is to
 
 Raster uses the original image resolution, increasing it to an anti-aliasing lower bound when needed. A user-supplied shape_nvf_grid_size does not control that path, so the reference API rejects it explicitly for raster input. To improve raster geometry accuracy, represent the original shape with finer pixels; simply replicating pixels does not recover missing boundary information.
 
-**shape_nvf_grid_size asks “at how many points is the field sampled?”; truncation_order asks “how many Fourier components are retained?”** Increasing one does not repair an inadequate choice of the other. Chapter 9 varies them separately to compare convergence.
+**shape_nvf_grid_size asks “at how many points is the field sampled?”; `orders` asks “how many Fourier components are retained?”** Increasing one does not repair an inadequate choice of the other. Chapter 9 varies them separately to compare convergence.
 
 This book's shape examples explicitly use `shape_nvf_grid_size=128` for faster learning. **This is not a recommendation to lower the default to 128.** Choose a value for actual work using the convergence procedure below.
