@@ -1,11 +1,5 @@
 # FDTD validation
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 Spatial, temporal, material and boundary studies. Each report states its measured configuration and remaining limits.
 
 Current public API: [automatic stopping with incident source columns](fd-source-decay.md)
@@ -16,8 +10,9 @@ periodic API and the study engine together.
 
 These records predate the public `wavebit.fdtd` module (2026-10-13) and name the interfaces they
 measured. The general engine they call `wavebit.fd` (`fd.Scene`, `fd.plan`, `fd.run`, `fd.check`)
-is retained as `wavebit.compat.legacy.fd`, which alone keeps `Absorber` and `Decay`; the periodic
-stack solver the `fdtd-*` records measure is retained as `wavebit.compat.legacy.fdtd`. For current
+was kept as `wavebit.compat.legacy.fd`, which alone had `Absorber` and `Decay`; the periodic
+stack solver the `fdtd-*` records measure was kept as `wavebit.compat.legacy.fdtd`. Both were
+retired on 2026-10-15; the [pre-retirement revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a) runs them. For current
 usage see the [FDTD guide](../../guide/fdtd/general-fdtd.md) and the
 [earlier general-engine manual](../../migration/general-fdtd-v1.md). Source digests quoted
 "relative to `src/wavebit/fd`" describe how those runs hashed the tree before it moved to

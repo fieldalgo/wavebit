@@ -689,12 +689,13 @@ Against the repository's own paths: two overlapping rods give 0.548127 painted h
 On a single shape, where there is nothing to resolve, the permittivity matches the parametric path
 to 5e-16.
 
+:::
+
 ---
 
 See also: [`parametric-modeling.md`](parametric-modeling.md) for the closed-form shape transforms this
 path reuses, and [`nvf-upsampling.md`](../../validation/rcwa/nvf-upsampling.md) for the normal field's grid on the
 raster path.
-:::
 
 ### References
 
