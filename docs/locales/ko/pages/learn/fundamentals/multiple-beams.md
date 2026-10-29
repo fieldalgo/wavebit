@@ -1,13 +1,11 @@
 (multiple-incident-waves)=
 # 09. 여러 입사파와 내부 소스
 
-> **과거 API 재현:** 이 페이지에서 `wavebit.compat`를 쓰는 코드·설명은 현재 설치의 API가 아닙니다.
-> 해당 이름은 [퇴역 전 소스 `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a)에 있습니다.
-> 측정 재현에는 본문에 적힌 원래 커밋·환경을 우선 사용하세요. 원본 측정값은 갱신하지 않았습니다.
-
-
 :::{note}
-다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
+그림 9-1에는 결과 이름이 아직 이전 생성자의 표기로 남아 있습니다: `output_top · output_bottom`,
+`power.outgoing_top · outgoing_bottom`, 그리고 반환된 `Z₀H`. 현재 API에서 전력은
+`result.outputs['top']`과 `result.outputs['bottom']`이며, 각각 W 단위의 `incoming`·`outgoing` 전력을 가집니다
+(출력 비율은 두 값의 비입니다). 반환되는 자기장은 A/m 단위의 H입니다. 본문과 코드는 현재 이름을 씁니다.
 :::
 
 [8장](light.md)에서는 입사파 하나의 방향과 편광을 지정했습니다. 이 장에서는 여러 입사파가 함께 만드는 장과 출력 전력을 계산합니다. 먼저 외부 입사와 내부 소스의 공통 계산 흐름을 살펴본 뒤, 합산의 전제와 입력 방법을 설명합니다. 같은 쪽 입사·양면 입사·차수별 입력 예제로 이를 확인하고, 가우시안 빔과 층 내부의 전기 다이폴로 이어갑니다.
@@ -27,7 +25,7 @@
 그림 9-1. 외부 입사와 내부 소스의 공통 계산 흐름. 한쪽·양면 입사와 다이폴을 함께 다루되, 입력 위치와 출력 전력을 읽는 방법을 구분합니다.
 ```
 
-**내부 다이폴은 전력을 직접 공급하므로 외부 입사 전력만을 기준으로 반사율·투과율을 정의하지 않습니다.** 다이폴이 포함된 결과의 `output_top`, `output_bottom`, `absorption`은 `None`이며, `result.power`에서 방향별 전력을 읽습니다. 단위와 사용 예는 {ref}`다이폴 절 <electric-dipole-source>`에서 설명합니다.
+**내부 다이폴은 전력을 직접 공급하므로 외부 입사 전력만을 기준으로 반사율·투과율을 정의하지 않습니다.** 다이폴이 포함된 계산에는 출력 비율이 없고 `result.absorption`을 읽으면 `UnsupportedFeatureError`가 납니다. 방향별 전력은 `result.outputs['top']`과 `result.outputs['bottom']`에서 W 단위로 읽습니다. 단위와 사용 예는 {ref}`다이폴 절 <electric-dipole-source>`에서 설명합니다.
 
 (source-calculation-groups)=
 ### 어떤 성분을 함께 계산할까?
@@ -51,56 +49,58 @@ Wavebit는 **선형 재료**를 다룹니다. 주어진 파장에서 유전율·
 
 여기서 ε₀는 진공 유전율, **ε**<sub>r</sub>은 상대 유전율입니다. 재료값이 고정되어 있으므로 두 전기장의 합에 대한 응답은 각 전기장에 대한 응답의 합과 같습니다. **같은 구조에서 각 소스로 계산한 전기장끼리, 자기장끼리 더하면 동시에 소스를 넣었을 때의 장을 얻을 수 있습니다.** 유전율이 복소수인 손실 재료나 이방성 텐서인 재료도 이 선형 조건을 만족할 수 있습니다. 빛의 세기에 따라 유전율이 달라지는 비선형 재료는 이 계산의 범위에 포함되지 않습니다.
 
-한 `excitation`에 함께 넣은 소스는 모두 같은 진동수로 진동하며, 소스 사이의 상대 위상이 시간에 따라 일정하다고 가정합니다. 예를 들어 두 소스의 위상을 0°와 +90°로 지정하면, 그 90°의 차이를 유지하며 진동하는 상태를 계산합니다. 이처럼 일정한 위상관계를 갖는 소스를 **결맞는 소스**라고 합니다.
+한 `rcwa.Excitation(sources=...)`에 함께 넣은 소스는 모두 같은 진동수로 진동하며, 소스 사이의 상대 위상이 시간에 따라 일정하다고 가정합니다. 예를 들어 두 소스의 위상을 0°와 +90°로 지정하면, 그 90°의 차이를 유지하며 진동하는 상태를 계산합니다. 이처럼 일정한 위상관계를 갖는 소스를 **결맞는 소스**라고 합니다.
 
-`wavelength`에는 이 공통 진동수에 해당하는 **진공 파장**을 넣습니다.
+`Excitation(wavelength=...)`에는 이 공통 진동수에 해당하는 **진공 파장**을 넣습니다.
 
 장은 이렇게 더할 수 있지만, **전력에는 두 장 사이의 간섭이 반영됩니다.** 따라서 결맞는 소스들을 함께 계산할 때는 장을 합친 다음 전력을 구합니다. 서로 비결맞는 입사파의 전력을 합산하는 방법은 뒤의 {ref}`전력 설명 <coherent-and-incoherent>`에서 구분합니다.
 
 (source-types)=
 ## 소스 종류와 입력 형식
 
-바깥에서 들어오는 입사파는 `PlaneWave` 또는 `GaussianBeam`으로, 층 안에서 빛을 내는 전기 다이폴은 `ElectricDipole`로 지정합니다. 이 소스 객체들은 `Source`라는 공통 타입에 속하며, `excitation`에 하나 또는 목록으로 넣습니다.
+바깥에서 들어오는 입사파는 `PlaneWave` 또는 `GaussianBeam`으로, 층 안에서 빛을 내는 전기 다이폴은 `ElectricDipole`로 지정합니다. 이 소스 객체들은 한 튜플로 묶어 `rcwa.Excitation(sources=(...))`에 함께 넣습니다.
 
 | 소스 | 지정하는 물리량 | 계산에 들어가는 위치 |
 | --- | --- | --- |
 | `PlaneWave` | 입사 방향·편광·복소 진폭 | 위·아래 바깥 경계 |
 | `GaussianBeam` | 중심 방향·편광·빔 폭·초점 위치·복소 진폭 | 여러 평면파로 분해하여 바깥 경계에 입력 |
 | `ElectricDipole` | 위치와 복소 전기 쌍극자 모멘트 | 해당 층 내부의 전류 항 |
-| `OrderExcitation` | 기준 방향과 차수별 복소 진폭 | 여러 입사 평면파를 차수로 지정 |
+| `IncidentOrders` | 기준 방향과 차수별 복소 가중치 | 여러 입사 평면파를 차수로 지정 |
 
-평면파의 입사 쪽은 각 객체의 `side`로 지정합니다. 목록에서 생략하면 `"top"`입니다. 위·아래 동시 입사는 다음처럼 쓸 수 있습니다.
+평면파의 입사 쪽은 각 객체의 `side` 인자로 지정합니다. 생략하면 `"top"`입니다. 위·아래 동시 입사는 다음처럼 쓸 수 있습니다.
 
 ```python
-from wavebit.compat import legacy as wavebit
+from wavebit import rcwa
 
-sources = [
-    wavebit.PlaneWave(side="top", kx=0.002, ky=0., amplitude=1.),
-    wavebit.PlaneWave(side="bottom", kx=0.002, ky=0., amplitude=0.5j),
-]
-# rcwa(..., excitation=sources)에 전달합니다.
+sources = (
+    rcwa.PlaneWave(side="top", kx=0.002, ky=0., amplitude=1.),
+    rcwa.PlaneWave(side="bottom", kx=0.002, ky=0., amplitude=0.5j),
+)
+excitation = rcwa.Excitation(wavelength=600., sources=sources)   # rcwa.Problem에 전달합니다
 ```
 
-`excitation={"top": [...], "bottom": [...]}`처럼 바깥 경계별로 묶는 형식도 사용할 수 있습니다. 내부 다이폴은 `top`이나 `bottom`에 속하지 않으므로 소스 목록에 넣습니다. 위치 좌표는 다른 장과 같은 xyz 기준이며, z=0은 첫째 층의 바닥이고 +z는 위쪽입니다.
+바깥 경계별로 묶는 사전은 없습니다. 각 소스가 자기 입사 쪽을 적습니다. 내부 다이폴은 `top`이나 `bottom`에 속하지 않고 `side`도 없으며, 같은 튜플에 넣고 `position`으로 위치를 정합니다. 위치 좌표는 다른 장과 같은 xyz 기준이며, z=0은 첫째 층의 바닥이고 +z는 위쪽입니다.
+
+소스가 둘 이상이거나 `PlaneWave` 하나가 아닌 소스가 있는 계산은 차수별 `R`, `T` 대신 경계 전력과 요청한 장을 반환하므로 `rcwa.Outputs(diffraction=False)`가 필요합니다.
 
 (id3)=
 ### 평면파 입력 형식 고르기
 
-평면파부터 살펴보겠습니다. 입사파마다 각도와 편광을 따로 정하려면 `PlaneWave`를, 격자의 입사 차수로 방향을 고르려면 차수별 복소 진폭을 사용합니다.
+평면파부터 살펴보겠습니다. 입사파마다 각도와 편광을 따로 정하려면 `PlaneWave`를, 격자의 입사 차수로 방향을 고르려면 차수별 복소 가중치를 가진 `IncidentOrders`를 사용합니다.
 
 | 원하는 입력 | 형식 | 예제 |
 | --- | --- | --- |
-| 같은 쪽에서 입사파마다 각도·편광을 따로 지정 | `excitation={"top": [wavebit.PlaneWave(...), ...]}` | {ref}`같은 쪽에 여러 입사파 <same-side-beams>` |
-| 위·아래에서 동시에 입사 | `excitation={"top": ..., "bottom": ...}` | {ref}`양면 입사 <two-sided-illumination>` |
-| 한 기준 방향에서 입사 차수를 선택 | `excitation={0: 1., 1: 0.5j}` | {ref}`차수별 입력 <incident-order-inputs>` |
-| 차수별 입력을 소스 목록에 포함 | `wavebit.OrderExcitation(orders={0: 1., 1: 0.5j}, ...)` | {ref}`입사 차수 묶기 <beams-detail-id31>` |
+| 같은 쪽에서 입사파마다 각도·편광을 따로 지정 | `sources=(rcwa.PlaneWave(side="top", ...), rcwa.PlaneWave(side="top", ...))` | {ref}`같은 쪽에 여러 입사파 <same-side-beams>` |
+| 위·아래에서 동시에 입사 | `sources=(rcwa.PlaneWave(side="top", ...), rcwa.PlaneWave(side="bottom", ...))` | {ref}`양면 입사 <two-sided-illumination>` |
+| 한 기준 방향에서 입사 차수를 선택 | `rcwa.IncidentOrders(weights=(((0, 0), 1.), ((1, 0), 0.5j)))` | {ref}`차수별 입력 <incident-order-inputs>` |
+| 차수별 입력을 다른 소스와 함께 지정 | 같은 `sources` 튜플에 `rcwa.IncidentOrders(...)` | {ref}`입사 차수 묶기 <beams-detail-id31>` |
 
-`PlaneWave`의 `side` 또는 바깥 경계 사전의 `"top"`·`"bottom"` 키로 입사 쪽을 정합니다. `excitation={0: ..., 1: ...}`처럼 차수별 진폭만 넣는 형식에서는 `incidence_side`로 한쪽을 선택합니다. 입력 형식마다 위상을 정하는 기준점과 결과 객체가 다르므로, 아래 예제에서 함께 확인합니다.
+입사 쪽은 각 소스의 `side`로 정합니다. `PlaneWave`, `IncidentOrders`, `GaussianBeam` 모두 이 인자를 받습니다. 두 평면파 형식 모두 입사 쪽 경계면의 셀 중심에서 진폭을 지정하며, 아래 예제에서 함께 확인합니다.
 
 (excitation-amplitude-phase)=
 ## 진폭·위상과 빛의 세기
 
-**복소 진폭은 전기장 진폭의 크기와 위상을 함께 나타냅니다.** `PlaneWave`에서는 `amplitude`에, 차수별 입력에서는 각 차수의 값에 넣습니다. 코드에서는 `크기 * np.exp(1j * 위상)`으로 씁니다.
+**복소 진폭은 전기장 진폭의 크기와 위상을 함께 나타냅니다.** `PlaneWave`에서는 `amplitude`에, `IncidentOrders(weights=...)`에서는 각 차수의 가중치에 넣습니다. 코드에서는 `크기 * np.exp(1j * 위상)`으로 씁니다.
 
 - 앞의 **크기**는 전기장 진폭의 크기를 정합니다.
 - `np.exp(1j * 위상)`은 크기가 1인 복소수로, **위상만 지정**합니다. 위상은 라디안 단위이므로, 도 단위의 각도는 `np.deg2rad()`로 변환합니다.
@@ -115,9 +115,9 @@ sources = [
 (same-side-beams)=
 ## 같은 쪽에 여러 입사파를 넣기
 
-위에서 여러 입사파를 넣으려면 `excitation={"top": [PlaneWave(...), PlaneWave(...)]}`처럼 **한쪽에 입사파 목록**을 지정합니다. 각 `PlaneWave`에서 방향·편광·진폭·위상을 따로 정합니다. 모든 입사파는 같은 구조에 입사하며, `rcwa()`의 `wavelength`를 공유합니다.
+위에서 여러 입사파를 넣으려면 `sources=(rcwa.PlaneWave(side="top", ...), rcwa.PlaneWave(side="top", ...))`처럼 **같은 쪽의 `PlaneWave`를 여러 개** 지정합니다. 각 `PlaneWave`에서 방향·편광·진폭·위상을 따로 정합니다. 모든 입사파는 같은 구조에 입사하며, `rcwa.Excitation`의 `wavelength`를 공유합니다.
 
-`"top"`만 적으면 위에서만 입사합니다. 아래에서만 여러 입사파를 넣으려면 목록의 키를 `"bottom"`으로 정합니다. 이때도 `top`과 `bot`에는 위·아래 매질의 재료값을 모두 넣습니다.
+`side="top"`인 소스만 넣으면 위에서만 입사합니다. 아래에서만 여러 입사파를 넣으려면 `side="bottom"`으로 정합니다. 이때도 `Stack.top`과 `Stack.bottom`에는 위·아래 매질을 모두 넣습니다.
 
 (beams-detail-id30)=
 ### 각 입사파의 값을 정하는 방법
@@ -126,13 +126,18 @@ sources = [
 | --- | --- |
 | `theta`, `phi` | 해당 입사파의 입사각과 방위각입니다. 단위는 라디안이며, 각 입사파의 입사 매질 안에서 읽습니다. |
 | `kx`, `ky` | 각도 대신 횡파수를 직접 지정합니다. 길이 단위가 nm이면 단위는 nm⁻¹입니다. 같은 `PlaneWave`에 `theta`, `phi`와 함께 넣지 않습니다. |
-| `polarization=(a_s, a_p)` | 그 입사파의 s·p 전기장 성분 비율과 상대 위상을 지정합니다. `(1., 0.)`은 s, `(0., 1.)`은 p 편광입니다. 두 성분은 크기의 제곱합이 1이 되도록 정규화됩니다. |
-| `psi`, `chi` | `polarization` 대신 편광 타원의 각도로 지정할 수 있습니다. {ref}`8장의 편광 설명 <incident-polarization>`과 같은 규약을 사용합니다. |
-| `amplitude` | 정규화된 편광 계수에 곱할 진폭 크기와 위상입니다. `A * np.exp(1j * np.deg2rad(delta))`에서 `A`는 크기, `delta`는 위상각(°)입니다. 생략하면 `1.`입니다. |
+| `polarization` | `"s"`, `"p"`, 또는 그 입사파의 s·p 전기장 성분 비율과 상대 위상 `(a_s, a_p)`입니다. `(1., 0.)`은 `"s"`, `(0., 1.)`은 `"p"`와 같습니다. 두 성분은 크기의 제곱합이 1이 되도록 정규화됩니다. 생략하면 `"s"`입니다. |
+| `amplitude` | 정규화된 편광 계수에 곱할 진폭 크기와 위상이며, 단위는 V/m입니다. `A * np.exp(1j * np.deg2rad(delta))`에서 `A`는 크기, `delta`는 위상각(°)입니다. 생략하면 `1.`입니다. |
 
 `polarization`은 입사파 안의 s·p 성분 사이 관계를, `amplitude`는 입사파 전체의 크기와 다른 입사파에 대한 위상을 정합니다.
 
-방향을 생략한 입사파는 `rcwa()`에 공통 `kx`, `ky`가 있으면 그 값을 사용하고, 없으면 수직 입사합니다. 편광도 공통 설정을 따르며, 공통 설정도 없으면 s 편광입니다. 아래 예제에서는 각 입사파의 조건을 직접 적습니다.
+:::{admonition} 이전 인터페이스
+:class: earlier-interface
+
+2026-10-15에 `wavebit.compat`와 함께 퇴역한 이전 인터페이스는 `polarization` 대신 편광 타원의 각도 `psi`, `chi`도 받았습니다. {ref}`8장의 편광 설명 <incident-polarization>`과 같은 규약입니다. 현재 `PlaneWave`는 이 인자를 받지 않으므로 존스 쌍 `(a_s, a_p)`를 넣습니다.
+:::
+
+방향을 생략한 입사파는 수직 입사하며, 편광을 생략하면 s 편광입니다. 공통 기본값은 없습니다. 각 `PlaneWave`가 자기 방향과 편광을 적습니다. 아래 예제에서는 각 입사파의 조건을 직접 적습니다.
 
 (beams-detail-id29)=
 ### 예제: 수직 입사와 20° 입사를 함께 넣기
@@ -141,34 +146,36 @@ sources = [
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-beams = [
-    wavebit.PlaneWave(
-        theta=0., phi=0.,
-        polarization=(1., 0.),          # s 편광
+beams = (
+    rcwa.PlaneWave(
+        side="top", theta=0., phi=0.,
+        polarization="s",              # s 편광
         amplitude=1.,                  # 진폭 크기 1, 위상 0°
     ),
-    wavebit.PlaneWave(
-        theta=np.deg2rad(20.), phi=0.,
-        polarization=(1., 0.),          # s 편광
+    rcwa.PlaneWave(
+        side="top", theta=np.deg2rad(20.), phi=0.,
+        polarization="s",              # s 편광
         amplitude=0.5 * np.exp(1j * np.deg2rad(90.)),
     ),
-]
-
-same_side = wavebit.rcwa(
-    wavelength=600.,                    # 길이 단위: nm
-    period=(900., 850.),
-    top=1., bot=2.25,
-    structure=[dict(background=4.+0.6j, shapes=[])],
-    thickness=[100.],
-    truncation_order=0,                 # 패턴이 없는 균일 평판
-    excitation={"top": beams},
 )
-same_side_result = same_side.solve(power_region="infinite")
 
-print("반사율:", same_side_result.output_top)
-print("투과율:", same_side_result.output_bottom)
+same_side = rcwa.Problem(
+    units=Units(length="nm"),           # 모든 길이는 nm
+    stack=rcwa.Stack(
+        period=(900., 850.),
+        top=Material(epsilon=1.), bottom=Material(epsilon=2.25),
+        layers=(rcwa.Layer(thickness=100., background=Material(epsilon=4.+0.6j)),)),
+    excitation=rcwa.Excitation(wavelength=600., sources=beams),
+    outputs=rcwa.Outputs(diffraction=False, power_region="infinite"),
+)
+numerics = rcwa.Numerics(orders=(0, 0))  # 패턴이 없는 균일 평판
+same_side_result = rcwa.run(same_side, numerics=numerics)
+top, bottom = same_side_result.outputs["top"], same_side_result.outputs["bottom"]
+
+print("반사율:", top.outgoing / top.incoming)
+print("투과율:", bottom.outgoing / top.incoming)
 print("흡수율:", same_side_result.absorption)
 ```
 
@@ -181,51 +188,53 @@ print("흡수율:", same_side_result.absorption)
 
 `beams[0]`, `beams[1]`의 숫자는 **목록에서 입사파를 구별하는 번호**입니다. 회절 차수 0차·1차를 뜻하지 않습니다. 목록에 `PlaneWave`를 추가하면 셋 이상의 입사파도 넣을 수 있습니다.
 
-위에서만 입사하므로 `output_top`은 전체 반사율, `output_bottom`은 전체 투과율입니다. 둘 다 두 입사파가 함께 만드는 입사파만의 전력을 기준으로 읽습니다. 아래에서만 입사한다면 `output_bottom`이 반사율, `output_top`이 투과율입니다.
+위에서만 입사하므로 위쪽 출력 전력을 입사 전력으로 나눈 `top.outgoing / top.incoming`이 전체 반사율, `bottom.outgoing / top.incoming`이 전체 투과율입니다. 둘 다 두 입사파가 함께 만드는 입사파만의 전력을 기준으로 읽습니다. 아래에서만 입사한다면 아래쪽 출력 비율이 반사율, 위쪽 출력 비율이 투과율입니다.
 
 위에서 넣는 두 입사파는 모두 **위 경계면의 셀 중심**인 `(x, y) = (0, 0)`에서 위상을 지정합니다. 따라서 예제의 +90°는 이 점에서 둘째 입사파가 첫째 입사파에 대해 갖는 상대 위상입니다. 두 입사파는 진행 방향이 달라 표면의 다른 위치에서는 상대 위상도 달라집니다. 한 위치에서 두 파 사이의 위상차가 시간에 따라 유지되는 결맞는 입사입니다.
 
 진폭 크기 0.5가 입사 전력의 비율 0.5를 뜻하지는 않습니다. 이 예제처럼 같은 무손실 등방성 매질에서 전기장 진폭을 지정하면, 경계면에 수직으로 들어오는 전력은 `진폭 크기² × cos(theta)`에 비례합니다. 둘째 입사파의 입사 전력은 첫째의 `0.5² × cos(20°) ≈ 0.235`배입니다.
 
-이 예제는 두 입사파의 방향이 달라 전력을 평균할 영역을 `power_region`으로 명시했습니다. 어떤 입사파들을 함께 계산하는지는 {ref}`계산 흐름 <coherent-illumination-flow>`에서 설명합니다. `power_region="infinite"`에서는 서로 다른 횡파수 사이의 간섭항이 공간 평균으로 사라지지만, 위치별 필드에는 간섭이 남습니다. 평균 영역별 차이는 {ref}`전력 읽기 <illumination-power-region>`에서 설명합니다.
+이 예제는 두 입사파의 방향이 달라 전력을 평균할 영역을 `Outputs(power_region=...)`로 명시했습니다. 어떤 입사파들을 함께 계산하는지는 {ref}`계산 흐름 <coherent-illumination-flow>`에서 설명합니다. `power_region="infinite"`에서는 서로 다른 횡파수 사이의 간섭항이 공간 평균으로 사라지지만, 위치별 필드에는 간섭이 남습니다. 평균 영역별 차이는 {ref}`전력 읽기 <illumination-power-region>`에서 설명합니다.
 
 (two-sided-illumination)=
 ## 위·아래에서 동시에 입사시키기
 
-양쪽에서 빛을 넣으려면 `excitation` 안에 `"top"`과 `"bottom"`을 적고, 각 쪽에 `wavebit.PlaneWave(...)`을 지정합니다. 같은 쪽 입사 예제와 마찬가지로 각 입사파의 방향·편광·진폭·위상을 따로 정합니다.
+양쪽에서 빛을 넣으려면 소스에 `rcwa.PlaneWave(side="top", ...)` 하나와 `rcwa.PlaneWave(side="bottom", ...)` 하나를 넣습니다. 같은 쪽 입사 예제와 마찬가지로 각 입사파의 방향·편광·진폭·위상을 따로 정합니다.
 
-`top`과 `bot`은 위·아래 반무한 매질의 재료값입니다. 빛이 들어오는 쪽은 `excitation`의 키로 정하므로 이 형식에서는 `incidence_side`를 함께 적지 않습니다. 층은 아래에서 위 순서로 입력합니다.
+`Stack.top`과 `Stack.bottom`은 위·아래 반무한 매질의 재료입니다. 빛이 들어오는 쪽은 각 소스의 `side`가 정하므로 입사 쪽을 따로 설정하지 않습니다. 층은 아래에서 위 순서로 입력합니다.
 
 (beams-detail-id19)=
 ### 예제: 두 경계면에서 위상차를 90°로 지정하기
 
-아래 예제는 위쪽이 공기, 아래쪽이 유리이고 그 사이에 흡수성 평판이 있는 경우입니다. 두 입사파의 `kx`, `ky`를 공통으로 정하고, 아래쪽 입사파에 +90°의 위상을 줍니다.
+아래 예제는 위쪽이 공기, 아래쪽이 유리이고 그 사이에 흡수성 평판이 있는 경우입니다. 두 입사파에 같은 `kx`, `ky`를 각각 적고, 아래쪽 입사파에 +90°의 위상을 줍니다.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-two_sided = wavebit.rcwa(
-    wavelength=600.,                    # 길이 단위: nm
-    period=(900., 850.),
-    top=1., bot=2.25,                   # 위·아래 상대 유전율
-    structure=[dict(background=4.+0.6j, shapes=[])],
-    thickness=[100.],
-    truncation_order=0,                 # 패턴이 없는 균일 평판 예제
-    kx=0.002, ky=0.,                    # 공통 횡파수, 단위: nm⁻¹
-    answers="field",
-    excitation={
-        "top": wavebit.PlaneWave(polarization=(1., 0.)),
-        "bottom": wavebit.PlaneWave(
-            polarization=(1., 0.),
-            amplitude=1.0 * np.exp(1j * np.deg2rad(90.)),
-        ),
-    },
+two_sided = rcwa.Problem(
+    units=Units(length="nm"),           # 모든 길이는 nm
+    stack=rcwa.Stack(
+        period=(900., 850.),
+        top=Material(epsilon=1.), bottom=Material(epsilon=2.25),   # 위·아래 반무한 매질
+        layers=(rcwa.Layer(thickness=100., background=Material(epsilon=4.+0.6j)),)),
+    excitation=rcwa.Excitation(
+        wavelength=600.,
+        sources=(
+            rcwa.PlaneWave(side="top", kx=0.002, ky=0., polarization="s"),   # kx 단위: nm⁻¹
+            rcwa.PlaneWave(
+                side="bottom", kx=0.002, ky=0., polarization="s",
+                amplitude=1.0 * np.exp(1j * np.deg2rad(90.)),
+            ),
+        )),
+    outputs=rcwa.Outputs(diffraction=False, fields=True),
 )
-two_sided_result = two_sided.solve()
+two_sided_result = rcwa.run(two_sided, numerics=rcwa.Numerics(orders=(0, 0)))  # 균일 평판
+top, bottom = two_sided_result.outputs["top"], two_sided_result.outputs["bottom"]
+incident = top.incoming + bottom.incoming
 
-print("위쪽으로 나가는 전력 비율:", two_sided_result.output_top)
-print("아래쪽으로 나가는 전력 비율:", two_sided_result.output_bottom)
+print("위쪽으로 나가는 전력 비율:", top.outgoing / incident)
+print("아래쪽으로 나가는 전력 비율:", bottom.outgoing / incident)
 print("평판에서 흡수되는 전력 비율:", two_sided_result.absorption)
 ```
 
@@ -249,25 +258,26 @@ print("평판에서 흡수되는 전력 비율:", two_sided_result.absorption)
 각 `PlaneWave`에 `theta`, `phi`를 직접 적으면 됩니다. 각도는 그 입사파가 들어오는 매질 안에서 읽습니다. 또는 각 입사파에 `kx`, `ky`를 직접 줄 수 있습니다. 한 입사파 안에서 두 입력 방식을 섞지는 않습니다.
 
 ```python
-two_sided_result = two_sided.solve(
-    excitation={
-        "top": wavebit.PlaneWave(theta=np.deg2rad(20.), phi=0.),
-        "bottom": wavebit.PlaneWave(
-            theta=np.deg2rad(35.), phi=0.,
+two_angles = two_sided.replace(
+    excitation=rcwa.Excitation(wavelength=600., sources=(
+        rcwa.PlaneWave(side="top", theta=np.deg2rad(20.), phi=0.),
+        rcwa.PlaneWave(
+            side="bottom", theta=np.deg2rad(35.), phi=0.,
             amplitude=0.7 * np.exp(1j * np.deg2rad(90.)),
         ),
-    },
-    power_region="infinite",
+    )),
+    outputs=rcwa.Outputs(diffraction=False, power_region="infinite"),
 )
-print(two_sided_result.group_count)  # 이 예제에서는 2
+two_angles_result = rcwa.run(two_angles, numerics=rcwa.Numerics(orders=(0, 0)))
+print(two_angles_result.diagnostics["source_group_counts"])  # 이 예제에서는 (2,)
 ```
 
-입사각을 각각 정하면 두 입사파가 서로 다른 계산 묶음에 놓일 수 있어 `power_region`을 지정합니다. 묶음을 나누는 기준과 전력 평균은 {ref}`계산 흐름 <coherent-illumination-flow>`에서 설명합니다.
+입사각을 각각 정하면 두 입사파가 서로 다른 계산 묶음에 놓일 수 있어 `Outputs(power_region=...)`을 지정합니다. `diagnostics["source_group_counts"]`에는 파장마다 묶음 수가 하나씩 들어 있습니다. 묶음을 나누는 기준과 전력 평균은 {ref}`계산 흐름 <coherent-illumination-flow>`에서 설명합니다.
 
 (incident-order-inputs)=
 ## 입사 차수로 여러 입사파를 지정하기
 
-`excitation={0: 1., 1: 0.5j}`는 같은 쪽에서 입사하는 파들을 회절 차수로 고르는 형식입니다. 각 차수의 방향은 기준 입사 방향과 격자 주기로 결정되며, 모든 파가 하나의 편광 설정을 공유합니다.
+`rcwa.IncidentOrders(weights=(((0, 0), 1.), ((1, 0), 0.5j)))`는 같은 쪽에서 입사하는 파들을 회절 차수로 고르는 형식입니다. 각 차수의 방향은 기준 입사 방향과 격자 주기로 결정되며, 모든 파가 하나의 편광 설정을 공유합니다.
 
 (beams-detail-id13)=
 ### 차수 번호가 입사 방향을 정하는 방법
@@ -280,7 +290,7 @@ print(two_sided_result.group_count)  # 이 예제에서는 2
 </div>
 ```
 
-**m=0은 기준 방향, m=+1은 x 방향 파수가 한 간격 더 큰 방향**입니다. `excitation`의 `0`, `1`은 이 차수 번호입니다. 파 번호마다 임의의 각도를 따로 넣는 방식이 아니라, 같은 주기 격자의 파수 간격에 놓인 입사파들을 고릅니다. 파수 간격과 격자의 관계는 [6장](lattice.md)에서 설명합니다.
+**m=0은 기준 방향, m=+1은 x 방향 파수가 한 간격 더 큰 방향**입니다. `weights`의 `(0, 0)`, `(1, 0)`이 이 차수 번호이며, 1D 격자에서는 둘째 정수가 0입니다. 파 번호마다 임의의 각도를 따로 넣는 방식이 아니라, 같은 주기 격자의 파수 간격에 놓인 입사파들을 고릅니다. 파수 간격과 격자의 관계는 [6장](lattice.md)에서 설명합니다.
 
 (beams-detail-id15)=
 ### 예제: 수직 입사파와 비스듬한 입사파를 함께 넣기
@@ -289,29 +299,35 @@ print(two_sided_result.group_count)  # 이 예제에서는 2
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
 amplitude_1 = 0.5                 # +1차 전기장 진폭의 크기
 phase_1 = np.deg2rad(90.)          # 0차에 대한 +1차의 상대 위상
 
-order_solver = wavebit.rcwa(
-    backend='numpy',
-    top=1., bot=2.25,
-    incidence_side="top",
-    wavelength=600., period=[1500., 1500.],  # 길이 단위: nm
-    theta=0., phi=0.,                      # 0차 입사파의 방향
-    structure=np.array([[[1., 1., 4., 4.]]]),
-    thickness=[200.],
-    truncation_order=dict(x=4, y=0),
-    polarization=(1., 0.),                 # 두 입사파 모두 s 편광
-    excitation={
-        0: 1.,                            # 크기 1, 위상 0°
-        1: amplitude_1 * np.exp(1j * phase_1),  # 크기 0.5, 위상 +90°
-    },
+order_problem = rcwa.Problem(
+    units=Units(length="nm"),                 # 모든 길이는 nm
+    stack=rcwa.Stack(
+        period=(1500., 1500.),
+        top=Material(epsilon=1.), bottom=Material(epsilon=2.25),
+        layers=(rcwa.Layer(
+            thickness=200.,
+            epsilon=np.array([[1., 1., 4., 4.]])),)),   # 한 행의 유전율 래스터 [y, x]
+    excitation=rcwa.Excitation(
+        wavelength=600.,
+        sources=(rcwa.IncidentOrders(
+            side="top",
+            theta=0., phi=0.,                  # 0차 입사파의 방향
+            polarization="s",                  # 두 입사파 모두 s 편광
+            weights=(
+                ((0, 0), 1.),                                  # 크기 1, 위상 0°
+                ((1, 0), amplitude_1 * np.exp(1j * phase_1)),  # 크기 0.5, 위상 +90°
+            )),)),
+    outputs=rcwa.Outputs(diffraction=False),
 )
-order_result = order_solver.solve()
-print("두 입사파를 함께 넣었을 때의 반사율:", order_result.R.sum())
-print("두 입사파를 함께 넣었을 때의 투과율:", order_result.T.sum())
+order_result = rcwa.run(order_problem, numerics=rcwa.Numerics(orders=(4, 0)))
+top, bottom = order_result.outputs["top"], order_result.outputs["bottom"]
+print("두 입사파를 함께 넣었을 때의 반사율:", top.outgoing / top.incoming)
+print("두 입사파를 함께 넣었을 때의 투과율:", bottom.outgoing / top.incoming)
 ```
 
 앞 코드의 두 입사파를 크기와 위상으로 나누어 읽으면 다음과 같습니다.
@@ -321,18 +337,27 @@ print("두 입사파를 함께 넣었을 때의 투과율:", order_result.T.sum(
 | `0` | 수직 입사 | 1 | 0° |
 | `1` | +x 쪽으로 약 23.58° 기울어진 입사 | 0.5 | +90° |
 
-+1차의 `amplitude_1 * np.exp(1j * phase_1)`은 이 예제에서 `0.5j`와 같습니다. **크기 0.5와 위상 +90°를 한 복소수로 표현한 값**입니다. `j`의 크기는 1이므로 `0.5j`의 크기는 0.5입니다. 진폭의 크기는 전력 비율을 뜻하는 값은 아닙니다. 표면을 통과하는 입사 전력에는 진폭 크기의 제곱뿐 아니라 각 파의 입사 방향과 매질도 반영됩니다. `R.sum()`과 `T.sum()`은 **두 입사파의 총 입사 전력**을 기준으로 정규화된 결과입니다.
++1차의 `amplitude_1 * np.exp(1j * phase_1)`은 이 예제에서 `0.5j`와 같습니다. **크기 0.5와 위상 +90°를 한 복소수로 표현한 값**입니다. `j`의 크기는 1이므로 `0.5j`의 크기는 0.5입니다. 진폭의 크기는 전력 비율을 뜻하는 값은 아닙니다. 표면을 통과하는 입사 전력에는 진폭 크기의 제곱뿐 아니라 각 파의 입사 방향과 매질도 반영됩니다. 출력한 비율은 **두 입사파의 총 입사 전력** `top.incoming`을 기준으로 정규화된 결과입니다. `IncidentOrders` 계산은 이 경계 전력과 요청한 장을 반환하며, 차수별 `R`, `T`는 반환하지 않습니다.
 
-이 차수별 진폭 형식의 위상 기준은 입사 쪽 경계면에서 푸리에 셀의 시작점입니다. 직교 셀에서는 `(x, y)=(-Px/2, -Py/2)`이며, 사선 셀에서는 `−(a₁+a₂)/2`입니다. `PlaneWave` 형식의 진폭은 셀 중심을 기준으로 합니다. 두 파의 `kx`가 다르므로 표면을 따라 이동하면 상대 위상이 달라지고, 합쳐진 입사장의 세기도 위치에 따라 달라질 수 있습니다. [8장](light.md)에서 설명한 단일 입사파는 각각의 세기가 표면을 따라 일정합니다. 여러 파를 합한 세기에는 파 사이의 간섭이 반영됩니다.
+:::{admonition} 이전 인터페이스
+:class: earlier-interface
 
-같은 크기 0.5에 **상대 위상 +45°를 지정하려면** 다음과 같이 입력합니다. 앞에서 만든 `order_solver`의 두 입사파 방향과 재료 설정을 사용하여 다시 계산합니다.
+2026-10-15에 `wavebit.compat`와 함께 퇴역한 이전 인터페이스의 차수 사전 `excitation={0: 1., 1: 0.5j}`는 일반 단면 계산기를 실행했으므로, 입사시킨 차수의 차수별 `R`, `T`와 진폭도 반환했습니다. 현재 API는 `IncidentOrders`에 대해 아직 이 값을 반환하지 않습니다. 같은 쪽의 같은 가중치에서 합계와 장은 이전 사전과 같습니다.
+:::
+
+`IncidentOrders`의 각 가중치는 `PlaneWave`의 진폭과 마찬가지로 입사 쪽 경계면의 셀 중심 `(x, y)=(0, 0)`을 기준으로 합니다. 두 파의 `kx`가 다르므로 표면을 따라 이동하면 상대 위상이 달라지고, 합쳐진 입사장의 세기도 위치에 따라 달라질 수 있습니다. [8장](light.md)에서 설명한 단일 입사파는 각각의 세기가 표면을 따라 일정합니다. 여러 파를 합한 세기에는 파 사이의 간섭이 반영됩니다.
+
+같은 크기 0.5에 **상대 위상 +45°를 지정하려면** 가중치만 바꿉니다. 앞에서 만든 `order_problem`의 두 입사파 방향과 재료 설정은 그대로 둡니다.
 
 ```python
-order_solver.excitation = {
-    0: 1.,
-    1: 0.5 * np.exp(1j * np.deg2rad(45.)),  # 크기 0.5, 위상 +45°
-}
-result_45 = order_solver.solve()
+source = order_problem.excitation.sources[0]
+order_45 = order_problem.replace(excitation=order_problem.excitation.replace(sources=(
+    source.replace(weights=(
+        ((0, 0), 1.),
+        ((1, 0), 0.5 * np.exp(1j * np.deg2rad(45.))),   # 크기 0.5, 위상 +45°
+    )),
+)))
+result_45 = rcwa.run(order_45, numerics=rcwa.Numerics(orders=(4, 0)))
 ```
 
 이때 +1차의 복소 진폭은 약 `0.353553 + 0.353553j`입니다. 실수부와 허수부가 함께 달라져도 진폭의 크기는 0.5이고, 0차에 대한 상대 위상은 +45°입니다.
@@ -340,9 +365,9 @@ result_45 = order_solver.solve()
 (beams-detail-id17)=
 ### 차수별 진폭을 한 사전으로 입력할 때의 범위
 
-- **`excitation={0: 1., 1: 0.5j}`처럼 차수별 진폭을 적는 형식은 같은 파장·입사 쪽·편광 설정을 공유합니다.** `excitation`은 각 파의 차수와 진폭을 정하고, `polarization` 또는 `psi`·`chi`는 모든 입사파에 공통으로 적용됩니다. 각 파의 s·p 방향은 그 파의 진행 방향을 기준으로 정합니다.
-- **지정한 입사 차수는 계산 차수 범위 안에 있어야 합니다.** 예를 들어 +1차를 넣으려면 `truncation_order`의 x 범위가 1 이상이어야 합니다. 계산 정확도에 필요한 차수 선택은 [10장](fourier-orders.md)에서 설명합니다.
-- **입사 쪽 매질에서 구조를 향하는 전력을 가져야 합니다.** 파장·주기·기준 입사 방향에 따라 허용되는 차수가 달라지며, 전파하지 않는 소멸파나 입사 전력이 0인 차수를 지정하면 오류가 발생합니다.
+- **한 `IncidentOrders`의 차수들은 같은 파장·입사 쪽·편광 설정을 공유합니다.** `weights`는 각 파의 차수와 진폭을 정하고, `polarization`은 모든 입사파에 공통으로 적용됩니다. 각 파의 s·p 방향은 그 파의 진행 방향을 기준으로 정합니다.
+- **지정한 입사 차수는 계산 차수 범위 안에 있어야 합니다.** 예를 들어 +1차를 넣으려면 `Numerics(orders=...)`의 x 반폭이 1 이상이어야 합니다. 계산 정확도에 필요한 차수 선택은 [10장](fourier-orders.md)에서 설명합니다.
+- **입사 쪽 매질에서 구조를 향하는 전력을 가져야 합니다.** 파장·주기·기준 입사 방향에 따라 허용되는 차수가 달라지며, 전파하지 않는 소멸파나 입사 전력이 0인 차수를 지정하면 `ValidationError`가 발생합니다.
 
 (excitation-order-pairs)=
 (d-m-n)=
@@ -350,7 +375,7 @@ result_45 = order_solver.solve()
 
 **x·y축에 나란한 직교 격자에서는 `(m, n)`을 `(x 방향 차수, y 방향 차수)` 순서로 씁니다.** 첫 번째 숫자 `m`은 x 방향, 두 번째 숫자 `n`은 y 방향의 차수입니다. 이 숫자들은 차수를 구별하는 정수 번호이며, `kx`, `ky`의 파수 값 자체는 아닙니다.
 
-| `excitation`의 키 | x 방향 차수 `m` | y 방향 차수 `n` | 기준 입사파의 횡파수에 더하는 값 `(Δkx, Δky)` |
+| `weights`의 차수 번호 | x 방향 차수 `m` | y 방향 차수 `n` | 기준 입사파의 횡파수에 더하는 값 `(Δkx, Δky)` |
 | --- | --- | --- | --- |
 | `(0, 0)` | 0 | 0 | `(0, 0)` — 기준 입사파 |
 | `(1, 0)` | +1 | 0 | `(2π/Px, 0)` |
@@ -362,10 +387,11 @@ result_45 = order_solver.solve()
 다음은 기준 입사파와 x 방향 +1차 입사파를 함께 지정하는 값입니다. 진폭의 크기와 위상은 1D와 같은 방법으로 입력합니다.
 
 ```python
-excitation = {
-    (0, 0): 1.,  # 기준 입사파: 크기 1, 위상 0°
-    (1, 0): 0.5 * np.exp(1j * np.deg2rad(90.)),  # x +1차, y 0차
-}
+weights = (
+    ((0, 0), 1.),  # 기준 입사파: 크기 1, 위상 0°
+    ((1, 0), 0.5 * np.exp(1j * np.deg2rad(90.))),  # x +1차, y 0차
+)
+source = rcwa.IncidentOrders(weights=weights, theta=0., phi=0., polarization="s")
 ```
 
 **사선 격자에서는 `m`, `n`이 첫째·둘째 역격자 벡터에 곱하는 차수입니다.** [6장](lattice.md)에서 설명한 두 역격자 벡터를 **b**<sub>1</sub>, **b**<sub>2</sub>라고 하면, 각 입사 차수의 횡방향 파수 벡터는 다음과 같습니다.
@@ -383,38 +409,38 @@ excitation = {
 (beams-detail-id31)=
 ### 입사 차수를 묶어서 지정하기
 
-`OrderExcitation`은 한 기준 방향에서 **역격자 벡터만큼 떨어진 여러 입사 평면파**를 묶어 지정합니다. `orders`에 차수별 복소 진폭을 넣고, 모든 차수에 공통 s·p 편광 계수를 적용합니다. `PlaneWave` 하나는 평면파 하나를 지정합니다.
+`IncidentOrders`는 한 기준 방향에서 **역격자 벡터만큼 떨어진 여러 입사 평면파**를 묶어 지정합니다. `weights`에 차수별 복소 가중치를 넣고, 모든 차수에 공통 s·p 편광 계수를 적용합니다. `PlaneWave` 하나는 평면파 하나를 지정합니다. 둘은 한 `sources` 튜플에 함께 넣을 수 있습니다.
 
 ```python
-beam_order_result = same_side.solve(
-    truncation_order=dict(x=1, y=0),    # 입력할 +1차를 포함
-    excitation={
-        "top": wavebit.OrderExcitation(
-            theta=0., phi=0.,
-            polarization=(1., 0.),
+beam_order_problem = same_side.replace(
+    excitation=same_side.excitation.replace(sources=(
+        rcwa.IncidentOrders(
+            side="top", theta=0., phi=0.,
+            polarization="s",
             amplitude=1.,
-            orders={
-                0: 1.,
-                1: 0.5 * np.exp(1j * np.deg2rad(90.)),
-            },
-        ),
-    },
-    power_region="cell",
+            weights=(
+                ((0, 0), 1.),
+                ((1, 0), 0.5 * np.exp(1j * np.deg2rad(90.))),
+            )),
+    )),
+    outputs=rcwa.Outputs(diffraction=False, power_region="cell"),
 )
+beam_order_result = rcwa.run(beam_order_problem,
+                             numerics=rcwa.Numerics(orders=(1, 0)))  # 입력할 +1차를 포함
 ```
 
-여기서 `orders`의 `0`, `1`은 **x 방향 입사 차수**입니다. 이 예제는 `ky=0`이고, `kx`는 기준 방향의 값에 `m × 2π/Px`를 더합니다. 공기, 파장 600 nm, 주기 900 nm이므로 0차는 수직 입사, +1차는 +x 쪽으로 약 41.81° 기울어진 입사입니다. {ref}`같은 쪽 입사 예제 <same-side-beams>`의 20° 입사파와는 다른 방향입니다. 2D에서는 `(m, n)`을 사용하며, 두 차수는 각각 첫째·둘째 역격자 벡터에 곱하는 정수입니다.
+여기서 `weights`의 `(0, 0)`, `(1, 0)`은 **x 방향 입사 차수**입니다. 이 예제는 `ky=0`이고, `kx`는 기준 방향의 값에 `m × 2π/Px`를 더합니다. 공기, 파장 600 nm, 주기 900 nm이므로 0차는 수직 입사, +1차는 +x 쪽으로 약 41.81° 기울어진 입사입니다. {ref}`같은 쪽 입사 예제 <same-side-beams>`의 20° 입사파와는 다른 방향입니다. 2D에서는 `(m, n)`을 사용하며, 두 차수는 각각 첫째·둘째 역격자 벡터에 곱하는 정수입니다.
 
-각 차수의 복소 계수는 `OrderExcitation.amplitude × orders[차수]`이며, 여기에 공통 s·p 편광 계수를 곱합니다. 차수마다 다른 편광을 넣으려면 별도의 `PlaneWave`로 지정합니다. 입력 차수는 `truncation_order` 범위 안에 있어야 하고, 입사 매질에서 구조 쪽으로 전력을 운반할 수 있어야 합니다.
+각 차수의 복소 계수는 `IncidentOrders.amplitude ×` 그 차수의 가중치이며, 여기에 공통 s·p 편광 계수를 곱합니다. 차수마다 다른 편광을 넣으려면 별도의 `PlaneWave`로 지정합니다. 입력 차수는 `Numerics(orders=...)` 범위 안에 있어야 하고, 입사 매질에서 구조 쪽으로 전력을 운반할 수 있어야 합니다.
 
 한 계산 묶음에서는 각 입력 주변의 회절 차수를 포함하도록 계산 배열을 넓힙니다. 따라서 한 묶음에 멀리 떨어진 입사 차수를 넣으면 배열 크기와 계산량도 늘어납니다.
 
 (illumination-output-power)=
 ## 합친 장에서 출력 전력 구하기
 
-앞의 예제에서 구한 `PlaneWave`·`OrderExcitation` 결과는 나가는 쪽에 따라 `output_top`, `output_bottom`으로 읽습니다. 위에서만 입사하면 각각 반사율·투과율이고, 아래에서만 입사하면 각각 투과율·반사율입니다.
+앞의 예제에서 구한 `PlaneWave`·`IncidentOrders` 결과는 나가는 쪽에 따라 `result.outputs['top']`, `result.outputs['bottom']`으로 읽습니다. 각각 W 단위의 `incoming`·`outgoing` 전력을 가진 `BoundaryPower`입니다. 나가는 전력을 총 입사 전력으로 나눈 출력 비율을 아래에서는 `output_top`, `output_bottom`이라고 부릅니다. 위에서만 입사하면 각각 반사율·투과율이고, 아래에서만 입사하면 각각 투과율·반사율입니다.
 
-위쪽으로 나가는 전기장에는 **위에서 넣은 입사파의 반사 성분과 아래에서 넣은 입사파의 투과 성분**이 함께 들어갑니다. 아래쪽 출력도 같은 방식으로 두 입력의 기여를 합칩니다. 그러므로 양면 입사의 결과는 하나의 `R`, `T`로 부르지 않고, 나가는 쪽에 따라 `output_top`, `output_bottom`으로 읽습니다.
+위쪽으로 나가는 전기장에는 **위에서 넣은 입사파의 반사 성분과 아래에서 넣은 입사파의 투과 성분**이 함께 들어갑니다. 아래쪽 출력도 같은 방식으로 두 입력의 기여를 합칩니다. 그러므로 양면 입사의 결과는 하나의 `R`, `T`로 부르지 않고, 나가는 쪽에 따라 `top`, `bottom`으로 읽습니다.
 
 ```{math}
 \mathbf E=\sum_j\mathbf E_j,\qquad
@@ -422,7 +448,7 @@ beam_order_result = same_side.solve(
 \langle\mathbf S\rangle=\frac12\operatorname{Re}(\mathbf E\times\mathbf H^*).
 ```
 
-여기서 j는 각 계산의 기여를 구별하는 번호이며, 앞에서 복소수에 쓴 Python의 `1j`와는 별개입니다. **S**는 전력 흐름 밀도를 나타내는 포인팅 벡터, ⟨ ⟩는 시간평균, 별표는 복소켤레입니다. 식의 **H**는 실제 자기장입니다. Wavebit가 반환하는 Z₀H로 계산한다면 식의 결과를 진공 임피던스 Z₀로 나눕니다.
+여기서 j는 각 계산의 기여를 구별하는 번호이며, 앞에서 복소수에 쓴 Python의 `1j`와는 별개입니다. **S**는 전력 흐름 밀도를 나타내는 포인팅 벡터, ⟨ ⟩는 시간평균, 별표는 복소켤레입니다. 식의 **H**는 실제 자기장이며, Wavebit는 A/m 단위로 반환합니다. (이전 인터페이스는 Z₀H를 반환했으므로, 그 값으로 구한 전력은 1/Z₀를 더 곱해야 합니다.)
 
 전기장끼리, 자기장끼리 더한 뒤 두 전체 장으로 전력을 구하면 두 파 사이의 간섭항도 포함됩니다. 전력 흐름 밀도의 경계면에 수직인 성분을 면적에 걸쳐 적분하면 그 면을 통과하는 전력이 됩니다. **출력 전력에는 바깥 경계면의 필드만 있으면 됩니다.** 층 내부의 모든 위치에서 필드를 먼저 구할 필요는 없습니다.
 
@@ -438,7 +464,7 @@ beam_order_result = same_side.solve(
 - **반사·투과 전력:** 각 입사파가 만든 전력을 더합니다.
 - **반사율·투과율:** 더한 출력 전력을 총 입사 전력으로 나눕니다. 이는 각 입사파의 입사 전력 비율로 가중 평균하는 것과 같습니다.
 
-두 입사파의 입사 전력을 P<sub>1</sub>, P<sub>2</sub>라고 하고, 따로 계산한 전체 반사율을 R<sub>1</sub>, R<sub>2</sub>, 전체 투과율을 T<sub>1</sub>, T<sub>2</sub>라고 하면 다음과 같습니다. 한 입사파씩 일반 `rcwa()` 입력으로 계산한 전체 반사율과 투과율은 `result.R.sum()`, `result.T.sum()`으로 읽습니다.
+두 입사파의 입사 전력을 P<sub>1</sub>, P<sub>2</sub>라고 하고, 따로 계산한 전체 반사율을 R<sub>1</sub>, R<sub>2</sub>, 전체 투과율을 T<sub>1</sub>, T<sub>2</sub>라고 하면 다음과 같습니다. 한 입사파씩 `PlaneWave` 하나로 계산한 전체 반사율과 투과율은 `result.R.sum()`, `result.T.sum()`으로 읽습니다.
 
 ```{raw} html
 <div class="power-equations" style="text-align:center">
@@ -456,13 +482,13 @@ beam_order_result = same_side.solve(
 
 총 입사 전력은 4 W이고, 총 반사 전력은 1.2 W이므로 합친 반사율은 1.2 / 4 = 30%입니다. 두 입사파의 입사 전력이 같을 때는 반사율의 단순 평균과 같습니다. 투과율도 같은 방법으로 구합니다.
 
-`excitation`에 복소 진폭을 지정하면 두 파의 위상차가 고정된 상태를 계산합니다. 따라서 위의 비결맞는 입사를 계산하려면 각 입사파의 RCWA 결과를 따로 구한 뒤 전력을 합산합니다.
+한 `Excitation`에 복소 진폭을 지정하면 두 파의 위상차가 고정된 상태를 계산합니다. 따라서 위의 비결맞는 입사를 계산하려면 각 입사파의 RCWA 결과를 따로 구한 뒤 전력을 합산합니다.
 
 (illumination-power-region)=
 (beams-detail-id22)=
 ### 전력을 어느 면적에서 평균할까?
 
-서로 다른 계산 묶음의 파를 합치면 세기 분포가 구조의 한 셀마다 똑같이 반복되지 않을 수 있습니다. 따라서 두 묶음 이상일 때는 `power_region`으로 전력을 평균할 영역을 지정합니다.
+서로 다른 계산 묶음의 파를 합치면 세기 분포가 구조의 한 셀마다 똑같이 반복되지 않을 수 있습니다. 따라서 두 묶음 이상일 때는 `rcwa.Outputs(power_region=...)`으로 전력을 평균할 영역을 지정합니다.
 
 | 설정 | 평균하는 영역 |
 | --- | --- |
@@ -472,18 +498,26 @@ beam_order_result = same_side.solve(
 
 무한 면적 평균에서 간섭항이 사라지는 것은 **공간에 대한 평균** 때문입니다. 두 입사파가 비결맞는 빛으로 바뀌는 것은 아니며, 위치별 필드에는 간섭이 남습니다. 유한한 직사각형에서는 그 영역에 걸친 간섭까지 반영한 전력을 구합니다.
 
-양쪽 바깥 매질이 무손실이고 셀마다 장의 세기가 반복되거나 무한 면적 평균을 사용하면, `absorption = 1 - output_top - output_bottom`입니다. 바깥 매질에 손실이 있으면 입사파와 출력파 사이의 간섭도 순 전력에 기여할 수 있으므로 `result.absorption`으로 읽습니다. 이 전력 기준은 {ref}`13장 <half-space-power>`에서 설명합니다.
+양쪽 바깥 매질이 무손실이고 셀마다 장의 세기가 반복되거나 무한 면적 평균을 사용하면, `result.absorption = 1 - output_top - output_bottom`입니다. 바깥 매질에 손실이 있으면 입사파와 출력파 사이의 간섭도 순 전력에 기여할 수 있으므로 `result.absorption`으로 읽습니다. 이 전력 기준은 {ref}`13장 <half-space-power>`에서 설명합니다.
 
-유한한 관측 영역은 옆면으로도 전력이 드나들 수 있습니다. 따라서 직사각형 평균이나 여러 묶음의 한 셀 평균에서는 위·아래 경계의 전력 차이를 전체 흡수로 부르지 않으며, `absorption`은 `None`입니다. 이때도 `result.power.net_into_stack`으로 아래 경계의 전체 +z 전력 흐름에서 위 경계의 전체 +z 전력 흐름을 뺀 값을 읽을 수 있습니다. 유한 영역의 방향별 전력은 간섭에 따라 음수가 될 수도 있어, 그 비율을 항상 0∼1인 효율로 해석하지 않습니다.
+유한한 관측 영역은 옆면으로도 전력이 드나들 수 있습니다. 따라서 직사각형 평균이나 여러 묶음의 한 셀 평균에서는 위·아래 경계의 전력 차이를 전체 흡수로 부르지 않으며, 이때 `result.absorption`을 읽으면 `UnsupportedFeatureError`가 납니다. `result.outputs`의 입사·출력 전력은 그대로 읽을 수 있습니다. 유한 영역의 방향별 전력은 간섭에 따라 음수가 될 수도 있어, 그 비율을 항상 0∼1인 효율로 해석하지 않습니다.
 
-{ref}`같은 쪽의 두 입사파 예제 <same-side-beams>`에서 구한 필드를 그대로 두고 관측 영역만 바꾸려면 다음처럼 읽습니다. 이 비율의 분모도 해당 직사각형을 지나는 입사파만의 평균 전력 흐름입니다. 이처럼 계산 후 관측 영역을 바꾸려면 `answers="amplitude"`(기본값) 또는 `"field"`로 계산해 두어야 합니다. `"efficiency"`에서는 처음 지정한 영역의 전력만 `result.power`에 보관합니다.
+{ref}`같은 쪽의 두 입사파 예제 <same-side-beams>`에서 관측 영역만 바꾸려면 그 직사각형을 `power_region`으로 두고 다시 계산합니다. 현재 결과에는 계산 뒤 다른 영역에서 장을 적분하는 메서드가 없습니다. 이 비율의 분모는 해당 직사각형을 지나는 입사파만의 평균 전력 흐름입니다.
 
 ```python
-window_power = same_side_result.boundary_power(
-    ((-450., 450.), (-425., 425.)),     # x 범위, y 범위 (nm)
-)
-print(window_power.output_top, window_power.output_bottom)
+window = same_side.replace(outputs=same_side.outputs.replace(
+    power_region=((-450., 450.), (-425., 425.)),     # x 범위, y 범위 (nm)
+))
+window_power = rcwa.run(window, numerics=numerics).outputs
+print(window_power["top"].outgoing / window_power["top"].incoming,
+      window_power["bottom"].outgoing / window_power["top"].incoming)
 ```
+
+:::{admonition} 이전 인터페이스
+:class: earlier-interface
+
+2026-10-15에 `wavebit.compat`와 함께 퇴역한 이전 인터페이스는 입사·출력 간섭을 포함하여 아래 경계의 전체 +z 전력 흐름에서 위 경계의 전체 +z 전력 흐름을 뺀 `result.power.net_into_stack`도 반환했고, `result.boundary_power(region)`으로 계산이 끝난 결과를 새 직사각형에서 다시 적분했습니다. 현재 결과에는 아직 둘 다 없습니다.
+:::
 
 (source-expansions)=
 ## 가우시안 빔과 내부 소스로 확장하기
@@ -502,30 +536,34 @@ print(window_power.output_top, window_power.output_bottom)
 | `focus=(x,y,z)` | 초점의 전체 구조 기준 좌표입니다. |
 | `amplitude` | 구조가 없다고 보았을 때 초점의 복소 전기장 벡터 크기와 공통 위상. `1.`은 크기 1입니다. |
 | `sampling=(Nx,Ny)` | 중심 방향에 수직인 두 파수 방향을 몇 점씩 나눌지 정합니다. 기본값은 `(9,9)`입니다. |
-| `spectral_extent` | 두 파수 방향을 각각 `±spectral_extent/waist`까지 포함합니다. 기본값은 `4.`입니다. |
+| `angular_spectrum_extent` | 두 파수 방향을 각각 `±angular_spectrum_extent/waist`까지 포함합니다. 기본값은 `4.`입니다. |
 
 평면파 성분의 가중치는 `exp(-waist**2 * (ku**2 + kv**2) / 4)`에 비례합니다. 여기서 `ku`, `kv`는 빔의 중심 방향에 수직인 두 파수 성분입니다. 소스는 입사 매질에서 전파할 수 있고 구조 쪽으로 향하는 성분만 사용합니다. 무손실 양의 유전율·투자율을 가진 등방성 입사 매질을 지원합니다. 아주 좁거나 크게 기울어진 빔은 이 성분 선택과 전기장의 수직 조건 때문에 스칼라 가우시안 모양과 차이가 생길 수 있습니다.
 
 ```python
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-gaussian_solver = wavebit.rcwa(
-    wavelength=600., period=(900., 850.),
-    top=1., bot=2.25,
-    structure=[dict(background=4., shapes=[])],
-    thickness=[100.], truncation_order=0,
-    excitation=[wavebit.GaussianBeam(
-        side="top", theta=0., phi=0., polarization=(1., 0.),
-        waist=1500., focus=(0., 0., 100.), sampling=(9, 9),
-    )],
+gaussian = rcwa.Problem(
+    units=Units(length="nm"),
+    stack=rcwa.Stack(
+        period=(900., 850.),
+        top=Material(epsilon=1.), bottom=Material(epsilon=2.25),
+        layers=(rcwa.Layer(thickness=100., background=Material(epsilon=4.)),)),
+    excitation=rcwa.Excitation(wavelength=600., sources=(
+        rcwa.GaussianBeam(
+            side="top", theta=0., phi=0., polarization="s",
+            waist=1500., focus=(0., 0., 100.), sampling=(9, 9),
+        ),
+    )),
+    outputs=rcwa.Outputs(diffraction=False,
+                         power_region=((-3000., 3000.), (-3000., 3000.))),
 )
-gaussian_result = gaussian_solver.solve(
-    power_region=((-3000., 3000.), (-3000., 3000.)),
-)
-print(gaussian_result.output_top, gaussian_result.output_bottom)
+gaussian_result = rcwa.run(gaussian, numerics=rcwa.Numerics(orders=(0, 0)))
+top, bottom = gaussian_result.outputs["top"], gaussian_result.outputs["bottom"]
+print(top.outgoing / top.incoming, bottom.outgoing / top.incoming)
 ```
 
-`GaussianBeam`에는 유한한 직사각형 `power_region`을 지정합니다. 이 결과는 지정한 직사각형에서 모은 출력 전력을 같은 직사각형의 입사 전력으로 나눈 값입니다. 관측 영역 밖으로 빠져나간 빛까지 포함한 전체 빔의 반사율·투과율을 구하려면 영역을 넓히며 수렴을 확인해야 합니다. `sampling`과 `spectral_extent`도 함께 확인합니다. 유한한 파수 간격은 공간에서 반복되는 빔의 근사가 되므로, 샘플 수를 늘려 이웃 복사본의 영향을 줄입니다.
+`GaussianBeam`에는 유한한 직사각형 `Outputs(power_region=...)`을 지정합니다. 이 결과는 지정한 직사각형에서 모은 출력 전력을 같은 직사각형의 입사 전력으로 나눈 값입니다. 관측 영역 밖으로 빠져나간 빛까지 포함한 전체 빔의 반사율·투과율을 구하려면 영역을 넓히며 수렴을 확인해야 합니다. `sampling`과 `angular_spectrum_extent`도 함께 확인합니다. 유한한 파수 간격은 공간에서 반복되는 빔의 근사가 되므로, 샘플 수를 늘려 이웃 복사본의 영향을 줄입니다.
 
 **설계 참고: FMMAX**
 
@@ -544,51 +582,54 @@ Wavebit의 가우시안 빔 계산은 FMMAX의 [Brillouin zone integration 설�
 | `bloch_k=(kx,ky)` | 반복 배열에서 이웃 셀 사이의 위상을 정합니다. 격자 이동 R에 대해 모멘트에 `exp(i k∥·R)`을 곱한 위상 관계를 가집니다. 생략하면 같은 위상입니다. |
 | `repetition="isolated"` | 여러 Bloch 파수의 결과를 적분하여 고립된 다이폴을 근사합니다. |
 | `sampling=(Nx,Ny)` | 고립 소스의 Bloch 파수 적분 격자. 기본값은 `(5,5)`이며 수렴을 확인해야 합니다. |
-| `rcwa(length_unit=...)` | 구조 길이 한 단위를 미터로 환산한 값. nm이면 `1e-9`, μm이면 `1e-6`입니다. |
+| `Problem(units=Units(length=...))` | SI 모멘트에 필요한, 구조 길이 한 단위의 미터 환산을 정합니다. `"nm"` 또는 `"um"`입니다. |
 
-소스가 있는 층은 `shapes=[]`로 지정하거나, 모든 공간 칸에 같은 재료를 넣은 래스터로 표현합니다. 다른 층에는 패턴이 있어도 됩니다. 균일한 이방성·자성 층도 사용할 수 있습니다. 계산기는 소스 높이에서 층을 나누고 전류 항을 넣으므로 사용자가 층을 직접 나누지 않습니다. 소스를 층 경계에 놓거나 소스와 같은 높이의 장을 읽는 경우는 받지 않습니다. 점 소스의 특이장과 경계에 놓인 소스는 별도의 정의가 필요하기 때문입니다.
+소스가 있는 층은 `regions` 없이 지정하거나, 모든 공간 칸에 같은 재료를 넣은 래스터로 표현합니다. 다른 층에는 패턴이 있어도 됩니다. 균일한 이방성·자성 층도 사용할 수 있습니다. 계산기는 소스 높이에서 층을 나누고 전류 항을 넣으므로 사용자가 층을 직접 나누지 않습니다. 소스를 층 경계에 놓거나 소스와 같은 높이의 장을 읽는 경우는 받지 않습니다. 점 소스의 특이장과 경계에 놓인 소스는 별도의 정의가 필요하기 때문입니다.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-dipole_solver = wavebit.rcwa(
-    wavelength=600., period=(900., 850.),
-    top=1., bot=2.25,
-    structure=[dict(background=1., shapes=[])],
-    thickness=[300.], truncation_order=dict(x=1, y=1),
-    length_unit=1e-9, answers="field",
-    excitation=[wavebit.ElectricDipole(
-        position=(0., 0., 150.),
-        moment=(0., 1e-29, 0.),
-        repetition="periodic", bloch_k=(0., 0.),
-    )],
+dipole = rcwa.Problem(
+    units=Units(length="nm"),            # SI 모멘트에 필요한 길이 단위의 미터 환산
+    stack=rcwa.Stack(
+        period=(900., 850.),
+        top=Material(epsilon=1.), bottom=Material(epsilon=2.25),
+        layers=(rcwa.Layer(thickness=300., background=Material(epsilon=1.)),)),
+    excitation=rcwa.Excitation(wavelength=600., sources=(
+        rcwa.ElectricDipole(
+            position=(0., 0., 150.),
+            moment=(0., 1e-29, 0.),
+            repetition="periodic", bloch_k=(0., 0.),
+        ),
+    )),
+    outputs=rcwa.Outputs(diffraction=False, fields=True, power_region="cell"),
 )
-dipole_result = dipole_solver.solve(power_region="cell")
-Z0 = 376.730313668
-print("위쪽 평균 전력 밀도 (W/m²):", dipole_result.power.outgoing_top / Z0)
-print("아래쪽 평균 전력 밀도 (W/m²):", dipole_result.power.outgoing_bottom / Z0)
-dipole_field = dipole_result.reconstruct_field(
-    sample_x=np.linspace(-400., 400., 41), sample_y=[0.],
-    sample_z=[50., 100., 200., 250.],
+dipole_result = rcwa.run(dipole, numerics=rcwa.Numerics(orders=(1, 1)))
+cell_area = 900e-9 * 850e-9                    # m²
+print("위쪽 평균 전력 밀도 (W/m²):", dipole_result.outputs["top"].outgoing / cell_area)
+print("아래쪽 평균 전력 밀도 (W/m²):", dipole_result.outputs["bottom"].outgoing / cell_area)
+dipole_field = dipole_result.field(
+    x=np.linspace(-400., 400., 41), y=[0.],
+    z=[50., 100., 200., 250.],
 )
 ```
 
 이 예제는 셀마다 같은 위상으로 진동하는 y 방향 다이폴 배열입니다. 실제로 한 개만 있는 소스를 근사하려면 `repetition="isolated"`로 바꾸고 `bloch_k`를 생략합니다. 이때 `power_region`에는 유한한 관측 직사각형을 명시하고, 적분 격자와 Fourier 차수를 늘리며 결과를 확인합니다. 유한한 적분 격자는 큰 주기 셀에 반복된 소스와 같으므로 그 반복 간격보다 작은 영역에서 고립 소스의 근사를 확인합니다.
 
-다이폴 입력의 필드는 E가 V/m, 마지막 세 성분은 Z₀H입니다. `result.power.outgoing_top`·`outgoing_bottom`은 Z₀로 나누기 전의 평균 전력 밀도입니다. 셀 전체의 출력 전력 W를 구하려면 Z₀로 나눈 값에 셀의 면적(m²)을 곱합니다. 관측 직사각형의 경우에는 그 직사각형의 면적을 사용합니다.
+다이폴 입력의 필드는 E가 V/m, H가 A/m입니다. `result.outputs['top'].outgoing`과 `result.outputs['bottom'].outgoing`은 한 셀을 지나는 출력 전력(W)입니다. 예제처럼 셀의 면적(m²)으로 나누면 평균 전력 밀도(W/m²)가 됩니다. 관측 직사각형의 경우에는 그 직사각형의 면적을 사용합니다.
 
-내부 소스가 있으면 외부 입사 전력만으로 전체 출력을 정규화할 수 없으므로 `output_top`, `output_bottom`, `absorption`은 `None`입니다. `result.power`의 방향별 전력과 `net_into_stack`은 읽을 수 있습니다. 이때 경계의 순 전력은 흡수와 소스의 공급 전력을 함께 반영하므로 흡수율로 해석하지 않습니다. 소스가 공급하는 전력, 자가장 정규화, Purcell factor는 이 API에서 반환하지 않습니다.
+내부 소스가 있으면 외부 입사 전력만으로 전체 출력을 정규화할 수 없으므로 출력 비율이 없고, `result.absorption`을 읽으면 `UnsupportedFeatureError`가 납니다. 방향별 전력은 `result.outputs`에서 읽을 수 있습니다. 이때 경계의 순 전력은 흡수와 소스의 공급 전력을 함께 반영하므로 흡수율로 해석하지 않습니다. 소스가 공급하는 전력, 자가장 정규화, Purcell factor는 이 API에서 반환하지 않습니다.
 
-`PlaneWave`와 `ElectricDipole`을 같은 소스 목록에 넣으면 두 소스의 복소 장이 합쳐집니다. 이 경우 평면파의 `amplitude`도 V/m 기준으로 지정하여 단위를 맞춥니다.
+`PlaneWave`와 `ElectricDipole`을 같은 `sources` 튜플에 넣으면 두 소스의 복소 장이 합쳐집니다. 이 경우 평면파의 `amplitude`도 V/m 기준으로 지정하여 단위를 맞춥니다.
 
 (beam-input-support)=
 (planewave)=
 ## 지원 범위와 필드 읽기
 
-`PlaneWave`, `OrderExcitation`, `GaussianBeam`, `ElectricDipole` 소스 객체를 `excitation`에 넣는 방식은 **1차 정식화(`first_order`, 옛 이름 4ff)와 SMM**으로 계산합니다. NumPy·JAX·PyTorch의 일반 실행을 지원하며, `jit`·`vmap`, 자동미분과 `JobSpec` 저장은 지원 범위에 포함되지 않습니다. `torch.compile` 안에서는 컴파일된 호출자 안에서 즉시 실행(eager)됩니다. 위·아래 반무한 매질은 등방성이어야 합니다. 가우시안 빔의 입사 매질과 다이폴이 놓이는 층의 조건은 각 소스 절에서 설명한 범위를 따릅니다.
+소스가 둘 이상이거나 `PlaneWave` 하나가 아닌 소스(`IncidentOrders`, `GaussianBeam`, `ElectricDipole`)가 있는 계산은 **1차 정식화(`first_order`, 옛 이름 4ff)와 SMM**으로 계산합니다. NumPy·JAX·PyTorch의 즉시 실행(eager)을 지원합니다. 소스 묶음을 나누려면 방향 값이 구체적이어야 하므로 `jax.jit`·`jax.vmap`으로 추적한 입력은 거부합니다(코드 `rcwa.coherent_transform`). 즉시 실행의 `jax.grad`와 PyTorch는 이 계산을 미분하지만, 중앙 차분과 비교한 것은 평면파 둘의 경우(영역 유전율, 층 두께, 반지름에 대한 미분)뿐입니다. 다른 소스의 미분은 확인되지 않은 것으로 다룹니다. `Job`은 이 소스들을 다른 문제 입력과 똑같이 직렬화합니다. `torch.compile` 안에서는 컴파일된 호출자 안에서 즉시 실행(eager)됩니다. 위·아래 반무한 매질은 등방성이어야 합니다. 가우시안 빔의 입사 매질과 다이폴이 놓이는 층의 조건은 각 소스 절에서 설명한 범위를 따릅니다.
 
-증폭 매질의 해 선택은 이 소스 API에서 별도로 정의하지 않습니다. 계산 차수가 정확히 스침 입사 조건에 놓여 행렬이 특이해지면 파장을 자동으로 바꾸지 않으므로, 가까운 파장이나 입사 조건에서 결과의 수렴을 확인합니다. [상세 API와 계산 정의(영문)](../../guide/rcwa/coherent-illumination.md)에서 입력값과 결과 객체를 더 자세히 확인할 수 있습니다.
+증폭 매질의 해 선택은 이 소스 API에서 별도로 정의하지 않습니다. 계산 차수가 정확히 스침 입사 조건에 놓여 행렬이 특이해지면 파장을 자동으로 바꾸지 않고 `Numerics(detuning=...)`도 거부하므로(코드 `rcwa.coherent_detuning`), 가까운 파장이나 입사 조건에서 결과의 수렴을 확인합니다. [상세 API와 계산 정의(영문)](../../guide/rcwa/coherent-illumination.md)에서 입력값과 결과 객체를 더 자세히 확인할 수 있습니다.
 
 (id20)=
 ### 경계면과 층 내부의 장 읽기
