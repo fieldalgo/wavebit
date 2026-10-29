@@ -1224,6 +1224,37 @@ class AutoDetuneWarning(UserWarning):
     """
 
 
+class SvdConvergenceWarning(UserWarning):
+    """The divide-and-conquer SVD of an NVF ``<1/eps>`` matrix did not converge.
+
+    Public path: ``wavebit.rcwa.diagnostics.SvdConvergenceWarning``.
+
+    The NVF inverse-rule floor takes singular vectors of ``<1/eps>`` on a layer where it binds
+    (a metal beside a dielectric; under ``jax.jit``, every NVF layer, since whether it binds
+    cannot be read there). Every backend takes them from LAPACK's divide-and-conquer driver,
+    ``?gesdd``. When that driver reports no convergence on a finite matrix, an eager run
+    recomputes the factors with the QR-based driver, ``?gesvd``, and warns. The factors are
+    constants to the floor's derivative rules, so the recomputed ones change no derivative.
+    Under ``jax.jit`` they cannot be recomputed. JAX returns NaN factors, NaN singular values
+    are below no floor, and the layer keeps its unfloored inverse rule: harmless on a passive
+    dielectric, where the floor does not bind, but on a layer where it does (a metal beside a
+    dielectric) the result is the one the floor exists to correct. This warning is then the
+    only sign; running the solve eagerly recomputes the factors. A non-finite matrix is never
+    retried; its error (or, on JAX, its NaN) is passed on as before.
+
+    One known cause is LAPACK, not the matrix: ``DLASD2``'s deflation test can let an inverted
+    pair of nearly equal singular values reach ``DLASD4``, which then stops converging
+    (Reference-LAPACK #1138, fixed by its PR #1140). As of 2026-10 it was measured in MKL
+    2021.4 to 2026.1 and in reference LAPACK 3.12.0, is present in the source of reference
+    LAPACK 3.12.1 and OpenBLAS up to 0.3.30, and is gone in MKL 2026.2 and OpenBLAS 0.3.31.
+    PyTorch's CPU wheels bundle MKL 2024.2 (pytorch/pytorch#202596). NumPy and SciPy, and JAX on
+    CPU through SciPy, use the LAPACK they were built against: a fixed OpenBLAS in the PyPI
+    wheels, MKL 2025 in the default build on Anaconda's ``defaults`` channel. The driver can
+    fail for other reasons too, so the warning does not name the cause. Its own category so a
+    sweep can escalate it to an error, or silence it once the retry is known to be harmless.
+    """
+
+
 # Where the 2D mode-cutoff warning fires: below this ratio of min|eigenvalue|/max|eigenvalue|
 # the measured efficiency error exceeds ~1e-5, and it keeps growing as ~eps/ratio down to
 # order-1 at the exact point. Measured on four exact-graze 2D stacks over a detune ladder
