@@ -1,11 +1,5 @@
 # Fields and diffraction observations
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 Request retained fields with `rcwa.Outputs(fields=True)`, run the full problem, then sample that result:
 
 ```python
@@ -23,7 +17,7 @@ these two methods. Public H is already in A/m: do not divide it by Z0.
 
 :::{note}
 The pure s/p field variants (`incidence='s'`/`'p'`) are not in the current API yet; that passage
-names the earlier `wavebit.compat.legacy` call that has them.
+names the earlier `wavebit.compat.legacy` call that had them (retired 2026-10-15; a historical checkout runs it).
 :::
 
 ## Reading fields from a result
@@ -234,8 +228,14 @@ M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). The default, `'fourier'`, is unchang
 
 ## Earlier-interface field calls
 
-The earlier `wavebit.compat.legacy` interface keeps `solver.reconstruct_field` and
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
+
+The earlier `wavebit.compat.legacy` interface kept `solver.reconstruct_field` and
 `solver.solve_field` with their existing layout and sampling contracts: three slots for pure
 TE/TM, an incidence axis for coupled fields, and magnetic components in `Z0*H`. Code using
-those layouts can continue to run there; compare it with the current result only after
+those layouts runs on a historical checkout; compare it with the current result only after
 dividing its magnetic components by Z0.
+:::

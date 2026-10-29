@@ -39,7 +39,7 @@ Two qualifications, both measured, both easy to trip over:
 - **On an axis-aligned boundary the default parametric NVF route is the slower one.** Li's rules along x and y
   are already optimal when the interfaces are axis-aligned, so NVF only costs there. Measured
   against RETICOLO: the block path matched at 1e-14 every order while the parametric path needs
-  truncation_order≈16 to reach 1e-4. The block path was removed on 2026-08-26; on axis-aligned
+  an order half-width of about 16 (`Numerics(orders=(16, 16))`) to reach 1e-4. The block path was removed on 2026-08-26; on axis-aligned
   rectangles `factorization='li'` now builds Li's rules on the exact edges (see *Cartesian
   rectangles with explicit Li factorization* below).
 
@@ -256,7 +256,7 @@ stand in those two expressions is gone**, which is one of the sites the flip to 
 made of, and there is no conjugation on the way in either: wavebit is `e^{-iωt}` throughout,
 so `Im(eps) > 0` is loss as written. Same reading as `to_conv_mat_raster_nvf`.
 `conv_matrix_2d` builds the block-Toeplitz matrices `⟦ε⟧`,
-`⟦1/ε⟧` from this `(4*truncation_order+1)²` coefficient grid in the same ordering as the raster
+`⟦1/ε⟧` from this `(4*N+1)²` coefficient grid, `N` the `orders` half-width, in the same ordering as the raster
 path's `fourier2d_pointwise` (`test_conv_matrix_matches_grid_convention`).
 
 ## 2. Coupling with the NVF factorization
@@ -289,13 +289,13 @@ the five matrices is then `D X D⁻¹` for one diagonal
 
 **The centring also makes the field reusable, which is where the wall clock goes.** Sampling and
 transforming it is the expensive half of this build — 83% of a five-point sweep at
-`shape_nvf_grid_size = 1024, truncation_order = 4` for one shape and 93% for six — and none of it reads a material.
+`shape_nvf_grid_size = 1024`, `orders=(4, 4)` for one shape and 93% for six — and none of it reads a material.
 The normal field is a property of where the boundaries are, not of what sits either side of
 them. So `normal_projector_coeffs` keys the sampled coefficients on the geometry it was actually
 built from and reuses them: a **material** sweep hits because the key holds no permittivity, and a
 single-shape **position** sweep hits because the build sits at the centre of the cell whatever
 `(cx, cy)` are. Measured 1.6× to 3.8× on five-point sweeps, largest where `shape_nvf_grid_size` is fine
-and `truncation_order` modest; where there is nothing to win (`shape_nvf_grid_size = 256`, `truncation_order = 8`) it is 1.0×.
+and `orders` modest; where there is nothing to win (`shape_nvf_grid_size = 256`, `orders=(8, 8)`) it is 1.0×.
 
 The key is `None` — no reuse, rebuild — whenever a value it would have to hold is traced or under
 autograd, which is what keeps this from touching a gradient. A JAX tracer cannot be converted, so
@@ -423,6 +423,11 @@ The current [Cartesian Li contact example](../../../examples/rcwa/rectilinear_co
 
 ## 4. Results (`studies/rcwa/benchmark_analytic/benchmark_analytic.py`)
 
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Measured through the earlier `wavebit.compat.legacy` interface, whose `truncation_order` is the half-width `N` along each periodic axis of the current `rcwa.Numerics(orders=...)`; values are as recorded.
+
 **[1] Dielectric tilted rectangle** (30°, n=3.5, TM, subwavelength). Reference = analytic
 truncation_order=16. Same rectangle represented analytically vs. as a block staircase (n_split); `t0`
 error:
@@ -481,6 +486,7 @@ while two independent staircases are still climbing toward it at truncation_orde
 **[3] Lossless multi-shape / multi-layer** (ellipse + rectangle + circle, conical
 incidence, non-square period): `|R+T−1|` = 6.7e-16 (truncation_order 5), 1.1e-14 (truncation_order 8) — machine-
 precision energy conservation. Backend agreement: `|np−jax|`~1e-14, `|np−torch|`~5e-10.
+:::
 
 ## 5. Backend consistency and differentiability
 
@@ -660,6 +666,11 @@ a layer whose permittivity is between 5.76 and 20.04, against +0.150 for the pro
 the number the solver returned was neither reading's, and the tell is that it does not settle on
 one. `sum(T)` for that rod:
 
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Measured through the earlier `wavebit.compat.legacy` interface, whose `truncation_order` is the half-width `N` along each periodic axis of the current `rcwa.Numerics(orders=...)`; values are as recorded.
+
 | `truncation_order` | block | smooth, summed | raster of the superposition | raster of the union |
 |---|---|---|---|---|
 | 6  | 0.4403 | 0.7635 | 0.8346 | 0.9722 |
@@ -667,6 +678,7 @@ one. `sum(T)` for that rod:
 | 15 | 0.4165 | 0.4971 | 0.7178 | 0.9722 |
 | 20 | 0.3697 | 0.5890 | 0.7185 | 0.9722 |
 | 25 | 0.4011 | 0.6508 | 0.7189 | 0.9722 |
+:::
 
 Both readings are structures and both converge — the union is a uniform slab, so it is exact at
 every order, and the superposition settles on 0.7189 by 25. The two shape paths converged on
