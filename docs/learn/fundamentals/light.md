@@ -1,25 +1,15 @@
 # 08. Choosing incident light: direction and polarization
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
-:::{note}
-The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
-:::
-
-To specify one incident wave, choose its **wavelength, incident side, propagation direction and polarization**. This chapter explains illumination from above or below and wavevectors in lossy media.
+To specify one incident wave, choose its **wavelength, incident side, propagation direction and polarization**. In code, the wavelength belongs to `rcwa.Excitation(wavelength=...)` and the rest to one `rcwa.PlaneWave(side=..., theta=..., phi=..., polarization=...)` in its `sources`. This chapter explains illumination from above or below and wavevectors in lossy media.
 
 [Chapter 9](multiple-beams.md) continues with independent amplitudes and phases for multiple incident waves and simultaneous illumination from both sides. [Chapter 13](power-and-efficiency.md) explains output power and efficiency, and [Chapter 14](fields.md) explains electric- and magnetic-field queries.
 
 | What to specify | Input and explanation |
 | --- | --- |
-| Wavelength | `wavelength`: use the same unit as all lengths; all incident waves in one calculation share it. |
+| Wavelength | `Excitation(wavelength=...)`: use the same unit as all lengths; all incident waves in one calculation share it. |
 | Propagation direction | {ref}`theta·phi or kx·ky <incident-direction-inputs>` |
-| Polarization | {ref}`polarization or psi·chi <incident-polarization>` |
-| One-sided illumination | {ref}`Choose top or bottom with incidence_side <incident-from-bottom>` |
+| Polarization | {ref}`polarization='s', 'p' or an (s, p) pair <incident-polarization>` |
+| One-sided illumination | {ref}`Choose top or bottom with PlaneWave(side=...) <incident-from-bottom>` |
 
 Wavevectors and attenuation in lossy exterior media are discussed separately in the {ref}`last section of this chapter <absorbing-incidence>`.
 
@@ -62,38 +52,42 @@ For example, an incident medium with `ε=2.25`, `μ=1` has index 1.5. A wave at 
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-scene = dict(
-    top=2.25, bot=1.,
-    incidence_side="top",                 # Downward incidence from the upper medium (default)
-    wavelength=500., period=[700., 700.],   # Length unit: nm
-    structure=np.full((1, 2, 2), 4.), thickness=[100.],
-    truncation_order=0, polarization=(1., 0.),
-)
-by_angle = wavebit.rcwa(**scene, theta=np.pi/6, phi=0.)
+def problem(source):
+    return rcwa.Problem(
+        units=Units(length="nm"),                  # Length unit: nm
+        stack=rcwa.Stack(
+            period=(700., 700.),
+            top=Material(epsilon=2.25), bottom=Material(epsilon=1.),
+            layers=(rcwa.Layer(thickness=100., background=Material(epsilon=4.)),)),
+        excitation=rcwa.Excitation(wavelength=500., sources=(source,)))
 
-k0 = 2*np.pi/scene["wavelength"]           # Vacuum wavevector magnitude, nm⁻¹
-by_k = wavebit.rcwa(**scene, kx=0.75*k0, ky=0.)
+numerics = rcwa.Numerics(orders=(0, 0))
+by_angle = rcwa.run(problem(rcwa.PlaneWave(
+    side="top",                                     # Downward incidence from the upper medium (default)
+    polarization="s", theta=np.pi/6, phi=0.)), numerics=numerics)
 
-angle_result = by_angle.solve()
-k_result = by_k.solve()
-np.testing.assert_allclose(angle_result.T, k_result.T, atol=1e-12)
+k0 = 2*np.pi/500.                                   # Vacuum wavevector magnitude, nm⁻¹
+by_k = rcwa.run(problem(rcwa.PlaneWave(
+    side="top", polarization="s", kx=0.75*k0, ky=0.)), numerics=numerics)
+
+np.testing.assert_allclose(by_angle.T, by_k.T, atol=1e-12)
 ```
 
 **The incident medium’s ε and μ remain necessary** when entering `kx` and `ky` directly. At the same transverse wavevector, changing material changes the normal wavevector, the electric-to-magnetic-field relation and incident power. Direct wavevector input also works for a lossy incident medium; no extra air layer is assumed.
 
 These inputs are **real wavevectors in physical xyz coordinates**. They are not the oblique lattice’s `u, v` order indices. The solver adds reciprocal-lattice wavevectors for the diffraction orders.
 
-`incidence_side` chooses which side illuminates the structure. In the example, `incidence_side="top"` means **downward (−z)** incidence from upper medium `top`; this is also the default. `incidence_side="bottom"` means **upward (+z)** incidence from lower medium `bot`. Directly specified `kx` and `ky` retain their signs for bottom incidence.
+`PlaneWave(side=...)` chooses which side illuminates the structure. In the example, `side="top"` means **downward (−z)** incidence from the upper medium `Stack.top`; this is also the default. `side="bottom"` means **upward (+z)** incidence from the lower medium `Stack.bottom`. Directly specified `kx` and `ky` retain their signs for bottom incidence.
 
 Direct inputs must be finite real numbers. Evanescent incidence with zero incident power cannot normalize diffraction efficiency and is rejected. Complex values are also rejected, with an error pointing to the alternative input. See {ref}`when complex transverse wavevectors are needed <complex-transverse-wavevector>` for the reason and method. `kx=ky=0` means **normal incidence**, perpendicular to the surface. Since its propagation direction does not uniquely determine an incidence plane, the azimuth-zero convention sets **s along y and p along x**. Specify the electric-field direction through `polarization`.
 
-A 1D calculation separating TE and TM requires `ky=0`. See the {ref}`polarization section <d-te-tm>` for conditions and inputs.
+A 1D grating solved for TE or TM alone uses `ky=0`. See the {ref}`polarization section <d-te-tm>` for conditions and inputs.
 
-Supplying `theta`·`phi` together with `kx`·`ky` raises an error. To change a solver’s input form, first clear the opposite pair to `None`, then assign the new values. {ref}`Chapter 18 <jobs-and-sweeps>` explains sweeps over wavelength, angle and wavevector.
+Supplying `theta`·`phi` together with `kx`·`ky` raises an error (code `source.direction_ambiguous`). To change a source’s input form, clear the opposite pair in the same replacement: `source.replace(theta=None, phi=None, kx=..., ky=...)`. {ref}`Chapter 18 <jobs-and-sweeps>` explains sweeps over wavelength, angle and wavevector.
 
-The query `order_kxy()` returns **calculated order wavevectors divided by `k0`**. These units differ from direct inputs: multiply the return values by `2π/λ` to obtain physical wavevectors.
+The calculated order wavevectors are in `result.reflection.k_parallel` and `result.transmission.k_parallel`, on a trailing `(kx, ky)` axis. They are **in the same inverse-length units as the direct inputs**, not divided by `k0`.
 
 (incident-polarization)=
 ## Specifying polarization
@@ -117,8 +111,8 @@ In `polarization=(a_s, a_p)`, **the first value is the s electric-field amplitud
 
 | Desired polarization | Input | Relation between components |
 | --- | --- | --- |
-| Linear s | `polarization=(1., 0.)` | Only s oscillates |
-| Linear p | `polarization=(0., 1.)` | Only p oscillates |
+| Linear s | `polarization="s"` or `(1., 0.)` | Only s oscillates |
+| Linear p | `polarization="p"` or `(0., 1.)` | Only p oscillates |
 | Linear at 45° between s and p | `polarization=(1., 1.)` | Equal magnitudes and phases |
 | Linear along the other diagonal | `polarization=(1., -1.)` | Equal magnitudes, 180° phase difference |
 | Circular | `polarization=(1., 1j)` | Equal magnitudes, 90° phase difference |
@@ -131,38 +125,39 @@ Python’s **`1j` is the imaginary unit i**. With `a_s=1`, `a_p=1j`, the s compo
 
 The input pair is normalized by `sqrt(abs(a_s)**2 + abs(a_p)**2)`. Thus `(1, 1j)` and `(10, 10j)` specify the same incident state; you do not need to divide `(1, 1j)` by `sqrt(2)` yourself. `(0, 0)` cannot be used because it supplies no electric field. **This normalization sets the coefficient magnitudes; it does not specify 1 W of incident power.** Power also depends on medium and incidence direction.
 
-This runnable example illuminates a grating with circularly polarized light from air. Lengths are in nm, and the numbers in `structure` are relative permittivities.
+This runnable example illuminates a grating with circularly polarized light from air. Lengths are in nm, and the numbers in the layer's `epsilon` raster are relative permittivities: one row along y, four pixels along x.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-scene = dict(
-    backend='numpy',
-    top=1., bot=2.25,
-    incidence_side="top",
-    wavelength=900., period=[700., 700.],
-    theta=np.deg2rad(30.), phi=0.,
-    structure=np.array([[[1., 1., 12.25, 12.25]]]),
-    thickness=[300.],
-    truncation_order=dict(x=4, y=0),
-)
+def grating(polarization):
+    return rcwa.Problem(
+        units=Units(length="nm"),
+        stack=rcwa.Stack(
+            period=(700., 700.),
+            top=Material(epsilon=1.), bottom=Material(epsilon=2.25),
+            layers=(rcwa.Layer(thickness=300.,
+                               epsilon=np.array([[1., 1., 12.25, 12.25]])),)),   # Raster [y, x]
+        excitation=rcwa.Excitation(wavelength=900., sources=(
+            rcwa.PlaneWave(side="top", theta=np.deg2rad(30.), phi=0.,
+                           polarization=polarization),)))
 
-solver = wavebit.rcwa(**scene, polarization=(1., 1j))
-result = solver.solve()
+numerics = rcwa.Numerics(orders=(4, 0))      # Orders −4…4 along x, only 0 along y
+result = rcwa.run(grating((1., 1j)), numerics=numerics)
 print("Reflectance:", result.R.sum())
 print("Transmittance:", result.T.sum())
 ```
 
-Change only `polarization` to another pair in the table to compare responses at fixed structure and incidence direction. Even s-polarized incidence can produce reflected or transmitted p components if the structure couples the polarizations. Input polarization specifies the incident wave’s state.
+Change only the pair passed to `grating` to another one in the table to compare responses at fixed structure and incidence direction. Even s-polarized incidence can produce reflected or transmitted p components if the structure couples the polarizations. Input polarization specifies the incident wave’s state.
 
 (psi-chi)=
 ### Angle inputs: psi and chi
 
-Use `psi` and `chi` to specify the polarization orientation and ellipse shape with angles. **Both are real angles in radians.**
+Two angles, ψ and χ, describe the polarization orientation and ellipse shape. **Both are real angles in radians.** The current `PlaneWave` takes the polarization only as `"s"`, `"p"` or an `(a_s, a_p)` pair, so convert the angles to a pair with the formulas below before passing them.
 
-- **ψ (`psi`)** is the major-axis angle of the polarization ellipse measured from p toward s. For linear polarization it is the angle of the line along which the field oscillates.
-- **χ (`chi`)** sets the ellipse’s flattening: `abs(tan(chi))` is the minor-to-major radius ratio. Its range is −45° to +45°; changing its sign reverses the field’s rotation.
+- **ψ (`psi` in the code below)** is the major-axis angle of the polarization ellipse measured from p toward s. For linear polarization it is the angle of the line along which the field oscillates.
+- **χ (`chi` in the code below)** sets the ellipse’s flattening: `abs(tan(χ))` is the minor-to-major radius ratio. Its range is −45° to +45°; changing its sign reverses the field’s rotation.
 
 ```{figure} ../../figures/learn/learn/08-polarization-angles.svg
 :name: light-figure-08-polarization-angles
@@ -172,27 +167,35 @@ Use `psi` and `chi` to specify the polarization orientation and ellipse shape wi
 Figure 8-3. ψ sets the major-axis direction, while χ sets the radius ratio and rotation direction. For a circle, the two radii are equal; changing ψ preserves the trajectory shape and rotation direction.
 ```
 
-| Polarization | Angle input | Corresponding amplitude pair |
+| Polarization | Angles (ψ, χ) | Corresponding amplitude pair |
 | --- | --- | --- |
-| Linear p | `psi=0., chi=0.` | `(0, 1)` |
-| Linear s | `psi=np.pi/2, chi=0.` | `(1, 0)` |
-| Linear at 45° | `psi=np.pi/4, chi=0.` | `(1, 1)` |
-| Circular | `psi=0., chi=-np.pi/4` | Same polarization as `(1, 1j)` |
-| Circular with opposite rotation | `psi=0., chi=np.pi/4` | Same polarization as `(1, -1j)` |
+| Linear p | `0, 0` | `(0, 1)` |
+| Linear s | `π/2, 0` | `(1, 0)` |
+| Linear at 45° | `π/4, 0` | `(1, 1)` |
+| Circular | `0, −π/4` | Same polarization as `(1, 1j)` |
+| Circular with opposite rotation | `0, π/4` | Same polarization as `(1, -1j)` |
 
-Omitting `chi` sets it to 0, giving linear polarization. Omitting all polarization inputs selects linear s. The two representations in each circular-polarization row need not have the same common phase. Adding the same phase to both components preserves the polarization ellipse, reflectance and transmittance but can change the phase of complex field amplitudes.
+χ = 0 gives linear polarization. Omitting `polarization` selects linear s. The two representations in each circular-polarization row need not have the same common phase. Adding the same phase to both components preserves the polarization ellipse, reflectance and transmittance but can change the phase of complex field amplitudes.
 
-Using the same `scene` above, enter linear polarization tilted 30° from p toward s as follows.
+Using the same `grating` above, enter linear polarization tilted 30° from p toward s by converting the two angles to a pair.
 
 ```python
-solver = wavebit.rcwa(**scene, psi=np.deg2rad(30.), chi=0.)
-result = solver.solve()
+psi, chi = np.deg2rad(30.), 0.
+pair = (np.sin(psi)*np.cos(chi) + 1j*np.cos(psi)*np.sin(chi),    # a_s
+        np.cos(psi)*np.cos(chi) - 1j*np.sin(psi)*np.sin(chi))    # a_p
+result = rcwa.run(grating(pair), numerics=numerics)
 ```
 
-The same linear polarization can be entered as `polarization=(0.5, np.sqrt(3)/2)`. **Use either the angles or the amplitude pair.** Supplying `psi`·`chi` and `polarization` in the same call raises an error.
+With χ = 0 this pair is `(0.5, np.sqrt(3)/2)`, and `grating((0.5, np.sqrt(3)/2))` gives the same result.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+The earlier interface (retired with `wavebit.compat` on 2026-10-15) also took the two angles directly, as `psi=` and `chi=` keywords of its constructor. Omitting `chi` set it to 0, supplying `psi`·`chi` together with `polarization` raised an error, and the conversion was the one in the dropdown below. The current `PlaneWave` has no angle form yet.
+:::
 
 ````{dropdown} Formulas: obtaining two amplitudes from psi and chi
-Wavebit calculates the two electric-field coefficients as follows.
+The two electric-field coefficients are as follows.
 
 ```{raw} html
 <div class="power-equations" style="text-align:center">
@@ -201,7 +204,7 @@ Wavebit calculates the two electric-field coefficients as follows.
 </div>
 ```
 
-When `chi=0`, `a_s=sin(psi)` and `a_p=cos(psi)`. This is why `psi=0` gives p and `psi=π/2` gives s. Their squared magnitudes already sum to 1, so no additional normalization is applied.
+When χ=0, `a_s=sin(ψ)` and `a_p=cos(ψ)`. This is why ψ=0 gives p and ψ=π/2 gives s. Their squared magnitudes already sum to 1, so the normalization `PlaneWave` applies to a pair leaves them unchanged.
 ````
 
 ```{raw} html
@@ -233,55 +236,67 @@ When `chi=0`, `a_s=sin(psi)` and `a_p=cos(psi)`. This is why `psi=0` gives p and
 <div class="readout" id="pol-readout" aria-live="polite" aria-atomic="true">
 <strong id="pol-state">Elliptical polarization</strong>
 <p id="pol-shape-note">Minor radius / major radius = 0.364</p>
-<p>Angle input<code id="pol-angle-code">psi=np.deg2rad(30.), chi=np.deg2rad(20.)</code></p>
+<p>Angles<code id="pol-angle-code">ψ=30°, χ=20°</code></p>
 <p>Amplitude-pair input (rounded)<code id="pol-pair-code">polarization=(0.4698+0.2962j, 0.8138-0.1710j)</code></p>
 </div>
-<p class="explain">Use either snippet for the polarization input to rcwa(). Sliders use degrees (°); the displayed code converts them to radians with np.deg2rad().</p>
+<p class="explain">Pass the amplitude pair as rcwa.PlaneWave(polarization=...). Sliders use degrees (°); the angle line converts them to radians with np.deg2rad().</p>
 </section>
 ```
 
-First set `chi=0°` and vary `psi` to rotate a linear polarization. Moving `chi` toward ±45° changes the line through an ellipse into a circle. Reversing the sign of `chi` reverses the small green time-direction arrow. For circular polarization, changing `psi` preserves the circle but changes the initial electric-field direction shown in orange.
+First set χ=0° and vary ψ to rotate a linear polarization. Moving χ toward ±45° changes the line through an ellipse into a circle. Reversing the sign of χ reverses the small green time-direction arrow. For circular polarization, changing ψ preserves the circle but changes the initial electric-field direction shown in orange.
 
 (d-te-tm)=
 ### Computing only TE or TM for a 1D structure
 
-The two polarizations can be solved separately **when the structure is invariant in y, incidence lies in the xz plane, and the material does not couple TE and TM**. `tetm="te"` selects TE, with electric field along y; `tetm="tm"` selects TM, with magnetic field along y and electric field in xz. Under these conditions, TE corresponds to s and TM to p.
+The two polarizations do not mix **when the structure is invariant in y, incidence lies in the xz plane, and the material does not couple TE and TM**. TE has its electric field along y; TM has its magnetic field along y and electric field in xz. Under these conditions, TE corresponds to s and TM to p.
 
-The `scene` above is an isotropic grating invariant in y with `phi=0`, so separate calculations are possible.
+The `grating` above is an isotropic grating invariant in y with `phi=0`, so s and p incidence give the TE and TM responses.
 
 ```python
+te_result = rcwa.run(grating("s"), numerics=numerics)   # TE
+tm_result = rcwa.run(grating("p"), numerics=numerics)   # TM
+```
+
+These run the general (conical) formulation, which also handles 2D patterns and nonzero `ky`. On a one-row raster grating at `phi=0` its amplitudes and efficiencies match a dedicated TE/TM solve to 5e-15 (measured 2026-10-15); it does not have that solve's speed.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+The earlier interface (retired with `wavebit.compat` on 2026-10-15) had a dedicated declaration for this case: `tetm="te"` or `tetm="tm"` solved TE or TM alone, 2 to 4 times faster than the conical formulation. It required `ky` to be zero (omitted, or explicitly `ky=0.`); nonzero `ky` raised an error. Because it declared a problem with no polarization degree of freedom, it could not be combined with `psi`, `chi` or `polarization`. The current API has no `tetm` declaration yet.
+
+```python
+# Earlier interface only; runs on a historical checkout.
 te_result = wavebit.rcwa(**scene, tetm="te").solve()
 tm_result = wavebit.rcwa(**scene, tetm="tm").solve()
 ```
-
-With `tetm`, `ky` must be zero; omission supplies zero, and explicit `ky=0.` is also accepted. Nonzero `ky` raises an error. Since `tetm` selects a calculation solving just TE or just TM, do not combine it with `psi`, `chi` or `polarization`. For 2D patterns or nonzero `ky`, specify incident polarization through `polarization` or `psi`·`chi`. To choose only s incidence in a general calculation, use `polarization=(1, 0)`.
+:::
 
 (incident-from-bottom)=
 ## Choosing incidence from above or below
 
-For one-sided illumination, `incidence_side` selects the incoming side. Its default is `"top"`.
+For one-sided illumination, `PlaneWave(side=...)` selects the incoming side. Its default is `"top"`.
 
-| Setting | Incident medium and direction | Reflectance `R` | Transmittance `T` |
+| `side` | Incident medium and direction | Reflectance `R` | Transmittance `T` |
 | --- | --- | --- | --- |
-| `"top"` | Downward (−z) from upper medium `top` | Light returning upward | Light leaving downward |
-| `"bottom"` | Upward (+z) from lower medium `bot` | Light returning downward | Light leaving upward |
+| `"top"` | Downward (−z) from upper medium `Stack.top` | Light returning upward | Light leaving downward |
+| `"bottom"` | Upward (+z) from lower medium `Stack.bottom` | Light returning downward | Light leaving upward |
 
-`incidence_side="bottom"` launches light upward (+z) from the lower half-space `bot`. At the bottom interface `z=0`, it first meets the lowest layer, `structure[0]`. Enter `structure` and `thickness` from bottom layer to top layer; `top` remains the upper medium and `bot` the lower medium.
+`side="bottom"` launches light upward (+z) from the lower half-space `Stack.bottom`. At the bottom interface `z=0`, it first meets the lowest layer, `layers[0]`. List `layers` from bottom layer to top layer, each `rcwa.Layer` with its own `thickness`; `top` remains the upper medium and `bottom` the lower medium.
 
-Reflectance `R` is the power fraction returning into lower medium `bot`; transmittance `T` is the fraction leaving into upper medium `top`. Both are normalized by the power incident from below.
+Reflectance `R` is the power fraction returning into the lower medium `bottom`; transmittance `T` is the fraction leaving into the upper medium `top`. Both are normalized by the power incident from below.
 
 (incidence-side-angles)=
 (thetaphipsichi)=
 ### Angles and polarization follow the same rules on both sides
 
-**`theta`, `phi`, `psi` and `chi` follow the same conventions for top and bottom incidence.** Select the side with `incidence_side`, then read the angles as follows. This discussion assumes a lossless isotropic incident medium.
+**`theta`, `phi` and the polarization angles ψ and χ follow the same conventions for top and bottom incidence.** Select the side with `PlaneWave(side=...)`, then read the angles as follows. This discussion assumes a lossless isotropic incident medium.
 
-| Input | Meaning |
+| Quantity | Meaning |
 | --- | --- |
 | `theta` | Angle between propagation and the inward surface normal: −z for top incidence, +z for bottom incidence. Zero degrees is normal incidence on either side. |
 | `phi` | Azimuth of the propagation vector projected into xy, measured from +x toward +y. Both sides use the same fixed x·y axes. |
-| `psi` | Major-axis angle of the polarization ellipse measured from that incident wave’s p direction toward its s direction. |
-| `chi` | Angle setting the ellipse shape and relative phase of s/p components. The same amplitude conversion is used on both sides. |
+| ψ | Major-axis angle of the polarization ellipse measured from that incident wave’s p direction toward its s direction. |
+| χ | Angle setting the ellipse shape and relative phase of s/p components. The same conversion to an `(a_s, a_p)` pair is used on both sides. |
 
 For example, at `theta=30°`, `phi=0`, **both waves arrive from the −x side and travel toward increasing x**. Relative to the point of incidence on the surface:
 
@@ -292,32 +307,31 @@ For example, at `theta=30°`, `phi=0`, **both waves arrive from the −x side an
 
 Both propagation vectors have positive x components; their z components have opposite signs. The top-incidence line extending upward toward −x shows where the light comes from, and its arrow points along the line toward the surface.
 
-Polarization is specified in each incident wave’s own s·p directions. For linear polarization, `chi=0`: `psi=0` gives p, `psi=90°` gives s, and `psi=45°` gives equal, in-phase s and p components. `abs(chi)=45°` gives circular polarization. Use these rules directly for either incident side.
+Polarization is specified in each incident wave’s own s·p directions. For linear polarization, χ=0: ψ=0 gives p, ψ=90° gives s, and ψ=45° gives equal, in-phase s and p components, the pair `(1, 1)`. `abs(χ)=45°` gives circular polarization. Use these rules directly for either incident side.
 
 (light-detail-id11)=
 ### Example: linearly polarized light incident upward from glass
 
-Here light enters upward from glass, `bot=2.25`, toward two layers. With `theta=30°`, `phi=0`, it approaches the surface from below on the −x side; its direction in glass makes 30° with the +z normal. It is linearly polarized with `psi=45°`, `chi=0°`. The code supplies angles in radians.
+Here light enters upward from glass, `bottom=Material(epsilon=2.25)`, toward two layers. With `theta=30°`, `phi=0`, it approaches the surface from below on the −x side; its direction in glass makes 30° with the +z normal. It is linearly polarized with ψ=45°, χ=0°, which is the pair `(1., 1.)`. The code supplies angles in radians.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-solver = wavebit.rcwa(
-    backend='numpy',
-    top=1., bot=2.25,                       # Air above, glass below
-    incidence_side="bottom",               # Upward incidence from glass
-    wavelength=600., period=[1500., 1500.], # Length unit: nm
-    structure=np.array([
-        [[4.]],                            # Lowest layer: z=0–100 nm
-        [[9.]],                            # Layer above: z=100–300 nm
-    ]),
-    thickness=[100., 200.],
-    theta=np.deg2rad(30.), phi=0.,          # kx > 0, kz > 0
-    psi=np.deg2rad(45.), chi=0.,            # Equal, in-phase s and p
-    truncation_order=0,
-)
-result = solver.solve()
+problem = rcwa.Problem(
+    units=Units(length="nm"),                          # Length unit: nm
+    stack=rcwa.Stack(
+        period=(1500., 1500.),
+        top=Material(epsilon=1.), bottom=Material(epsilon=2.25),   # Air above, glass below
+        layers=(
+            rcwa.Layer(thickness=100., background=Material(epsilon=4.)),   # Lowest layer: z=0–100 nm
+            rcwa.Layer(thickness=200., background=Material(epsilon=9.)),   # Layer above: z=100–300 nm
+        )),
+    excitation=rcwa.Excitation(wavelength=600., sources=(
+        rcwa.PlaneWave(side="bottom",                  # Upward incidence from glass
+                       theta=np.deg2rad(30.), phi=0.,  # kx > 0, kz > 0
+                       polarization=(1., 1.)),)))      # Equal, in-phase s and p
+result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(0, 0)))
 print("Reflectance returning into glass:", result.R.sum())
 print("Transmittance leaving into air:", result.T.sum())
 ```
@@ -333,8 +347,8 @@ This section considers isotropic exterior media and real surface-parallel waveve
 
 | Incidence setting | Incident medium | Transmitted medium |
 | --- | --- | --- |
-| `incidence_side="top"` | Upper `top` | Lower `bot` |
-| `incidence_side="bottom"` | Lower `bot` | Upper `top` |
+| `PlaneWave(side="top")` | Upper `top` | Lower `bottom` |
+| `PlaneWave(side="bottom")` | Lower `bottom` | Upper `top` |
 
 **First determine the incident `kx`, `ky`, then calculate `kz` separately in each medium.** Angle inputs determine the incident transverse wavevector from ε and μ of the incident medium and `theta`, `phi`. Direct inputs use the supplied `kx`, `ky`. The transmitted direction follows from this transverse wavevector and ε and μ of the transmitted medium.
 
@@ -493,32 +507,30 @@ For a lossless positive-index medium, `b=0` and `a=n²>0`, so `N=n`. At normal i
 (absorbing-incidence-example)=
 #### Example: a 30° phase angle inside a lossy incident medium
 
-In this example, `theta=30°` is **the phase angle within the medium `top=4+3j`**. All lengths use nm. The finite layer and `bot` use the same lossless material; we inspect the incident transverse wavevector.
+In this example, `theta=30°` is **the phase angle within the medium `top=Material(epsilon=4+3j)`**. All lengths use nm. The finite layer and `bottom` use the same lossless material; we inspect the incident transverse wavevector.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-solver = wavebit.rcwa(
-    top=4. + 3j, bot=2.25,
-    incidence_side="top",
-    wavelength=1000., period=[1200., 1200.],
-    theta=np.deg2rad(30.), phi=0.,
-    polarization=(1., 0.),                         # s incidence
-    structure=np.full((1, 2, 2), 2.25),
-    thickness=[100.],
-    truncation_order=0,                           # Uniform layer: order 0 suffices
-)
-result = solver.solve()
+problem = rcwa.Problem(
+    units=Units(length="nm"),
+    stack=rcwa.Stack(
+        period=(1200., 1200.),
+        top=Material(epsilon=4. + 3j), bottom=Material(epsilon=2.25),
+        layers=(rcwa.Layer(thickness=100., background=Material(epsilon=2.25)),)),
+    excitation=rcwa.Excitation(wavelength=1000., sources=(
+        rcwa.PlaneWave(side="top", theta=np.deg2rad(30.), phi=0.,
+                       polarization="s"),)))                       # s incidence
+result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(0, 0)))   # Uniform layer: order 0 suffices
 
-kx_over_k0, ky_over_k0 = solver.order_kxy()
-k0 = 2 * np.pi / solver.wavelength
-print(k0 * kx_over_k0, k0 * ky_over_k0)             # Wavevector units: nm⁻¹
+kx, ky = result.reflection.k_parallel[0, 0, 0]   # wavelength, order_v, order_u; nm⁻¹
+print(kx, ky)
 ```
 
-`order_kxy()` returns order wavevectors divided by `k0`. Since only order 0 is used here, each array has one element. Multiplying by `k0` gives `kx ≈ 0.00677139 nm⁻¹`, `ky = 0 nm⁻¹`. **The 30° angle is defined inside the selected lossy incident medium.** See {ref}`Chapter 13 <half-space-power>` for reading the resulting powers.
+`k_parallel` holds each order's physical transverse wavevector, not divided by `k0`. Only order 0 is used here, so indexing the first wavelength and order leaves the `(kx, ky)` pair: `kx ≈ 0.00677139 nm⁻¹`, `ky = 0 nm⁻¹`. **The 30° angle is defined inside the selected lossy incident medium.** See {ref}`Chapter 13 <half-space-power>` for reading the resulting powers.
 
-This also shows **why the lossless-medium formula cannot be used unchanged**. The complex index of `top=4+3j` is `n = 2.1213 + 0.7071i`. Substituting it into the lossless formula `kx = k0 n sin(θ)` gives complex `kx/k0 = 1.0607 + 0.3536i`, violating the required real `kx`. Instead, interpret 30° as the angle of Re(k) and use:
+This also shows **why the lossless-medium formula cannot be used unchanged**. The complex index of the incident medium `ε=4+3j` is `n = 2.1213 + 0.7071i`. Substituting it into the lossless formula `kx = k0 n sin(θ)` gives complex `kx/k0 = 1.0607 + 0.3536i`, violating the required real `kx`. Instead, interpret 30° as the angle of Re(k) and use:
 
 ```{raw} html
 <div class="power-equations" style="text-align:center">
@@ -559,13 +571,18 @@ To invert a desired `kx` when `ky = 0`, set `theta = arcsin(kx / (k0 n))`, `phi 
 
 If this produces an imaginary transverse component, the interpretation of results changes.
 
-- **Intensity varies along the surface.** For `top=4+3j` at vacuum wavelength 1,000 nm, `kx/k0 = n sin(30°) = 1.0607 + 0.3536i` reduces intensity to about 1/207 over one 1200 nm period.
-- **`R`, `T` are formal ratios, not fractions of incident power.** They can sum to more than 1 even for a lossless structure. In the Chapter 13 example, changing only `top` to lossless `4` and setting `theta = 30° + 0.2i` gives `T = 1.379`.
-- **`power_entering` and `absorption` are reported as `NaN`.** {ref}`Chapter 13 <half-space-power>` explains why.
-- **Each solve emits one `ComplexIncidenceWarning`.** Because this has its own warning category, an intentional calculation can silence just this warning with `warnings.filterwarnings('ignore', category=wavebit.ComplexIncidenceWarning)`.
+- **Intensity varies along the surface.** For `top=Material(epsilon=4+3j)` at vacuum wavelength 1,000 nm, `kx/k0 = n sin(30°) = 1.0607 + 0.3536i` reduces intensity to about 1/207 over one 1200 nm period.
+- **There is no incident power to divide by.** The uniform-intensity power normalization does not hold, so `R`, `T`, `power_entering`, `absorption` and the port powers are `NaN`, and `result.reflection.metadata['power_defined']` is false. The complex amplitudes `amplitude_s`, `amplitude_p` and `amplitude_xyz` are returned. {ref}`Chapter 13 <half-space-power>` explains the normalization.
+- **Each run emits one `ComplexIncidenceWarning`.** Because this has its own warning category, an intentional calculation can silence just this warning with `warnings.filterwarnings('ignore', category=wavebit.rcwa.diagnostics.ComplexIncidenceWarning)`.
 - **Other solvers may give different answers.** Choosing between the two `kz` roots for each exterior-medium order becomes a convention, so Wavebit, fmmax and RETICOLO can return different reflection coefficients for the same input. {ref}`Appendix A <complex-kx-roots>` explains these rules in lossless media. {ref}`Appendix B <complex-kx-lossy-gain>` explains why real and complex `theta` yield different `kx` in an absorbing incident medium, and what changes with absorbing or gain half-spaces.
 
-For a complex angle of the form `theta = π/2 + iα`, as used for evanescent incidence, `sin(θ) = cosh(α)` is real. If the incident medium is lossless, the normalized wavevector `kx/k0 = n cosh(α)` also remains real, so no `ComplexIncidenceWarning` is emitted. The incident wave itself is then evanescent: it carries no power toward the surface, so there is nothing to divide the reflected and transmitted power by. `R`, `T`, `power_entering` and `absorption` are therefore `NaN`, with no warning, while the amplitudes such as `r_s` and `t_s` are returned as usual. For an absorbing incident medium, n is complex and so is `kx`, triggering the warning.
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+The earlier interface (retired with `wavebit.compat` on 2026-10-15) returned formal `R` and `T` ratios here instead of `NaN`. They could sum to more than 1 even for a lossless structure: in the Chapter 13 example, changing only `top` to lossless `4` and setting `theta = 30° + 0.2i` gave `T = 1.379`. Its `power_entering` and `absorption` were `NaN`.
+:::
+
+For a complex angle of the form `theta = π/2 + iα`, as used for evanescent incidence, `sin(θ) = cosh(α)` is real. If the incident medium is lossless, the normalized wavevector `kx/k0 = n cosh(α)` also remains real, so no `ComplexIncidenceWarning` is emitted. The incident wave itself is then evanescent: it carries no power toward the surface, so there is nothing to divide the reflected and transmitted power by. `R`, `T`, `incident_power`, `power_entering` and `absorption` are therefore `NaN`, with no warning, and `result.reflection.metadata['efficiency_defined']` is false. `power_defined` stays true: the port powers in W are returned, because light that tunnels through to the far side carries real power. The amplitudes such as `result.reflection.amplitude_s` are returned as usual. For an absorbing incident medium, n is complex and so is `kx`, triggering the warning.
 
 (absorbing-transmission)=
 ### When the transmitted medium is lossy
@@ -581,35 +598,32 @@ Each transmitted order satisfies the following relation. The subscript t denotes
 </div>
 ```
 
-There are two signs for `kz`. In an absorbing transmitted medium, choose **the solution decaying away from the structure**. Wavebit’s +z points upward, so transmission into lower medium `bot` decays toward decreasing z, while transmission into upper medium `top` decays toward increasing z.
+There are two signs for `kz`. In an absorbing transmitted medium, choose **the solution decaying away from the structure**. Wavebit’s +z points upward, so transmission into lower medium `bottom` decays toward decreasing z, while transmission into upper medium `top` decays toward increasing z.
 
 Thus real `kx`, `ky` remain valid with a lossy transmitted medium. Loss appears as attenuation from the imaginary part of complex `kz`. **`theta`, `phi` specify incidence; they are not separate transmitted-angle inputs.** Read the transmitted phase direction from Re(k), recognizing that it can differ from power-flow direction.
 
 (light-detail-id7)=
 #### Example: transmission from air into a lossy medium
 
-Light enters from air, `top=1`, at phase angle 30°, with lossy `bot=4+3j` below. Both half-spaces have μ=1. The finite layer is also air, matching the incident medium. Wavelength and all lengths use nm.
+Light enters from air, `top=Material(epsilon=1.)`, at phase angle 30°, with lossy `bottom=Material(epsilon=4+3j)` below. Both half-spaces have μ=1. The finite layer is also air, matching the incident medium. Wavelength and all lengths use nm.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-solver = wavebit.rcwa(
-    top=1., bot=4. + 3j,
-    incidence_side="top",
-    wavelength=1000., period=[1200., 1200.],
-    theta=np.deg2rad(30.), phi=0.,
-    polarization=(1., 0.),                         # s incidence
-    structure=np.ones((1, 2, 2)),                  # Finite air layer
-    thickness=[100.],
-    truncation_order=0,                           # Uniform layer: order 0 suffices
-)
-result = solver.solve()
+problem = rcwa.Problem(
+    units=Units(length="nm"),
+    stack=rcwa.Stack(
+        period=(1200., 1200.),
+        top=Material(epsilon=1.), bottom=Material(epsilon=4. + 3j),
+        layers=(rcwa.Layer(thickness=100., background=Material(epsilon=1.)),)),   # Finite air layer
+    excitation=rcwa.Excitation(wavelength=1000., sources=(
+        rcwa.PlaneWave(side="top", theta=np.deg2rad(30.), phi=0.,
+                       polarization="s"),)))                       # s incidence
+result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(0, 0)))   # Uniform layer: order 0 suffices
 
-kx_over_k0, ky_over_k0 = solver.order_kxy()
-k0 = 2 * np.pi / solver.wavelength
-kx = k0 * kx_over_k0[0]
-ky = k0 * ky_over_k0[0]
+k0 = 2 * np.pi / 1000.
+kx, ky = result.transmission.k_parallel[0, 0, 0]  # nm⁻¹, the same as the incident wave's
 
 # Here μ=1. Choose kz for a wave outgoing and decaying downward.
 kz_transmitted = -np.sqrt(k0**2 * (4. + 3j) - kx**2 - ky**2)
@@ -630,6 +644,6 @@ The negative real part of `kz` indicates downward phase propagation. Its imagina
 
 `T` is the power fraction crossing the finite structure’s lower interface, `z=0`, into the lossy medium. The transmitted wave continues to attenuate afterward. At normal depth `d` beyond the interface, this single wave’s normal power-flow magnitude is `exp(−2 |Im(kz)| d)` times its interface value. For `d=100 nm` here, the factor is approximately 0.4019.
 
-The incident medium and finite layer are both lossless, so `R+T=1` in this example. Subsequent absorption inside the semi-infinite transmitted medium is not part of the finite layers’ `result.absorption`. {ref}`Chapter 13 <half-space-power>` explains reference surfaces and absorption scope. If both incident and transmitted media are lossy, the sequence is unchanged: determine transverse wavevectors from incidence, then calculate normal wavevectors using each medium’s ε and μ.
+The incident medium and finite layer are both lossless, so `R+T=1` in this example. Subsequent absorption inside the semi-infinite transmitted medium is not part of the finite layers’ `result.absorption`, which is `result.outputs['power_entering']` minus the total `T`. {ref}`Chapter 13 <half-space-power>` explains reference surfaces and absorption scope. If both incident and transmitted media are lossy, the sequence is unchanged: determine transverse wavevectors from incidence, then calculate normal wavevectors using each medium’s ε and μ.
 
 For uniform multilayers, transverse-wavevector continuity and solution selection in absorbing exterior media are also discussed in [Byrnes’s multilayer tutorial, Sections 2 and 5](https://arxiv.org/html/1603.02720v5#S2). Its z direction differs from this example, so interpret wavevector signs using the respective coordinate conventions.
