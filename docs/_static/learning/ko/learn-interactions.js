@@ -38,7 +38,7 @@ listen(['pol-psi','pol-chi'], () => {
   byId('pol-shape-note').textContent=linear?'전기장 끝점이 직선 위에서 왕복합니다.':
     circular?'두 반지름이 같아 원을 그립니다. χ의 부호로 회전 방향을 바꿉니다.':
     `짧은 반지름 / 긴 반지름 = ${Math.abs(Math.tan(chi)).toFixed(3)}. 작은 화살표가 시간 진행 방향입니다.`;
-  byId('pol-angle-code').textContent=`psi=np.deg2rad(${psiDeg}.), chi=np.deg2rad(${chiDeg}.)`;
+  byId('pol-angle-code').textContent=`ψ=${psiDeg}°, χ=${chiDeg}°`;
   const complex=(re,im)=>{
     const r=Math.abs(re)<0.00005?0:re,i=Math.abs(im)<0.00005?0:im;
     if(i===0)return r.toFixed(4);

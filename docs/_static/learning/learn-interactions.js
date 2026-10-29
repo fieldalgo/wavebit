@@ -38,7 +38,7 @@ listen(['pol-psi','pol-chi'], () => {
   byId('pol-shape-note').textContent=linear?'The electric-field tip moves back and forth along a line.':
     circular?'Equal radii form a circle. The sign of χ reverses the rotation.':
     `Minor radius / major radius = ${Math.abs(Math.tan(chi)).toFixed(3)}. The small arrow shows increasing time.`;
-  byId('pol-angle-code').textContent=`psi=np.deg2rad(${psiDeg}.), chi=np.deg2rad(${chiDeg}.)`;
+  byId('pol-angle-code').textContent=`ψ=${psiDeg}°, χ=${chiDeg}°`;
   const complex=(re,im)=>{
     const r=Math.abs(re)<0.00005?0:re,i=Math.abs(im)<0.00005?0:im;
     if(i===0)return r.toFixed(4);

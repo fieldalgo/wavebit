@@ -1,24 +1,15 @@
 # 08. 어떤 빛을 넣는가: 방향과 편광
 
-> **과거 API 재현:** 이 페이지에서 `wavebit.compat`를 쓰는 코드·설명은 현재 설치의 API가 아닙니다.
-> 해당 이름은 [퇴역 전 소스 `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a)에 있습니다.
-> 측정 재현에는 본문에 적힌 원래 커밋·환경을 우선 사용하세요. 원본 측정값은 갱신하지 않았습니다.
-
-
-:::{note}
-다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
-:::
-
-입사광 하나를 지정할 때는 **파장, 빛이 들어오는 쪽, 진행 방향, 편광**을 정합니다. 이 장에서는 한 입사파를 위나 아래에서 넣는 방법과 손실 매질 안에서의 파수를 설명합니다.
+입사광 하나를 지정할 때는 **파장, 빛이 들어오는 쪽, 진행 방향, 편광**을 정합니다. 코드에서 파장은 `rcwa.Excitation(wavelength=...)`에, 나머지는 그 `sources`에 넣는 `rcwa.PlaneWave(side=..., theta=..., phi=..., polarization=...)` 하나에 들어갑니다. 이 장에서는 한 입사파를 위나 아래에서 넣는 방법과 손실 매질 안에서의 파수를 설명합니다.
 
 여러 입사파의 크기·위상을 각각 정하거나 양쪽에서 동시에 빛을 넣는 방법은 [9장](multiple-beams.md)에서 이어집니다. 계산 후의 전력·효율은 [13장](power-and-efficiency.md), 전기장·자기장 조회는 [14장](fields.md)에서 설명합니다.
 
 | 정하려는 내용 | 입력과 설명 |
 | --- | --- |
-| 파장 | `wavelength`: 모든 길이와 같은 단위를 사용하며, 한 계산의 모든 입사파가 공유합니다. |
+| 파장 | `Excitation(wavelength=...)`: 모든 길이와 같은 단위를 사용하며, 한 계산의 모든 입사파가 공유합니다. |
 | 진행 방향 | {ref}`theta·phi 또는 kx·ky <incident-direction-inputs>` |
-| 편광 | {ref}`polarization 또는 psi·chi <incident-polarization>` |
-| 한쪽에서 입사 | {ref}`incidence_side로 위·아래 선택 <incident-from-bottom>` |
+| 편광 | {ref}`polarization='s', 'p' 또는 (s, p) 쌍 <incident-polarization>` |
+| 한쪽에서 입사 | {ref}`PlaneWave(side=...)로 위·아래 선택 <incident-from-bottom>` |
 
 손실이 있는 바깥 매질을 사용할 때의 파수와 감쇠는 {ref}`이 장 마지막 절 <absorbing-incidence>`에서 따로 설명합니다.
 
@@ -61,38 +52,42 @@
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-scene = dict(
-    top=2.25, bot=1.,
-    incidence_side="top",                 # 위쪽 매질에서 아래로 입사 (기본값)
-    wavelength=500., period=[700., 700.],   # 길이 단위: nm
-    structure=np.full((1, 2, 2), 4.), thickness=[100.],
-    truncation_order=0, polarization=(1., 0.),
-)
-by_angle = wavebit.rcwa(**scene, theta=np.pi/6, phi=0.)
+def problem(source):
+    return rcwa.Problem(
+        units=Units(length="nm"),                  # 길이 단위: nm
+        stack=rcwa.Stack(
+            period=(700., 700.),
+            top=Material(epsilon=2.25), bottom=Material(epsilon=1.),
+            layers=(rcwa.Layer(thickness=100., background=Material(epsilon=4.)),)),
+        excitation=rcwa.Excitation(wavelength=500., sources=(source,)))
 
-k0 = 2*np.pi/scene["wavelength"]           # 진공 파수, nm⁻¹
-by_k = wavebit.rcwa(**scene, kx=0.75*k0, ky=0.)
+numerics = rcwa.Numerics(orders=(0, 0))
+by_angle = rcwa.run(problem(rcwa.PlaneWave(
+    side="top",                                     # 위쪽 매질에서 아래로 입사 (기본값)
+    polarization="s", theta=np.pi/6, phi=0.)), numerics=numerics)
 
-angle_result = by_angle.solve()
-k_result = by_k.solve()
-np.testing.assert_allclose(angle_result.T, k_result.T, atol=1e-12)
+k0 = 2*np.pi/500.                                   # 진공 파수, nm⁻¹
+by_k = rcwa.run(problem(rcwa.PlaneWave(
+    side="top", polarization="s", kx=0.75*k0, ky=0.)), numerics=numerics)
+
+np.testing.assert_allclose(by_angle.T, by_k.T, atol=1e-12)
 ```
 
 `kx`, `ky`를 직접 넣어도 **입사 매질의 ε·μ는 필요합니다.** 같은 횡파수라도 재료가 달라지면 수직 방향 파수와 전기장·자기장의 관계, 입사 전력이 달라지기 때문입니다. 손실 입사 매질에서도 직접 파수를 지정할 수 있으며, 별도의 공기층을 가정하지 않습니다.
 
 입력값은 **실제 xyz 좌표계의 실수 파수**입니다. 사선 격자의 `u`, `v` 차수 번호와는 다르며, 회절 차수에 따른 역격자 파수는 솔버가 더합니다.
 
-`incidence_side`는 빛을 구조의 어느 쪽에서 비추는지 정합니다. 위 예제의 `incidence_side="top"`은 위쪽 매질 `top`에서 구조를 향해 **아래로(−z)** 입사한다는 뜻이며, 생략해도 기본값은 `"top"`입니다. `incidence_side="bottom"`으로 지정하면 아래쪽 매질 `bot`에서 구조를 향해 **위로(+z)** 입사합니다. 아래쪽 입사에서도 직접 지정한 `kx`, `ky`의 부호는 그대로 사용합니다.
+`PlaneWave(side=...)`는 빛을 구조의 어느 쪽에서 비추는지 정합니다. 위 예제의 `side="top"`은 위쪽 매질 `Stack.top`에서 구조를 향해 **아래로(−z)** 입사한다는 뜻이며, 생략해도 기본값은 `"top"`입니다. `side="bottom"`으로 지정하면 아래쪽 매질 `Stack.bottom`에서 구조를 향해 **위로(+z)** 입사합니다. 아래쪽 입사에서도 직접 지정한 `kx`, `ky`의 부호는 그대로 사용합니다.
 
 직접 입력한 값은 유한한 실수여야 합니다. 입사 전력이 0인 소멸파는 회절 효율의 기준으로 사용할 수 없어 거부합니다. 복소수도 거부하며, 이때 오류 메시지가 대신 쓸 입력을 안내합니다. 이유와 복소 파수가 필요할 때의 방법은 {ref}`복소 횡파수가 필요할 때 <complex-transverse-wavevector>`에서 설명합니다. `kx=ky=0`이면 빛이 표면에 수직으로 들어오는 **수직 입사**입니다. 이때는 진행 방향만으로 입사면을 하나로 정할 수 없으므로, 방위각 0을 기준으로 **s를 y 방향, p를 x 방향**으로 정합니다. 전기장의 방향은 `polarization`으로 지정합니다.
 
-TE·TM을 분리하는 1D 계산에서는 `ky`가 0이어야 합니다. 조건과 입력 방법은 {ref}`편광 절 <d-te-tm>`에서 설명합니다.
+1D 격자에서 TE 또는 TM만 풀 때는 `ky=0`을 씁니다. 조건과 입력 방법은 {ref}`편광 절 <d-te-tm>`에서 설명합니다.
 
-`theta`·`phi`와 `kx`·`ky`를 함께 넣으면 오류입니다. 솔버의 입력 방식을 바꿀 때에는 먼저 반대쪽 두 입력을 `None`으로 비운 뒤 새 값을 지정합니다. 파장·각도·파수를 여러 값으로 바꾸어 계산하는 방법은 {ref}`18장 <jobs-and-sweeps>`에서 설명합니다.
+`theta`·`phi`와 `kx`·`ky`를 함께 넣으면 오류(코드 `source.direction_ambiguous`)입니다. 광원의 입력 방식을 바꿀 때에는 한 번의 교체에서 반대쪽 두 입력을 함께 비웁니다: `source.replace(theta=None, phi=None, kx=..., ky=...)`. 파장·각도·파수를 여러 값으로 바꾸어 계산하는 방법은 {ref}`18장 <jobs-and-sweeps>`에서 설명합니다.
 
-`order_kxy()`는 **계산된 차수별 파수를 `k0`로 나누어** 반환하는 조회 함수입니다. 직접 입력과 단위가 다르므로, 반환값에 `2π/λ`를 곱해야 실제 파수가 됩니다.
+계산된 차수별 파수는 `result.reflection.k_parallel`과 `result.transmission.k_parallel`의 마지막 `(kx, ky)` 축에 있습니다. **직접 입력과 같은 길이의 역수 단위**이며, `k0`로 나눈 값이 아닙니다.
 
 (incident-polarization)=
 ## 편광을 지정하는 방법
@@ -116,8 +111,8 @@ Wavebit에서는 전기장을 **s 성분과 p 성분**으로 나누어 입력합
 
 | 만들고 싶은 편광 | 입력 | 두 성분의 관계 |
 | --- | --- | --- |
-| s 선편광 | `polarization=(1., 0.)` | s 성분만 진동 |
-| p 선편광 | `polarization=(0., 1.)` | p 성분만 진동 |
+| s 선편광 | `polarization="s"` 또는 `(1., 0.)` | s 성분만 진동 |
+| p 선편광 | `polarization="p"` 또는 `(0., 1.)` | p 성분만 진동 |
 | s와 p 사이 45° 선편광 | `polarization=(1., 1.)` | 크기가 같고 위상도 같음 |
 | 반대 대각선의 선편광 | `polarization=(1., -1.)` | 크기가 같고 위상차가 180° |
 | 원편광 | `polarization=(1., 1j)` | 크기가 같고 위상차가 90° |
@@ -130,38 +125,39 @@ Python의 **`1j`는 허수 단위 i**입니다. `a_s=1`, `a_p=1j`를 넣으면 �
 
 입력한 쌍은 `sqrt(abs(a_s)**2 + abs(a_p)**2)`로 나누어 정규화됩니다. 따라서 `(1, 1j)`와 `(10, 10j)`는 같은 입사 상태가 되며, `(1, 1j)`를 직접 `sqrt(2)`로 나누어 넣을 필요는 없습니다. `(0, 0)`은 전기장이 없는 입력이므로 사용할 수 없습니다. **이 정규화는 두 계수의 크기를 맞추는 것이며, 입사 전력을 1 W로 지정한다는 뜻은 아닙니다.** 전력은 매질과 입사 방향까지 반영하여 계산합니다.
 
-다음은 공기에서 격자로 원편광을 입사시키는 실행 예제입니다. 길이 단위는 nm이고, `structure`의 숫자는 상대 유전율입니다.
+다음은 공기에서 격자로 원편광을 입사시키는 실행 예제입니다. 길이 단위는 nm이고, 층의 `epsilon` 래스터에 든 숫자는 상대 유전율입니다. y 방향으로 한 행, x 방향으로 네 화소입니다.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-scene = dict(
-    backend='numpy',
-    top=1., bot=2.25,
-    incidence_side="top",
-    wavelength=900., period=[700., 700.],
-    theta=np.deg2rad(30.), phi=0.,
-    structure=np.array([[[1., 1., 12.25, 12.25]]]),
-    thickness=[300.],
-    truncation_order=dict(x=4, y=0),
-)
+def grating(polarization):
+    return rcwa.Problem(
+        units=Units(length="nm"),
+        stack=rcwa.Stack(
+            period=(700., 700.),
+            top=Material(epsilon=1.), bottom=Material(epsilon=2.25),
+            layers=(rcwa.Layer(thickness=300.,
+                               epsilon=np.array([[1., 1., 12.25, 12.25]])),)),   # 래스터 [y, x]
+        excitation=rcwa.Excitation(wavelength=900., sources=(
+            rcwa.PlaneWave(side="top", theta=np.deg2rad(30.), phi=0.,
+                           polarization=polarization),)))
 
-solver = wavebit.rcwa(**scene, polarization=(1., 1j))
-result = solver.solve()
+numerics = rcwa.Numerics(orders=(4, 0))      # x 방향 −4…4차, y 방향은 0차만
+result = rcwa.run(grating((1., 1j)), numerics=numerics)
 print("반사율:", result.R.sum())
 print("투과율:", result.T.sum())
 ```
 
-`polarization`만 표의 다른 쌍으로 바꾸면 같은 구조·입사 방향에서 편광에 따른 응답을 비교할 수 있습니다. s로 입사하더라도 구조가 두 편광 성분을 결합하면 반사파나 투과파에는 p 성분이 생길 수 있습니다. 입력 편광은 입사파의 상태를 정합니다.
+`grating`에 넘기는 쌍만 표의 다른 쌍으로 바꾸면 같은 구조·입사 방향에서 편광에 따른 응답을 비교할 수 있습니다. s로 입사하더라도 구조가 두 편광 성분을 결합하면 반사파나 투과파에는 p 성분이 생길 수 있습니다. 입력 편광은 입사파의 상태를 정합니다.
 
 (psi-chi)=
 ### 각도로 입력하기: psi와 chi
 
-편광의 방향이나 타원 모양을 각도로 지정하려면 `psi`, `chi`를 사용합니다. **두 각도 모두 실수이며, 단위는 라디안**입니다.
+편광의 방향과 타원 모양은 두 각도 ψ, χ로도 나타낼 수 있습니다. **두 각도 모두 실수이며, 단위는 라디안**입니다. 현재 `PlaneWave`는 편광을 `"s"`, `"p"` 또는 `(a_s, a_p)` 쌍으로만 받으므로, 아래 식으로 각도를 쌍으로 바꾸어 넘깁니다.
 
-- **ψ (`psi`)**: p 방향에서 s 방향 쪽으로 잰 편광 타원의 긴 축 각도입니다. 선편광에서는 전기장이 왕복하는 직선의 각도입니다.
-- **χ (`chi`)**: 타원의 납작한 정도를 정하는 각도입니다. `abs(tan(chi))`는 짧은 반지름을 긴 반지름으로 나눈 비입니다. −45°부터 +45° 범위로 나타내며, 부호를 바꾸면 전기장이 도는 방향이 반대가 됩니다.
+- **ψ (아래 코드의 `psi`)**: p 방향에서 s 방향 쪽으로 잰 편광 타원의 긴 축 각도입니다. 선편광에서는 전기장이 왕복하는 직선의 각도입니다.
+- **χ (아래 코드의 `chi`)**: 타원의 납작한 정도를 정하는 각도입니다. `abs(tan(χ))`는 짧은 반지름을 긴 반지름으로 나눈 비입니다. −45°부터 +45° 범위로 나타내며, 부호를 바꾸면 전기장이 도는 방향이 반대가 됩니다.
 
 ```{figure} ../../figures/learn/learn/08-polarization-angles.svg
 :name: light-figure-08-polarization-angles
@@ -171,27 +167,35 @@ print("투과율:", result.T.sum())
 그림 8-3. ψ는 타원의 긴 축 방향, χ는 두 반지름의 비와 회전 방향을 정합니다. 원에서는 긴 축과 짧은 축이 같아 ψ를 바꾸어도 편광 타원의 모양과 회전 방향은 같습니다.
 ```
 
-| 편광 | 각도 입력 | 대응하는 진폭 쌍 |
+| 편광 | 각도 (ψ, χ) | 대응하는 진폭 쌍 |
 | --- | --- | --- |
-| p 선편광 | `psi=0., chi=0.` | `(0, 1)` |
-| s 선편광 | `psi=np.pi/2, chi=0.` | `(1, 0)` |
-| 45° 선편광 | `psi=np.pi/4, chi=0.` | `(1, 1)` |
-| 원편광 | `psi=0., chi=-np.pi/4` | `(1, 1j)`와 같은 편광 |
-| 반대 회전의 원편광 | `psi=0., chi=np.pi/4` | `(1, -1j)`와 같은 편광 |
+| p 선편광 | `0, 0` | `(0, 1)` |
+| s 선편광 | `π/2, 0` | `(1, 0)` |
+| 45° 선편광 | `π/4, 0` | `(1, 1)` |
+| 원편광 | `0, −π/4` | `(1, 1j)`와 같은 편광 |
+| 반대 회전의 원편광 | `0, π/4` | `(1, -1j)`와 같은 편광 |
 
-`chi`를 생략하면 0, 즉 선편광입니다. 편광 입력을 모두 생략하면 s 선편광을 사용합니다. 원편광 행의 두 표현은 공통 위상까지 같다는 뜻은 아닙니다. 두 성분에 같은 위상을 더해도 편광 타원과 반사율·투과율은 같지만, 복소 전기장 진폭의 위상은 달라질 수 있습니다.
+χ = 0이면 선편광입니다. `polarization`을 생략하면 s 선편광을 사용합니다. 원편광 행의 두 표현은 공통 위상까지 같다는 뜻은 아닙니다. 두 성분에 같은 위상을 더해도 편광 타원과 반사율·투과율은 같지만, 복소 전기장 진폭의 위상은 달라질 수 있습니다.
 
-위 코드의 `scene`을 그대로 사용하여 p에서 s 쪽으로 30° 기울어진 선편광을 넣으려면 다음처럼 씁니다.
+위 코드의 `grating`을 그대로 사용하여 p에서 s 쪽으로 30° 기울어진 선편광을 넣으려면 두 각도를 쌍으로 바꿉니다.
 
 ```python
-solver = wavebit.rcwa(**scene, psi=np.deg2rad(30.), chi=0.)
-result = solver.solve()
+psi, chi = np.deg2rad(30.), 0.
+pair = (np.sin(psi)*np.cos(chi) + 1j*np.cos(psi)*np.sin(chi),    # a_s
+        np.cos(psi)*np.cos(chi) - 1j*np.sin(psi)*np.sin(chi))    # a_p
+result = rcwa.run(grating(pair), numerics=numerics)
 ```
 
-이 선편광은 `polarization=(0.5, np.sqrt(3)/2)`로도 지정할 수 있습니다. **각도 입력과 진폭 쌍 중 하나만 사용합니다.** `psi`·`chi`와 `polarization`을 한 호출에 함께 넣으면 오류입니다.
+χ = 0이면 이 쌍은 `(0.5, np.sqrt(3)/2)`이고, `grating((0.5, np.sqrt(3)/2))`도 같은 결과를 줍니다.
+
+:::{admonition} 이전 인터페이스
+:class: earlier-interface
+
+이전 인터페이스(2026-10-15에 `wavebit.compat`와 함께 퇴역)는 두 각도를 생성자의 `psi=`, `chi=` 키워드로 직접 받았습니다. `chi`를 생략하면 0이었고, `psi`·`chi`를 `polarization`과 함께 넣으면 오류였으며, 변환식은 아래 펼침 상자의 식과 같았습니다. 현재 `PlaneWave`에는 아직 각도 입력이 없습니다.
+:::
 
 ````{dropdown} 수식으로 보기: psi·chi에서 두 진폭을 구하기
-Wavebit는 다음 식으로 두 전기장 계수를 구합니다.
+두 전기장 계수는 다음과 같습니다.
 
 ```{raw} html
 <div class="power-equations" style="text-align:center">
@@ -200,7 +204,7 @@ Wavebit는 다음 식으로 두 전기장 계수를 구합니다.
 </div>
 ```
 
-`chi=0`이면 `a_s=sin(psi)`, `a_p=cos(psi)`입니다. 이 때문에 `psi=0`이 p, `psi=π/2`가 s입니다. 이 두 계수는 처음부터 절댓값 제곱의 합이 1이므로 따로 정규화하지 않습니다.
+χ=0이면 `a_s=sin(ψ)`, `a_p=cos(ψ)`입니다. 이 때문에 ψ=0이 p, ψ=π/2가 s입니다. 이 두 계수는 처음부터 절댓값 제곱의 합이 1이므로, `PlaneWave`가 쌍에 적용하는 정규화로 값이 바뀌지 않습니다.
 ````
 
 ```{raw} html
@@ -232,55 +236,67 @@ Wavebit는 다음 식으로 두 전기장 계수를 구합니다.
 <div class="readout" id="pol-readout" aria-live="polite" aria-atomic="true">
 <strong id="pol-state">타원편광</strong>
 <p id="pol-shape-note">짧은 반지름 / 긴 반지름 = 0.364</p>
-<p>각도로 입력<code id="pol-angle-code">psi=np.deg2rad(30.), chi=np.deg2rad(20.)</code></p>
+<p>각도<code id="pol-angle-code">ψ=30°, χ=20°</code></p>
 <p>진폭 쌍으로 입력 (반올림)<code id="pol-pair-code">polarization=(0.4698+0.2962j, 0.8138-0.1710j)</code></p>
 </div>
-<p class="explain">두 코드 중 한 가지를 rcwa()의 편광 입력으로 사용합니다. 슬라이더는 도(°) 단위이며, 표시한 코드는 np.deg2rad()로 라디안으로 바꿉니다.</p>
+<p class="explain">진폭 쌍을 rcwa.PlaneWave(polarization=...)에 넘깁니다. 슬라이더는 도(°) 단위이며, 각도 줄은 np.deg2rad()로 라디안으로 바꿉니다.</p>
 </section>
 ```
 
-먼저 `chi=0°`에서 `psi`를 바꿔 선편광의 방향을 돌려 보세요. 이어서 `chi`를 ±45° 쪽으로 움직이면 직선이 타원을 거쳐 원이 됩니다. `chi`의 부호를 바꾸면 작은 초록 화살표의 진행 방향이 반대로 바뀝니다. 원편광에서는 `psi`를 바꾸어도 원의 모양은 같고, 주황색으로 표시한 시작 시각의 전기장 방향이 달라집니다.
+먼저 χ=0°에서 ψ를 바꿔 선편광의 방향을 돌려 보세요. 이어서 χ를 ±45° 쪽으로 움직이면 직선이 타원을 거쳐 원이 됩니다. χ의 부호를 바꾸면 작은 초록 화살표의 진행 방향이 반대로 바뀝니다. 원편광에서는 ψ를 바꾸어도 원의 모양은 같고, 주황색으로 표시한 시작 시각의 전기장 방향이 달라집니다.
 
 (d-te-tm)=
 ### 1D 구조에서 TE 또는 TM만 계산하기
 
-**y 방향으로 구조가 변하지 않고 입사파도 xz 평면 안에서 진행하며, 재료가 TE와 TM을 결합하지 않는 경우**에는 두 편광을 분리해서 계산할 수 있습니다. 이때 `tetm="te"`는 전기장이 y 방향인 TE, `tetm="tm"`은 자기장이 y 방향이고 전기장은 xz 평면에 있는 TM을 선택합니다. 이 조건에서 TE는 s, TM은 p에 대응합니다.
+**y 방향으로 구조가 변하지 않고 입사파도 xz 평면 안에서 진행하며, 재료가 TE와 TM을 결합하지 않는 경우**에는 두 편광이 섞이지 않습니다. TE는 전기장이 y 방향이고, TM은 자기장이 y 방향이며 전기장은 xz 평면에 있습니다. 이 조건에서 TE는 s, TM은 p에 대응합니다.
 
-위 `scene`은 y 방향으로 일정한 등방성 격자이고 `phi=0`이므로 다음처럼 따로 계산할 수 있습니다.
+위 `grating`은 y 방향으로 일정한 등방성 격자이고 `phi=0`이므로, s와 p 입사가 각각 TE와 TM 응답을 줍니다.
 
 ```python
+te_result = rcwa.run(grating("s"), numerics=numerics)   # TE
+tm_result = rcwa.run(grating("p"), numerics=numerics)   # TM
+```
+
+이 계산은 2D 패턴과 0이 아닌 `ky`도 다루는 일반(conical) 정식화로 풉니다. `phi=0`인 한 행 래스터 격자에서는 진폭과 효율이 TE/TM 전용 풀이와 5e-15 이내로 같습니다(2026-10-15 측정). 다만 전용 풀이의 속도는 얻지 못합니다.
+
+:::{admonition} 이전 인터페이스
+:class: earlier-interface
+
+이전 인터페이스(2026-10-15에 `wavebit.compat`와 함께 퇴역)에는 이 경우를 위한 전용 선언이 있었습니다. `tetm="te"` 또는 `tetm="tm"`은 TE나 TM 하나만 풀었고, conical 정식화보다 2–4배 빨랐습니다. `ky`는 0이어야 했으며(생략하거나 `ky=0.`을 직접 적음), 0이 아닌 `ky`는 오류였습니다. 편광 자유도가 없는 문제를 선언하므로 `psi`, `chi`, `polarization`과 함께 쓸 수 없었습니다. 현재 API에는 아직 `tetm` 선언이 없습니다.
+
+```python
+# 이전 인터페이스 전용. 과거 체크아웃에서만 실행됩니다.
 te_result = wavebit.rcwa(**scene, tetm="te").solve()
 tm_result = wavebit.rcwa(**scene, tetm="tm").solve()
 ```
-
-`tetm`에서는 `ky`가 0이어야 하며, 생략하면 0입니다. `ky=0.`을 직접 적어도 됩니다. 0이 아닌 `ky`와 함께 지정하면 오류가 발생합니다. `tetm`은 TE 또는 TM 하나만 푸는 계산 방식을 선택하므로 `psi`, `chi`, `polarization`과 함께 사용하지 않습니다. 2D 패턴이나 `ky`가 0이 아닌 입사 조건에서는 `polarization` 또는 `psi`·`chi`로 입사 편광을 정합니다. 일반 계산에서 s 입사만 지정하려면 `polarization=(1, 0)`을 쓰면 됩니다.
+:::
 
 (incident-from-bottom)=
 ## 위쪽과 아래쪽 중 입사 쪽을 정하기
 
-한쪽에서 입사하는 계산은 `incidence_side`로 빛이 들어오는 쪽을 정합니다. 기본값은 `"top"`입니다.
+한쪽에서 입사하는 계산은 `PlaneWave(side=...)`로 빛이 들어오는 쪽을 정합니다. 기본값은 `"top"`입니다.
 
-| 설정 | 입사 매질과 진행 방향 | 반사율 `R` | 투과율 `T` |
+| `side` | 입사 매질과 진행 방향 | 반사율 `R` | 투과율 `T` |
 | --- | --- | --- | --- |
-| `"top"` | 위쪽 `top`에서 아래로(−z) | 위쪽으로 돌아가는 빛 | 아래쪽으로 나가는 빛 |
-| `"bottom"` | 아래쪽 `bot`에서 위로(+z) | 아래쪽으로 돌아가는 빛 | 위쪽으로 나가는 빛 |
+| `"top"` | 위쪽 `Stack.top`에서 아래로(−z) | 위쪽으로 돌아가는 빛 | 아래쪽으로 나가는 빛 |
+| `"bottom"` | 아래쪽 `Stack.bottom`에서 위로(+z) | 아래쪽으로 돌아가는 빛 | 위쪽으로 나가는 빛 |
 
-`incidence_side="bottom"`은 아래쪽 반무한 매질 `bot`에서 위쪽(+z)으로 빛을 넣는 설정입니다. 입사파는 바닥 `z=0`에서 맨 아래층인 `structure[0]`을 먼저 만납니다. `structure`와 `thickness`는 아래층부터 위층 순서로 입력하며, `top`은 위쪽 매질, `bot`은 아래쪽 매질입니다.
+`side="bottom"`은 아래쪽 반무한 매질 `Stack.bottom`에서 위쪽(+z)으로 빛을 넣는 설정입니다. 입사파는 바닥 `z=0`에서 맨 아래층인 `layers[0]`을 먼저 만납니다. `layers`는 아래층부터 위층 순서로 적고 각 `rcwa.Layer`에 그 층의 `thickness`를 주며, `top`은 위쪽 매질, `bottom`은 아래쪽 매질입니다.
 
-반사율 `R`은 아래쪽 `bot`으로 돌아가는 전력의 비율이고, 투과율 `T`는 위쪽 `top`으로 나가는 전력의 비율입니다. 두 값 모두 아래쪽에서 들어온 입사 전력을 기준으로 합니다.
+반사율 `R`은 아래쪽 `bottom`으로 돌아가는 전력의 비율이고, 투과율 `T`는 위쪽 `top`으로 나가는 전력의 비율입니다. 두 값 모두 아래쪽에서 들어온 입사 전력을 기준으로 합니다.
 
 (incidence-side-angles)=
 (thetaphipsichi)=
 ### 위·아래 입사에 공통인 각도와 편광
 
-**`theta`·`phi`·`psi`·`chi`는 위·아래 입사에서 같은 규칙으로 지정합니다.** 입사 쪽은 `incidence_side`로 정하고, 각도는 다음과 같이 읽습니다. 아래 설명은 무손실 등방성 입사 매질을 기준으로 합니다.
+**`theta`·`phi`와 편광 각도 ψ·χ는 위·아래 입사에서 같은 규칙으로 지정합니다.** 입사 쪽은 `PlaneWave(side=...)`로 정하고, 각도는 다음과 같이 읽습니다. 아래 설명은 무손실 등방성 입사 매질을 기준으로 합니다.
 
-| 입력 | 의미 |
+| 양 | 의미 |
 | --- | --- |
 | `theta` | 빛의 진행 방향과 표면 안쪽을 향하는 법선 사이의 각도. 위쪽 입사는 −z, 아래쪽 입사는 +z가 기준이며, 양쪽 모두 0°는 수직 입사입니다. |
 | `phi` | 빛의 진행 벡터를 xy 평면에 투영했을 때, +x에서 +y 쪽으로 잰 방위각. 양쪽 모두 고정된 x·y축을 기준으로 합니다. |
-| `psi` | 해당 입사파의 p 방향에서 s 방향 쪽으로 잰 편광 타원의 긴 축 각도. |
-| `chi` | 편광 타원의 모양과 s/p 성분의 상대 위상을 정하는 각도. 양쪽 모두 같은 진폭 변환식을 사용합니다. |
+| ψ | 해당 입사파의 p 방향에서 s 방향 쪽으로 잰 편광 타원의 긴 축 각도. |
+| χ | 편광 타원의 모양과 s/p 성분의 상대 위상을 정하는 각도. 양쪽 모두 같은 `(a_s, a_p)` 쌍 변환식을 사용합니다. |
 
 예를 들어 `theta=30°`, `phi=0`이면 **양쪽 모두 −x 쪽에서 와서 x가 증가하는 방향으로 진행합니다.** 표면의 입사점을 기준으로 경로를 비교하면 다음과 같습니다.
 
@@ -291,32 +307,31 @@ tm_result = wavebit.rcwa(**scene, tetm="tm").solve()
 
 양쪽 모두 진행 벡터의 x 성분은 양수이고, z 성분의 부호가 다릅니다. 위쪽 입사 그림의 선이 −x 쪽 위로 뻗어 있는 것은 빛이 오는 쪽을 보여 주며, 화살표는 그 선을 따라 표면으로 향합니다.
 
-편광은 각 입사파의 s·p 방향을 기준으로 지정합니다. 선편광인 `chi=0`에서 `psi=0`은 p 편광, `psi=90°`는 s 편광, `psi=45°`는 같은 크기·같은 위상의 s와 p 성분을 갖는 선편광입니다. `abs(chi)=45°`이면 원편광입니다. 위·아래 입사 모두 이 규칙으로 원하는 편광을 직접 지정합니다.
+편광은 각 입사파의 s·p 방향을 기준으로 지정합니다. 선편광인 χ=0에서 ψ=0은 p 편광, ψ=90°는 s 편광, ψ=45°는 같은 크기·같은 위상의 s와 p 성분을 갖는 선편광, 곧 쌍 `(1, 1)`입니다. `abs(χ)=45°`이면 원편광입니다. 위·아래 입사 모두 이 규칙으로 원하는 편광을 직접 지정합니다.
 
 (light-detail-id11)=
 ### 예제: 유리에서 위로 입사하는 선편광
 
-아래 예제는 유리 `bot=2.25`에서 빛이 두 층을 향해 올라오는 설정입니다. `theta=30°`, `phi=0`이므로 −x 쪽 아래에서 표면으로 진행하며, 유리 안의 진행 방향은 +z 법선과 30°를 이룹니다. 편광은 `psi=45°`, `chi=0°`인 선편광입니다. 코드에서는 각도를 라디안으로 입력합니다.
+아래 예제는 유리 `bottom=Material(epsilon=2.25)`에서 빛이 두 층을 향해 올라오는 설정입니다. `theta=30°`, `phi=0`이므로 −x 쪽 아래에서 표면으로 진행하며, 유리 안의 진행 방향은 +z 법선과 30°를 이룹니다. 편광은 ψ=45°, χ=0°인 선편광, 곧 쌍 `(1., 1.)`입니다. 코드에서는 각도를 라디안으로 입력합니다.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-solver = wavebit.rcwa(
-    backend='numpy',
-    top=1., bot=2.25,                       # 위: 공기, 아래: 유리
-    incidence_side="bottom",               # 유리에서 위로 입사
-    wavelength=600., period=[1500., 1500.], # 길이 단위: nm
-    structure=np.array([
-        [[4.]],                            # 맨 아래층: z=0~100 nm
-        [[9.]],                            # 그 위층: z=100~300 nm
-    ]),
-    thickness=[100., 200.],
-    theta=np.deg2rad(30.), phi=0.,          # kx > 0, kz > 0
-    psi=np.deg2rad(45.), chi=0.,            # 같은 크기·같은 위상의 s와 p
-    truncation_order=0,
-)
-result = solver.solve()
+problem = rcwa.Problem(
+    units=Units(length="nm"),                          # 길이 단위: nm
+    stack=rcwa.Stack(
+        period=(1500., 1500.),
+        top=Material(epsilon=1.), bottom=Material(epsilon=2.25),   # 위: 공기, 아래: 유리
+        layers=(
+            rcwa.Layer(thickness=100., background=Material(epsilon=4.)),   # 맨 아래층: z=0~100 nm
+            rcwa.Layer(thickness=200., background=Material(epsilon=9.)),   # 그 위층: z=100~300 nm
+        )),
+    excitation=rcwa.Excitation(wavelength=600., sources=(
+        rcwa.PlaneWave(side="bottom",                  # 유리에서 위로 입사
+                       theta=np.deg2rad(30.), phi=0.,  # kx > 0, kz > 0
+                       polarization=(1., 1.)),)))      # 같은 크기·같은 위상의 s와 p
+result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(0, 0)))
 print("유리 쪽으로 돌아가는 반사율:", result.R.sum())
 print("공기 쪽으로 나가는 투과율:", result.T.sum())
 ```
@@ -332,8 +347,8 @@ print("공기 쪽으로 나가는 투과율:", result.T.sum())
 
 | 입사 설정 | 입사 매질 | 투과 매질 |
 | --- | --- | --- |
-| `incidence_side="top"` | 위쪽 `top` | 아래쪽 `bot` |
-| `incidence_side="bottom"` | 아래쪽 `bot` | 위쪽 `top` |
+| `PlaneWave(side="top")` | 위쪽 `top` | 아래쪽 `bottom` |
+| `PlaneWave(side="bottom")` | 아래쪽 `bottom` | 위쪽 `top` |
 
 **입사파의 `kx`, `ky`를 먼저 정하고, 양쪽 매질에서 각각 `kz`를 구합니다.** 각도로 입력하면 입사 매질의 ε·μ와 `theta`, `phi`로 입사파의 횡파수를 정합니다. 직접 입력하면 주어진 `kx`, `ky`를 사용합니다. 투과파의 방향은 이 횡파수와 투과 매질의 ε·μ에서 결정됩니다.
 
@@ -492,32 +507,30 @@ ky = k0 s N sin(theta) sin(phi)
 (absorbing-incidence-example)=
 #### 예시: 손실 입사 매질 안의 위상각 30°
 
-아래 예제의 `theta=30°`는 `top=4+3j`인 **그 매질 안에서의 위상각**입니다. 단위는 nm로 통일했습니다. 유한 층과 `bot`은 같은 무손실 재료로 두고, 입사파의 횡파수를 확인합니다.
+아래 예제의 `theta=30°`는 `top=Material(epsilon=4+3j)`인 **그 매질 안에서의 위상각**입니다. 단위는 nm로 통일했습니다. 유한 층과 `bottom`은 같은 무손실 재료로 두고, 입사파의 횡파수를 확인합니다.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-solver = wavebit.rcwa(
-    top=4. + 3j, bot=2.25,
-    incidence_side="top",
-    wavelength=1000., period=[1200., 1200.],
-    theta=np.deg2rad(30.), phi=0.,
-    polarization=(1., 0.),                         # s 입사
-    structure=np.full((1, 2, 2), 2.25),
-    thickness=[100.],
-    truncation_order=0,                           # 균일층이므로 0차만 필요
-)
-result = solver.solve()
+problem = rcwa.Problem(
+    units=Units(length="nm"),
+    stack=rcwa.Stack(
+        period=(1200., 1200.),
+        top=Material(epsilon=4. + 3j), bottom=Material(epsilon=2.25),
+        layers=(rcwa.Layer(thickness=100., background=Material(epsilon=2.25)),)),
+    excitation=rcwa.Excitation(wavelength=1000., sources=(
+        rcwa.PlaneWave(side="top", theta=np.deg2rad(30.), phi=0.,
+                       polarization="s"),)))                       # s 입사
+result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(0, 0)))   # 균일층이므로 0차만 필요
 
-kx_over_k0, ky_over_k0 = solver.order_kxy()
-k0 = 2 * np.pi / solver.wavelength
-print(k0 * kx_over_k0, k0 * ky_over_k0)             # 파수 단위: nm⁻¹
+kx, ky = result.reflection.k_parallel[0, 0, 0]   # 파장, order_v, order_u; nm⁻¹
+print(kx, ky)
 ```
 
-`order_kxy()`가 반환하는 값은 `k0`로 나눈 차수별 파수입니다. 여기서는 0차만 사용하므로 각각 원소가 하나이며, `k0`를 곱하면 `kx ≈ 0.00677139 nm⁻¹`, `ky = 0 nm⁻¹`입니다. **이 30°는 선택한 손실 입사 매질 안의 위상각**입니다. 계산한 전력 결과를 읽는 방법은 {ref}`13장 <half-space-power>`에서 설명합니다.
+`k_parallel`에는 각 차수의 실제 횡파수가 `k0`로 나누지 않은 값으로 들어 있습니다. 여기서는 0차만 사용하므로 첫 파장과 차수를 고르면 `(kx, ky)` 쌍이 남으며, `kx ≈ 0.00677139 nm⁻¹`, `ky = 0 nm⁻¹`입니다. **이 30°는 선택한 손실 입사 매질 안의 위상각**입니다. 계산한 전력 결과를 읽는 방법은 {ref}`13장 <half-space-power>`에서 설명합니다.
 
-**무손실 매질의 식을 그대로 쓸 수 없는 이유**도 이 예제로 확인할 수 있습니다. `top=4+3j`의 복소 굴절률은 `n = 2.1213 + 0.7071i`입니다. 위의 무손실 식 `kx = k0 n sin(θ)`에 넣으면 `kx/k0 = 1.0607 + 0.3536i`인 복소수가 되어, 실수여야 하는 `kx`로 쓸 수 없습니다. 그래서 30°를 위상 진행 방향 `Re(k)`의 각도로 읽고, 다음 조건을 사용합니다.
+**무손실 매질의 식을 그대로 쓸 수 없는 이유**도 이 예제로 확인할 수 있습니다. 입사 매질 `ε=4+3j`의 복소 굴절률은 `n = 2.1213 + 0.7071i`입니다. 위의 무손실 식 `kx = k0 n sin(θ)`에 넣으면 `kx/k0 = 1.0607 + 0.3536i`인 복소수가 되어, 실수여야 하는 `kx`로 쓸 수 없습니다. 그래서 30°를 위상 진행 방향 `Re(k)`의 각도로 읽고, 다음 조건을 사용합니다.
 
 ```{raw} html
 <div class="power-equations" style="text-align:center">
@@ -558,13 +571,18 @@ print(k0 * kx_over_k0, k0 * ky_over_k0)             # 파수 단위: nm⁻¹
 
 이 경로로 횡파수에 허수부가 생기면 결과를 읽는 방법이 달라집니다.
 
-- **세기가 표면을 따라 변합니다.** `top=4+3j`, 진공 파장 1,000 nm에서 `kx/k0 = n sin(30°) = 1.0607 + 0.3536i`이면, 한 주기 1200 nm를 지나는 동안 세기가 약 1/207로 줄어듭니다.
-- **`R`, `T`는 입사 전력에 대한 비가 아니라 형식적인 비율입니다.** 무손실 구조에서도 합이 1을 넘을 수 있습니다. 13장 예제 구조에서 `top`만 무손실 `4`로 바꾸고 `theta = 30° + 0.2i`를 넣으면 `T = 1.379`입니다.
-- **`power_entering`과 `absorption`은 `NaN`으로 표시합니다.** 이유는 {ref}`13장 <half-space-power>`에서 설명합니다.
-- **풀이마다 `ComplexIncidenceWarning` 경고를 한 번 냅니다.** 경고 분류가 따로 있으므로, 의도한 계산이라면 `warnings.filterwarnings('ignore', category=wavebit.ComplexIncidenceWarning)`로 이 경고만 끌 수 있습니다.
+- **세기가 표면을 따라 변합니다.** `top=Material(epsilon=4+3j)`, 진공 파장 1,000 nm에서 `kx/k0 = n sin(30°) = 1.0607 + 0.3536i`이면, 한 주기 1200 nm를 지나는 동안 세기가 약 1/207로 줄어듭니다.
+- **나눌 입사 전력이 없습니다.** 표면에서 세기가 균일하다는 전력 정규화가 성립하지 않으므로 `R`, `T`, `power_entering`, `absorption`과 포트 전력은 `NaN`이고, `result.reflection.metadata['power_defined']`는 거짓입니다. 복소 진폭 `amplitude_s`, `amplitude_p`, `amplitude_xyz`는 반환됩니다. 정규화는 {ref}`13장 <half-space-power>`에서 설명합니다.
+- **실행마다 `ComplexIncidenceWarning` 경고를 한 번 냅니다.** 경고 분류가 따로 있으므로, 의도한 계산이라면 `warnings.filterwarnings('ignore', category=wavebit.rcwa.diagnostics.ComplexIncidenceWarning)`로 이 경고만 끌 수 있습니다.
 - **다른 솔버와 답이 다를 수 있습니다.** 위아래 반공간의 각 차수에서 `kz`의 두 근 중 무엇을 고를지가 규약이 되어, 같은 입력에서도 Wavebit, fmmax, RETICOLO가 서로 다른 반사계수를 낼 수 있습니다. 규칙마다 무엇이 다른지는 {ref}`부록 A <complex-kx-roots>`에서 무손실 매질로 설명하고, 흡수 입사 매질에서 실수 `theta`와 복소 `theta`가 왜 다른 `kx`를 주는지와 흡수·이득 반공간에서 달라지는 점은 {ref}`부록 B <complex-kx-lossy-gain>`에서 설명합니다.
 
-소멸파 입사처럼 `theta = π/2 + iα` 꼴의 복소 각도는 `sin(θ) = cosh(α)`가 실수입니다. 입사 매질이 무손실이면 `kx/k0 = n cosh(α)`도 실수로 남으므로 `ComplexIncidenceWarning`이 나오지 않습니다. 이때 입사파 자체가 소멸파여서 표면 쪽으로 전력을 나르지 않으므로, 반사 전력과 투과 전력을 나눌 기준이 없습니다. 그래서 `R`, `T`, `power_entering`, `absorption`은 경고 없이 `NaN`이고, `r_s`, `t_s` 같은 진폭은 평소대로 반환됩니다. 입사 매질이 흡수성이면 n이 복소수라 `kx`도 복소수가 되고 경고가 나옵니다.
+:::{admonition} 이전 인터페이스
+:class: earlier-interface
+
+이전 인터페이스(2026-10-15에 `wavebit.compat`와 함께 퇴역)는 여기서 `NaN` 대신 형식적인 `R`, `T` 비율을 돌려주었습니다. 무손실 구조에서도 합이 1을 넘을 수 있었습니다. 13장 예제 구조에서 `top`만 무손실 `4`로 바꾸고 `theta = 30° + 0.2i`를 넣으면 `T = 1.379`였습니다. `power_entering`과 `absorption`은 `NaN`이었습니다.
+:::
+
+소멸파 입사처럼 `theta = π/2 + iα` 꼴의 복소 각도는 `sin(θ) = cosh(α)`가 실수입니다. 입사 매질이 무손실이면 `kx/k0 = n cosh(α)`도 실수로 남으므로 `ComplexIncidenceWarning`이 나오지 않습니다. 이때 입사파 자체가 소멸파여서 표면 쪽으로 전력을 나르지 않으므로, 반사 전력과 투과 전력을 나눌 기준이 없습니다. 그래서 `R`, `T`, `incident_power`, `power_entering`, `absorption`은 경고 없이 `NaN`이고 `result.reflection.metadata['efficiency_defined']`는 거짓입니다. `power_defined`는 참으로 남아 W 단위 포트 전력은 반환됩니다. 반대쪽으로 터널링해 나가는 빛은 실제 전력을 나르기 때문입니다. `result.reflection.amplitude_s` 같은 진폭은 평소대로 반환됩니다. 입사 매질이 흡수성이면 n이 복소수라 `kx`도 복소수가 되고 경고가 나옵니다.
 
 (absorbing-transmission)=
 ### 투과 매질에 손실이 있을 때
@@ -580,35 +598,32 @@ print(k0 * kx_over_k0, k0 * ky_over_k0)             # 파수 단위: nm⁻¹
 </div>
 ```
 
-`kz`에는 두 부호의 해가 있습니다. 흡수성 투과 매질에서는 **구조에서 멀어지는 쪽으로 감쇠하는 해**를 선택합니다. Wavebit의 +z는 위쪽이므로, 아래쪽 `bot`으로 나가는 투과파는 z가 작아지는 쪽으로, 위쪽 `top`으로 나가는 투과파는 z가 커지는 쪽으로 감쇠합니다.
+`kz`에는 두 부호의 해가 있습니다. 흡수성 투과 매질에서는 **구조에서 멀어지는 쪽으로 감쇠하는 해**를 선택합니다. Wavebit의 +z는 위쪽이므로, 아래쪽 `bottom`으로 나가는 투과파는 z가 작아지는 쪽으로, 위쪽 `top`으로 나가는 투과파는 z가 커지는 쪽으로 감쇠합니다.
 
 따라서 투과 매질에 손실이 있어도 실수인 `kx`, `ky`를 사용할 수 있습니다. 손실은 복소 `kz`의 허수부에 따른 감쇠로 나타납니다. **`theta`, `phi`는 입사파를 지정하는 값이며, 투과파의 각도를 따로 입력하는 옵션이 아닙니다.** 투과파의 위상 방향은 `Re(k)`에서 읽으며, 전력 흐름 방향과는 다를 수 있습니다.
 
 (light-detail-id7)=
 #### 예시: 공기에서 손실 매질로 투과하기
 
-공기 `top=1`에서 위상각 30°로 입사하고, 아래쪽에는 `bot=4+3j`인 손실 매질을 둡니다. 두 반무한 매질의 μ는 1입니다. 유한 층도 공기로 두어 입사 쪽과 재료가 같게 했습니다. 파장과 모든 길이의 단위는 nm입니다.
+공기 `top=Material(epsilon=1.)`에서 위상각 30°로 입사하고, 아래쪽에는 `bottom=Material(epsilon=4+3j)`인 손실 매질을 둡니다. 두 반무한 매질의 μ는 1입니다. 유한 층도 공기로 두어 입사 쪽과 재료가 같게 했습니다. 파장과 모든 길이의 단위는 nm입니다.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-solver = wavebit.rcwa(
-    top=1., bot=4. + 3j,
-    incidence_side="top",
-    wavelength=1000., period=[1200., 1200.],
-    theta=np.deg2rad(30.), phi=0.,
-    polarization=(1., 0.),                         # s 입사
-    structure=np.ones((1, 2, 2)),                  # 공기인 유한 층
-    thickness=[100.],
-    truncation_order=0,                           # 균일층이므로 0차만 필요
-)
-result = solver.solve()
+problem = rcwa.Problem(
+    units=Units(length="nm"),
+    stack=rcwa.Stack(
+        period=(1200., 1200.),
+        top=Material(epsilon=1.), bottom=Material(epsilon=4. + 3j),
+        layers=(rcwa.Layer(thickness=100., background=Material(epsilon=1.)),)),   # 공기인 유한 층
+    excitation=rcwa.Excitation(wavelength=1000., sources=(
+        rcwa.PlaneWave(side="top", theta=np.deg2rad(30.), phi=0.,
+                       polarization="s"),)))                       # s 입사
+result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(0, 0)))   # 균일층이므로 0차만 필요
 
-kx_over_k0, ky_over_k0 = solver.order_kxy()
-k0 = 2 * np.pi / solver.wavelength
-kx = k0 * kx_over_k0[0]
-ky = k0 * ky_over_k0[0]
+k0 = 2 * np.pi / 1000.
+kx, ky = result.transmission.k_parallel[0, 0, 0]  # nm⁻¹, 입사파와 같은 값
 
 # 이 예제는 μ=1. 아래쪽으로 나가며 감쇠하는 kz를 선택합니다.
 kz_transmitted = -np.sqrt(k0**2 * (4. + 3j) - kx**2 - ky**2)
@@ -629,6 +644,6 @@ print(result.R.sum(), result.T.sum())
 
 `T`는 유한 구조의 아랫면 `z=0`을 넘어 손실 매질로 들어가는 전력의 비입니다. 그 뒤에도 투과파는 계속 감쇠합니다. 이 단일 투과파가 경계면에서 수직으로 `d`만큼 더 깊이 들어가면, 표면에 수직인 전력 흐름의 크기는 경계면 값의 `exp(−2 |Im(kz)| d)`배가 됩니다. 이 예제에서 `d=100 nm`이면 약 0.4019배입니다.
 
-입사 매질과 유한 층이 모두 무손실이므로 이 예제의 `R+T`는 1입니다. 반무한 투과 매질 안에서 이후에 흡수되는 전력은 유한 층의 `result.absorption`에 포함되지 않습니다. 전력의 기준면과 흡수 범위는 {ref}`13장 <half-space-power>`에서 설명합니다. 입사·투과 매질이 모두 손실성이어도, 입사 조건으로 횡파수를 정하고 각 매질의 ε·μ로 수직 파수를 구하는 순서는 같습니다.
+입사 매질과 유한 층이 모두 무손실이므로 이 예제의 `R+T`는 1입니다. 반무한 투과 매질 안에서 이후에 흡수되는 전력은 유한 층의 `result.absorption`(곧 `result.outputs['power_entering']`에서 전체 `T`를 뺀 값)에 포함되지 않습니다. 전력의 기준면과 흡수 범위는 {ref}`13장 <half-space-power>`에서 설명합니다. 입사·투과 매질이 모두 손실성이어도, 입사 조건으로 횡파수를 정하고 각 매질의 ε·μ로 수직 파수를 구하는 순서는 같습니다.
 
 균일한 다층막에서 횡파수의 연속성과 흡수성 외부 매질의 해 선택은 [Byrnes의 다층막 해설 §2·§5](https://arxiv.org/html/1603.02720v5#S2)에서도 확인할 수 있습니다. 그 문헌의 z축 방향은 이 예제와 다르므로 파수의 부호는 각 좌표 규약에 맞춰 읽습니다.
