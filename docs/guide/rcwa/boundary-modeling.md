@@ -1,11 +1,5 @@
 # Boundary modeling — painting an overlap without staircasing the edges
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 :::{note}
 The examples use the current `rcwa.Problem` / `rcwa.Numerics` lifecycle, except the one under
 [Differentiability](#differentiability), which is kept in the earlier `wavebit.compat.legacy`
@@ -202,6 +196,11 @@ gradient:
 - **replay** (`polygon.py`, `boundary.py`) — arithmetic only. No value-dependent control flow, no
   in-place writes, so it traces and differentiates on every backend.
 
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Retired with `wavebit.compat` on 2026-10-15; this runs only on a historical checkout.
+
 `freeze_geometry()` records the plan in `StaticGeometry.boundary_plans`. Because the plan is
 pure Python indices it compares **by content**, so re-freezing a structure whose topology has
 not changed hits the JAX compilation cache — take the freeze again every step (see the README
@@ -218,6 +217,7 @@ structure = [dict(background=1.0, shapes=[
 solver = wavebit.rcwa(backend='jax', structure=structure, ...)
 res = solver.solve(geometry=solver.freeze_geometry())
 ```
+:::
 
 A gradient runs from `(cx, cy, lx, ly, angle)` through the replay, the polygon transform and the
 normal field to the convolution matrices, and matches finite differences to 2.3e-08. Through the
@@ -313,6 +313,11 @@ own terms.)
 
 ### Tried: the gradient does not survive the swap
 
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Measured through the earlier `wavebit.compat.legacy` interface, whose `truncation_order` is the half-width `N` along each periodic axis of the current `rcwa.Numerics(orders=...)`; values are as recorded.
+
 Disjoint layers are the whole affected population: an overlapping one already routes here, and a
 lone shape is exact through the phase trick.
 
@@ -365,8 +370,14 @@ several normal-grid pixels wide, because the jumps are what the two fields disag
 narrower one steps over them; and the gradient has to be sampled on the *same* abscissae as the
 loss, because the derivative fluctuates on a sub-pixel scale and a coarser gradient grid aliases
 it into whatever the spacing happens to select.
+:::
 
 ### But that verdict has a condition, and it is the incidence angle
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Measured through the earlier `wavebit.compat.legacy` interface, whose `truncation_order` is the half-width `N` along each periodic axis of the current `rcwa.Numerics(orders=...)`; values are as recorded.
 
 The measurement above sits at one corner of its own parameter space: high index contrast (3.0 and
 2.2) **and** oblique incidence. Varying those one at a time over a fixed base — same shapes, same
@@ -432,6 +443,7 @@ One thing the window does settle. At `truncation_order = 4` neither field reprod
 slope is about twice the truncation_order-12 one — and that is the truncation every gradient test in
 `tests/rcwa/test_shape_position_gradients.py` runs at. Those tests hold autodiff to finite differences,
 which is the comparison the previous section says cannot fail on either path.
+:::
 
 ### Layers of both kinds in one `structure`
 
@@ -450,6 +462,11 @@ traced". A `jax.jit` tracer genuinely has no number. A **`jax.grad` tracer carri
 primal** and was refusing only the spelling — so the checks were skipped in an un-jitted
 gradient loop, which is exactly where an optimizer lives, and a rod grown by plain gradient
 ascent ran to `lx = 911.71` on a period of 300 with `R + T = 1.000000000000` at every step.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+The earlier interface's freeze, kept as measured; the current mapping follows the block.
 
 Since 2026-08-28 the read is `backend.checked_float` — `detach`, then `float`, then
 `stop_gradient` — and "concrete" is a property of the *value*:
@@ -470,6 +487,7 @@ Under `jax.jit` there is nothing to read, the freeze is what stands in for it, a
 above cannot run at all — including the staleness checks. That is the argument for re-taking
 the freeze every step rather than holding one; it costs 0–1 ms and its record compares by
 content.
+:::
 
 The table is the earlier interface's. Through `rcwa.prepare` and `prepared.run` the eager and
 PyTorch rows hold as written. Eager `jax.grad` of a shape is checked on its concrete primal, as
@@ -615,6 +633,11 @@ raster path; the constraint belongs to the transform, not to the path that feeds
 
 ## What has been verified
 
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Measured through the earlier `wavebit.compat.legacy` interface, whose `truncation_order` is the half-width `N` along each periodic axis of the current `rcwa.Numerics(orders=...)`; values are as recorded.
+
 Against **S4**, an independent RCWA implementation (Stanford Stratified Structure Solver), with
 the truncation set matched exactly (`LatticeTruncation='Parallelogramic'`,
 `NumBasis=(2*truncation_order+1)**2`) so both codes carry the same orders:
@@ -671,6 +694,7 @@ to 5e-16.
 See also: [`parametric-modeling.md`](parametric-modeling.md) for the closed-form shape transforms this
 path reuses, and [`nvf-upsampling.md`](../../validation/rcwa/nvf-upsampling.md) for the normal field's grid on the
 raster path.
+:::
 
 ### References
 

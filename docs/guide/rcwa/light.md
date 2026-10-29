@@ -1,11 +1,5 @@
 # Declaring RCWA illumination
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 `rcwa.Excitation(wavelength=..., sources=(...))` separates vacuum wavelengths from the sources that own side, direction, polarization and amplitude. All source angles are radians. A source uses either `theta/phi` or `kx/ky` in inverse problem-length units, never both.
 
 ```python
@@ -187,15 +181,26 @@ that reaches the far side.
 The current `PlaneWave` takes the third kind, `polarization='s'`, `'p'` or `(a_s, a_p)`. The
 first two are earlier-interface declarations that the current API does not have yet.
 
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+The first two rows are earlier-interface declarations (retired with `wavebit.compat` on 2026-10-15); the current `PlaneWave` takes only the third.
+
 | | write | what it is |
 | --- | --- | --- |
 | **declaration** | `tetm='te'` / `'tm'` | this problem has no polarization and no azimuth degree of freedom. One-row raster structures only (a shape structure is refused, even one invariant along y; use `polarization=(1, 0)` / `(0, 1)` at `phi=0` there), and it is what buys the pure TE/TM formulation -- 2 to 4 times faster than the conical one, which gives the same amplitudes, fields and efficiencies as `polarization=(1, 0)` / `(0, 1)` at `phi=0`, to 1e-13 (since 2026-09-27; before, the amplitudes differed by a sign on the orders across `kx = 0` from the incident one) |
 | **coordinates** | `psi`, `chi` | the state's two angles: `psi` the ellipse's tilt, `chi` its ellipticity. `chi=0` is linear (and is exactly the `psi` spelling), `chi=+/-pi/4` circular. This is the form to sweep and to optimize |
 | **amplitudes** | `polarization=(a_s, a_p)` | the Jones pair itself, in the same (s, p) basis the results come back in. The only form that carries an overall phase; its magnitude is normalized away, so `(3, 4j)` and `(0.6, 0.8j)` are one incidence |
+:::
 
 ```python
 rcwa.PlaneWave(polarization=(1, -1j))           # the pair, straight from another code
 ```
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Retired with `wavebit.compat` on 2026-10-15; this runs only on a historical checkout.
 
 ```python
 # Earlier interface: the current API has no tetm or psi/chi declaration yet.
@@ -206,16 +211,24 @@ wavebit.rcwa(tetm='te', ...)                    # fast 1D path; psi reads back a
 wavebit.rcwa(psi=0.4, ...)                      # linear, at an angle
 wavebit.rcwa(psi=0.4, chi=np.pi / 4, ...)       # circular
 ```
+:::
 
 The current `polarization='s'` / `'p'` at `phi=0` runs the conical formulation: on a one-row
 raster grating its amplitudes and efficiencies match `tetm='te'` / `'tm'` to 5e-15 (measured
 2026-10-15), without the pure path's speed.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
 
 `tetm`, `psi`/`chi` and `polarization` are three *kinds* of thing, not three spellings of one.
 Naming `tetm` with either of the others raises, and so does `psi` with `polarization`. Which to
 reach for is usually decided by what you are doing: `(psi, chi)` is two real numbers with
 nothing redundant in them, so a gradient over the polarization state is an ordinary 2D problem,
 where the pair spends two of its four real numbers on directions that cannot change any power.
+:::
+
+:::{admonition} Earlier interface
+:class: earlier-interface
 
 **On the earlier interface, a polarization sweep needs one solve.** Every solve there at
 `answers='amplitude'` or above also returns `result.s_inc` and `result.p_inc`, the responses
@@ -228,6 +241,7 @@ efficiencies drops their cross term. `s_inc` and `p_inc` are `None` under `tetm=
 `answers='efficiency'`. The current `Result` does not return them yet: run `'s'` and `'p'` once
 each and combine their `amplitude_s`, `amplitude_p` and `amplitude_xyz` the same way. The two runs
 reproduce `s_inc` and `p_inc` to 5e-15.
+:::
 
 Every order named in an `IncidentOrders` has to propagate in the incidence medium. One past
 the light line would drive the structure while contributing nothing to the incident flux every

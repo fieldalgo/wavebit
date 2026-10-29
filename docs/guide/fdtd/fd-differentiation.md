@@ -1,14 +1,13 @@
 # Differentiating the general FDTD engine
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 :::{note}
 This page retains the earlier engine declarations and their measured admission rules. The pillar scene now has a [complete current-API example](substrate-gradients.md), using an explicit smoothed substrate continuation through the bottom open face. The current module runs the same engine and checks; [In the current module](#in-the-current-module) maps the declarations below.
 :::
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 `wavebit.compat.legacy.fd` runs on NumPy, JAX and PyTorch, and on the last two a run is
 differentiable: material values, a body's shape and position, a source's amplitude, phase,
@@ -17,8 +16,14 @@ page says how to set that up, what may be traced, and what the run does when a t
 leaves the region it can certify. The measurements behind it are the C6 sections at the end of
 [`fd-subpixel-occupancy.md`](../../validation/fdtd/fd-subpixel-occupancy.md), the last of them "Traced
 material values beside traced geometry".
+:::
 
 ## The one rule: plan concrete, run traced
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 A run is `fd.plan` (static, on the host: the grid, the boundaries, every refusal) followed
 by `fd.lower` and the time stepping (the arrays a gradient flows through). Build the plan
@@ -31,6 +36,7 @@ values it was built from. The traced run reuses it, reads the live values, and c
 ones that can move at run time (see [When the result is NaN](#when-the-result-is-nan)). On
 JAX the plan is also what makes the compiled stepping program reusable: one compile per
 plan, however many values you try.
+:::
 
 ### In the current module
 
@@ -45,6 +51,11 @@ rejected has `result.validity.checks['runtime_stability']` false. A traced `Bloc
 field.
 
 ## A pillar's radius, height and index together
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 A metasurface cell: a glass substrate (a smoothed `fd.Box` running through the bottom PML)
 and a cylindrical pillar standing flush on it, under a normal plane wave. The pillar's
@@ -121,8 +132,14 @@ Three things in that scene are what make the shape traceable:
   `fd.Material(eps=...)` with a leaf to the first structure -- although it fills the bottom
   PML: the rule that keeps a PML from being asked to absorb an order leaving too steeply is
   held at run time (see below).
+:::
 
 ## An inactive Lorentz term in the analytic response
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 For finite inputs, `fd.Lorentz(..., strength=0).eps_term(omega)` contributes zero,
 including at its undamped resonance. `fd.eps_at` inherits this convention when it
@@ -143,8 +160,14 @@ regularization or derivative there.
 This is the analytic material response. It does not change the time-domain pole
 recurrence, its stability policy, or which material and geometry derivatives a
 planned `fd.run` admits.
+:::
 
 ## What may be traced
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 | Leaf | Where | Notes |
 | --- | --- | --- |
@@ -169,8 +192,14 @@ the same rule: plan from concrete values, pass `plan=`. For a Sphere, Cylinder, 
 turned Box -- bodies whose smoothing couples field components -- `plan=None` is refused,
 because the plan's stability certificate needs numbers; an unturned Box and the cell-snapped
 `Slab` and `Region` plan a traced value as they always have.
+:::
 
 ## When the result is NaN
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 A traced value can reach a value the plan would have refused. The run then does not raise --
 under `jax.grad` there is nothing to raise on -- but returns `nan` fields, results and
@@ -209,8 +238,14 @@ at wavelength 0.95 once its `eps` passes `(0.95 / 0.6)**2 = 2.507`, just above t
 horizon, which no PML absorbs: from there the run is `nan`, as the concrete scene is refused. If an optimizer's step returns `nan`, step back
 and bound the variable; the run's report (`result.report.warnings`) names the checks a
 traced value is held to.
+:::
 
 ## What is refused, and why
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 These are refused by name when the scene is run, because no runtime check could stand in
 for them. The stabilized-PML row applies even without smoothed bodies; its exact-return
@@ -228,8 +263,14 @@ a Sphere, Cylinder, Prism or turned Box
 | A body with traced geometry as the face a pillar stands on | the junction is differentiated through its standing body only | keep the face's geometry concrete |
 | A traced conductivity or pole parameter | no certificate | keep it concrete |
 | A traced value where `plan=` was built without that material, or naming `mu` differently | the plan was certified for another medium | plan from the same scene at concrete values |
+:::
 
 ## How accurate is the derivative
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 The derivative is that of the discrete solver, exactly. On the probe's version of the cell
 above (`studies/fdtd/traced_material/fdtd_traced_material_probe.py`: three wavelengths, T and R, the centre's x
@@ -250,8 +291,14 @@ substrate's. Two caveats:
   (0.2% of its small `dT`): the residual `T + R - 1` itself ripples at the `1e-6` level as
   the thick substrate's optical path changes, and that is its slope. Check your own
   observable under refinement before trusting its optimum.
+:::
 
 ## Which backend
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 JAX compiles the run once per plan (about 50 s for the probe's cell on one CPU thread) and
 is then fast to repeat; Torch runs eagerly (about 7 s for the same two-output Jacobian) and
@@ -376,3 +423,4 @@ The inactive ordinary response keeps nonzero damping so an unselected Lorentz
 resonance cannot contaminate the selected response's frequency derivative with NaN.
 `tests/fdtd/test_damping_response_review.py` checks concrete/carried agreement
 and the analytic frequency tangent at a large-damping resonance.
+:::
