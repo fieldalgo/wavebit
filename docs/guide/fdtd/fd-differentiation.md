@@ -9,7 +9,7 @@ This page retains the earlier engine declarations and their measured admission r
 
 Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
-`wavebit.compat.legacy.fd` runs on NumPy, JAX and PyTorch, and on the last two a run is
+`wavebit.compat.legacy.fd` ran on NumPy, JAX and PyTorch, and on the last two a run was
 differentiable: material values, a body's shape and position, a source's amplitude, phase,
 delay and band, and the Bloch phase can all be leaves of `jax.grad` or Torch autograd. This
 page says how to set that up, what may be traced, and what the run does when a traced value
