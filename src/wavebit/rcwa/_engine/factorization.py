@@ -103,8 +103,10 @@ worked (``tests/rcwa/test_conv_matrices_accessor.py``). The builders are what di
 ``tests/rcwa/test_slot_order.py`` pins the property directly, for every builder.
 """
 import math
+import warnings
 from typing import NamedTuple
 
+from wavebit._common.backend import SvdConvergenceWarning
 from wavebit._common.backend import _concrete
 from wavebit._common.backend import array_namespace
 from wavebit._common.backend import as_array
@@ -1919,10 +1921,11 @@ def _floor_singular_values(xp, B, floor):
     # everywhere but a `jax.jit` trace or a `torch.func.vmap` lane -- a layer where it does not
     # is `B` itself, as both branches below return it. Every passive dielectric layer is one,
     # and stopping here spares it the singular *vectors*: not only time, but a failure.
-    # MKL's vector-computing SVD (PyTorch's) failed to converge on the `<1/eps>` of one circle
-    # in air at 961 harmonics -- radius 161.48 nm in a 600 nm cell, eps 12.25, a Hermitian
-    # matrix of condition 12.25 whose singular values sit in two tight clusters -- where its
-    # values-only SVD, NumPy's and LAPACK's gesvd all succeed.
+    # PyTorch's vector-computing SVD failed to converge on the `<1/eps>` of one circle in air at
+    # 961 harmonics -- radius 161.48 nm in a 600 nm cell, eps 12.25, a Hermitian matrix of
+    # condition 12.25 whose singular values sit in two tight clusters -- where its values-only
+    # SVD and LAPACK's gesvd succeed. The cause is LAPACK's divide-and-conquer driver, not the
+    # matrix: see `_svd`, which is what a layer that does need the vectors goes through.
     # The answer is read only where it can be; a one-element probe asks that first, so a jit
     # trace, which could not use the values, does not pay for them.
     detached = _no_gradient(B)
@@ -1954,22 +1957,96 @@ def _floor_singular_values(xp, B, floor):
     return xp.where(xp.any(clip), _jax_floor()(B, floor, U, s, Vh, lifted, clip), B)
 
 
+#: Why a retried SVD warns: what happened, and what the caller can do about it.
+_SVD_CAUSE = ('One known cause is a LAPACK bug (DLASD2, Reference-LAPACK #1138) in MKL <= 2026.1, '
+              'OpenBLAS <= 0.3.30 and reference LAPACK <= 3.12.1; if the LAPACK {library} uses '
+              'is one of these, updating it avoids this. '
+              'See wavebit.rcwa.diagnostics.SvdConvergenceWarning.')
+_SVD_RETRIED = ('The divide-and-conquer SVD (LAPACK ?gesdd) of an NVF <1/eps> matrix did not '
+                'converge; its factors were recomputed with the QR-based ?gesvd. ' + _SVD_CAUSE)
+_SVD_UNRECOVERED = ('The divide-and-conquer SVD (LAPACK ?gesdd) of an NVF <1/eps> matrix did not '
+                    'converge {where}. Its factors are NaN, so the inverse-rule floor was not '
+                    'applied to this layer: harmless where the floor would not bind (a passive '
+                    'dielectric), but a layer where it would (a metal beside a dielectric) keeps '
+                    'the unfloored inverse rule the floor exists to correct. ' + _SVD_CAUSE)
+
+
 def _svd(xp, B):
-    """``xp.linalg.svd`` of a detached ``B``, through NumPy's LAPACK where PyTorch's fails.
+    """``xp.linalg.svd`` of a detached ``B``, recomputed with ``?gesvd`` where ``?gesdd`` fails.
 
     The factors are constants to every derivative rule here (:func:`_floor_singular_values`
     takes them from a detached matrix), so where they were computed changes no derivative.
-    PyTorch's raises ``torch.linalg.LinAlgError`` on a matrix MKL's divide-and-conquer driver
-    does not converge on; NumPy's, on the same matrix, did.
+    Every backend's SVD is LAPACK's divide-and-conquer ``?gesdd``, and that driver can report
+    no convergence on a finite, well-conditioned matrix: measured, on the ``<1/eps>`` of one
+    circle in air, PyTorch's bundled MKL did, through a ``DLASD2`` bug that NumPy's OpenBLAS no
+    longer carries (``wavebit.rcwa.diagnostics.SvdConvergenceWarning`` has the versions).
+    So a failure on a finite matrix is retried with the QR-based ``?gesvd``, which that bug
+    does not reach, and announced; a non-finite matrix keeps its failure. PyTorch and NumPy
+    report the failure by raising; JAX returns NaN factors instead, so on JAX the factors are
+    checked. Under ``jax.jit`` nothing can be recomputed, and a ``jax.debug.callback`` warns
+    when the factors come back NaN from a finite matrix. NaN singular values are below no
+    floor, so :func:`_floor_singular_values` then hands back ``B`` unfloored: right on a
+    passive dielectric, wrong by the floor on a layer where it binds -- which is what the
+    warning says.
     """
+    if 'jax' in xp.__name__:
+        return _jax_svd(xp, B)
+    import numpy as np
+    errors = (np.linalg.LinAlgError,)
+    if 'torch' in xp.__name__:
+        import torch
+        errors += (torch.linalg.LinAlgError,)
     try:
         return xp.linalg.svd(B)
-    except RuntimeError:
-        if 'torch' not in xp.__name__:
+    except errors as failure:
+        try:
+            host = np.asarray(B.cpu()) if hasattr(B, 'cpu') else np.asarray(B)
+        except RuntimeError:          # a `torch.func.vmap` lane has no host values to take
+            raise failure from None
+        if not np.all(np.isfinite(host)):
             raise
-        import numpy as np
-        U, s, Vh = np.linalg.svd(B.cpu().numpy())
+        import scipy.linalg
+        try:
+            U, s, Vh = scipy.linalg.svd(host, lapack_driver='gesvd')
+        except np.linalg.LinAlgError as retry:
+            raise failure from retry
+        library = 'PyTorch' if 'torch' in xp.__name__ else 'NumPy'
+        warnings.warn(_SVD_RETRIED.format(library=library), SvdConvergenceWarning, stacklevel=2)
         return tuple(as_array(xp, a, device=_device(xp, B)) for a in (U, s, Vh))
+
+
+def _jax_svd(xp, B):
+    """:func:`_svd` on JAX, whose ``?gesdd`` reports a failure as NaN factors, not an error."""
+    import jax
+    U, s, Vh = xp.linalg.svd(B)
+    converged = _concrete(xp.all(xp.isfinite(s)))
+    if converged is None:
+        jax.debug.callback(_warn_traced_svd, xp.all(xp.isfinite(s)), xp.all(xp.isfinite(B)))
+        return U, s, Vh
+    if converged or not _concrete(xp.all(xp.isfinite(B))):
+        return U, s, Vh
+    U, s, Vh = jax.lax.linalg.svd(B, full_matrices=True,
+                                  algorithm=jax.lax.linalg.SvdAlgorithm.QR)
+    if _concrete(xp.all(xp.isfinite(s))):
+        warnings.warn(_SVD_RETRIED.format(library='SciPy (and so JAX on CPU)'),
+                      SvdConvergenceWarning, stacklevel=3)
+    else:
+        warnings.warn(_SVD_UNRECOVERED.format(where='with ?gesdd or ?gesvd',
+                                              library='SciPy (and so JAX on CPU)'),
+                      SvdConvergenceWarning, stacklevel=3)
+    return U, s, Vh
+
+
+def _warn_traced_svd(converged, finite):
+    """Host side of :func:`_jax_svd` under a trace: warn when a finite matrix lost its factors.
+
+    Under ``jax.vmap`` both arguments arrive batched, one flag per lane.
+    """
+    import numpy as np
+    if np.any(~np.asarray(converged) & np.asarray(finite)):
+        warnings.warn(_SVD_UNRECOVERED.format(where='under jax.jit, where it cannot be recomputed',
+                                              library='SciPy (and so JAX on CPU)'),
+                      SvdConvergenceWarning, stacklevel=2)
 
 
 #: What a second derivative through a floored layer raises with.

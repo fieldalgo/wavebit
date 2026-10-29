@@ -43,6 +43,7 @@ import pytest
 from wavebit.rcwa._engine import factorization as F
 from wavebit.rcwa._engine import parametric as P
 from wavebit._common.backend import array_namespace
+from wavebit.rcwa import diagnostics
 from wavebit.rcwa._engine.factorization import INVERSE_RULE_BOUND, _floor_singular_values, _nvf_assemble
 from wavebit.lattice import Lattice
 
@@ -275,10 +276,12 @@ def test_a_passive_dielectric_solve_takes_no_singular_values(monkeypatch, backen
     assert not calls
 
 
-def test_where_the_floor_binds_a_failing_torch_svd_is_taken_by_numpy(monkeypatch):
+def test_where_the_floor_binds_a_failing_torch_svd_is_recomputed_with_gesvd(monkeypatch):
     """Where the floor binds the factors are needed, and they are constants to the derivative
-    rule (taken from a detached matrix), so NumPy's SVD on the host is an exact substitute for a
-    PyTorch one that raises: same floored matrix, same gradient."""
+    rule (taken from a detached matrix), so SciPy's QR-based ``gesvd`` on the host is an exact
+    substitute for a PyTorch SVD that raises: same floored matrix, same gradient, and a
+    :class:`SvdConvergenceWarning` saying so. Not NumPy's SVD: that is the same
+    divide-and-conquer ``gesdd``, and in an MKL build it carries the same bug."""
     torch = pytest.importorskip('torch')
     par, cfg = holes(AU_807, 807.0)
     _, B, _ = matrices(par, cfg, 6)
@@ -292,10 +295,109 @@ def test_where_the_floor_binds_a_failing_torch_svd_is_taken_by_numpy(monkeypatch
 
     expected, expected_grad = floored()
     _, calls = _failing_torch_svd(monkeypatch)
-    value, grad = floored()
+    numpy_svd = []
+    monkeypatch.setattr(np.linalg, 'svd', lambda *a, **k: numpy_svd.append(1))
+    with pytest.warns(diagnostics.SvdConvergenceWarning, match=r'recomputed with the QR-based \?gesvd'):
+        value, grad = floored()
     assert calls
+    assert not numpy_svd
     assert np.allclose(value, expected, rtol=0, atol=1e-12)
     assert np.allclose(grad, expected_grad, rtol=0, atol=1e-10)
+
+
+def test_a_failing_numpy_svd_is_recomputed_with_gesvd(monkeypatch):
+    """NumPy's ``gesdd`` raises on the same bug wherever NumPy links an affected LAPACK (the MKL
+    build on Anaconda's ``defaults`` channel), so the NumPy backend takes the same retry."""
+    par, cfg = holes(AU_807, 807.0)
+    _, B, _ = matrices(par, cfg, 6)
+    floor = 1.0 / (INVERSE_RULE_BOUND * largest_eps(par))
+    expected = _floor_singular_values(np, B, floor)
+    xp = array_namespace(B)
+
+    def svd(*args, **kwargs):
+        raise np.linalg.LinAlgError('SVD did not converge')
+
+    monkeypatch.setattr(xp.linalg, 'svd', svd)
+    with pytest.warns(diagnostics.SvdConvergenceWarning, match='LAPACK NumPy uses'):
+        value = _floor_singular_values(xp, B, floor)
+    assert np.allclose(value, expected, rtol=0, atol=1e-12)
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'torch'])
+def test_a_non_finite_matrix_keeps_its_failure(monkeypatch, backend):
+    """A NaN fails every SVD driver, so a retry could only hide it: the original error is raised
+    and nothing is announced."""
+    B = np.eye(4, dtype=np.complex128)
+    B[0, 1] = np.nan
+    if backend == 'torch':
+        torch, _ = _failing_torch_svd(monkeypatch)
+        B, error = torch.tensor(B), torch.linalg.LinAlgError
+    else:
+        def svd(*args, **kwargs):
+            raise np.linalg.LinAlgError('SVD did not converge')
+        monkeypatch.setattr(array_namespace(B).linalg, 'svd', svd)
+        error = np.linalg.LinAlgError
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', diagnostics.SvdConvergenceWarning)
+        with pytest.raises(error, match='converge'):
+            F._svd(array_namespace(B), B)
+
+
+def _nan_jax_svd(monkeypatch):
+    """Make ``jnp.linalg.svd`` return NaN factors, as JAX does when ``gesdd`` reports a failure."""
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    svd = jnp.linalg.svd
+
+    def failing(a, *args, **kwargs):
+        return tuple(x * jnp.nan for x in svd(a, *args, **kwargs))
+
+    monkeypatch.setattr(jnp.linalg, 'svd', failing)
+    return jax, jnp
+
+
+def test_an_eager_jax_svd_that_returns_nan_is_recomputed_with_gesvd(monkeypatch):
+    """JAX reports a ``gesdd`` failure as NaN factors rather than an error (its CPU LAPACK is
+    SciPy's), so the eager JAX path checks the factors and recomputes them with
+    ``SvdAlgorithm.QR`` -- the same floored matrix as an SVD that converged."""
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    par, cfg = holes(AU_807, 807.0)
+    _, B, _ = matrices(par, cfg, 6)
+    floor = 1.0 / (INVERSE_RULE_BOUND * largest_eps(par))
+    expected = np.asarray(_floor_singular_values(jnp, jnp.asarray(B), floor))
+    _nan_jax_svd(monkeypatch)
+    with pytest.warns(diagnostics.SvdConvergenceWarning, match=r'recomputed with the QR-based \?gesvd'):
+        value = np.asarray(_floor_singular_values(jnp, jnp.asarray(B), floor))
+    assert np.allclose(value, expected, rtol=0, atol=1e-12)
+
+
+def test_under_jax_jit_a_lost_svd_is_announced(monkeypatch):
+    """Under ``jax.jit`` the factors cannot be recomputed. NaN singular values are below no
+    floor, so the layer is handed back unfloored -- here a gold layer the floor should have
+    lifted, a wrong result with no other sign -- and a host callback says so."""
+    jax, jnp = _nan_jax_svd(monkeypatch)
+    par, cfg = holes(AU_807, 807.0)
+    _, B, _ = matrices(par, cfg, 6)
+    floor = 1.0 / (INVERSE_RULE_BOUND * largest_eps(par))
+    with pytest.warns(diagnostics.SvdConvergenceWarning, match='under jax.jit'):
+        value = jax.jit(lambda b: _floor_singular_values(jnp, b, floor))(jnp.asarray(B))
+        jax.effects_barrier()
+    assert np.array_equal(np.asarray(value), B)
+    assert not np.array_equal(np.asarray(_floor_singular_values(np, B, floor)), B)
+
+
+def test_the_traced_announcement_reads_each_lane():
+    """Under ``jax.vmap`` the callback gets one flag per lane: it warns when a finite lane lost its
+    factors, and not when the only lane without factors was not finite to begin with."""
+    with pytest.warns(diagnostics.SvdConvergenceWarning):
+        F._warn_traced_svd(np.array([True, False]), np.array([True, True]))
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', diagnostics.SvdConvergenceWarning)
+        F._warn_traced_svd(np.array([True, False]), np.array([True, False]))
+        F._warn_traced_svd(np.asarray(True), np.asarray(True))
 
 
 # --------------------------------------------------------------- what it does to the solve
