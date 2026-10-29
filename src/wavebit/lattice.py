@@ -37,8 +37,8 @@ Cartesian position is
 
     r = (u - 0.5) * a1 + (v - 0.5) * a2
 
-Axis 1 runs along ``a1`` (and pairs with ``truncation_order[0]`` / ``m``), axis 0 along ``a2``
-(with ``truncation_order[1]`` / ``n``) — the same pairing the axis-aligned case has always
+Axis 1 runs along ``a1`` (and pairs with ``Numerics(orders=(Mu, Mv))``'s ``Mu`` / ``m``), axis 0 along ``a2``
+(with ``Mv`` / ``n``) — the same pairing the axis-aligned case has always
 used, read in lattice coordinates rather than Cartesian ones.
 
 The ``- 0.5`` is a relabeling and nothing else: the integral above runs over ``u, v`` in
@@ -409,8 +409,8 @@ class Lattice:
 
         * the *fundamental cell* differs, so an omitted shape centre lands elsewhere: ``(100, 173)``
           against ``(300, 173)`` at ``a = 400``. See :func:`~wavebit.rcwa._engine.parametric.shape_geometry`.
-        * ``truncation_order`` cuts a parallelogram in ``(m, n)``, and a different basis maps that
-          onto a different set of ``G``. Measured at ``truncation_order=4``: 81 orders either way,
+        * ``Numerics(orders=...)`` cuts a parallelogram in ``(m, n)``, and a different basis maps that
+          onto a different set of ``G``. Measured at ``orders=(4, 4)``: 81 orders either way,
           **61 of them shared**. The two agree in the converged limit and not before it.
 
         So this is a choice with consequences at finite truncation, which is why it is an argument
