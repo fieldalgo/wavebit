@@ -1,11 +1,5 @@
 # Multimode incidence — several orders lit at once
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 :::{note}
 The current API lights several orders with `rcwa.IncidentOrders`, whose run reports boundary
 power and fields but not per-order efficiencies. The per-order `R`, `T` and amplitudes this page
@@ -26,6 +20,11 @@ from wavebit import rcwa
 source = rcwa.IncidentOrders(weights=(((0, 0), 1.0), ((1, 0), 0.6 - 0.8j)))  # by the (x, y) pair
 ```
 
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Retired with `wavebit.compat` on 2026-10-15; this runs only on a historical checkout.
+
 ```python
 # Earlier interface: per-order R/T for lit orders are not in the current API yet.
 from wavebit.compat import legacy as wavebit
@@ -33,6 +32,7 @@ from wavebit.compat import legacy as wavebit
 solver = wavebit.rcwa(..., excitation={0: 1.0, 1: 0.6 - 0.8j})     # 1D: by the x order
 solver = wavebit.rcwa(..., excitation={(0, 0): 1.0, (1, 0): 0.5j})  # 2D: by the pair
 ```
+:::
 
 The illumination arrives on more than one diffraction order, coherently, in one solve. The
 weights are *spatial*: `polarization` (on the earlier interface also `psi` / `tetm`) still says
@@ -56,7 +56,7 @@ and reading order `+1` against solving at `arcsin(sin(theta) + lambda/period)` a
 specular order agrees to **~1e-9** at every basis size tried, the residue being nothing but the
 two solves keeping slightly different finite windows. So a one-order excitation buys a
 relabelling. (It was 9e-1 → 2.5e-4 before §4's widening, which is itself a demonstration of
-what the widening does: lighting order +1 now retains `[-truncation_order, truncation_order + 1]`, all but
+what the widening does: lighting order +1 at `Numerics(orders=(N, 0))` now retains `[-N, N + 1]`, all but
 one order of what the shifted-angle solve keeps.) One caveat on the `ky == 0` row: amplitudes
 there are quoted in `sign(kx) * y_hat`, so an order whose `kx` is exactly `0` in one spelling
 and `+-1e-17` in the other (a rounding) can come back with the opposite sign in the two, while
@@ -86,7 +86,7 @@ number of order indices before adding.
 It is also *more* accurate, but only because of the window widening in §4. On a window that
 stayed centred on the specular order the two are a measured tie — the winner alternates
 arbitrarily across basis sizes, and their difference is smaller than each one's own truncation
-error from `truncation_order` 8 up. The widening is what turns the tie into a win.
+error from `N = 8` up (§4's table). The widening is what turns the tie into a win.
 
 ## 3. Every lit order must propagate
 
@@ -130,6 +130,12 @@ odd span buys one order more than the union strictly needs.
 **This is what makes the feature better than the workaround rather than equal to it.** Three
 beams at orders 0, +1, +2, error on orders -2..+2 against a converged reference:
 
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Measured through the earlier `wavebit.compat.legacy` interface, whose `truncation_order` is the
+half-width `N` of the current `rcwa.Numerics(orders=(N, 0))`.
+
 | truncation_order | union window | orders | three solves apart | orders |
 | --- | --- | --- | --- | --- |
 | 6 | 4.01e-1 | 15 | 3.48e-1 | 39 |
@@ -142,6 +148,7 @@ beams at orders 0, +1, +2, error on orders -2..+2 against a converged reference:
 From `truncation_order` 8 up it wins every time, on a third of the orders. (Row 6 is the unconverged
 regime — both errors are ~0.4 — and means nothing.) Without the widening the two are a measured
 tie, which is what an earlier draft of this feature had.
+:::
 
 The extra orders are cheap and get cheaper: `m_max - m_min` of them, a **fixed** number, against
 an `n_orders` that grows. Measured **3.6–9.1%**, falling with N.
@@ -155,7 +162,7 @@ name.
 Everything the widening touches is a *size* or an *offset*: the four `kx` builders, the two
 factorization entry points, and `lit_orders`'s mapping. **The factorization does not care where
 the window sits** — a convolution matrix's `(i, j)` entry is the harmonic `i - j`, so two solves
-at one `truncation_order` and very different angles build bit-identical slots (measured 0.0). Only the
+at one `orders` and very different angles build bit-identical slots (measured 0.0). Only the
 width travels into it.
 
 ## 5. Where it enters
