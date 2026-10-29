@@ -1,17 +1,14 @@
 # 07. 재료: 유전율, 흡수, 파장에 따른 변화
 
-> **과거 API 재현:** 이 페이지에서 `wavebit.compat`를 쓰는 코드·설명은 현재 설치의 API가 아닙니다.
-> 해당 이름은 [퇴역 전 소스 `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a)에 있습니다.
-> 측정 재현에는 본문에 적힌 원래 커밋·환경을 우선 사용하세요. 원본 측정값은 갱신하지 않았습니다.
-
-
 :::{note}
-다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
+그림 7-1의 ② 단계에는 이전 생성자의 `solve(wavelength=λ)`와 `solve_conv` 행렬이 아직 적혀
+있습니다. 현재 API에서 파장은 `rcwa.Excitation(wavelength=...)`으로 정하고, 직접 만든 연산 행렬은
+`rcwa.operators`로 넘깁니다. 본문과 코드는 현재 이름을 씁니다.
 :::
 
 **계산에 넣는 재료값은 상대 유전율 εᵣ입니다.** 아래첨자 r은 상대(relative)를 뜻하며, 진공 유전율 ε<sub>0</sub>에 대한 비 εᵣ = ε/ε<sub>0</sub>를 나타냅니다.
 
-상수로 볼 재료는 `12.25`처럼 숫자로 바로 넣고, 파장에 따라 값이 달라지는 재료는 분산 정보를 가진 객체를 한 번 지정합니다. 솔버는 현재 파장에 해당하는 값을 평가해 계산합니다. 굴절률을 별도의 계산 입력으로 관리할 필요는 없습니다.
+상수로 볼 재료는 `Material(epsilon=12.25)`로 넣습니다. 재료 자리에 `12.25` 같은 숫자만 넣으면 거절됩니다(코드 `material.type`). 파장에 따라 값이 달라지는 재료는 분산 정보를 가진 객체를 한 번 지정합니다. 솔버는 현재 파장에 해당하는 값을 평가해 계산합니다. 굴절률을 별도의 계산 입력으로 관리할 필요는 없습니다.
 
 ```{figure} ../../figures/learn/learn/07-material.svg
 :alt: 재료를 한 번 지정하면 파장마다 상대 유전율을 평가해 RCWA 계산에 전달한다
@@ -27,24 +24,26 @@
 
 | 가진 정보 | 입력 예 | 계산에 쓰이는 값 |
 | --- | --- | --- |
-| 상수 등방성 유전율 | `12.25` | 모든 방향에 같은 εᵣ |
-| 흡수를 포함한 상수 유전율 | `4. + 0.1j` | 복소 εᵣ |
-| 상수 ε와 μ | `wavebit.Material(epsilon=4., mu=1.2)` | εᵣ와 μᵣ를 함께 지정 |
-| 번들 재료표 | `wavebit.materials.load('Si')` | 계산 파장에서 자동 평가한 εᵣ |
-| 직접 가진 파장별 ε·μ | `wavebit.TabulatedMaterial(...)` | 사용자 표에서 보간한 스칼라 또는 텐서 εᵣ·μᵣ |
-| 외부 n+ik 표 | `wavebit.TabulatedMaterial.from_refractive_index(..., mu=...)` | 굴절률과 선택적 투자율로 유전율 계산; mu 생략 시 비자성 |
+| 상수 등방성 유전율 | `Material(epsilon=12.25)` | 모든 방향에 같은 εᵣ |
+| 흡수를 포함한 상수 유전율 | `Material(epsilon=4. + 0.1j)` | 복소 εᵣ |
+| 상수 ε와 μ | `Material(epsilon=4., mu=1.2)` | εᵣ와 μᵣ를 함께 지정 |
+| 번들 재료표 | `materials.load('Si')` | 계산 파장에서 자동 평가한 εᵣ |
+| 직접 가진 파장별 ε·μ | `TabulatedMaterial(..., wavelength_unit="nm")` | 사용자 표에서 보간한 스칼라 또는 텐서 εᵣ·μᵣ |
+| 외부 n+ik 표 | `TabulatedMaterial.from_refractive_index(..., wavelength_unit="nm", mu=...)` | 굴절률과 선택적 투자율로 유전율 계산; mu 생략 시 비자성 |
 | 이방성 유전율 텐서 | `Material(epsilon=[2.25, 4., 2.25])` 또는 3×3 배열 | 방향별 응답과 성분 간 결합; 아래 별도 예제 참고 |
 
-상수와 사용자 표는 등방성·이방성 모두 표현할 수 있습니다. 번들 n·k 자료는 비자성 등방성 재료로 평가합니다. `from_refractive_index`는 등방성 재료용이며, `mu`를 주면 자성 재료도 변환합니다. 래스터에는 평가된 숫자 배열을 넣습니다. 도형의 `material`과 층의 `background`에는 스칼라 또는 지원되는 텐서 재료·분산 객체를 할당합니다. `top`·`bot` 반무한 매질은 스칼라 재료만 받으며, 실수와 복소수 모두 사용할 수 있습니다. 입력 방법은 아래 {ref}`반무한 매질 설명 <material-half-spaces>`을 참고합니다.
+모두 `wavebit`에서 가져옵니다(`from wavebit import Material, TabulatedMaterial, materials`). 상수와 사용자 표는 등방성·이방성 모두 표현할 수 있습니다. 번들 n·k 자료는 비자성 등방성 재료로 평가합니다. `from_refractive_index`는 등방성 재료용이며, `mu`를 주면 자성 재료도 변환합니다. 래스터 `rcwa.Layer(epsilon=배열)`에는 평가된 숫자 배열을 넣습니다. 영역의 `material`과 층의 `background`에는 스칼라 또는 지원되는 텐서 `Material`, 또는 분산 객체를 할당합니다. `rcwa.Stack`의 `top`·`bottom` 반무한 매질은 등방성 재료만 받으며, 실수와 복소수 모두 사용할 수 있습니다. 입력 방법은 아래 {ref}`반무한 매질 설명 <material-half-spaces>`을 참고합니다.
 
 ## 실리콘을 한 번 지정하고 파장만 바꾸기
 
 ```python
-silicon = wavebit.materials.load('Si')
+from wavebit import materials
+
+silicon = materials.load('Si')
 # 파장을 여기서 고정하지 않는다. silicon에는 실리콘의 분산 표가 남는다.
 ```
 
-이 객체를 도형의 `material`, 층의 `background`, 또는 위·아래 매질인 `top`, `bot`에 넣습니다. 아래 예제에서는 **같은 원에 같은 silicon 객체를 붙여 두고, 파장만 바꿉니다.** 파장마다 도형을 다시 만들거나 유전율을 직접 교체하지 않습니다.
+이 객체를 영역의 `material`, 층의 `background`, 또는 위·아래 매질인 `top`, `bottom`에 넣습니다. 아래 예제에서는 **같은 원에 같은 silicon 객체를 붙여 두고, 파장만 바꿉니다.** 파장마다 도형을 다시 만들거나 유전율을 직접 교체하지 않습니다.
 
 실행 파일: {download}`09_material_sweep.py <../../../examples/rcwa/learning/learn/09_material_sweep.py>`
 
@@ -69,28 +68,31 @@ silicon = wavebit.materials.load('Si')
 
 | 지정 방법 | 값의 종류 | 파장을 바꿨을 때 |
 | --- | --- | --- |
-| 숫자 `12.25` | 숫자 | 유전율 12.25를 유지; 객체 생성 불필요 |
-| `wavebit.Material(epsilon=4., mu=1.2)` | `Material` | 유전율 4와 투자율 1.2를 함께 유지 |
-| `wavebit.materials.load('Si')` | `TabulatedMaterial` | 실리콘 표에서 새 파장에 해당하는 값을 구함 |
-| `silicon.at(900.)` | `MaterialResponse` | 900 nm에서 구한 유전율과 투자율을 유지 |
+| `Material(epsilon=12.25)` | `Material` | 유전율 12.25를 유지 |
+| `Material(epsilon=4., mu=1.2)` | `Material` | 유전율 4와 투자율 1.2를 함께 유지 |
+| `materials.load('Si')` | `TabulatedMaterial` | 실리콘 표에서 새 파장에 해당하는 값을 구함 |
+| `silicon.at(900.)` | `MaterialResponse` | 900 nm에서 구한 유전율과 투자율(확인용) |
 
-`materials.load('Si')`는 실리콘의 **파장별 재료 데이터**를 불러옵니다. 이 재료를 도형이나 층에 할당하면 계산 파장에 맞는 재료값을 자동으로 사용합니다.
+`materials.load('Si')`는 실리콘의 **파장별 재료 데이터**를 불러옵니다. 이 재료를 영역이나 층에 할당하면 계산 파장에 맞는 재료값을 자동으로 사용합니다.
 
-`silicon.at(900.)`은 **900 nm에서의 유전율과 투자율을 구해 `MaterialResponse` 객체에 담으며**, 이 객체는 `Material`처럼 할당합니다. 이 결과를 도형이나 층에 할당하면, 계산 파장을 바꿔도 900 nm에서 구한 유전율과 투자율을 그대로 사용합니다.
+`silicon.at(900.)`은 **900 nm에서의 유전율과 투자율을 구해 `MaterialResponse` 객체에 담습니다.** `MaterialResponse`는 평가된 값의 묶음이지 재료 모델이 아니므로, 재료 자리에 넣으면 거절됩니다. 900 nm 값을 계산에 쓰려면 `Material(epsilon=response.epsilon, mu=response.mu)`처럼 `Material`에 담습니다. 이 재료를 영역이나 층에 할당하면, 계산 파장을 바꿔도 900 nm에서 구한 유전율과 투자율을 그대로 사용합니다.
 
 ### 두 객체 모두 같은 자리에 재료로 할당합니다
 
-도형의 `material`, 층의 `background`, 위·아래 매질의 `top`, `bot`에는 두 종류의 객체를 모두 넣을 수 있습니다. 아래 예제는 같은 실리콘을 층의 재료로 지정하되, 파장에 따라 재료값을 바꿀지 고정할지를 선택합니다.
+영역의 `material`, 층의 `background`, 위·아래 매질의 `top`, `bottom`에는 `TabulatedMaterial`과 `Material`을 모두 넣을 수 있습니다. 아래 예제는 같은 실리콘을 층의 재료로 지정하되, 파장에 따라 재료값을 바꿀지 고정할지를 선택합니다.
 
 ```python
-silicon = wavebit.materials.load('Si')       # TabulatedMaterial: 파장별 데이터
-silicon_900 = silicon.at(900.)              # MaterialResponse: 900 nm의 ε·μ 값
+from wavebit import Material, materials, rcwa
+
+silicon = materials.load('Si')               # TabulatedMaterial: 파장별 데이터
+response = silicon.at(900.)                  # MaterialResponse: 900 nm의 ε·μ 값
+silicon_900 = Material(epsilon=response.epsilon, mu=response.mu)   # Material: 그 값으로 고정
 
 # 계산 파장에 맞춰 실리콘의 재료값을 구하는 층
-layer = dict(background=silicon, shapes=[])
+layer = rcwa.Layer(thickness=120., background=silicon)
 
 # 계산 파장이 달라져도 900 nm의 재료값을 유지하는 층
-fixed_layer = dict(background=silicon_900, shapes=[])
+fixed_layer = rcwa.Layer(thickness=120., background=silicon_900)
 ```
 
 계산 파장이 1,000 nm라면 `layer`는 1,000 nm의 실리콘 값을, `fixed_layer`는 900 nm에서 구한 값을 사용합니다. **파장 스윕에서 실리콘의 파장별 특성을 반영하려면 `silicon`을 그대로 할당하면 됩니다.** 솔버가 파장에 맞는 값을 구하므로 `.at()`을 직접 호출할 필요가 없습니다.
@@ -100,40 +102,48 @@ fixed_layer = dict(background=silicon_900, shapes=[])
 ## 어떤 재료가 있고, 길이 단위는 어떻게 고를까
 
 ```python
-wavebit.materials.available()
+from wavebit import materials
+
+materials.available()
 # ('Green2008-Li1980/Si', 'Luke2015/Si3N4', 'Malitson1962/Al2O3', 'Malitson1965/SiO2')
-silicon = wavebit.materials.load('Green2008-Li1980/Si')  # 출처까지 지정
+silicon = materials.load('Green2008-Li1980/Si')  # 출처까지 지정
 print(silicon.wavelength_range)                  # (250.0, 14000.0), 기본 nm
-silicon_um = wavebit.materials.load('Si', wavelength_unit='um')
+silicon_um = materials.load('Si', wavelength_unit='um')
 value = silicon_um.at(0.9)                       # 0.9 μm = 900 nm
 ```
 
 `Si`처럼 짧게 부를 수 있고 대소문자는 구별하지 않습니다. 출처가 여러 개라 이름이 모호하면 하나를 임의로 선택하지 않습니다. `Green2008-Li1980/Si`처럼 출처를 포함해서 고릅니다. **같은 화학식이라도 제작 조건에 따라 광학 특성이 다를 수 있으므로 자료 선택은 물리 모델의 일부입니다.** 필요한 파일 하나만 읽고 불변 객체를 재사용하며, 전체 재료표를 사용자가 먼저 읽을 필요가 없습니다.
 
-기본 길이 단위는 `nm`입니다. `wavelength_unit='um'`은 표의 파장 축을 μm로 바꿉니다. 그러면 계산 파장뿐 아니라 주기·도형 크기·층 두께도 모두 μm로 입력합니다. `nm`, `um`, `mm`, `m`을 지원하며, 이미 만든 도형의 크기를 몰래 바꾸지는 않습니다. 원래 포함돼 있던 `p_Si.mat`은 단위·원출처 정보가 파일에 없어 이 목록에 넣지 않았고, 2026-10-14에 패키지에서 제거했습니다.
+표는 자기 파장 단위를 가지며, `materials.load`의 기본값은 `nm`입니다. `wavelength_unit='um'`이면 표의 파장 축과 그 표의 `.at()`에 넣는 파장을 μm로 읽습니다. 문제의 길이 단위는 `rcwa.Problem(units=Units(length=...))`로 따로 정하고, 솔버가 표를 평가할 때 두 단위를 맞춰 변환합니다. 그래서 같은 실리콘 표를 nm로 쓴 문제에도, μm로 쓴 문제에도 쓸 수 있습니다. 구조의 숫자만 바꿔 표를 다른 단위로 해석하지 마세요. `nm`, `um`, `mm`, `m`을 지원합니다. 원래 포함돼 있던 `p_Si.mat`은 단위·원출처 정보가 파일에 없어 이 목록에 넣지 않았고, 2026-10-14에 패키지에서 제거했습니다.
 
-`solver.structure`, `solver.top`, `solver.bot`에서 읽는 재료는 현재 파장에서 평가한 값입니다. 새 재료나 도형을 넣을 때는 `structure`나 `top`, `bot`을 다시 할당합니다. 읽어 온 평가용 딕셔너리의 일부만 직접 고치면 원래 분산 정의를 바꾼 것이 아니므로 이런 편집은 피합니다.
+`Problem`은 할당한 재료 객체를 그대로 보관하며, 한 파장에서 평가한 값을 담지 않습니다. 새 재료나 도형을 넣을 때는 `problem.replace(stack=problem.stack.replace(top=...))`처럼 새 문제를 만듭니다. 솔버가 쓸 값을 보려면 `material.at(wavelength, units=problem.units)`로 재료를 평가하거나 `rcwa.sample_structure(problem, layer=0)`로 층의 유전율 분포를 표본화합니다. 둘 다 평가된 값을 돌려주며, 이 값을 고쳐도 원래 분산 정의는 바뀌지 않습니다.
 
 ## 내가 가진 유전율 표를 쓰려면
 
 ```python
-material = wavebit.TabulatedMaterial(
+from wavebit import TabulatedMaterial
+
+material = TabulatedMaterial(
     wavelengths=[800., 900., 1000.],
     epsilon=[4.+0.1j, 4.2+0.12j, 4.5+0.15j],
+    wavelength_unit="nm",
 )
 value = material.at(850.)
 # value.epsilon = 4.1 + 0.11j
 ```
 
-양수이고 증가하는 파장 표와, 파장마다 하나의 복소 유전율을 지정합니다. 최소 두 표본이 필요하며 표본 사이의 복소 유전율은 선형 보간합니다. 필요한 경우 같은 길이의 `mu` 표도 지정할 수 있습니다. 표는 복사해서 보관하므로 원래 배열을 나중에 수정해도 재료 정의가 몰래 바뀌지 않습니다. 파장마다 스칼라, 대각 성분 세 개, 또는 3×3 텐서를 넣을 수 있습니다. 한 물리량의 모든 표본은 같은 모양이어야 하며 텐서는 성분별로 보간합니다.
+양수이고 증가하는 파장 표와 그 단위(`wavelength_unit`은 필수), 파장마다 하나의 복소 유전율을 지정합니다. 최소 두 표본이 필요하며 표본 사이의 복소 유전율은 선형 보간합니다. 필요한 경우 같은 길이의 `mu` 표도 지정할 수 있습니다. 표는 복사해서 보관하므로 원래 배열을 나중에 수정해도 재료 정의가 몰래 바뀌지 않습니다. 파장마다 스칼라, 대각 성분 세 개, 또는 3×3 텐서를 넣을 수 있습니다. 한 물리량의 모든 표본은 같은 모양이어야 하며 텐서는 성분별로 보간합니다.
 
 ## 표본 파장과 계산 파장은 다르다
 
 `wavelengths=[800., 900., 1000.]`은 **재료 데이터가 주어진 표본 지점**입니다. 실제 계산은 이 범위 안의 임의의 파장을 사용할 수 있습니다.
 
 ```python
+from wavebit import rcwa
+
 value = material.at(850.)              # 800과 900 사이의 ε를 선형 보간
-result = solver.solve(wavelength=873.2) # 할당된 분산 재료도 이 파장에서 평가
+excitation = rcwa.Excitation(          # 할당된 분산 재료도 이 파장에서 평가
+    wavelength=873.2, sources=(rcwa.PlaneWave(polarization="s"),))
 ```
 
 ε와 μ 표를 함께 넣으면 두 값 모두 보간합니다. 아래 자성 예제에서는 850 nm에서 ε=4.1, μ=1.15입니다. 표본 파장을 하나씩 추가하지 않아도 됩니다. 다만 표의 범위가 800–1000 nm라면 1100 nm에서는 오류가 나므로 더 넓은 파장을 포함한 자료가 필요합니다. `materials.load('Si')`의 기본 자료는 250–14000 nm를 포함합니다. 범위 안에서 보간할 수 있다는 것과 표가 실제 재료를 충분히 정확하게 나타낸다는 것은 별개이므로, 급격한 분산 변화가 있는 구간은 표본 간격과 원자료도 확인합니다.
@@ -141,10 +151,13 @@ result = solver.solve(wavelength=873.2) # 할당된 분산 재료도 이 파장�
 ## 투자율 μ 데이터도 있으면 함께 넣는다
 
 ```python
-magnetic = wavebit.TabulatedMaterial(
+from wavebit import TabulatedMaterial
+
+magnetic = TabulatedMaterial(
     wavelengths=[800., 900., 1000.],
     epsilon=[4., 4.2, 4.5],
     mu=[1.1, 1.2, 1.3],
+    wavelength_unit="nm",
 )
 value = magnetic.at(850.)
 # value.epsilon = 4.1, value.mu = 1.15
@@ -156,7 +169,7 @@ value = magnetic.at(850.)
 
 외부 광학 자료는 흔히 `n, k` 표로 제공됩니다. `materials.load`로 선택한 재료는 이 표의 n과 k를 보간한 뒤, 비자성 조건 μᵣ=1에서 `(n+ik)²`로 유전율을 계산합니다. 이 변환은 내부에서 처리됩니다. 직접 가진 유전율 표를 쓰면 그 변환이 필요 없습니다. 두 방식은 보간하는 양도 다르므로, 굴절률을 먼저 보간해 제곱하는 것과 유전율을 바로 보간하는 것이 표 사이에서 항상 같지는 않습니다.
 
-직접 가진 n+ik 자료는 `TabulatedMaterial.from_refractive_index(wavelengths, index)`로 명시적으로 가져옵니다. 유전율로부터 굴절률 그래프가 필요하면 비자성 조건에서 `wavebit.refractive_index_from_eps(silicon.at(wavelengths).epsilon)`을 쓸 수 있습니다. `.at`에는 파장 배열도 넣을 수 있으며, 출력 유전율도 같은 모양의 배열입니다. 별도의 굴절률 검색 함수나 재료 이름의 숨은 접미사는 사용하지 않습니다. Wavebit의 시간 규약은 `exp(−iωt)`이며, 보통의 수동 매질은 스칼라 유전율의 양의 허수부로 손실을 표현합니다.
+직접 가진 n+ik 자료는 `TabulatedMaterial.from_refractive_index(wavelengths, index, wavelength_unit="nm")`로 명시적으로 가져옵니다. 유전율로부터 굴절률 그래프가 필요하면 비자성 조건에서 `wavebit.refractive_index_from_eps(silicon.at(wavelengths).epsilon)`을 쓸 수 있습니다. `.at`에는 파장 배열도 넣을 수 있으며, 출력 유전율도 같은 모양의 배열입니다. 별도의 굴절률 검색 함수나 재료 이름의 숨은 접미사는 사용하지 않습니다. Wavebit의 시간 규약은 `exp(−iωt)`이며, 보통의 수동 매질은 스칼라 유전율의 양의 허수부로 손실을 표현합니다.
 
 
 ## 자성 재료의 굴절률을 유전율로 바꾸기
@@ -170,10 +183,12 @@ value = magnetic.at(850.)
 `eps_from_refractive_index`에 `mu`를 함께 주면 이 변환을 수행합니다. 예를 들어 굴절률이 2이고 상대 투자율이 1.25이면 상대 유전율은 3.2입니다. 변환에 사용한 투자율을 `Material`에도 함께 넣습니다.
 
 ```python
+from wavebit import Material, eps_from_refractive_index
+
 n_complex = 2.0
 mu_r = 1.25
-magnetic = wavebit.Material(
-    epsilon=wavebit.eps_from_refractive_index(n_complex, mu=mu_r),
+magnetic = Material(
+    epsilon=eps_from_refractive_index(n_complex, mu=mu_r),
     mu=mu_r,
 )
 # magnetic.epsilon = 3.2, magnetic.mu = 1.25
@@ -182,10 +197,13 @@ magnetic = wavebit.Material(
 파장별 굴절률 표에도 투자율을 함께 지정할 수 있습니다.
 
 ```python
-magnetic = wavebit.TabulatedMaterial.from_refractive_index(
+from wavebit import TabulatedMaterial
+
+magnetic = TabulatedMaterial.from_refractive_index(
     wavelengths=[800., 1000.],
     index=[2., 3.],
     mu=[1., 2.],
+    wavelength_unit="nm",
 )
 value = magnetic.at(900.)
 # 굴절률 2.5, 상대 투자율 1.5로 보간
@@ -202,30 +220,32 @@ value = magnetic.at(900.)
 
 표와 구조의 모든 길이는 같은 단위를 써야 합니다. 모든 분산 객체는 표 범위 밖의 파장을 일반 실행에서 오류로 거절합니다. JAX JIT 안에서 범위를 벗어난 원소는 NaN이 됩니다. 끝값으로 몰래 고정하거나 표 밖으로 외삽하지 않으므로, 파장 스윕 범위는 `wavelength_range` 안에 둡니다.
 
-도형·층 배경·위아래 매질에 `TabulatedMaterial`을 할당했다면, `solver.solve(wavelength=...)`로 파장을 바꿀 때 그 파장의 재료값을 자동으로 구합니다.
+영역·층 배경·위아래 매질에 `TabulatedMaterial`을 할당했다면, `rcwa.Excitation(wavelength=...)`의 모든 파장에서 그 파장의 재료값을 자동으로 구합니다. `wavelength=(800., 900., 1000.)` 같은 스펙트럼이든, 위의 스윕 예제처럼 `prepared.run(problem.replace(excitation=problem.excitation.replace(wavelength=...)))`로 준비된 문제에 새 파장을 넘기든 같습니다.
 
-**숫자로 만든 래스터 배열은 이미 평가된 유전율 분포입니다.** 픽셀별 재료 이름이나 분산 정의를 보관하지 않으므로, 래스터 스윕은 `.at(wavelength)`로 재료를 평가하고 배열을 갱신해야 합니다. `solve_conv`에 직접 넣는 행렬도 사용자가 해당 파장에 맞게 다시 만들어야 합니다.
+**숫자로 만든 래스터 배열은 이미 평가된 유전율 분포입니다.** 픽셀별 재료 이름이나 분산 정의를 보관하지 않으므로, 래스터 스윕은 `.at(wavelength)`로 재료를 평가하고 배열을 갱신해야 합니다. `rcwa.operators` 조립에 직접 바꿔 넣는 연산 행렬도 사용자가 해당 파장에 맞게 다시 만들어야 합니다.
 
 JAX·PyTorch에서는 파장 미분에 재료값의 변화도 포함됩니다. 이것은 표의 구간별 선형 보간에 대한 미분이며 실제 물질의 분산 모델을 피팅했다는 뜻은 아닙니다. 표본 지점의 미분은 오른쪽 구간을, 마지막 지점은 왼쪽 구간을 사용합니다. 표본 값 자체는 고정 자료이며 미분할 설계 변수로 취급하지 않습니다. RCWA의 분산 표가 그대로 FDTD의 시간 영역 재료 모델이 되는 것도 아닙니다.
 
 (material-half-spaces)=
-## top과 bot: 구조 밖의 반무한 매질
+## top과 bottom: 구조 밖의 반무한 매질
 
-두께를 지정해 쌓은 층들을 기준으로, `top`은 맨 위층 위의 공간을 채우는 매질이고 `bot`은 맨 아래층 아래의 공간을 채우는 매질입니다. 예를 들어 유리 기판 위의 박막을 공기 중에서 계산한다면 `top`은 공기, `bot`은 유리로 지정할 수 있습니다.
+두께를 지정해 쌓은 층들을 기준으로, `rcwa.Stack(top=...)`은 맨 위층 위의 공간을 채우는 매질이고 `rcwa.Stack(bottom=...)`은 맨 아래층 아래의 공간을 채우는 매질입니다. 예를 들어 유리 기판 위의 박막을 공기 중에서 계산한다면 `top`은 공기, `bottom`은 유리로 지정할 수 있습니다.
 
-`top`은 위쪽으로, `bot`은 아래쪽으로 무한히 이어진다고 가정합니다. 이런 영역을 **반무한 매질**이라고 하며, 두께(`thickness`)를 지정하지 않습니다.
+`top`은 위쪽으로, `bottom`은 아래쪽으로 무한히 이어진다고 가정합니다. 이런 영역을 **반무한 매질**이라고 하며, 두께(`thickness`)를 지정하지 않습니다.
 
-Wavebit의 `top`·`bot`에는 등방성 재료를 지정합니다. 스칼라 유전율이나 스칼라 ε·μ를 가진 `Material`, 분산 재료 객체를 넣습니다. 이방성 반무한 매질은 지원하지 않습니다. 이방성 재료는 두께가 있는 층의 `background`나 도형의 `material`에 할당할 수 있습니다.
+Wavebit의 `top`·`bottom`에는 등방성 재료를 지정합니다. 스칼라 ε와 선택적 스칼라 μ를 가진 `Material`, 또는 분산 재료 객체를 넣습니다. 이방성 반무한 매질은 지원하지 않습니다. 이방성 재료는 두께가 있는 층의 `background`나 영역의 `material`에 할당할 수 있습니다.
 
 ```python
-top = 1.                                           # 비자성 공기
-bot = 4. + 0.3j                                    # 흡수성 비자성 매질
-magnetic = wavebit.Material(epsilon=4.+0.3j, mu=1.2) # ε와 μ를 함께 지정
+from wavebit import Material
+
+top = Material(epsilon=1.)                       # 비자성 공기
+bottom = Material(epsilon=4. + 0.3j)             # 흡수성 비자성 매질
+magnetic = Material(epsilon=4. + 0.3j, mu=1.2)   # ε와 μ를 함께 지정
 ```
 
-어느 쪽에서 비추는지는 `incidence_side`가 정합니다. 기본값 `"top"`이면 `top`이 입사 매질이고, `"bottom"`이면 `bot`이 입사 매질입니다. **실수 `theta`, `phi`는 선택한 입사 매질 안에서의 위상 진행 방향**을 지정합니다. `theta`는 구조 안쪽 법선에서 잰 각도, `phi`는 고정된 xy 좌표계에서의 방위각이며 단위는 라디안입니다.
+어느 쪽에서 비추는지는 `rcwa.PlaneWave(side=...)`가 정합니다. 기본값 `side="top"`이면 `top`이 입사 매질이고, `side="bottom"`이면 `bottom`이 입사 매질입니다. **실수 `theta`, `phi`는 선택한 입사 매질 안에서의 위상 진행 방향**을 지정합니다. `theta`는 구조 안쪽 법선에서 잰 각도, `phi`는 고정된 xy 좌표계에서의 방위각이며 단위는 라디안입니다.
 
-방향을 직접 파수 `kx`, `ky`로 지정하는 방법은 {ref}`8장의 두 입력 방식 <incident-direction-inputs>`에서 설명합니다. 이때도 `top`·`bot`의 ε·μ는 필요합니다. 손실이 있는 입사·투과 매질의 파수 계산과 예제는 {ref}`8장 <absorbing-incidence>`에서 설명합니다. 반사율·투과율의 기준면과 유한 층의 흡수는 {ref}`13장 <half-space-power>`을 참고합니다.
+방향을 직접 파수 `kx`, `ky`로 지정하는 방법은 {ref}`8장의 두 입력 방식 <incident-direction-inputs>`에서 설명합니다. 이때도 `top`·`bottom`의 ε·μ는 필요합니다. 손실이 있는 입사·투과 매질의 파수 계산과 예제는 {ref}`8장 <absorbing-incidence>`에서 설명합니다. 반사율·투과율의 기준면과 유한 층의 흡수는 {ref}`13장 <half-space-power>`을 참고합니다.
 
 (material-anisotropy)=
 ## 등방성과 이방성: 방향별로 다른 재료 응답
@@ -237,10 +257,10 @@ magnetic = wavebit.Material(epsilon=4.+0.3j, mu=1.2) # ε와 μ를 함께 지정
 등방성 재료는 상대 유전율 한 값으로 지정합니다. 이방성 재료의 기준 방향이 x·y·z축과 나란하다면, 각 방향의 값을 세 개로 지정할 수 있습니다.
 
 ```python
-from wavebit.compat import legacy as wavebit
+from wavebit import Material
 
-isotropic = 2.25
-crystal = wavebit.Material(epsilon=[2.25, 4., 2.25])
+isotropic = Material(epsilon=2.25)
+crystal = Material(epsilon=[2.25, 4., 2.25])
 ```
 
 | 재료 | x 방향 값 | y 방향 값 | z 방향 값 |
@@ -291,7 +311,9 @@ crystal = wavebit.Material(epsilon=[2.25, 4., 2.25])
 전체 행렬을 알고 있다면 행·열을 x, y, z 순서로 입력합니다. 모든 성분은 Wavebit의 x·y·z축을 기준으로 표현합니다.
 
 ```python
-material = wavebit.Material(epsilon=[
+from wavebit import Material
+
+material = Material(epsilon=[
     [3.0, 0.2, 0.0],   # D의 x 성분에 연결되는 행
     [0.2, 4.0, 0.0],   # D의 y 성분에 연결되는 행
     [0.0, 0.0, 2.5],   # D의 z 성분에 연결되는 행
@@ -303,7 +325,7 @@ material = wavebit.Material(epsilon=[
 상대 투자율 μᵣ도 같은 형식으로 지정합니다. `mu`를 생략하면 비자성 조건인 μᵣ = 1을 사용합니다.
 
 ```python
-magnetic = wavebit.Material(
+magnetic = Material(
     epsilon=[2., 3., 4.],
     mu=[1.1, 1.2, 1.3],
 )
@@ -344,9 +366,9 @@ magnetic = wavebit.Material(
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material
 
-crystal = wavebit.Material(epsilon=[2.25, 4., 2.25])
+crystal = Material(epsilon=[2.25, 4., 2.25])
 rotated = crystal.rotated(np.deg2rad(45.), axis="z")
 ```
 
@@ -457,24 +479,28 @@ x축이나 y축 주위로 재료를 기울이면 ε<sub>xz</sub>·ε<sub>yz</sub
 
 ### 한 층 전체에 이방성 재료를 넣기
 
-이방성 재료도 층의 `background`나 도형의 `material`에 넣습니다. 먼저 층 전체를 같은 재료로 채우려면 `background`를 지정하고 `shapes=[]`로 둡니다.
+이방성 재료도 층의 `background`나 영역의 `material`에 넣습니다. 먼저 층 전체를 같은 재료로 채우려면 층에 `background`를 지정하고 `regions`는 두지 않습니다.
 
-아래는 공기 사이에 두께 220 nm인 이방성 박막을 놓고, 위에서 수직으로 빛을 비추는 예제입니다. 길이 단위는 nm입니다.
+아래는 공기 사이에 두께 220 nm인 이방성 박막을 놓고, 위에서 수직으로 빛을 비추는 예제입니다. 길이 단위는 nm입니다. 반복문은 s 편광과 p 편광을 두 문제로 나눠 계산합니다.
 
 <!-- uniform-anisotropic-example:start -->
 ```python
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-crystal = wavebit.Material(epsilon=[2.25, 4., 2.25])
-solver = wavebit.rcwa(
-    wavelength=600., thickness=[220.],
-    period=(600., 600.), top=1., bot=1.,
-    structure=[{"background": crystal, "shapes": []}],
-    theta=0., phi=0., truncation_order=(0, 0),
-)
-result = solver.solve()
-print("y 편광 반사율:", float(result.s_inc.R.sum()))
-print("x 편광 반사율:", float(result.p_inc.R.sum()))
+crystal = Material(epsilon=[2.25, 4., 2.25])
+air = Material(epsilon=1.)
+for polarization, label in (("s", "y 편광"), ("p", "x 편광")):
+    problem = rcwa.Problem(
+        units=Units(length="nm"),
+        stack=rcwa.Stack(
+            period=(600., 600.), top=air, bottom=air,
+            layers=(rcwa.Layer(thickness=220., background=crystal),)),
+        excitation=rcwa.Excitation(
+            wavelength=600.,
+            sources=(rcwa.PlaneWave(theta=0., phi=0., polarization=polarization),)),
+    )
+    result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(0, 0)))
+    print(f"{label} 반사율: {float(result.R.sum()):.6f}")
 ```
 <!-- uniform-anisotropic-example:end -->
 
@@ -491,23 +517,25 @@ print("x 편광 반사율:", float(result.p_inc.R.sum()))
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-crystal = wavebit.Material(epsilon=[2.25, 4., 2.25])
+crystal = Material(epsilon=[2.25, 4., 2.25])
 rotated = crystal.rotated(np.deg2rad(45.), axis="z")
-solver = wavebit.rcwa(
-    wavelength=700., period=(600., 600.), thickness=[170.],
-    top=1., bot=1.,
-    structure=[{"background": 1., "shapes": [
-        {"type": "circle", "lx": 270., "material": rotated},
-    ]}],
-    truncation_order=(3, 3), shape_nvf_grid_size=128,
+air = Material(epsilon=1.)
+problem = rcwa.Problem(
+    units=Units(length="nm"),
+    stack=rcwa.Stack(
+        period=(600., 600.), top=air, bottom=air,
+        layers=(rcwa.Layer(
+            thickness=170., background=air,
+            regions=(rcwa.Region(geometry=rcwa.Circle(radius=135.), material=rotated),)),)),
+    excitation=rcwa.Excitation(wavelength=700., sources=(rcwa.PlaneWave(polarization="s"),)),
 )
-result = solver.solve()
-solver.plot_structure(component="xx")
+result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(3, 3), shape_nvf_grid_size=128))
+eps_xx = rcwa.sample_structure(problem, component="xx")   # 0번 층 ε_xx의 (y, x) 배열
 ```
 
-지름은 270 nm, 높이는 층 두께와 같은 170 nm입니다. `plot_structure(component="xx")`는 ε<sub>xx</sub>의 공간 분포를 보여줍니다. `component="xy"`를 지정하면 ε<sub>xy</sub>를 볼 수 있습니다. 위의 Fourier 차수와 NVF 표본 수는 예제를 실행하기 위한 값이며, 필요한 정확도는 [19장의 수렴 확인](convergence.md)으로 판단합니다.
+반지름은 135 nm(지름 270 nm), 높이는 층 두께와 같은 170 nm입니다. `rcwa.sample_structure(problem, component="xx")`는 해를 구하지 않고 0번 층의 ε<sub>xx</sub> 공간 분포를 표본화해 그림으로 그릴 `(y, x)` 배열로 돌려줍니다. `component="xy"`를 지정하면 ε<sub>xy</sub>를 볼 수 있습니다. 위의 Fourier 차수와 NVF 표본 수는 예제를 실행하기 위한 값이며, 필요한 정확도는 [19장의 수렴 확인](convergence.md)으로 판단합니다.
 
 **이방성은 한 위치에서의 방향별 성질이고, 재료 분포는 위치에 따른 차이입니다.** 이 둘은 별도로 정합니다.
 
@@ -519,18 +547,20 @@ solver.plot_structure(component="xx")
 
 ### 래스터 배열로 넣기
 
-래스터는 각 공간 칸에 재료값을 저장합니다. 전체 유전율 행렬을 저장할 때 `structure`의 배열 모양은 `(층, 행, 열, 3, 3)`입니다. 마지막 두 축은 **각 칸의 유전율 행렬의 행과 열**입니다. 투자율은 별도의 `mu` 배열로 넣습니다.
+래스터는 각 공간 칸에 재료값을 저장하며, 층마다 배열 하나를 `rcwa.Layer(epsilon=...)`로 넣습니다. 전체 유전율 행렬을 저장할 때 배열 모양은 `(행, 열, 3, 3)`입니다. 마지막 두 축은 **각 칸의 유전율 행렬의 행과 열**입니다. 투자율은 별도의 배열 `rcwa.Layer(mu=...)`로 넣습니다.
 
 아래는 한 층의 2×4개 칸을 모두 같은 재료로 채운 배열입니다.
 
 ```python
 import numpy as np
+from wavebit import rcwa
 
 cell_tensor = np.diag([2.25, 4., 2.25])
-structure = np.broadcast_to(cell_tensor, (1, 2, 4, 3, 3)).copy()
+epsilon = np.broadcast_to(cell_tensor, (2, 4, 3, 3)).copy()
+layer = rcwa.Layer(thickness=220., epsilon=epsilon)
 ```
 
-박막 예제의 `structure` 자리에 이 배열을 넣으면 같은 균일층을 표현합니다. 칸마다 다른 재료를 넣으려면 해당 칸의 행렬을 바꿉니다. 예를 들어 `structure[0, 0, 0] = np.eye(3)`은 첫 층의 0번 행·0번 열을 상대 유전율 1인 등방성 재료로 바꿉니다. 투자율 배열도 같은 공간 격자를 사용하며, 각 칸에 스칼라 또는 3×3 행렬을 저장할 수 있습니다.
+박막 예제의 층 자리에 이 층을 넣으면 같은 균일층을 표현합니다. 칸마다 다른 재료를 넣으려면 해당 칸의 행렬을 바꿉니다. 예를 들어 `epsilon[0, 0] = np.eye(3)`은 0번 행·0번 열을 상대 유전율 1인 등방성 재료로 바꿉니다. 투자율 배열도 같은 공간 격자를 사용하며, 각 칸에 스칼라 또는 3×3 행렬을 저장할 수 있습니다.
 
 ### 파장별 이방성 재료를 넣기
 
@@ -538,12 +568,13 @@ structure = np.broadcast_to(cell_tensor, (1, 2, 4, 3, 3)).copy()
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import TabulatedMaterial
 
-crystal_table = wavebit.TabulatedMaterial(
+crystal_table = TabulatedMaterial(
     wavelengths=[500., 700.],
     epsilon=[[2., 3., 2.5], [3., 4., 2.9]],
     mu=[[1.1, 1.2, 1.3], [1.2, 1.3, 1.4]],
+    wavelength_unit="nm",
 )
 value = crystal_table.at(600.)
 # epsilon의 대각 성분: [2.5, 3.5, 2.7]
@@ -552,11 +583,11 @@ value = crystal_table.at(600.)
 rotated_table = crystal_table.rotated(np.deg2rad(30.), axis="z")
 ```
 
-`rotated_table`을 도형이나 층 배경에 한 번 할당하면, 파장을 바꿀 때마다 그 파장의 회전된 재료값을 사용합니다. 숫자 래스터를 사용할 때는 파장별로 재료값을 구해 배열을 갱신합니다.
+`rotated_table`을 영역이나 층 배경에 한 번 할당하면, 파장을 바꿀 때마다 그 파장의 회전된 재료값을 사용합니다. 숫자 래스터를 사용할 때는 파장별로 재료값을 구해 배열을 갱신합니다.
 
 ### 계산 옵션과 지원 범위
 
-위 예제처럼 재료를 할당하고 `solve()`를 호출하면 Wavebit가 필요한 계산 행렬을 구성합니다. 구조 표현에 따라 선택할 수 있는 방식은 다음과 같습니다.
+위 예제처럼 재료를 할당하고 `rcwa.run`을 호출하면 Wavebit가 필요한 계산 행렬을 구성합니다. 구조 표현에 따라 선택할 수 있는 방식은 다음과 같습니다.
 
 | 구조 | 계산 방식 |
 | --- | --- |
@@ -564,22 +595,22 @@ rotated_table = crystal_table.rotated(np.deg2rad(30.), axis="z")
 | x·y축과 나란한 직교 셀의 래스터 | NVF 또는 Li |
 | 같은 직교 셀 안에서 변이 x·y축과 나란한 사각형 도형 | NVF 또는 Li |
 | 원·타원·회전한 도형, 또는 사선 격자 | NVF |
-| 위·아래 반무한 매질 `top`·`bot` | 등방성 스칼라 ε·μ 지원; 이방성 텐서는 미지원 |
+| 위·아래 반무한 매질 `top`·`bottom` | 등방성 스칼라 ε·μ 지원; 이방성 텐서는 미지원 |
 
-이방성 재료가 포함된 패턴의 기본 설정은 `factorization="nvf"`, `nvf_projector="linear"`입니다. `linear`는 NVF의 투영행렬을 만드는 방식이며, 입사광의 편광은 [8장](light.md)의 별도 입력으로 정합니다. Li를 선택하려면 위 표의 조건에 맞는 구조에서 `factorization="li"`를 지정합니다.
+이방성 재료가 포함된 패턴의 기본 설정은 `Numerics(factorization="nvf", nvf_projector="linear")`입니다. `linear`는 NVF의 투영행렬을 만드는 방식이며, 입사광의 편광은 [8장](light.md)의 별도 입력으로 정합니다. Li를 선택하려면 위 표의 조건에 맞는 구조에서 `Numerics(factorization="li")`를 지정합니다.
 
-ε나 μ에 xz·yz·zx·zy 성분이 있으면 그 성분까지 함께 다루는 1차 정식화(`first_order`, 옛 이름 4ff)가 자동으로 선택됩니다. 층 연결에는 기본값인 `layer_algorithm="ETM"`과 `layer_algorithm="SMM"`을 모두 사용할 수 있습니다. 두 방식 모두 반사·투과와 구조 내부의 전기장·자기장을 계산합니다. 연결 방식과 산란행렬 사용법은 [15장](layer-algorithms.md)에서 설명합니다. [전체 텐서 예제](../../guide/rcwa/full-tensor-patterns.md)에서 기울어진 재료를 사각형 도형에 넣는 실행 코드를 볼 수 있습니다.
+ε나 μ에 xz·yz·zx·zy 성분이 있으면 기본값 `Numerics(formulation="auto")`가 그 성분까지 함께 다루는 1차 정식화(`"first_order"`, 옛 이름 4ff)를 선택합니다. 층 연결에는 기본값인 `Numerics(algorithm="smm")`과 `algorithm="etm"`을 모두 사용할 수 있습니다. 두 방식 모두 반사·투과와 구조 내부의 전기장·자기장을 계산합니다. 연결 방식과 산란행렬 사용법은 [15장](layer-algorithms.md)에서 설명합니다. [전체 텐서 예제](../../guide/rcwa/full-tensor-patterns.md)에서 기울어진 재료를 사각형 도형에 넣는 실행 코드를 볼 수 있습니다.
 
-Li·NVF와 Fourier 계수 계산 방법은 [10장](fourier-orders.md), NVF의 법선장과 투영행렬은 [11장](nvf.md)에서 설명합니다. 이방성 NVF 도형의 주기 복제본끼리 겹치거나 셀 경계 너머에서 도형들이 서로 덮는 경우에는 `fourier_coefficients="sampled"`를 사용합니다. `"integrated"`의 형상 조건은 [도형 적분 안내](../../guide/rcwa/tensor-shape-integration.md)에 정리되어 있습니다.
+Li·NVF와 Fourier 계수 계산 방법은 [10장](fourier-orders.md), NVF의 법선장과 투영행렬은 [11장](nvf.md)에서 설명합니다. 이방성 NVF 도형의 주기 복제본끼리 겹치거나 셀 경계 너머에서 도형들이 서로 덮는 경우에는 `Numerics(fourier_coefficients="sampled")`를 사용합니다. `"integrated"`의 형상 조건은 [도형 적분 안내](../../guide/rcwa/tensor-shape-integration.md)에 정리되어 있습니다.
 
 유한한 차수의 NVF에서는 손실 없는 재료라도 R+T가 정확히 1이 아닐 수 있습니다. 계산 정확도는 [19장](convergence.md)에 따라 관심 결과의 수렴을 확인해 판단합니다.
 
 ```{dropdown} 자동미분을 사용할 때의 조건
 NumPy·JAX·PyTorch가 같은 재료 입력을 받습니다. 자동미분의 기본 사용법은 [17장](autodiff.md)을 참고합니다.
 
-- NVF의 도형 적분 경로는 재료값과 도형의 위치·크기·회전 각도, 격자 미분을 지원합니다. JAX 추적 전에 `freeze_geometry()`로 도형들의 교차·접촉 관계를 기록하고 `solve(geometry=...)`에 전달합니다. 겹침이나 주기 접촉 관계가 달라지면 추적 밖에서 다시 기록합니다. 법선장이 여러 경계로부터 같은 거리에 놓이는 지점 근처에서는 미분값의 격자 수렴도 확인합니다.
+- NVF의 도형 적분 경로는 재료값과 도형의 위치·크기·회전 각도, 격자 미분을 지원합니다. PyTorch와 즉시 실행 `jax.grad`는 실행할 때마다 구체적인 값으로 도형들의 교차·접촉 관계를 확인하며, 그 관계를 바꾸는 단계는 `prepared.topology`로 거절됩니다. `jax.jit`나 `jax.vmap` 아래에서 영역 도형을 쓰려면 `Numerics(topology_check="host")`를 명시해야 하며, 기본 장치 정책은 `prepared.host_topology`로 거절합니다. 법선장이 여러 경계로부터 같은 거리에 놓이는 지점 근처에서는 미분값의 격자 수렴도 확인합니다.
 - NVF의 `"sampled"` 도형과 텐서 래스터는 고정된 경계에서 재료값 미분을 지원합니다. 이 경로의 도형·격자 미분은 지원하지 않습니다.
-- Li 텐서 래스터는 재료값과 직교 격자 주기를 미분할 수 있습니다. Li 사각형 도형은 경계 순서가 유지되는 범위에서 재료값·위치·크기·주기를 미분할 수 있습니다. 차수·법선장 격자·계수 계산 방식을 바꾸면 기록한 계산 준비 정보도 갱신합니다.
-- 분산 표의 표본 값과 표 전체를 회전하는 각도는 고정 자료입니다. 재료 회전 각도를 설계 변수로 미분하려면 `crystal_table.at(wavelength).rotated(angle)`처럼 현재 파장의 값을 구한 뒤 회전합니다. `.at()`에 파장 배열을 넣어 얻은 값은 스펙트럼 확인용이며, 한 재료 영역에는 재료 객체나 한 파장에서 구한 값을 할당합니다.
+- Li 텐서 래스터는 재료값과 직교 격자 주기를 미분할 수 있습니다. Li 사각형 도형은 경계 순서가 유지되는 범위에서 재료값·위치·크기·주기를 미분할 수 있습니다. 차수·법선장 격자·계수 계산 방식을 바꾸면 `rcwa.prepare`를 다시 합니다.
+- 분산 표의 표본 값과 표 전체를 회전하는 각도는 고정 자료입니다. 재료 회전 각도를 설계 변수로 미분하려면 현재 파장의 값을 구한 뒤 회전합니다. `value = crystal_table.at(wavelength)`로 구하고 `Material(epsilon=value.epsilon, mu=value.mu).rotated(angle)`을 할당합니다. `.at()`에 파장 배열을 넣어 얻은 값은 스펙트럼 확인용이며, 한 재료 영역에는 재료 객체나 한 파장의 값으로 만든 `Material`을 할당합니다.
 - 미분이나 JAX 추적 중에는 현재 0인 비대각 성분도 유지합니다. 따라서 현재 값에서 xz·yz·zx·zy 성분이 0이어도 1차 경로로 계산할 수 있습니다.
 ```
