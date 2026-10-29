@@ -1,10 +1,11 @@
 # A book about the whole of Wavebit
 
 :::{note}
-The downloadable teaching scripts use the current `rcwa.Problem` / `rcwa.run` API, and so do the
-text and snippets of most chapters. Chapters 7 (materials), 8 (incident light), 9 (multiple waves
-and sources) and 14 (fields) still explain the earlier constructor, retired with `wavebit.compat`
-on 2026-10-15, and say so at their top. Some figures keep the earlier labels. Compare the
+The downloadable teaching scripts, the text and the snippets of every chapter use the current
+`rcwa.Problem` / `rcwa.run` API. A few passages describe features the current API does not have
+yet, such as the `psi`/`chi` polarization angles and the pure 1D `tetm` path; they sit in boxes
+titled "Earlier interface" (retired with `wavebit.compat` on 2026-10-15). Some figures keep the
+earlier labels, and the chapters that show them name the current equivalents. Compare the
 [current getting-started guide](../../getting-started/index.md) and
 [migration guide](../../migration/index.md). Historical measurement files and their source
 provenance remain unchanged.
