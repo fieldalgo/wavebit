@@ -208,12 +208,46 @@ def test_the_floor_is_decided_from_the_materials_where_the_proof_covers_them(val
 
 
 def test_an_unreadable_permittivity_keeps_the_bound():
-    """Under ``jax.jit`` the values cannot be read, so the floor is decided from the matrix as
-    before rather than assumed away."""
+    """A permittivity that is an argument of a ``jax.jit`` function has no value to read, so the
+    floor is decided from the matrix as before rather than assumed away. A constant of the same
+    trace is read: it is a passive dielectric here, and alone it would need no floor."""
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     out = jax.jit(lambda e: F.inverse_rule_bound(jnp, [e, jnp.asarray(1.0 + 0j)]))(jnp.asarray(12.25 + 0j))
     assert float(out) == pytest.approx(12.25)
+    constant, seen = jnp.asarray(12.25 + 0j), []      # closed over, as a solve's material is
+    jax.jit(lambda e: seen.append(F.inverse_rule_bound(jnp, [constant])) or e)(1.0)
+    assert seen == [None]
+
+
+def test_a_jitted_shape_derivative_on_a_dielectric_takes_no_singular_values(monkeypatch):
+    """The case the materials-first decision exists for: a shape parameter differentiated under
+    ``jax.jit`` with constant materials. The check is read on the host because inside the trace
+    every ``jnp`` operation is staged; written in ``jnp`` it came back abstract and the floor's
+    SVD was compiled into every NVF layer of every shape fit. A gold disk still takes it."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    jax.config.update('jax_enable_x64', True)
+    from wavebit import Material, Units, rcwa
+
+    def problem(r, eps):
+        return rcwa.Problem(units=Units(length='nm'), stack=rcwa.Stack(
+            period=(600., 600.), bottom=Material(2.25), layers=(rcwa.Layer(
+                thickness=200., background=Material(1.), regions=(rcwa.Region(
+                    geometry=rcwa.Circle(radius=r), material=Material(eps)),)),)),
+            excitation=rcwa.Excitation(wavelength=850., sources=(rcwa.PlaneWave(polarization='s'),)))
+
+    calls = []
+    real = F._floor_singular_values
+    monkeypatch.setattr(F, '_floor_singular_values', lambda *a: calls.append(1) or real(*a))
+    numerics = rcwa.Numerics(orders=(2, 2), topology_check='host')
+    for eps, floored in ((12.25, False), (AU_807, True)):
+        prepared = rcwa.prepare(problem(160., eps), numerics=numerics, backend='jax')
+        calls.clear()
+        step = jax.jit(jax.value_and_grad(lambda r: prepared.run(problem(r, eps)).T[0, 2, 2].real))
+        value, grad = step(jnp.asarray(160.))
+        assert np.isfinite(float(value)) and np.isfinite(float(grad))
+        assert bool(calls) is floored
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'torch'])
