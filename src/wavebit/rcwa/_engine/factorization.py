@@ -1820,23 +1820,39 @@ def inverse_rule_bound(xp, values):
     floored one bit for bit, so deciding from the materials spares the layer every singular value
     of ``<1/eps>``: a values-only SVD of the full ``n x n`` matrix, against a check on a handful
     of numbers. A metal, a gain medium, a value on the boundary of that set (``Re eps = 0``) or a
-    value that cannot be read (a ``jax.jit`` trace, a ``torch.func.vmap`` lane) keeps the bound,
-    and :func:`_floor_singular_values` decides from the matrix as before. Reading through a
+    value that cannot be read (a ``jax.jit`` argument, a ``torch.func.vmap`` lane) keeps the
+    bound, and :func:`_floor_singular_values` decides from the matrix as before. Reading through a
     ``jax.grad`` tracer or a grad-tracking tensor changes no derivative: where the floor does not
     bind it is the identity, of every order.
+
+    **Read on the host.** The check runs in NumPy on each value's concrete copy, not in ``xp``:
+    inside a ``jax.jit`` trace every ``jnp`` operation is staged, so the same test written in
+    ``xp`` comes back abstract even for a material that is a constant of the trace -- the case of
+    every shape-parameter fit -- and the floor was taken there all the same. A value with no
+    concrete copy (a jit argument, a vmap lane) is what keeps the bound.
     """
-    passive = None
     bound = None
-    for v in values:
-        v = _no_gradient(v) if hasattr(v, 'shape') else v
-        ok = xp.all((xp.real(v) > 0) & (xp.imag(v) >= 0))
-        passive = ok if passive is None else passive & ok
-    if _concrete(passive) is True:
+    if all(_host_passive(v) for v in values):
         return None
     for v in values:
         m = xp.max(xp.abs(v))
         bound = m if bound is None else xp.maximum(bound, m)
     return bound
+
+
+def _host_passive(v):
+    """Whether ``v``'s concrete values are all passive dielectrics; ``False`` when there are none."""
+    import numpy as np
+    if hasattr(v, 'detach'):                    # torch: detach is eager, whatever the context
+        v = v.detach().cpu()
+    try:
+        a = np.asarray(v)                       # a constant of a jit trace reads here
+    except Exception:                           # noqa: BLE001 - a tracer of some kind
+        try:
+            a = np.asarray(_no_gradient(v))     # an eager jax.grad tracer reads through this
+        except Exception:                       # noqa: BLE001 - a jit argument or a vmap lane
+            return False
+    return bool(np.all((a.real > 0) & (a.imag >= 0)))
 
 
 def _floor_singular_values(xp, B, floor):

@@ -117,8 +117,9 @@ its excursion. It is bit-transparent where nothing is below the floor. Since 202
 from the materials first: a layer whose permittivities can all be read and are passive dielectrics
 (`Re eps > 0`, `Im eps ≥ 0`, the case proved below) is not floored at all, so no singular value is
 computed. Any other layer computes the singular values alone, and the full SVD only where one is
-below the floor. A metal, a gain medium, `Re eps = 0` and a `jax.jit` trace all take that second
-route. The full SVD was not only the costlier half. PyTorch's (MKL's) failed to converge on the
+below the floor. A metal, a gain medium, `Re eps = 0` and a permittivity that is an argument of
+a `jax.jit` function (not a constant of the trace, which is read on the host) all take that
+second route. The full SVD was not only the costlier half. PyTorch's (MKL's) failed to converge on the
 `<1/eps>` of a dielectric circle at 961 harmonics (two tight clusters of singular values,
 condition 12.25), which this floor would never have touched.
 
