@@ -1,46 +1,38 @@
 # 14. Electric and magnetic fields at specified positions
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 :::{note}
-The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
+Figure 14-2 still draws the earlier field layout: no wavelength axis, and Z₀H in the last three
+slots. The current `.values` array is `(n_wavelengths, nz, ny, nx, 6)` and its last three
+components are H in A/m. The text and code use the current layout.
 :::
 
 Reflectance and transmittance describe fractions of the power carried by light. To see the electric and magnetic field distributions inside a layer, read the **fields** at the desired positions after solving. Reading a field means obtaining its electric and magnetic components at that position.
 
-For ordinary incidence, multiple plane waves, Gaussian beams, and dipole sources alike, fields are read from the **result object** returned by `solve()`. This chapter covers preparation, sampling coordinates, returned arrays, and boundary fields, then explains complex amplitudes and magnetic-field units.
-
-**Current example versus earlier conventions:** the runnable file uses `Outputs(fields=True)` and `result.field(x=..., y=..., z=...)`. Its arrays include a wavelength axis and H is already A/m. The remaining explanations of `answers`, `reconstruct_field`, Z₀H arrays and conversion below describe the earlier interface. Do not apply that conversion twice to current results; see the [current field guide](../../guide/rcwa/fields.md).
+For a single plane wave, several plane waves, Gaussian beams, and dipole sources alike, fields are read from the **result object** returned by `rcwa.run()`. This chapter covers preparation, sampling coordinates, returned arrays, and boundary fields, then explains complex amplitudes and magnetic-field units. The [field guide](../../guide/rcwa/fields.md) states the same rules in reference form.
 
 (field-preparation)=
 ## Reading fields from a solved result
 
-Use `answers="field"` when you need fields inside the layers.
+Ask for fields before running, with `rcwa.Outputs(fields=True)` in the problem.
 
 ```python
-result = solver.solve(answers="field")
-cell = result.reconstruct_field(sample_x=41, sample_y=21, sample_z=20)
+problem = problem.replace(outputs=rcwa.Outputs(fields=True))
+result = rcwa.run(problem, numerics=numerics)
+cell = result.field(x=41, y=21, z=20)
 ```
 
-`result` retains the wavevectors, thicknesses, and per-layer state used for this solve. Changing only the sampling positions does not require another solve. You can repeatedly read fields at different positions from the same result. Even if you change the settings of `solver` or solve again, the earlier `result` continues to return fields for its original conditions.
+`result` retains the wavevectors, thicknesses, and per-layer state used for this run. Changing only the sampling positions does not require another run. You can repeatedly read fields at different positions from the same result. Running another problem, or the same preparation again, does not change the fields read from this `result`; it keeps returning the fields of its own conditions.
 
-The information available after a solve depends on `answers` as follows. These rules apply regardless of how the incident waves and sources are specified.
+What a result retains depends on `Outputs` as follows. These rules apply regardless of how the incident waves and sources are specified.
 
-| `answers` setting | Power results | Boundary fields | Interior fields |
+| `Outputs` | Power results | Boundary fields | Interior fields |
 | --- | --- | --- | --- |
-| `"efficiency"` | Retained | — | — |
-| `"amplitude"` — default | Retained | Retained | — |
-| `"field"` | Retained | Retained | Retained |
+| `Outputs()` — default | Retained | — | — |
+| `Outputs(fields=True)` | Retained | Retained | Retained |
 
-Read boundary electric and magnetic fields with `result.boundary_fields()`; the solve must use `answers="amplitude"` or `"field"`. Reading fields inside layers with `result.reconstruct_field()` requires `answers="field"`.
+Read boundary electric and magnetic fields with `result.boundary_fields(...)` and fields inside layers with `result.field(...)`. Both need `Outputs(fields=True)`; without it they raise `UnsupportedFeatureError` with code `outputs.unavailable`. A run without fields uses the boundary fields to compute power and then releases them. If you later need fields, run again with `Outputs(fields=True)`.
 
-With `answers="efficiency"`, the result does not retain the complex fields used to calculate power. If you subsequently need fields, call `solve()` again with the required `answers` setting.
-
-For a result with specified sources, recalculating power over a different observation region with `result.boundary_power(region)` also requires at least `"amplitude"`. The power already calculated for the original region is available as `result.power` with every setting.
+For a result with sources other than a single plane wave, `result.outputs['top']` and `result.outputs['bottom']` hold the power over the problem's `Outputs(power_region=...)`, with or without fields. The current result has no method that recomputes power over another region from its retained fields; run the problem again with that region.
 
 (ordinary-field-sampling)=
 ## Fields inside layers
@@ -69,24 +61,22 @@ Figure 14-1. The electric-field y component from the example, showing the real p
 (field-sample-coordinates)=
 ### Specifying sampling positions
 
-For `sample_x`, `sample_y`, and `sample_z`, supply either an integer **number of points** or a one-dimensional array of **coordinates**. In `reconstruct_field()`, each omitted argument defaults to `20`.
+For `x`, `y`, and `z`, supply either a positive integer **number of points** or a nonempty one-dimensional array of **coordinates**. `field()` requires all three and `boundary_fields()` requires `x` and `y`; there are no defaults.
 
 | Input | Meaning | Example |
 | --- | --- | --- |
-| `sample_x` | Number of points along the cell x direction, or an array of x coordinates | `41`, `[-100., 0., 100.]` |
-| `sample_y` | Number of points along the cell y direction, or an array of y coordinates | `21`, `[0.]` |
-| `sample_z` | Number of points per layer, or an array of z coordinates for the entire stack | `20`, `[0., 60., 120.]` |
+| `x` | Number of points along the cell x direction, or an array of x coordinates | `41`, `[-100., 0., 100.]` |
+| `y` | Number of points along the cell y direction, or an array of y coordinates | `21`, `[0.]` |
+| `z` | Number of points per layer, or an array of z coordinates for the entire stack | `20`, `[0., 60., 120.]` |
 
 To sample just three heights at the cell center in the example above, write:
 
 ```python
-three_heights = result.reconstruct_field(
-    sample_x=[0.], sample_y=[0.], sample_z=[0., 60., 120.],
-)
-print(three_heights.shape)  # (3, 1, 1, 6)
+three_heights = result.field(x=[0.], y=[0.], z=[0., 60., 120.])
+print(three_heights.values.shape)  # (1, 3, 1, 1, 6)
 ```
 
-`sample_z=20` places **20 points in each layer**. Two layers therefore produce 40 samples along z. In contrast, `sample_z=[20.]` reads one sample at a height of 20 nm.
+`z=20` places **20 points in each layer**. Two layers therefore produce 40 samples along z. In contrast, `z=[20.]` reads one sample at a height of 20 nm.
 
 - The x and y origins are at the cell center. For a rectangular cell, a point count produces uniform samples including both endpoints in each direction. A count of 1 selects the negative endpoint, so use `[0.]` for a single point at the center.
 - The z origin is at the bottom of the lowest layer, and z increases upward. Coordinate arrays must lie in `0 ≤ z ≤ sum(thickness)`.
@@ -98,9 +88,9 @@ When x and y are coordinate arrays, every x–y combination is sampled at every 
 
 **Layer boundaries:** A z coordinate exactly on an internal interface reads the value in the upper layer. At `z=0` and `z=sum(thickness)`, it reads the interior value of the bottommost and topmost layer, respectively.
 
-When `sample_z` is a point count, each layer is sampled separately. A count of at least 2 includes both ends of each layer, so an internal interface appears once from the lower layer and once from the upper layer. The normal components `Ez` and `Hz` can differ across a material interface. `sample_z=1` reads the lower face of each layer.
+When `z` is a point count, each layer is sampled separately. A count of at least 2 includes both ends of each layer, so an internal interface appears once from the lower layer and once from the upper layer. The normal components `Ez` and `Hz` can differ across a material interface. `z=1` reads the lower face of each layer.
 
-**Oblique lattices:** Integer `sample_x` and `sample_y` place points along the two lattice vectors; the horizontal array axes correspond to `(v, u)`. If both inputs are coordinate arrays, fields are read at every combination of Cartesian x and y coordinates. For an oblique lattice, do not mix a point count on one axis with a coordinate array on the other.
+**Oblique lattices:** Integer `x` and `y` place points along the two lattice vectors; the horizontal array axes correspond to `(v, u)`. If both inputs are coordinate arrays, fields are read at every combination of Cartesian x and y coordinates. For an oblique lattice, do not mix a point count on one axis with a coordinate array on the other.
 
 **Dipoles:** The field is singular at the height of a point dipole. Choose positions above and below it, excluding that height. If count-based sampling includes the source height, choose different sampling positions.
 :::
@@ -108,78 +98,81 @@ When `sample_z` is a point count, each layer is sampled separately. A count of a
 (fields-detail-id26)=
 ### Selecting components from the returned array
 
-Interior fields from every result have shape `(nz, ny, nx, 6)`. The first three axes select the position; the last axis selects the component.
+`result.field(...)` returns a field-sample object. Its `.values` array has shape `(n_wavelengths, nz, ny, nx, 6)` for every result: the first axis selects the wavelength, even for a single wavelength, the next three select the position, and the last axis selects the component. `.components` names the six components and `.units` gives the unit of each component and of `'coordinates'`.
 
 ```{figure} ../../figures/learn/learn/13-field-layout.svg
 :alt: The common field array has z, y, x, and component axes; its last axis contains Ex Ey Ez Z0Hx Z0Hy Z0Hz
 :figclass: learning-figure
 
-Figure 14-2. Axes and six components of the field array read from a result object. The magnetic field is normalized by multiplication by Z₀.
+Figure 14-2. Position axes and six components of the field array read from a result object. The figure still draws the earlier layout: the current `.values` array has a leading wavelength axis, and its last three components are H in A/m, not Z₀H.
 ```
 
 | Index | `0` | `1` | `2` | `3` | `4` | `5` |
 | --- | --- | --- | --- | --- | --- | --- |
-| Component | E<sub>x</sub> | E<sub>y</sub> | E<sub>z</sub> | Z<sub>0</sub>H<sub>x</sub> | Z<sub>0</sub>H<sub>y</sub> | Z<sub>0</sub>H<sub>z</sub> |
+| Component | E<sub>x</sub> | E<sub>y</sub> | E<sub>z</sub> | H<sub>x</sub> | H<sub>y</sub> | H<sub>z</sub> |
+| Unit | V/m | V/m | V/m | A/m | A/m | A/m |
 
 ```python
-E = cell[..., :3]           # Three electric-field components
-H_normalized = cell[..., 3:] # Three normalized magnetic-field components
-Ey = cell[..., 1]           # Electric-field y component at every position
+E = cell.values[..., :3]    # Three electric-field components, V/m
+H = cell.values[..., 3:]    # Three magnetic-field components, A/m
+Ey = cell.values[..., 1]    # Electric-field y component at every wavelength and position
+print(cell.components)      # ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')
 ```
 
-The six components occupy the same positions for TE/TM. In pure TE, `Ex`, `Ez`, and `Hy` are zero; in pure TM, `Ey`, `Hx`, and `Hz` are zero.
+The six components occupy the same positions for every polarization. For s (TE) light in the xz plane of incidence (`phi=0`) on a structure invariant along y, `Ex`, `Ez`, and `Hy` are zero; for p (TM) light, `Ey`, `Hx`, and `Hz` are zero.
 
-For a general coupled solve that also computes pure s and p responses, read them individually with `incidence="s"` or `"p"`. The default, `"incident"`, returns the response for the specified incidence.
+`field()` returns the response to the declared excitation. To obtain the pure s and pure p responses, run the problem twice, once with `polarization="s"` and once with `"p"`, and read each result's fields.
 
-```python
-# For a result that includes both s and p responses
-s_field = result.reconstruct_field(incidence="s")
-p_field = result.reconstruct_field(incidence="p")
-```
+:::{admonition} Earlier interface
+:class: earlier-interface
 
-This option does not separate contributions from different incident waves. For pure TE/TM and results combining multiple sources, use only `incidence="incident"`.
+The earlier interface's coupled solves also retained pure s and p responses, read with `result.reconstruct_field(incidence="s")` or `incidence="p"`; its default, `"incident"`, returned the declared incidence. The current `field()` and `boundary_fields()` take no `incidence` argument.
+:::
 
 :::{dropdown} Fields while differentiating with respect to thickness
 
-Whenever the thickness changes, call `solve()` with that thickness and read the fields from the returned result.
+Prepare once outside the derivative, then run the live problem with each thickness and read the fields from the returned result.
 
 ```python
+prepared = rcwa.prepare(problem, numerics=numerics, backend="jax")
+
 def field_for_thickness(d):
-    result = solver.solve(thickness=d, answers="field")
-    return result.reconstruct_field(
-        sample_x=[0.], sample_y=[0.], sample_z=20,
-    )
+    layer = problem.stack.layers[0].replace(thickness=d)
+    live = problem.replace(stack=problem.stack.replace(layers=(layer,)))
+    return prepared.run(live).field(x=[0.], y=[0.], z=20).values
 ```
 
-The common field function for ordinary-incidence results supports automatic differentiation with respect to thickness in JAX and PyTorch. `sample_z=20` places points at relative positions within each layer, so their physical heights change with the thickness.
+For single-plane-wave results, `prepared.run` and `field` support automatic differentiation with respect to thickness in JAX and PyTorch. `z=20` places points at relative positions within each layer, so their physical heights change with the thickness.
 
-Coordinates such as `sample_z=[50., 100.]` instead give the change at fixed heights. Differentiation is valid over intervals in which the samples remain within the same layers. When an interface crosses a sample, the local material and normal field components may change, so a smooth derivative cannot be expected there. With JAX `jit`, keep the input range such that coordinates remain inside the stack.
+Coordinates such as `z=[50., 100.]` instead give the change at fixed heights. Differentiation is valid over intervals in which the samples remain within the same layers. When an interface crosses a sample, the local material and normal field components may change, so a smooth derivative cannot be expected there. With JAX `jit`, keep the input range such that coordinates remain inside the stack.
 
-Source solves involving `PlaneWave`, dipoles, and similar sources use concrete numerical values to classify sources and split layers. The differentiation discussion above applies to ordinary-incidence solves.
+Runs with other sources, such as several `PlaneWave`s, a `GaussianBeam` or a dipole, use concrete numerical values to group sources and split layers and refuse a JAX-traced input. The differentiation discussion above applies to single-plane-wave runs.
 :::
 
 (illumination-fields)=
 (fields-detail-id23)=
 ## Incoming, outgoing, and total fields at boundaries
 
-Read a boundary with `result.boundary_fields(...)`. The same function serves single incidence and results combining multiple sources. The example below sends s-polarized waves from both above and below, with a relative phase of 90° for the bottom incident wave.
+Read a boundary with `result.boundary_fields(...)`. The same method serves a single plane wave and results combining several sources. The example below sends s-polarized waves from both above and below, with a relative phase of 90° for the bottom incident wave. A run with sources on both sides reports port powers instead of diffraction efficiencies, so it needs `Outputs(diffraction=False)`.
 
 ```python
-field_solver = wavebit.rcwa(
-    wavelength=600., period=(900., 850.),  # Length unit: nm
-    top=1., bot=2.25,
-    structure=[dict(background=4.+0.6j, shapes=[])],
-    thickness=[100.], truncation_order=0,
-    kx=0.002, ky=0.,                       # Unit: nm⁻¹
-    excitation={
-        "top": wavebit.PlaneWave(polarization=(1., 0.)),
-        "bottom": wavebit.PlaneWave(
-            polarization=(1., 0.),
-            amplitude=np.exp(1j * np.deg2rad(90.)),
-        ),
-    },
+import numpy as np
+from wavebit import Material, Units, rcwa
+
+field_problem = rcwa.Problem(
+    units=Units(length="nm"),
+    stack=rcwa.Stack(
+        period=(900., 850.),
+        top=Material(epsilon=1.), bottom=Material(epsilon=2.25),
+        layers=(rcwa.Layer(thickness=100., background=Material(epsilon=4. + 0.6j)),)),
+    excitation=rcwa.Excitation(wavelength=600., sources=(
+        rcwa.PlaneWave(side="top", polarization="s", kx=0.002, ky=0.),       # Unit: nm⁻¹
+        rcwa.PlaneWave(side="bottom", polarization="s", kx=0.002, ky=0.,
+                       amplitude=np.exp(1j * np.deg2rad(90.))),
+    )),
+    outputs=rcwa.Outputs(diffraction=False, fields=True),
 )
-field_result = field_solver.solve(answers="field")
+field_result = rcwa.run(field_problem, numerics=rcwa.Numerics(orders=(0, 0)))
 x = np.linspace(-300., 300., 61)
 y = np.array([0.])
 ```
@@ -190,38 +183,38 @@ y = np.array([0.])
 The upper boundary is at `z=100 nm` and the lower boundary at `z=0`. The following code reads fields along the `y=0` line on the upper boundary.
 
 ```python
-incoming = field_result.boundary_fields("top", x, y, part="incoming")
-outgoing = field_result.boundary_fields("top", x, y, part="outgoing")
-boundary = field_result.boundary_fields("top", x, y, part="total")
-print(boundary.shape)  # (1, 61, 6)
+incoming = field_result.boundary_fields(side="top", x=x, y=y, part="incoming")
+outgoing = field_result.boundary_fields(side="top", x=x, y=y, part="outgoing")
+boundary = field_result.boundary_fields(side="top", x=x, y=y, part="total")
+print(boundary.values.shape)  # (1, 1, 61, 6)
 # At the same positions, boundary = incoming + outgoing
 ```
 
 | Input | Meaning |
 | --- | --- |
 | `side` | `"top"` or `"bottom"`, selecting the boundary to read |
-| `sample_x`, `sample_y` | Point counts or coordinate arrays; each defaults to `[0.]`, the cell center |
+| `x`, `y` | Point counts or coordinate arrays; required. `[0.]` is the cell center |
 | `part="incoming"` | Waves entering toward the layers from the selected side |
 | `part="outgoing"` | Waves leaving the layers toward the selected side |
 | `part="total"` — default | The total field, summing incoming and outgoing waves |
 
-The returned shape is `(ny, nx, 6)`, with the same component order as interior fields. Contributions from multiple sources are added as complex amplitudes. For two-sided incidence, the upper `outgoing` field includes both reflection of the top incident wave and transmission of the bottom incident wave.
+The `.values` shape is `(n_wavelengths, ny, nx, 6)`, with the same component order and units as interior fields. Contributions from multiple sources are added as complex amplitudes. For two-sided incidence, the upper `outgoing` field includes both reflection of the top incident wave and transmission of the bottom incident wave.
 
 (fields-detail-id25)=
 ### Outside and inside a boundary
 
-`boundary_fields()` returns the value on the **half-space side** of the boundary. Read the value inside the layer with `reconstruct_field()`.
+`boundary_fields()` returns the value on the **half-space side** of the boundary. Read the value inside the layer with `field()`.
 
 ```python
-inside = field_result.reconstruct_field(x, y, sample_z=[0., 50., 100.])
-print(inside.shape)  # (3, 1, 61, 6)
-middle = inside[1]   # Field along the line at z=50 nm
+inside = field_result.field(x=x, y=y, z=[0., 50., 100.])
+print(inside.values.shape)  # (1, 3, 1, 61, 6)
+middle = inside.values[0, 1]  # Field along the line at z=50 nm
 ```
 
 | Call | Side sampled |
 | --- | --- |
-| `field_result.boundary_fields("top", x, y)` | The `top` half-space side of the upper boundary |
-| `field_result.reconstruct_field(x, y, sample_z=[100.])` | Inside the 100 nm layer at the upper boundary |
+| `field_result.boundary_fields(side="top", x=x, y=y)` | The `top` half-space side of the upper boundary |
+| `field_result.field(x=x, y=y, z=[100.])` | Inside the 100 nm layer at the upper boundary |
 
 At an interface with no free surface charge or current, the tangential components `Ex`, `Ey`, `Hx`, and `Hy` are continuous. The normal components `Ez` and `Hz` can differ with the material. The interior-field function returns the total field from all sources, so it takes no `part` argument.
 
@@ -234,7 +227,7 @@ Fields at specified positions are neither area-averaged over `power_region` nor 
 Extract the electric-field y component at the middle height from `inside` above:
 
 ```python
-Ey = inside[1, 0, :, 1]              # Ey along z=50 nm, y=0
+Ey = inside.values[0, 1, 0, :, 1]    # Ey along z=50 nm, y=0
 Ey_amplitude = np.abs(Ey)           # Amplitude magnitude
 Ey_phase_deg = np.angle(Ey, deg=True) # Phase in degrees
 ```
@@ -265,8 +258,8 @@ For example, {math}`E_y=e^{i\pi/3}` has amplitude magnitude 1 and phase 60°. It
 The sum of the squared magnitudes of the three electric-field components, {math}`|\mathbf E|^2`, is obtained as follows:
 
 ```python
-E_squared = np.sum(np.abs(inside[..., :3])**2, axis=-1)
-print(E_squared.shape)  # (3, 1, 61)
+E_squared = np.sum(np.abs(inside.values[..., :3])**2, axis=-1)
+print(E_squared.shape)  # (1, 3, 1, 61)
 ```
 
 Use this quantity to compare electric-field strength at different positions. The direction and magnitude of power flow instead follow from the Poynting vector, which uses the magnetic field as well.
@@ -274,29 +267,34 @@ Use this quantity to compare electric-field strength at different positions. The
 (magnetic-field-units)=
 ## Magnetic-field normalization and physical units
 
-When solving Maxwell’s equations, Wavebit uses the **normalized magnetic field** {math}`\widetilde{\mathbf H}=Z_0\mathbf H` in place of {math}`\mathbf H`. Here {math}`Z_0\approx376.73\,\Omega` is the vacuum impedance. The field array contains this normalized value, so divide by {math}`Z_0` to obtain the magnetic field itself.
+When solving Maxwell’s equations, Wavebit uses the **normalized magnetic field** {math}`\widetilde{\mathbf H}=Z_0\mathbf H` in place of {math}`\mathbf H`. Here {math}`Z_0\approx376.73\,\Omega` is the vacuum impedance. Before returning, the result divides by {math}`Z_0`, so the field array already contains the magnetic field itself.
 
 ```{math}
 \mathbf H=\frac{\widetilde{\mathbf H}}{Z_0}.
 ```
 
-In the six-component array above, the last three entries are the normalized magnetic field.
+In the six-component array above, the last three entries are H in A/m. Do not divide them by {math}`Z_0` again.
 
 ```python
-E = inside[..., :3]
-H_normalized = inside[..., 3:]
-Z0 = 376.730313668
-H = H_normalized / Z0
+E = inside.values[..., :3]   # V/m
+H = inside.values[..., 3:]   # A/m
+print(inside.units["Hx"])    # A/m
 ```
 
-:::{dropdown} Amplitude convention for pure TM input
+::::{dropdown} Amplitude reference of every source
 
-A pure 1D solve with `tetm="tm"` specifies amplitude relative to the normalized magnetic field of the incident wave. In contrast, `polarization=(a_s, a_p)` and `PlaneWave` use the electric field. The common field function preserves these input conventions; it neither divides the returned fields by incident power nor automatically rescales them to equal amplitudes.
+Every source amplitude is an electric amplitude: a `PlaneWave` `amplitude` is in V/m for `polarization="s"`, `"p"` or `(a_s, a_p)`, and a dipole moment is in C·m. The field methods preserve that scale; they neither divide the returned fields by incident power nor rescale them to equal amplitudes.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Until 2026-09-27 the earlier interface's pure 1D solve with `tetm="tm"` was lit by a unit normalized magnetic field, so its field was `mu_inc/n_inc` of the conical p field for the same light. That interface also returned Z₀H in the last three slots; divide those by Z₀ before comparing them with a current result.
 :::
+::::
 
-If an input electric-field amplitude of `1` represents `1 V/m`, `E` has units of V/m and the converted `H` has units of A/m. For example, a returned magnetic-field component of `1` becomes approximately `0.00265 A/m` after conversion.
+A `PlaneWave` amplitude of `1` represents `1 V/m`, so `E` is in V/m and `H` in A/m. For example, a normalized magnetic field Z₀H of `1` corresponds to about `0.00265 A/m`.
 
-If the input amplitude is only relative, you must also choose a physical scale. For example, to make a calculated electric field of `1` correspond to `10 V/m`, multiply both `E` and `H` above by 10. Dividing by {math}`Z_0` is a constant scaling, so it does not alter the magnetic field’s spatial pattern or phase.
+The fields are linear in the source amplitude. To make the incident electric field `10 V/m`, set `amplitude=10.` on the source, or multiply both `E` and `H` from a unit-amplitude run by 10. Dividing by {math}`Z_0` is a constant scaling, so it does not alter the magnetic field’s spatial pattern or phase.
 
 ### Calculating power density
 
@@ -309,7 +307,7 @@ The time-averaged Poynting vector follows from the complex electric and magnetic
   (\mathbf E\times\widetilde{\mathbf H}^{\,*}).
 ```
 
-Using the converted `H` above:
+Using `E` and `H` from the field array:
 
 ```python
 S = 0.5 * np.real(np.cross(E, np.conj(H)))
@@ -318,21 +316,27 @@ Sz = S[..., 2]
 
 If `E` is in V/m and `H` in A/m, `S` is in W/m². `Sz > 0` means upward power flow along +z, and `Sz < 0` means downward flow along −z. [Chapter 13](power-and-efficiency.md) explains how these quantities determine reflectance, transmittance, and net entering power.
 
-For power ratios such as reflectance and transmittance, the factor `1/Z0` cancels between numerator and denominator. Therefore, do not apply another magnetic-field unit conversion to returned `R`, `T`, `output_top`, or `output_bottom`.
+For power ratios such as reflectance and transmittance, the factor `1/Z0` cancels between numerator and denominator. Do not apply another magnetic-field unit conversion to the returned `R`, `T`, `result.outputs['top']`, or `result.outputs['bottom']`.
 
-:::{dropdown} Converting result.power from a PlaneWave result to watts
+::::{dropdown} Port powers of a source result are in watts
 
-`result.power.incoming_top`, `incoming_bottom`, `outgoing_top`, and `outgoing_bottom` are the normal power flows of the respective incoming and outgoing waves, averaged over `power_region`. Each wave’s incoming or outgoing direction is taken as positive. Values are returned in computational units with the common factor `1/Z0` omitted.
+For a result with sources other than a single plane wave, `result.outputs['top']` and `result.outputs['bottom']` each hold `incoming` and `outgoing`: the normal power flows of the incoming and outgoing waves at that port, with each wave’s own direction taken as positive. They are physical powers for the declared source amplitudes in V/m. Their `units` is `'W'` over the cell or the `Outputs(power_region=...)` rectangle, named in `power_region`, and `'W/m^2'` for the `'infinite'` region, a mean per unit area. In the two-sided example above, `field_result.outputs['top'].incoming` is about `9.97e-16` W: the top wave’s 1 V/m in air, `cos(theta)/(2 Z0)` W/m², over the 900 × 850 nm cell.
 
-Let a selected value of `result.power` be {math}`P_{\mathrm{calc}}`. If a calculated electric-field amplitude of `1` corresponds to a physical {math}`E_{\mathrm{scale}}\,\mathrm{V/m}` and the physical observation area is {math}`A_{\mathrm{obs}}\,\mathrm{m}^2`, the total power is:
+Powers scale with the square of the source amplitude. An average over an infinite region alone does not determine a finite total power; to report a total, run with a finite `power_region`.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+The earlier interface's `result.power.incoming_top`, `incoming_bottom`, `outgoing_top`, and `outgoing_bottom` were averages over `power_region` in computational units with the common factor `1/Z0` omitted. For a selected value {math}`P_{\mathrm{calc}}`, a calculated electric-field amplitude of `1` corresponding to {math}`E_{\mathrm{scale}}\,\mathrm{V/m}`, and a physical observation area {math}`A_{\mathrm{obs}}\,\mathrm{m}^2`, the total power was
 
 ```{math}
 P\;[\mathrm W]
 =P_{\mathrm{calc}}\,\frac{E_{\mathrm{scale}}^2}{Z_0}\,A_{\mathrm{obs}}.
 ```
 
-For a rectangular observation region, for example, convert its physical area to m². An average over an infinite region alone does not determine a finite total power; you must also specify an area to report total power.
+Do not apply this conversion to a current result.
 :::
+::::
 
 :::{dropdown} Magnetic-field conventions in other RCWA tools
 
@@ -343,5 +347,5 @@ For a rectangular observation region, for example, convert its physical area to 
 | <span style="white-space:nowrap">FMMAX</span> | Its [official conventions](https://facebookresearch.github.io/fmmax/#fmm-conventions) set the vacuum ε₀, μ₀, and c to 1. The returned magnetic field in this unit system is interpreted using the same normalization. |
 | <span style="white-space:nowrap">RETICOLO</span> | [Page 4 of the official manual](https://arxiv.org/pdf/2101.00901#page=4) uses Maxwell’s equations with ε₀, μ₀, and c set to 1. The `H` components from `res3()` follow this unit system. |
 
-A returned value named `H` therefore does not automatically mean A/m. When comparing complex fields between tools, align the incident-amplitude reference, coordinate axes, and phase conventions as well as magnetic-field normalization.
+Wavebit's returned `H` is in A/m, but a value named `H` in another tool does not automatically mean A/m. When comparing complex fields between tools, align the incident-amplitude reference, coordinate axes, and phase conventions as well as magnetic-field normalization.
 :::
