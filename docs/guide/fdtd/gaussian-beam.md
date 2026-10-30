@@ -31,6 +31,17 @@ beam, one way. Away from it, each plane wave's profile and half-cell phase are t
 and a little of the beam goes backward. The [validation record](../../validation/fdtd/fd-gaussian-beam.md)
 measures that part against its exact prediction.
 
+## Accuracy on a finite grid
+
+The beam is exact for the grid, not for the continuum. The grid's plane waves travel at a
+phase velocity that depends on their direction, so the phase a beam gathers through its focus
+(its Gouy phase) differs a little from the continuum beam's. In the
+[validation record](../../validation/fdtd/fd-gaussian-beam.md) (vacuum, wavelength 1 µm,
+waist 1.5 µm) it differs by at most 2.2e-3 rad within 3 µm of the focus at a spacing of
+0.05 µm (20 cells per wavelength), and by 5.4e-4 rad at 0.025 µm: the error falls at second
+order. Converge the spacing for any result that depends on the phase along the beam. The
+focal-plane waist, the power and the back-radiation match their predictions far more closely.
+
 ## What it requires
 
 - The faces across the plane are `Open` (or `InvariantAxis`). A metal, mirror or periodic
