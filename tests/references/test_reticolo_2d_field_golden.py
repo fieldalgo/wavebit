@@ -176,3 +176,36 @@ def test_the_rule_on_shapes_is_champ_1_on_walls_no_raster_has(pol):
     gaps = {NAMES[slot]: _gap(plain, champ0, slot) for slot in (0, 1, 3, 4)}
     assert max(gaps.values()) < TOL, gaps
     assert _gap(plain, champ1, 0) > 0.1
+
+
+@pytest.mark.parametrize('pol', list(EINC))
+def test_a_result_of_the_current_api_is_champ_1_on_those_walls(pol):
+    """The door a user has, from the problem through ``Result.field``."""
+    def layer(entry):
+        regions = tuple(rcwa_api.Region(geometry=rcwa_api.Rectangle(size=(shape['lx'], shape['ly']),
+                                                                    center=(shape['cx'], shape['cy'])),
+                                        material=Material(shape['material']))
+                        for shape in entry['shapes'])
+        return regions, Material(entry['background'])
+
+    structure = shapes(OFF_GRID_LAYERS, off_grid_blocks)
+    layers = []
+    for entry, source in zip(structure, OFF_GRID_LAYERS[::-1]):
+        regions, background = layer(entry)
+        layers.append(rcwa_api.Layer(thickness=source['thickness'], background=background, regions=regions))
+    problem = rcwa_api.Problem(
+        units=Units(length='nm'),
+        stack=rcwa_api.Stack(period=tuple(PERIOD), top=Material(N_TOP ** 2), bottom=Material(N_BOT ** 2),
+                             layers=tuple(layers)),
+        excitation=rcwa_api.Excitation(wavelength=WL, sources=(rcwa_api.PlaneWave(
+            theta=np.deg2rad(OFF_GRID_ANGLE[0]), phi=np.deg2rad(OFF_GRID_ANGLE[1]), polarization=pol),)),
+        outputs=rcwa_api.Outputs(fields=True))
+    result = rcwa_api.run(problem, numerics=rcwa_api.Numerics(orders=(MAX_ORDER, MAX_ORDER), factorization='li'))
+    x, y = samples()
+    z = GOLDEN_OFF_GRID['z'][_LAYER_ROWS].copy()
+    z[_TOP_FACES] -= 1e-9
+    ours = np.array(result.field(x=x, y=y, z=z, discontinuous='continuity').values[0])
+    ours[..., 3:] *= Z0
+    champ1 = np.transpose(GOLDEN_OFF_GRID[f'champ1__{key(OFF_GRID_ANGLE, pol)}'][_LAYER_ROWS], (0, 2, 1, 3))
+    gaps = {name: _gap(ours, champ1, slot) for slot, name in enumerate(NAMES)}
+    assert max(gaps.values()) < TOL, gaps

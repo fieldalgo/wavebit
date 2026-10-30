@@ -1047,6 +1047,16 @@ def test_matrices_from_solve_conv_are_refused_on_shapes():
         s.reconstruct_field(3, 3, 3, discontinuous='continuity')
 
 
+def test_matrices_after_a_solve_are_refused_on_what_that_solve_returns():
+    """The solver still holds the solve before them while they run, and the result they return must not."""
+    s = _rule_on([_rect(2, 6, 1, 5, 4.0)])
+    matrices = s.eps_conv_matrices()
+    s.solve()
+    state = s.solve_conv(*matrices)._field_state
+    with pytest.raises(NotImplementedError, match='solve_conv'):
+        state.reconstruct(3, 3, 3, 'incident', 'continuity')
+
+
 def _rectangle_with(spelling):
     return [dict(background=1.0, shapes=spelling), dict(background=2.25, shapes=[])]
 
@@ -1230,9 +1240,71 @@ def _jax_result(shape):
                 factorization='laurent').solve()
 
 
+def test_a_result_that_went_through_a_pytree_can_still_be_pickled():
+    """The pytree's read-only mappings could not, and a Result from a jit is one of those."""
+    jax = pytest.importorskip('jax')
+    _enable_x64()
+    result = jax.tree_util.tree_map(lambda leaf: leaf, _jax_result(dict(_A_RECTANGLE)))
+    expected = np.asarray(result.reconstruct_field(**_AT))
+    for through in (copy.deepcopy, lambda value: pickle.loads(pickle.dumps(jax.device_get(value)))):
+        np.testing.assert_allclose(np.asarray(through(result).reconstruct_field(**_AT)), expected, rtol=0, atol=1e-13)
+
+
+def test_a_result_holds_only_leaves_jax_can_carry():
+    """An ``np.str_`` was a string array, and a ``Fraction`` a number no transform can take."""
+    jax = pytest.importorskip('jax')
+    _enable_x64()
+    odd = rcwa(backend='jax', structure=[dict(background=Fraction(1), shapes=[dict(_A_RECTANGLE, type=np.str_('rectangle'))]),
+                                         dict(background=2.25, shapes=[])],
+               period=[PX, PY], wavelength=620.0, truncation_order=[2, 2], thickness=[100.0, 60.0], theta=0.2, phi=0.3,
+               answers='field', factorization='laurent').solve()
+    expected = np.asarray(odd.reconstruct_field(**_AT))
+    jax.tree_util.tree_map(lambda leaf: leaf, odd)
+    jax.jit(lambda result: result.R)(odd)
+    plain = _jax_result(dict(_A_RECTANGLE))
+    np.testing.assert_allclose(expected, np.asarray(plain.reconstruct_field(**_AT)), rtol=0, atol=1e-14)
+
+
 def test_the_order_of_a_dicts_keys_is_not_part_of_a_results_pytree():
     jax = pytest.importorskip('jax')
     _enable_x64()
     one = _jax_result(dict(_A_RECTANGLE))
     other = _jax_result(dict(reversed(list(_A_RECTANGLE.items()))))
     assert jax.tree_util.tree_structure(one) == jax.tree_util.tree_structure(other)
+
+
+def test_a_negative_side_under_a_trace_answers_nan_on_a_raster_too():
+    """Counts run down such a cell and the pixels are read up it; a trace cannot tell them apart."""
+    jax = pytest.importorskip('jax')
+    _enable_x64()
+    grid = np.ones((2, 9, 8))
+    grid[0, 2:7, 3:6] = 4.0
+    grid[1] = 2.25
+    kw = dict(backend='jax', structure=grid, wavelength=620.0, truncation_order=[2, 2], thickness=[100.0, 60.0],
+              theta=0.2, phi=0.3, polarization=(0.0, 1.0), answers='field')
+
+    def field(side):
+        out = rcwa(lattice=Lattice(jax.numpy.stack([side, 0.0]), jax.numpy.array([0.0, PY]), True), **kw).solve()
+        return out.reconstruct_field(5, 4, 3, discontinuous='continuity')
+
+    negative = np.asarray(jax.jit(field)(-PX))
+    assert np.all(np.isnan(negative[..., :2][:3])) and np.all(np.isfinite(negative[..., 2:]))
+    assert np.all(np.isfinite(np.asarray(jax.jit(field)(PX))))
+
+
+def test_a_negative_side_under_a_trace_answers_nan_on_a_one_row_raster_too():
+    jax = pytest.importorskip('jax')
+    _enable_x64()
+    grid = np.ones((2, 1, 8))
+    grid[0, 0, 3:6] = 4.0
+    grid[1] = 2.25
+    kw = dict(backend='jax', structure=grid, wavelength=620.0, truncation_order=[3, 0], thickness=[100.0, 60.0],
+              theta=0.2, phi=0.0, polarization=(0.0, 1.0), answers='field')
+
+    def field(side):
+        out = rcwa(lattice=Lattice(jax.numpy.stack([side, 0.0]), jax.numpy.array([0.0, PY]), True), **kw).solve()
+        return out.reconstruct_field(5, 1, 3, discontinuous='continuity')
+
+    negative = np.asarray(jax.jit(field)(-PX))
+    assert np.all(np.isnan(negative[..., 0][:3])) and np.all(np.isfinite(negative[..., 2]))
+    assert np.all(np.isfinite(np.asarray(jax.jit(field)(PX))))

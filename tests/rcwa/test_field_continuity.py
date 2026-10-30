@@ -339,3 +339,22 @@ def test_a_traced_structure_over_an_eager_solve_reads_the_solve():
         return s.reconstruct_field(5, 5, 3, discontinuous='continuity')
 
     np.testing.assert_allclose(np.asarray(jax.jit(field)(2.0)), before, rtol=0, atol=1e-12)
+
+
+@pytest.mark.parametrize('tetm', ['tm', None], ids=['tm', 'conical'])
+def test_counts_on_a_negative_side_read_eps_under_each_sample_of_a_grating(tetm):
+    """On the object a solve returns, a count runs down the cell, and ``eps`` is read where it lands."""
+    grid = np.ones((2, 1, 48))
+    grid[0, 0, 9:30] = 9.0
+    grid[1] = 2.25
+    kw = dict(backend='numpy', top=1.0, bot=2.25, truncation_order=[11, 0], wavelength=720.0, thickness=[100.0, 60.0],
+              theta=0.2, phi=0.0 if tetm else 0.3, answers='field', structure=grid, factorization='li')
+    if tetm:
+        kw['tetm'] = tetm
+    z = [20.0, 120.0]
+    negative = rcwa(lattice=np.array([[-530.0, 0.0], [0.0, 1.0]]), **kw).solve()
+    positive = rcwa(lattice=np.array([[530.0, 0.0], [0.0, 1.0]]), **kw).solve()
+    x = np.linspace(-0.5, 0.5, 13) * -530.0
+    np.testing.assert_allclose(negative.reconstruct_field(13, [0.0], z, discontinuous='continuity'),
+                               positive.reconstruct_field(x, [0.0], z, discontinuous='continuity'),
+                               rtol=0, atol=1e-11)

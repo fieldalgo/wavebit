@@ -1,5 +1,6 @@
 """Owned RCWA observations, with spectral axes and physical field calibration."""
 import re
+import sys
 from contextlib import contextmanager
 from dataclasses import field
 from types import MappingProxyType
@@ -8,7 +9,7 @@ import numpy as np
 
 from .._common.declarations import renamed_attributes, spec
 from .._common.backend import array_namespace, as_array
-from ..errors import UnsupportedFeatureError, ValidationError
+from ..errors import NumericalError, UnsupportedFeatureError, ValidationError
 from ..observations import FieldSamples
 from ..observations.fields import _component_units
 from ..units import Z0
@@ -66,6 +67,12 @@ def _coordinates(name, value):
         return
     raise ValidationError(f'{name} must be a positive integer count or a nonempty one-dimensional '
                           f'array of finite real coordinates.', code='field.coordinates', path=name)
+
+
+def _singular_errors():
+    """What a singular matrix raises on the backends in use; JAX returns one instead."""
+    torch = sys.modules.get('torch')
+    return (np.linalg.LinAlgError,) + (() if torch is None else (torch.linalg.LinAlgError,))
 
 
 @contextmanager
@@ -138,31 +145,54 @@ class Result:
                                           code='outputs.unavailable', path='outputs.fields')
         return self._field_records
 
-    def field(self, *, x, y, z):
+    def field(self, *, x, y, z, discontinuous='fourier'):
         """Collocated complex phasors at explicit Cartesian coordinate arrays.
 
         Shape is (wavelength,z,y,x,component); E is V/m and H is A/m.
         Coordinates use the Problem's declared length unit. Interfaces select
         the upper layer, matching the engine's explicit-coordinate convention.
+
+        ``discontinuous`` chooses how the E component normal to a patterned layer's walls is
+        rebuilt: ``'fourier'`` sums its own coefficients, which ring at every wall, and
+        ``'continuity'`` sums the continuous ``D`` series line by line and divides by ``eps`` at
+        each sample (P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). It changes
+        ``E_x`` of a 1D TM or conical grating, and ``E_x`` and ``E_y`` of a 2D cell, in patterned
+        layers only. What it does not take is refused with ``field.discontinuous``, and a line
+        whose ``1/eps`` matrix is singular fails with ``rcwa.singular``.
         """
         records = self._fields()
+        if discontinuous not in ('fourier', 'continuity'):
+            raise ValidationError(f"discontinuous must be 'fourier' or 'continuity', not {discontinuous!r}.",
+                                  code='field.discontinuous', path='discontinuous')
         for name, value in (('x', x), ('y', y), ('z', z)):
             _coordinates(name, value)
         values = []
         for state, amplitude in zip(records, self._field_amplitudes):
             with _public_sampling():
-                a = state.reconstruct(x, y, z, 'incident') * amplitude
+                try:
+                    a = state.reconstruct(x, y, z, 'incident', discontinuous) * amplitude
+                except NotImplementedError as error:
+                    raise UnsupportedFeatureError(str(error), code='field.discontinuous',
+                                                  path='discontinuous') from error
+                except _singular_errors() as error:
+                    raise NumericalError("discontinuous='continuity' inverts the 1/eps matrix of the "
+                                         'line through each sample, and one of them is singular: a '
+                                         'negative eps at an unlucky fill factor. Compare another '
+                                         "truncation, or keep 'fourier'.",
+                                         code='rcwa.singular', path='discontinuous') from error
             xp = array_namespace(a)
             factors = as_array(xp, [1., 1., 1., 1/Z0, 1/Z0, 1/Z0], dtype=a.dtype,
                                device=getattr(a, 'device', None))
             values.append(a * factors)
         data = array_namespace(values[0]).stack(values)
+        metadata = {'axis_order': ('wavelength', 'z', 'y', 'x', 'component'),
+                    'time_convention': 'exp(-i*omega*t)'}
+        if discontinuous != 'fourier':
+            metadata['discontinuous'] = discontinuous
         return FieldSamples(coordinates={'x': x, 'y': y, 'z': z, 'wavelength': self.wavelengths},
                             values=data, components=('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'),
                             units=_component_units(_COMPONENTS, self.provenance['length_units']),
-                            sampling='collocated Cartesian phasor',
-                            metadata={'axis_order': ('wavelength', 'z', 'y', 'x', 'component'),
-                                      'time_convention': 'exp(-i*omega*t)'})
+                            sampling='collocated Cartesian phasor', metadata=metadata)
 
     def boundary_fields(self, *, side, x, y, part='total'):
         """Collocated boundary phasors from this result's requested field state."""
