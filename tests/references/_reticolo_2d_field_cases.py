@@ -43,6 +43,18 @@ ANGLES = [(0.0, 0.0), (25.0, 30.0)]
 EINC = {'p': (1.0, 0.0), 's': (0.0, 1.0)}
 
 
+# The same two-layer stack with walls on no pixel line: no raster states it, so this is what pins
+# a shape structure's line-wise rule on its own. (cx, cy, dx, dy, refractive index), centre-origin
+# lengths, top layer first. One angle: it has the conical case's every term.
+OFF_GRID_ANGLE = (25.0, 30.0)
+OFF_GRID_LAYERS = [
+    dict(thickness=180.0, background=1.0,
+         blocks=[(-37.3, 23.1, 123.7, 91.9, 2.0), (101.3, -111.7, 77.7, 61.3, 2.5)]),
+    dict(thickness=120.0, background=1.5,
+         blocks=[(61.1, -81.3, 97.3, 131.9, _LOSSY), (-133.3, 99.1, 71.1, 83.3, 1.0)]),
+]
+
+
 def key(angle, pol):
     theta, phi = angle
     return f'{theta:g}_{phi:g}_{pol}'
@@ -71,6 +83,21 @@ def blocks(layer):
     return np.array([[((c0 + c1) / 2) * px - PERIOD[0] / 2, ((r0 + r1) / 2) * py - PERIOD[1] / 2,
                       (c1 - c0) * px, (r1 - r0) * py, n, 1.0]
                      for r0, r1, c0, c1, n in layer['blocks']], dtype=complex)
+
+
+def off_grid_blocks(layer):
+    """:func:`blocks` of an :data:`OFF_GRID_LAYERS` entry."""
+    return np.array([[cx, cy, dx, dy, n, 1.0] for cx, cy, dx, dy, n in layer['blocks']],
+                    dtype=complex)
+
+
+def shapes(layers, rows):
+    """The stack as a shape structure, bottom layer first. ``rows`` is :func:`blocks` or
+    :func:`off_grid_blocks`."""
+    return [dict(background=layer['background'] ** 2,
+                 shapes=[dict(type='rectangle', cx=row[0].real, cy=row[1].real, lx=row[2].real,
+                              ly=row[3].real, material=row[4] ** 2) for row in rows(layer)])
+            for layer in layers[::-1]]
 
 
 def samples():

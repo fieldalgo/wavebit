@@ -39,9 +39,12 @@ import numpy as np
 import pytest
 
 from tests.references._reticolo_2d_field_cases import (
-    ANGLES, EINC, LAYERS, MAX_ORDER, NAMES, NPTS, N_BOT, N_TOP, PERIOD, WL, key, raster, samples,
-    thickness)
+    ANGLES, EINC, LAYERS, MAX_ORDER, NAMES, NPTS, N_BOT, N_TOP, OFF_GRID_ANGLE, OFF_GRID_LAYERS, PERIOD,
+    WL, blocks, key, off_grid_blocks, raster, samples, shapes, thickness)
+from wavebit import Material, Units
+from wavebit import rcwa as rcwa_api
 from wavebit.rcwa._factory import rcwa
+from wavebit.units import Z0
 
 GOLDEN = np.load(repository_path('tests/references/golden_reticolo_2d_field.npz'))
 
@@ -129,3 +132,47 @@ def test_each_reference_tells_the_two_rules_apart(angle, pol):
     for slot in (0, 1):
         assert _gap(plain, continuity, slot) > 1e-2
         assert _gap(plain, _reticolo(1, angle, pol), slot) > 1e-2
+
+
+# ------------------------------------------------------------------------- the same on shapes
+
+GOLDEN_OFF_GRID = np.load(repository_path('tests/references/golden_reticolo_2d_field_off_grid.npz'))
+
+
+def _on_shapes(layers, rows, angle, pol):
+    a_p, a_s = EINC[pol]
+    s = rcwa(backend='numpy', top=N_TOP ** 2, bot=N_BOT ** 2, period=list(PERIOD),
+             truncation_order=[MAX_ORDER] * 2, wavelength=WL,
+             thickness=[layer['thickness'] for layer in layers[::-1]],
+             structure=shapes(layers, rows), theta=np.deg2rad(angle[0]), phi=np.deg2rad(angle[1]),
+             polarization=(a_s, a_p), factorization='li', answers='field')
+    s.solve()
+    return s
+
+
+@pytest.mark.parametrize('angle,pol', CASES)
+def test_the_rule_on_shapes_is_champ_1_where_a_raster_draws_the_same_walls(angle, pol):
+    x, y = samples()
+    ours = np.asarray(_on_shapes(LAYERS, blocks, angle, pol).reconstruct_field(
+        sample_x=x, sample_y=y, sample_z=_z(), discontinuous='continuity'))[0]
+    gaps = {name: _gap(ours, _reticolo(1, angle, pol), slot) for slot, name in enumerate(NAMES)}
+    assert max(gaps.values()) < TOL, gaps
+
+
+@pytest.mark.parametrize('pol', list(EINC))
+def test_the_rule_on_shapes_is_champ_1_on_walls_no_raster_has(pol):
+    """No pixel line holds these walls, so this reads the rule off the shapes alone."""
+    x, y = samples()
+    z = GOLDEN_OFF_GRID['z'][_LAYER_ROWS].copy()
+    z[_TOP_FACES] -= 1e-9
+    solver = _on_shapes(OFF_GRID_LAYERS, off_grid_blocks, OFF_GRID_ANGLE, pol)
+    rule = np.asarray(solver.reconstruct_field(x, y, z, discontinuous='continuity'))[0]
+    plain = np.asarray(solver.reconstruct_field(x, y, z))[0]
+    case = key(OFF_GRID_ANGLE, pol)
+    champ1 = np.transpose(GOLDEN_OFF_GRID[f'champ1__{case}'][_LAYER_ROWS], (0, 2, 1, 3))
+    champ0 = np.transpose(GOLDEN_OFF_GRID[f'champ0__{case}'][_LAYER_ROWS], (0, 2, 1, 3))
+    gaps = {name: _gap(rule, champ1, slot) for slot, name in enumerate(NAMES)}
+    assert max(gaps.values()) < TOL, gaps
+    gaps = {NAMES[slot]: _gap(plain, champ0, slot) for slot in (0, 1, 3, 4)}
+    assert max(gaps.values()) < TOL, gaps
+    assert _gap(plain, champ1, 0) > 0.1
