@@ -132,3 +132,54 @@ monitor's `source=` check, the sheet clearance, the direction check, and the mod
 re-entering its own source. Each time the source was restored byte for byte. One parameter is
 bounded by no limit: the H row's half-cell group delay changes only the off-centre leakage,
 which S2 reports rather than limits, and the exact prediction follows it.
+
+## Comparison with Meep and FDTDX
+
+Added 2026-10-30, after every verdict above, and it changes none of them: it is evidence about
+the accuracy one can expect, not acceptance. The cases were run in Meep 1.35.0 (pymeep from
+conda-forge, no MPI, with MPB 1.12.0) and in FDTDX 0.6.3 (JAX 0.12.0.1 on the CPU, double
+precision). Each ran in its own process from the geometry and wavelengths written in physical
+units; no Wavebit object reached either tool. Meep is GPL-2.0-or-later and was run as a
+separate program; its source was not read. The values, each tool's settings and what could not
+be matched are frozen in `tests/references/golden_stage7_cross_solver.json` and its record.
+`tests/references/test_stage7_cross_solver_golden.py` holds this table, and each statement
+below it, to those values.
+
+What was matched: Setup S and the S5 butt joint, the same spacings (Meep resolutions 20, 40 and
+80 per µm), the same time step (Courant 0.5 in each tool) and TE (Wavebit's `Ey` is Meep's `Ez`
+and FDTDX's `filter_pol="tm"`, a naming trap in FDTDX). Each tool used its own mode solver,
+mode source and mode readout: Meep's `EigenModeSource` and `get_eigenmode_coefficients`,
+FDTDX's `ModePlaneSource` and `ModeOverlapDetector`. Meep's absorber is `PML(1.2)` with its
+default profile; FDTDX's is its default PML with `extend_material_to_pml`. Only ratios are
+compared, since FDTDX's unit mode power carries no area factor. Wavebit's absorber row is D1 of
+`fd-waveguide-through-pml.md` (an initial-field launch), not the same readout as the other two.
+
+| Quantity | Wavebit | Meep | FDTDX |
+| --- | --- | --- | --- |
+| TE0 index the mode solver reports, minus exact (0.05 / 0.025 / 0.0125) | +1.3e-2 / +3.2e-3 / +7.9e-4 | -1.3e-3 / -5.6e-4 / -2.6e-4 | +1.8e-4 / +4.5e-5 / +1.1e-5 |
+| TE0 index the run propagates, minus exact (0.05 / 0.025) | +1.3e-2 / +3.2e-3 | +1.1e-2 / +2.6e-3 | +1.3e-2 / +3.2e-3 |
+| Run index minus the Wavebit run index (0.05 / 0.025) | 0 / 0 | -1.6e-3 / -5.9e-4 | -7.3e-9 / -7.7e-11 |
+| Backward / forward power at 1.55 um (0.05 / 0.025) | 6.8e-29 / 1.2e-29 | 1.3e-3 / 9.2e-5 | 4.3e-7 / 6.4e-9 |
+| Backward / forward power at 1.45 / 1.65 um, 0.025 | 1.3e-6 / 1.4e-6 | 8.3e-5 / 1.0e-4 | 1.4e-6 / 1.4e-6 |
+| Butt joint, abs(T - T_mm) (0.05 / 0.025 / 0.0125) | 3.8e-4 / 9.8e-5 / - | 2.8e-3 / 1.0e-3 / 4.1e-4 | 5.0e-5 / 1.4e-5 / - |
+| Butt joint, abs(R - R_mm) / R_mm (0.05 / 0.025 / 0.0125) | 6.2e-2 / 1.5e-2 / - | 1.1e0 / 2.6e-1 / 7.2e-2 | 6.8e-1 / 2.3e-1 / - |
+| Core into the absorber: reflected TE0, 0.6 / 1.2 um layer (0.05) | 4.3e-8 / 3.5e-16 | 1.0e-4 / 1.0e-4 | 9.6e-5 / 9.6e-5 |
+| Same, 0.025 | - | 6.3e-6 / 6.3e-6 | - |
+
+What the comparison shows:
+
+- The three runs propagate one discrete system. FDTDX's run index equals Wavebit's to 7.3e-9
+  and 7.7e-11; Meep's differs by its subpixel averaging of the core faces. The index each mode
+  solver reports is another matter: Meep's and FDTDX's are near the continuum, while Wavebit's
+  is the run's own (S4), which is why it looks furthest from the exact value.
+- That difference decides how one-way a mode launch is. At the centre wavelength only the
+  Wavebit launch is one-way. FDTDX's leakage falls near the sixth power of the spacing and
+  Meep's near the fourth. Away from the centre FDTDX and Wavebit leak alike, since both fix the
+  profile and the half-cell phase at the centre.
+- Every tool converges on the mode-matching transmission. FDTDX is closest; why has not been
+  established. The small reflection is closest in Wavebit, whose readout separates directions
+  by the exact discrete orthogonality.
+- The external absorber numbers are a floor of the measurement. Doubling the layer changes them
+  by at most 1.5 %, where a layer's own reflection would fall by orders of magnitude (as D1's
+  does), and Meep's falls with resolution instead. They measure the readout, not the layer, and
+  this table cannot rank the absorbers.

@@ -1,0 +1,181 @@
+{
+ "schema": "wavebit.reference-values/1",
+ "case": "golden_stage7_cross_solver",
+ "physics": "fdtd",
+ "comparison": "different-discretization",
+ "role": "stage-7 cross-solver comparison (mode solver, one-way mode launch, butt joint, absorber, Gaussian beam): evidence printed in fd-mode-source.md and fd-gaussian-beam.md, not acceptance",
+ "references": [
+  {
+   "tool": "Meep",
+   "version": "1.35.0",
+   "build": "pymeep conda-forge nompi_py312h7a316d3_100 (no MPI), MPB 1.12.0, NumPy 2.5.4",
+   "modified": {
+    "value": false,
+    "description": "the conda-forge build, unmodified"
+   },
+   "spdx": "GPL-2.0-or-later",
+   "source": "https://github.com/NanoComp/meep",
+   "install": {
+    "kind": "conda",
+    "command": "micromamba create -n meep -c conda-forge pymeep=1.35.0=nompi*"
+   },
+   "settings": "public API only. Propagation along x, transverse y (Wavebit z -> x, x -> y); TE is Ez with ODD_Z symmetry; Courant 0.5; PML(1.2) with the default profile; EigenModeSource (MPB mode) and get_eigenmode_coefficients; GaussianBeamSource with the focus at the origin. Generator script sha256 817a5fbc9ac364e7858a8f26664a792b3c2b50dc5df53f1a5b8d7ee383d8b8de, shared case definitions e0f3fed65d0f56a388cfedbe2b23a432958e5246bf0d396552b7dc13720c6e62",
+   "discretization": "2-D cell, resolutions 20, 40 and 80 per um (0.05, 0.025, 0.0125 um), default subpixel averaging",
+   "arrays": [
+    "meep__*"
+   ],
+   "execution": "separate-process",
+   "independence": {
+    "product_loaded_in_reference_process": false,
+    "reference_inputs_built_from_product_objects": false
+   }
+  },
+  {
+   "tool": "FDTDX",
+   "version": "0.6.3",
+   "build": "pip wheel, JAX 0.12.0.1 on the CPU with float64, NumPy 2.4.6; its mode solver calls tidy3d compute_modes",
+   "modified": {
+    "value": false,
+    "description": "the released wheel, unmodified"
+   },
+   "spdx": "MIT",
+   "source": "https://github.com/ymahlau/fdtdx",
+   "install": {
+    "kind": "pip",
+    "command": "python -m pip install fdtdx==0.6.3"
+   },
+   "settings": "public API. Propagation along x, transverse y, the invariant axis two periodic cells; TE is filter_pol=\"tm\" (FDTDX names the mode by its first transverse E component); courant_factor 0.5; default PML (kappa 1) with extend_material_to_pml; ModePlaneSource and ModeOverlapDetector (conjugated overlap); GaussianPlaneSource, whose focus is its own plane, so the beam row is a variant with the focus on the source plane (width 2 um past it, Gouy phase from 0.5 to 3 um) and the focal case was not run. Generator script sha256 df86676088a50b8aa6f8234f3a19032f41c7d09c22943d59e52eed4dc75f2845",
+   "discretization": "uniform Yee grid 0.05, 0.025 and 0.0125 um (mode solver only at 0.0125), cell-snapped core",
+   "arrays": [
+    "fdtdx__*"
+   ],
+   "execution": "separate-process",
+   "independence": {
+    "product_loaded_in_reference_process": false,
+    "reference_inputs_built_from_product_objects": false
+   }
+  },
+  {
+   "tool": "wavebit",
+   "version": "0.0.4",
+   "build": "source checkout at the product commit below, NumPy backend, float64",
+   "modified": {
+    "value": false,
+    "description": "this repository"
+   },
+   "spdx": "Apache-2.0 AND MIT",
+   "source": "https://github.com/fieldalgo/wavebit",
+   "install": {
+    "kind": "source",
+    "command": "python -m pip install -e ."
+   },
+   "settings": "the validation tests themselves: tests/fdtd/test_fd_mode_source.py, test_fd_gaussian_beam.py, test_fd_waveguide_pml.py (D1, an initial-field launch, for the absorber row); values as fd-mode-source.md, fd-gaussian-beam.md and fd-waveguide-through-pml.md print them, and the solver index from fdtd.solve_modes on the slab",
+   "discretization": "uniform Yee grid 0.05, 0.025 and 0.0125 um, cell-snapped core",
+   "arrays": [
+    "wavebit__*"
+   ],
+   "execution": "separate-process",
+   "independence": {
+    "product_loaded_in_reference_process": true,
+    "reference_inputs_built_from_product_objects": true
+   }
+  }
+ ],
+ "generator": {
+  "path": "private research repository",
+  "sha256": "0d714fa5cc0b89557854cf9a65befea1ff94563905c9193cb2e296b425771b40",
+  "command": "python freeze_public_golden.py golden_stage7_cross_solver.json (assembles the Meep and FDTDX run results and the Wavebit numbers the validation records print)",
+  "product_commit": "bdcd93da52d8f43fb71a15fb194380065be31ced",
+  "clean_tree": true
+ },
+ "generated_utc": "2026-10-30T12:20:00Z",
+ "environment": {
+  "python": "3.12 (Meep environment), 3.13 (FDTDX and Wavebit environments)",
+  "numpy": "2.5.4 (Meep, Wavebit), 2.4.6 (FDTDX)",
+  "os": "Linux x86_64, CPU only"
+ },
+ "cost": {
+  "max_rss_mb": {
+   "Meep": "up to 170",
+   "FDTDX": "up to 900"
+  },
+  "wall_clock": "not recorded"
+ },
+ "inputs": {
+  "cases": {
+   "slab": "core 1.5 um, eps 4 in cladding eps 2.085136, y invariant, x open at +-4.5 um, z open at +-4 um, core continued through both z faces (fd-mode-source.md Setup S)",
+   "straight": "TE0 launched +z from z = -2 um, pulse centred at 1.55 um, frequency_sigma_hz 1.5e13; mode readouts at z = +1, +2 (forward) and -3 um (backward), at 1.45, 1.55, 1.65 um",
+   "joint": "core 1.5 um for z < 0 and 1.0 um for z > 0 (fd-mode-source.md S5); T read at z = +2 um in the narrow core, R at z = -1 um, at 1.55 um",
+   "pml": "the slab core run into a 0.6 um and a 1.2 um absorbing layer; reflected TE0 power at 1.55 um",
+   "beam": "vacuum, waist 1.5 um (1/e amplitude radius), wavelength 1.0 um, TE, focus at the origin, source plane z = -4 um (fd-gaussian-beam.md Setup B); back-radiation at 0.95, 1.0, 1.05 um; Gouy phase on the axis relative to the axial wave, largest difference from the exact angular spectrum over z in [-3, 3] um",
+   "focal": "waist 1.0 um, glass eps 2.25 for z > -1 um, source z = -2.5 um, focus declared at z = +0.5 um (fd-gaussian-beam.md G3); on-axis intensity peak in the glass"
+  },
+  "spacings_um": [
+   0.05,
+   0.025,
+   0.0125
+  ],
+  "courant": 0.5,
+  "oracles": {
+   "te0_exact_index": 1.9562181937830228,
+   "joint_T_mode_matching": 0.955057091104045,
+   "joint_R_mode_matching": 0.0003328675845426776,
+   "focal_peak_exact_um": 1.3739765060772822,
+   "source": "exact slab dispersion relation; continuum mode matching and exact angular spectrum as written in tests/fdtd/test_fd_mode_source.py and tests/fdtd/test_fd_gaussian_beam.py"
+  },
+  "keys": "tool__quantity; spacing keys in um (Meep resolution 20, 40, 80 per um); lists follow the three wavelengths of the case"
+ },
+ "outcomes": {
+  "matched": "geometry, wavelengths, spacings, Courant number, polarization, readout planes; ratios only (FDTDX unit mode power has no area factor)",
+  "not_matched": "each tool's own mode solver, source and readout; Meep's subpixel averaging; FDTDX's Gaussian source focuses on its own plane (beam row is a variant, focal case not run); Wavebit's absorber row is D1, an initial-field launch, not the other tools' readout",
+  "reference_self_check": "Meep's and FDTDX's absorber values do not change when the layer is doubled, so they are a floor of their readout and are recorded as such",
+  "failed_or_discarded": "none discarded; every run that finished is recorded",
+  "not_run": "FDTDX focal-shift case (cannot be set up); FDTDX absorber case at 0.025 um; Wavebit butt joint at 0.0125 um"
+ },
+ "payload": {
+  "file": "golden_stage7_cross_solver.json",
+  "format": "json",
+  "file_sha256": "bb3bd9afdca61867e9dac8cfb0e8278a49da819fbc40241f9ffddebbdb91888e",
+  "arrays": [
+   "fdtdx__beam_back_per_forward",
+   "fdtdx__beam_radius_2um_ratio_minus_1",
+   "fdtdx__gouy_max_error_rad",
+   "fdtdx__joint_R",
+   "fdtdx__joint_T",
+   "fdtdx__leakage_power",
+   "fdtdx__n_run",
+   "fdtdx__neff_te_reported_error",
+   "fdtdx__pml_reflection",
+   "meep__beam_back_per_forward",
+   "meep__beam_waist_ratio_minus_1",
+   "meep__focal_peak_um",
+   "meep__gouy_max_error_rad",
+   "meep__joint_R",
+   "meep__joint_T",
+   "meep__leakage_power",
+   "meep__n_run",
+   "meep__neff_te_reported_error",
+   "meep__pml_reflection",
+   "wavebit__beam_back_per_forward",
+   "wavebit__beam_waist_ratio_minus_1",
+   "wavebit__focal_peak_um",
+   "wavebit__gouy_max_error_rad",
+   "wavebit__joint_R",
+   "wavebit__joint_T",
+   "wavebit__leakage_power",
+   "wavebit__n_run",
+   "wavebit__neff_te_reported_error",
+   "wavebit__pml_reflection_d1"
+  ]
+ },
+ "values_sha256": null,
+ "content_sha256": "b89d851dc8c4cdc9915b4bba767c7bc07a29cb11cff24148aa051c547bb393a8",
+ "consumers": [
+  "tests/references/test_stage7_cross_solver_golden.py"
+ ],
+ "provenance_status": "complete",
+ "regeneration": [],
+ "not_recorded": {
+  "values_sha256": "a nested JSON payload has no values digest (tests/references/_reference_records.py)"
+ }
+}
