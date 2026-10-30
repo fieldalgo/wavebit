@@ -55,6 +55,9 @@ from wavebit.materials.response import refractive_index_from_eps
 from wavebit.materials._tabulated import TabulatedMaterial
 from wavebit.materials._tabulated import evaluate_material
 from wavebit.materials._tabulated import evaluate_structure
+from wavebit.rcwa._engine.continuity import continuity_rows
+from wavebit.rcwa._engine.continuity import refusal as continuity_refusal
+from wavebit.rcwa._engine.continuity import solved_structure
 from wavebit.rcwa._engine.enums import Answers
 from wavebit.rcwa._engine.enums import DEFAULT_ANSWERS
 from wavebit.rcwa._engine.enums import DEFAULT_FACTORIZATION
@@ -81,6 +84,7 @@ from wavebit.rcwa._engine.enums import coefficients_of
 from wavebit.rcwa._engine.enums import factorization_of
 from wavebit.rcwa._engine.enums import formulation_of
 from wavebit.rcwa._engine.enums import resolve_fourier_options
+from wavebit.rcwa._engine.fields import _require_solved
 from wavebit.rcwa._engine.fields import field_1d
 from wavebit.rcwa._engine.fields import field_1d_conical
 from wavebit.rcwa._engine.fields import field_2d
@@ -727,7 +731,7 @@ def _centred(a, odd):
 
 
 #: The attributes a solve leaves behind for reconstruction, as opposed to the scene's conditions.
-_SOLVE_STATE = ('layer_info_list', 'T1', '_scattering', '_merged_field_state')
+_SOLVE_STATE = ('layer_info_list', 'T1', '_scattering', '_merged_field_state', '_solved_structure')
 
 
 def _efficiency_only(de_ri, de_ti, power_entering):
@@ -1081,6 +1085,12 @@ class CoreSolveMixin:
             raise ValueError(
                 f"incidence_side must be 'top' or 'bottom', got {value!r}")
         self._incidence_side = value
+
+    def _field_kind(self):
+        """Which reconstruction this solve's field takes, as ``FieldState`` names them."""
+        if self._grating_type == 0:
+            return 'te' if self.tetm_index == 0 else 'tm'
+        return 'conical' if self._grating_type == 1 else self._formulation_assigned.value
 
     @property
     def _kernel_incidence_side(self):
@@ -2858,6 +2868,10 @@ class CoreSolveMixin:
         #: The scene this solve was posed with, so `reconstruct_field` can tell whether it is
         #: still being asked about the same one. See `_reconstruction_scene`.
         self._solved_scene = self._reconstruction_scene()
+        #: The structure this solve was posed with, which the continuity rule reads. Under
+        #: `answers='field'` alone, the one rung that can reach the rule.
+        self._solved_structure = (solved_structure(self.structure)
+                                  if self._answers.covers(Answers.FIELD) else None)
         odd = centre_parity(*self.order_window)
         for key in ('incident', 's_inc', 'p_inc'):
             sub = out.get(key)
@@ -3973,10 +3987,16 @@ class CoreFactorizationMixin:
             (epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all,
              epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all), *window)
         mu = swap_fourier_origin(mu, *window)
-        return self._solve_conv(
+        out = self._solve_conv(
             *eps, mu=mu,
             mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
             layer_dng=self._layer_double_negative(like=epx_conv_all) if mu is not None else None)
+        # These matrices need not be the solver's structure, so nothing read off it describes them.
+        self._solved_structure = None
+        state = getattr(out, '_field_state', None)
+        if state is not None:
+            state.structure = None
+        return out
 
     @device_scoped
     def _solve_conv(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
@@ -4603,6 +4623,9 @@ class CoreFactorizationMixin:
     #: The third non-scene: this solver's conditions moved in a call whose solve stayed inside
     #: it -- JAX's compiled `solve_field`. Set by `_forget_the_solve`.
     _SOLVED_ELSEWHERE = object()
+    #: A copy of the last solve's structure (:func:`~wavebit.rcwa._engine.continuity.
+    #: solved_structure`); ``None`` when it answered less than the field or was handed matrices.
+    _solved_structure = None
 
     @_contextlib.contextmanager
     def _solve_state_scope(self):
@@ -4652,6 +4675,7 @@ class CoreFactorizationMixin:
         self._scattering = None
         self._merged_field_state = None
         self._solved_scene = self._SOLVED_ELSEWHERE
+        self._solved_structure = None
 
     def _reconstruction_scene(self):
         """The live conditions a reconstruction reads, as concrete numbers -- or ``None``.
@@ -4782,91 +4806,28 @@ class CoreFactorizationMixin:
     @device_scoped
     def _refuse_continuity(self):
         """Refuse ``discontinuous='continuity'`` where it is not built yet, by name."""
-        if self._grating_type == 2 and self._formulation_assigned == Formulation.FIRST_ORDER:
-            raise NotImplementedError(
-                "discontinuous='continuity' is built on the second-order 2D reconstruction; the "
-                'first-order formulation still takes the Fourier sum.')
-        if self._grating_type == 2 and _np.ndim(self.order_kxy()[0]) != 1:
-            raise NotImplementedError(
-                "discontinuous='continuity' applies its rule along the cell's x and y lines; a "
-                'skewed lattice has no such lines and is refused.')
-        if self.modeling_path != ModelingPath.RASTER:
-            raise NotImplementedError(
-                "discontinuous='continuity' reads eps at the sample points from a raster "
-                'structure; a shape structure is not supported yet.')
-        if self._has_tensor_materials():
-            raise NotImplementedError(
-                "discontinuous='continuity' divides D_x by a scalar eps; a tensor material "
-                'couples D_x to more than E_x and is refused.')
-        if self._merged_field_state is not None:
-            raise NotImplementedError(
-                "discontinuous='continuity' is not available after a solve that merged layers "
-                'into its half-spaces.')
-
-    @staticmethod
-    def _sample_pixels(spec, period, n_pixels, axis):
-        """The raster pixel under each sample along one axis, for the continuity rule.
-
-        Pixel ``j`` covers ``[j, j+1) * period / n_pixels`` from the cell's negative edge, so a
-        sample is read from the pixel it falls in, periodically. A sample exactly on a wall
-        between two permittivities belongs to the pixel on its positive side.
-        """
-        from wavebit.rcwa._engine.field_result import _host_value
-        if is_count(spec):
-            corner = _np.linspace(0., 1., int(spec))
-        else:
-            points = _host_value(spec)
-            if points is None or period is None:
-                raise ValueError(f"discontinuous='continuity' needs concrete {axis} and period "
-                                 'to choose the raster pixel under each sample.')
-            corner = _np.asarray(points, dtype=float) / float(period) + 0.5
-        # Half a part in 1e9 lifts a sample that rounding put just below a pixel edge it sits on.
-        return _np.floor(corner * n_pixels + 1e-9).astype(int) % n_pixels
+        # First what any reconstruction asks, so a solve that kept no field state says so and a
+        # structure of `None` past this point can only be matrices handed to `solve_conv`.
+        if self._merged_field_state is None:
+            _require_solved(self.T1, self.layer_info_list)
+        structure = self._solved_structure
+        kx, ky = self.order_kxy()
+        message = continuity_refusal(self._field_kind(), structure, self.lattice, kx, ky,
+                                     _anisotropy.scene_is_tensor(structure, getattr(self, '_mu', None)),
+                                     self._merged_field_state is not None)
+        if message is not None:
+            raise NotImplementedError(message)
 
     def _continuity_rows(self, sample_x, sample_y, backside):
-        """What the continuity rule reads off each kernel layer record, in its order.
+        """:func:`~wavebit.rcwa._engine.continuity.continuity_rows` in the kernels' record order.
 
-        ``None`` where the layer is uniform -- it keeps the Fourier sum, bit for bit, since there
-        is nothing for the rule to change there. Otherwise, on the 1D paths, ``eps`` at the x
-        samples ``(n_x,)``; on the 2D path a triple ``(ops_x, ops_y, eps)``: ``ops_x[j]`` is Li's
-        inverse rule ``[[1/eps]]_x^-1`` along the raster row under the ``j``-th y sample,
-        ``ops_y[i]`` the same along the column under the ``i``-th x sample, and ``eps`` the
-        ``(n_y, n_x)`` permittivity at the samples
-        (:func:`wavebit.rcwa._engine.fields._continuity_2d`).
+        The kernels append records from the top public layer down; a backside (public top)
+        incidence solves the mirrored scene, which reverses that.
         """
-        from wavebit.rcwa._engine.factorization import line_inverse_rules
-        from wavebit.rcwa._engine.field_result import _host_value
-        xp = self.xp
-        structure = self.structure
-        periods = _lattice.periods_of(self.lattice)
-        columns = self._sample_pixels(sample_x, _host_value(periods[0]), structure.shape[-1],
-                                      'sample_x')
-        two_d = self._grating_type == 2
-        if two_d:
-            lines = self._sample_pixels(sample_y, _host_value(periods[1]), structure.shape[-2],
-                                        'sample_y')
-            kx, ky = self.order_kxy()
-            half_u, half_v = (kx.shape[0] - 1) // 2, (ky.shape[0] - 1) // 2
-        rows = []
-        for layer in range(structure.shape[0]):
-            grid = structure[layer] if two_d else structure[layer, 0]
-            values = _host_value(grid)
-            if values is not None and _np.all(values == values.flat[0]):
-                rows.append(None)
-                continue
-            dev = _device_of(grid)
-            at_x = as_array(xp, columns, device=dev)
-            if not two_d:
-                rows.append(xp.take(grid, at_x, axis=0))
-                continue
-            at_y = as_array(xp, lines, device=dev)
-            ops_x = xp.take(line_inverse_rules(xp, grid, half_u), at_y, axis=0)
-            ops_y = xp.take(line_inverse_rules(xp, xp.permute_dims(grid, (1, 0)), half_v),
-                            at_x, axis=0)
-            eps = xp.take(xp.take(grid, at_y, axis=0), at_x, axis=1)
-            rows.append((ops_x, ops_y, eps))
-        # The kernels append records from the top public layer down; a backside (public
-        # top) incidence solves the mirrored scene, which reverses that.
+        kx, ky = self.order_kxy()
+        rows = continuity_rows(self.xp, self._solved_structure, self.lattice, kx, ky,
+                               self.float_dtype, self.complex_dtype, self._grating_type == 2,
+                               sample_x, sample_y)
         return rows if backside else rows[::-1]
 
     def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('incident',),
@@ -4893,9 +4854,12 @@ class CoreFactorizationMixin:
         ``'continuity'`` sums the continuous ``D_x`` series and divides by ``eps`` at each sample
         (P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357 (1998); RETICOLO's ``champ=1``). It
         changes ``E_x`` in patterned layers only on the 1D TM and conical paths, and ``E_x`` and
-        ``E_y`` on the 2D path, each summed line by line (``E_x`` along the row under the sample,
-        ``E_y`` along the column); it needs a raster structure and is refused elsewhere
-        (:meth:`_refuse_continuity`).
+        ``E_y`` on the 2D path, each summed line by line (``E_x`` along the row through the sample,
+        ``E_y`` along the column). On a shape structure it takes walls along x and y; what it
+        does not take is refused by name (:meth:`_refuse_continuity`). It reads the structure the
+        solve was posed with, whatever has been assigned since. Its derivative holds each
+        sample fixed, so it leaves out a wall sweeping across a sample: an objective over an area
+        takes ``'fourier'``.
 
         ``incidences`` names which of the incidences the solve carries to reconstruct, one
         leading axis entry each, **in the order asked for**: ``'incident'`` is the incidence the
