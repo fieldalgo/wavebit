@@ -4,11 +4,16 @@ Solvers supply spectral coefficients; this module owns sampling, spatial expansi
 component layout and the lifetime of the solved field. No query reads a live solver.
 """
 
+from collections.abc import Mapping
+
 import numpy as np
 
 from wavebit._common.backend import array_namespace
 from wavebit._common.backend import as_array
+from wavebit._common.pytrees import _pack, _unpack
+from wavebit.lattice import periods_of
 from wavebit.rcwa._engine.fields import LayerSamples
+from wavebit.rcwa._engine.fields import _continuity_2d
 from wavebit.rcwa._engine.fields import is_count
 from wavebit.rcwa._engine.fields import field_1d
 from wavebit.rcwa._engine.fields import field_1d_conical
@@ -112,6 +117,15 @@ def _local_height(xp, z, start, thickness, selected):
     return xp.where(selected, local, safe)
 
 
+def _plain(value):
+    """``_unpack``'s read-only mappings as dicts again, which a pickle and a deep copy can hold."""
+    if isinstance(value, Mapping):
+        return {name: _plain(item) for name, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return type(value)(_plain(item) for item in value)
+    return value
+
+
 @eager_under_torch_compile
 class FieldState:
     """Numeric solve snapshot and a static adapter name; a JAX pytree when registered.
@@ -123,20 +137,29 @@ class FieldState:
     """
 
     def __init__(self, data, kind, mirrored=False, names=('incident',), window=None,
-                 merged=None):
+                 merged=None, structure=None, tensor=False):
         self.data, self.kind, self.mirrored, self.names = data, kind, mirrored, tuple(names)
         self.window = window
         #: ``(bottom, top, lit side)`` of a solve that merged layers into its half-spaces
         #: (:mod:`~wavebit.rcwa._engine.half_space_merge`), else ``None``. Static, like
         #: ``window``: it fixes which heights the kernels' records answer.
         self.merged = merged
+        #: The solve's copy of its structure, which the continuity rule reads
+        #: (:func:`~wavebit.rcwa._engine.continuity.solved_structure`), and whether its materials
+        #: are tensors. ``None`` where there is none to read: a source solve, or matrices handed
+        #: to ``solve_conv``.
+        self.structure, self.tensor = structure, tensor
 
     def tree_flatten(self):
-        return (self.data,), (self.kind, self.mirrored, self.names, self.window, self.merged)
+        leaves = []
+        spec = _pack(self.structure, leaves)
+        return (self.data, tuple(leaves)), (self.kind, self.mirrored, self.names, self.window,
+                                            self.merged, spec, self.tensor)
 
     @classmethod
     def tree_unflatten(cls, meta, children):
-        return cls(children[0], *meta)
+        *static, spec, tensor = meta
+        return cls(children[0], *static, _plain(_unpack(spec, children[1])), tensor)
 
     def _incidence(self, name):
         if name not in self.names:
@@ -159,19 +182,56 @@ class FieldState:
             coefficients = incoming + outgoing
         return expand_spectrum(xp, kxy, coefficients, grid)
 
-    def reconstruct(self, sample_x, sample_y, sample_z, incidence):
+    def reconstruct(self, sample_x, sample_y, sample_z, incidence, discontinuous='fourier'):
         xp = array_namespace(self.data['lattice'])
         grid = xy_grid(xp, self.data['lattice'], sample_x, sample_y)
-        return self.reconstruct_on(grid, sample_z, incidence)
+        return self.reconstruct_on(grid, sample_z, incidence,
+                                   self._continuity_rule(xp, sample_x, sample_y, discontinuous))
 
-    def reconstruct_on(self, grid, sample_z, incidence):
+    def _continuity_rule(self, xp, sample_x, sample_y, discontinuous):
+        """What :meth:`reconstruct_on` takes for ``discontinuous``, ``None`` for the Fourier sum.
+
+        Refuses by name what the rule does not take, and the TE path has nothing for it to change:
+        its one electric component runs along every wall.
+        """
+        if discontinuous not in ('fourier', 'continuity'):
+            raise ValueError(f"discontinuous must be 'fourier' or 'continuity', not {discontinuous!r}.")
+        if discontinuous == 'fourier':
+            return None
+        from wavebit.rcwa._engine.continuity import continuity_rows
+        from wavebit.rcwa._engine.continuity import refusal as continuity_refusal
+        from wavebit.rcwa._engine.continuity import samples_along_cell
+        self._require_internal_fields()
+        g = self.data['groups'][0] if self.data['groups'] else {}
+        lattice = self.data.get('cell')
+        message = continuity_refusal(self.kind, self.structure, lattice, g.get('kx'), g.get('ky'),
+                                     self.tensor, self.merged is not None)
+        if message is not None:
+            raise NotImplementedError(message)
+        if self.kind == 'te':
+            return None
+        two_d = self.kind == 'second_order'
+        sides = _host_value(lattice.columns)
+        if sides is not None:
+            sample_x = samples_along_cell(sample_x, sides[0, 0])
+            sample_y = samples_along_cell(sample_y, sides[1, 1])
+        rows = continuity_rows(xp, self.structure, lattice, g['kx'], g['ky'],
+                               xp.real(self.data['lattice']).dtype, g['T1'].dtype, two_d,
+                               sample_x, sample_y)
+        return dict(rows=rows, two_d=two_d, lattice=lattice, sample_x=sample_x, sample_y=sample_y)
+
+    def _require_internal_fields(self):
+        if (not self.data['groups'] and self.merged is None) or any(
+                g['layers'] is None for g in self.data['groups']):
+            raise RuntimeError("Internal fields require solve(answers='field') and at least one layer.")
+
+    def reconstruct_on(self, grid, sample_z, incidence, rule=None):
         """:meth:`reconstruct` on centre-origin Cartesian points ``grid = (x, y)`` already laid
-        out, for a door whose lateral sampling rules are its own."""
+        out, for a door whose lateral sampling rules are its own. ``rule`` is
+        :meth:`_continuity_rule`'s, on the same points."""
         index = self._incidence(incidence)
         data = self.data
-        if (not data['groups'] and self.merged is None) or any(
-                g['layers'] is None for g in data['groups']):
-            raise RuntimeError("Internal fields require solve(answers='field') and at least one layer.")
+        self._require_internal_fields()
         xp = array_namespace(data['lattice'])
         ds = xp.real(data['thickness'])
         if not ds.shape[0]:
@@ -198,8 +258,10 @@ class FieldState:
             if self.kind == 'source':
                 coefficient = self._source_coefficients(xp, g, z, owner, edges)
             else:
-                coefficient = self._ordinary_coefficients(xp, g, z, owner, edges, index)
+                coefficient = self._ordinary_coefficients(xp, g, z, owner, edges, index, rule)
             field = expand_spectrum(xp, g['kxy'], coefficient, grid)
+            if rule is not None:
+                field = self._apply_continuity(xp, g, rule, coefficient, field, owner)
             result = field if result is None else result + field
         if self.merged is not None:
             from wavebit.rcwa._engine.half_space_merge import zone_coefficients
@@ -209,7 +271,51 @@ class FieldState:
             result = field if result is None else result + field
         return result
 
-    def _ordinary_coefficients(self, xp, g, z, owner, edges, index):
+    def _apply_continuity(self, xp, g, rule, coefficient, field, owner):
+        """``field`` with the rule's ``E`` in the samples of the layers the rule reads.
+
+        On the 1D paths ``coefficient`` already holds the ``D_x`` series there
+        (:meth:`_ordinary_coefficients`), so its sum, in ``field``, only needs dividing by ``eps``.
+        The 2D rule is summed line by line in the kernels' frame, where
+        :func:`~wavebit.rcwa._engine.fields._continuity_2d` lives and its operators are: undoing
+        the parity of :meth:`_ordinary_coefficients` and, as
+        ``CoreSolveMixin._centre_phase`` does, putting the phase of the incident wave at the
+        cell's centre back afterwards. The order grid is the window's, so the specular order is
+        where ``ordinary_spectra`` finds it.
+        """
+        if rule['two_d']:
+            from wavebit._common.conventions import centre_parity
+            odd = as_array(xp, centre_parity(*self.window).reshape(-1),
+                           device=getattr(coefficient, 'device', None))
+            kernel = xp.where(odd[None, :, None], -coefficient, coefficient)
+            lead = (kernel.shape[0], 1, kernel.shape[1], 1)
+            sx, sy = xp.reshape(kernel[..., 0], lead), xp.reshape(kernel[..., 1], lead)
+            lattice = rule['lattice']
+            (cx, hx), (cy, hy) = self.window
+            incident = g['kxy'][(hy - cy) * (2 * hx + 1) + hx - cx]
+            # The kernels' corner is half a period below the centre, and a period is positive
+            # whichever way the lattice's side was written (`fields._axis_samples`).
+            centre = 0.5 * xp.stack([as_array(xp, p, dtype=incident.dtype,
+                                              device=getattr(incident, 'device', None))
+                                     for p in periods_of(lattice)])
+            phase = xp.exp(-1j * xp.sum(incident * centre))
+        for layer, row in enumerate(rule['rows']):
+            if row is None:
+                continue
+            if rule['two_d']:
+                ex, ey = _continuity_2d(xp, g['kx'], g['ky'], lattice, rule['sample_x'],
+                                        rule['sample_y'], 2 * np.pi / self.data['wavelength'],
+                                        g['T1'].dtype, sx, sy, row)
+                electric = xp.stack([ex[:, 0], ey[:, 0]], axis=-1) * phase
+            else:
+                electric = field[..., :1] / xp.reshape(xp.astype(row, field.dtype), (1, 1, -1, 1))
+            held = (owner == layer)[:, None, None, None]
+            count = electric.shape[-1]
+            field = xp.concat([xp.where(held, electric, field[..., :count]), field[..., count:]],
+                              axis=-1)
+        return field
+
+    def _ordinary_coefficients(self, xp, g, z, owner, edges, index, rule=None):
         layers = g['layers']
         # The kernels' records cover the layers they solved: all of them, or those left
         # between the merged ones (`half_space_merge`), which start at public layer `first`.
@@ -225,6 +331,9 @@ class FieldState:
             masks.reverse()
         kwargs = dict(sample_z=LayerSamples(local), incidences=(self.names[index],),
                       _coefficients=True)
+        if rule is not None and not rule['two_d']:
+            # Which layers put the D_x series in E_x's place, in the kernels' record order.
+            kwargs['eps_rows'] = rule['rows'] if self.mirrored else rule['rows'][::-1]
         args = (self.data['wavelength'], g['kx'])
         tail = (g['T1'], layers, self.data['lattice'])
         if self.kind in ('te', 'tm'):
@@ -327,10 +436,7 @@ def ordinary_spectra(solver, variants, *, eps_top=None, eps_bot=None, mu_top=Non
     k0 = 2*np.pi/solver.wavelength
     kxy = xp.stack([gx, gy], axis=-1)*k0
     lattice = _array(xp, solver.lattice.columns, kxy)
-    if solver._grating_type == 0:
-        kind = 'te' if solver.tetm_index == 0 else 'tm'
-    else:
-        kind = 'conical' if solver._grating_type == 1 else solver._formulation_assigned.value
+    kind = solver._field_kind()
     names = tuple(name for name, sub in variants.items() if sub is not None)
     (cx, hx), (cy, hy) = solver.order_window
     specular = (hy-cy)*(2*hx+1) + hx-cx
@@ -427,6 +533,7 @@ def ordinary_state(solver, spectra, merged=None):
     ``{'plan': (bottom, top, lit side), 'data': ...}`` (``CoreSolveMixin._finish_merge``):
     the plan rides in the aux data, the numbers under ``data['merge']``.
     """
+    from wavebit.rcwa._engine.continuity import solved_structure
     if spectra is None:
         return None
     xp = array_namespace(spectra['kxy'])
@@ -442,12 +549,14 @@ def ordinary_state(solver, spectra, merged=None):
                        layers=solver.layer_info_list),)
     data = dict(lattice=spectra['lattice'], wavelength=solver.wavelength,
                 thickness=solver.thickness, boundary_kxy=spectra['kxy'], boundary=boundary,
-                groups=groups)
+                groups=groups, cell=solved_structure(solver.lattice))
     if merged is not None:
         data['merge'] = merged['data']
     return FieldState(_copy(data), spectra['kind'], solver._kernel_incidence_side == 'bottom',
                       spectra['names'], solver.order_window,
-                      None if merged is None else merged['plan'])
+                      None if merged is None else merged['plan'],
+                      solver._solved_structure if groups else None,
+                      solver._has_tensor_materials())
 
 
 def source_state(spectra, groups, lattice, wavelength, thickness):
