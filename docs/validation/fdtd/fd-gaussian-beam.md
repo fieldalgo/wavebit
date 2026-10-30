@@ -131,6 +131,26 @@ depends on their direction, which the continuum's do not. The limit is not chang
 failure beside a passing test of its order. For scale, the exact beam's Gouy phase differs
 from the paraxial `arctan(z / zR) / 2` by 2.1e-3 rad over the same range.
 
+### Support decision (2026-10-30)
+
+Recorded after the results and kept apart from the verdicts above, which stand: G2 failed as
+registered and its limit is not changed. `GaussianBeam` is supported, with its Gouy-phase
+accuracy stated rather than hidden. The reasons:
+
+- The difference is the grid's dispersion, not a fault of the source. The launched beam is
+  exact for the grid; its waist, power and back-radiation match their predictions to 1e-8 or
+  better (G1, G4, G5).
+- It falls at second order (observed order 2.02), and at 0.025 µm (40 cells per wavelength)
+  it is within the registered limit.
+- It is of the size by which the paraxial formula itself departs from the exact beam over the
+  same range (2.1e-3 rad).
+
+The guide (`docs/guide/fdtd/gaussian-beam.md`) and the class docstring state the measured
+error and ask for a spacing convergence of any result that depends on the phase along the
+beam. No runtime warning is added. These grids sample the wavelength at 20 and 40 cells,
+above the 8 to 12 cells where `CoarseMeshWarning` already warns, and a notice on every beam
+run would say nothing about that run.
+
 Two details of the runs, neither a change to a limit. G3's half-space crosses the x faces,
 so it declares `continuation=('x-', 'x+')`, the slab door of `fd-waveguide-through-pml.md`.
 The `FluxMonitor`s span x in ±5.9 µm, clear of the absorbing layers, as a flux plane must.
