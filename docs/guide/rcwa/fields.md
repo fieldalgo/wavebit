@@ -1,11 +1,5 @@
 # Fields and diffraction observations
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 Request retained fields with `rcwa.Outputs(fields=True)`, run the full problem, then sample that result:
 
 ```python
@@ -23,7 +17,7 @@ these two methods. Public H is already in A/m: do not divide it by Z0.
 
 :::{note}
 The pure s/p field variants (`incidence='s'`/`'p'`) are not in the current API yet; that passage
-names the earlier `wavebit.compat.legacy` call that has them.
+names the earlier `wavebit.compat.legacy` call that had them (retired 2026-10-15; a historical checkout runs it).
 :::
 
 ## Reading fields from a result
@@ -180,22 +174,68 @@ continuous `D` series instead: sum `D`, then divide by `eps` at each sample (P. 
 M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). The default, `'fourier'`, is unchanged.
 
 - **What it changes.** `E_x` in the patterned layers of a 1D grating, on the pure TM and the
-  conical paths. Every other component, every uniform layer and the whole TE field are returned
-  bit for bit as the default returns them.
+  conical paths; `E_x` and `E_y` in the patterned layers of a 2D cell. Every other component,
+  every uniform layer and the whole TE field are returned bit for bit as the default returns them.
+- **How it works on a 2D cell.** Line by line. `E_x` jumps across walls normal to x and is
+  continuous across walls normal to y, so at each sample its series is summed over the y orders
+  first, then Li's inverse rule along the raster row under the sample turns its x coefficients
+  into those of `D_x`, which is summed along x and divided by `eps`. `E_y` is the same along the
+  column under the sample.
+- **What it trades on a 2D cell.** Each rule is right on one kind of wall and wrong on the
+  other, and neither error goes away as the truncation grows. `E_x` meets two kinds of wall:
+  across a wall normal to x it is the normal component and must jump (`eps*E_x` is what stays
+  continuous), and across a wall normal to y it is tangential and must not jump.
+  - The default is continuous everywhere, so it is right across walls normal to y and wrong
+    across walls normal to x: there `eps*E_x` mismatches by the full contrast (75 to 92% of the
+    larger side in the three test cells below), and the sum rings beside the wall.
+  - The continuity rule makes `eps*E_x` continuous across walls normal to x, to 1e-7. But
+    across a wall normal to y it reads the two sides off two different rows, each row's
+    operator built for that row's walls alone, so there `E_x` steps where it should be
+    continuous.
+  - Measured on three cells — a 3.5-index square, a 2.5-index checkerboard with four-way
+    corners, and a lossy L-shape at oblique incidence — at orders 4, 8, 12 and 16, each jump
+    relative to the larger side, at the middle of each pixel edge:
+    - The step is 5 to 43% of the local field (median over walls) and up to 75% at the worst
+      wall, beside corners.
+    - It shows no trend toward zero over that range. The default's mismatch across the other
+      walls does not shrink either.
+    - A higher order does not remove the step. It is the same kind of error as the one the
+      rule removes, moved to the other walls.
+  - More than one pixel away from any wall the two rules agree and converge together. There
+    the continuity rule is somewhat more accurate: RMS error 0.7 to 2.0% of the field at
+    order 16, against 1.5 to 2.3% for the default.
+  - The choice therefore depends on what you read and where. Use `'continuity'` for anything
+    built from the normal field at sidewalls: `D` or `eps*E_n` across a wall, the field just
+    inside a wall normal to the component, or absorbed power beside a sidewall. Keep the
+    default where a component runs along walls normal to the other axis and you need it
+    continuous there, as in a smooth field map or a tangential boundary value. Away from walls
+    either rule will do. A reconstruction right on both kinds of wall would split `E` at each
+    point into the part normal to the local wall, read from `D`, and the part along it, read
+    from `E`. Wavebit does not have one yet.
 - **Why use it.** It is RETICOLO's `res3` rule (`parm.res1.champ=1`): with it the RETICOLO field
-  goldens agree to 1e-13 on every slot, `E_x` included, where the default differs by 7e-2 to
-  1e-1. On a 1D TM bar of index 3.5 its RMS error in `E_x` is 2.5 to 7 times smaller than the
-  default's at every truncation order from 10 to 80, against a reference at order 800.
-- **What it reads.** `eps` at each sample, from the raster column the sample falls in. A sample
-  exactly on a wall belongs to the column on its positive side. Derivatives with respect to the
-  raster's values are exact; the column choice is not differentiated.
-- **Not yet.** 2D cells, shape structures, tensor materials and solves that merged layers into a
-  half-space refuse it by name; the current result API's `field` does not take it yet.
+  goldens agree to 1e-13 on every slot of the 1D and conical cases, `E_x` included, where the
+  default differs by 7e-2 to 1e-1, and to 4e-11 on every slot of a two-layer crossed grating,
+  where the default's `E_x` and `E_y` differ by about 0.3. On a 1D TM bar of index 3.5 its RMS
+  error in `E_x` is 2.5 to 7 times smaller than the default's at every truncation order from 10
+  to 80, against a reference at order 800.
+- **What it reads.** `eps` at each sample, from the raster pixel the sample falls in, and on a
+  2D cell the inverse-rule matrix of the row and the column through it. A sample exactly on a
+  wall belongs to the pixel on its positive side. Derivatives with respect to the raster's
+  values are exact; the pixel choice is not differentiated.
+- **Not yet.** Shape structures, tensor materials, skewed lattices, the first-order 2D
+  formulation and solves that merged layers into a half-space refuse it by name; the current
+  result API's `field` does not take it yet.
 
 ## Earlier-interface field calls
 
-The earlier `wavebit.compat.legacy` interface keeps `solver.reconstruct_field` and
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
+
+The earlier `wavebit.compat.legacy` interface kept `solver.reconstruct_field` and
 `solver.solve_field` with their existing layout and sampling contracts: three slots for pure
 TE/TM, an incidence axis for coupled fields, and magnetic components in `Z0*H`. Code using
-those layouts can continue to run there; compare it with the current result only after
+those layouts runs on a historical checkout; compare it with the current result only after
 dividing its magnetic components by Z0.
+:::

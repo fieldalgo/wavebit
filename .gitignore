@@ -22,6 +22,10 @@ docs/_build/
 # Jupyter autosave copies, written next to a notebook whenever it is opened in Jupyter.
 .ipynb_checkpoints/
 
+# Crash dumps an MSYS or Cygwin program (Git Bash's grep, for one) writes into the current
+# directory when it faults.
+*.stackdump
+
 # Local build, profiling and comparison outputs.
 artifacts/
 .venv/

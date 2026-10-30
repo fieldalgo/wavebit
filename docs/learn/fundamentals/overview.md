@@ -1,13 +1,14 @@
 # 01. What questions does Wavebit answer?
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 :::{note}
-The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
+The downloadable teaching scripts, the text and the snippets of every chapter use the current
+`rcwa.Problem` / `rcwa.run` API. A few passages describe features the current API does not have
+yet, such as the `psi`/`chi` polarization angles and the pure 1D `tetm` path; they sit in boxes
+titled "Earlier interface" (retired with `wavebit.compat` on 2026-10-15). Some figures keep the
+earlier labels, and the chapters that show them name the current equivalents. Compare the
+[current getting-started guide](../../getting-started/index.md) and
+[migration guide](../../migration/index.md). Historical measurement files and their source
+provenance remain unchanged.
 :::
 
 “When light illuminates a periodically repeated nanostructure, where does it go, and how much goes in each direction?” This is the central question addressed by the RCWA calculations in this course. Given the wavelength, materials, geometry, layer thicknesses, incident direction, and polarization, Wavebit calculates the reflected and transmitted intensities by direction, complex amplitudes, and electromagnetic fields inside the structure. With JAX or PyTorch, you can also find how much a result changes when a design variable changes slightly.

@@ -1,27 +1,18 @@
 # 10. 정확도와 비용을 결정하는 Fourier 차수
 
-> **과거 API 재현:** 이 페이지에서 `wavebit.compat`를 쓰는 코드·설명은 현재 설치의 API가 아닙니다.
-> 해당 이름은 [퇴역 전 소스 `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a)에 있습니다.
-> 측정 재현에는 본문에 적힌 원래 커밋·환경을 우선 사용하세요. 원본 측정값은 갱신하지 않았습니다.
-
-
-:::{note}
-다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
-:::
-
 Fourier 차수는 계산에 남길 공간 주파수 성분의 범위를 정합니다. 먼저 차수와 행렬 크기의 관계를 살펴보고, 형상 해상도·계수 계산 방법·Li와 NVF가 각각 무엇을 바꾸는지 구분합니다.
 
 ## Fourier 차수와 행렬 크기
 
-`truncation_order`에 지정하는 x·y 방향의 최대 차수를 각각 {math}`N_x`, {math}`N_y`라고 씁니다. 기본 0차 단일 입사에서는 {math}`m=-N_x,\ldots,N_x`, {math}`n=-N_y,\ldots,N_y`인 성분을 계산에 남깁니다. 두 차수의 조합으로 만들어지는 **전체 Fourier 성분 수**를 {math}`H`라고 하면 다음과 같습니다.
+`rcwa.Numerics(orders=(N_x, N_y))`에 지정하는 최대 차수를 각각 {math}`N_x`, {math}`N_y`라고 씁니다. 직사각형 셀에서는 첫째 격자 벡터가 x, 둘째가 y입니다. 기본 0차 단일 입사에서는 {math}`m=-N_x,\ldots,N_x`, {math}`n=-N_y,\ldots,N_y`인 성분을 계산에 남깁니다. 두 차수의 조합으로 만들어지는 **전체 Fourier 성분 수**를 {math}`H`라고 하면 다음과 같습니다.
 
 ```{math}
 H=(2N_x+1)(2N_y+1).
 ```
 
-예를 들어 `truncation_order=dict(x=2, y=1)`이면 {math}`N_x=2`, {math}`N_y=1`입니다. x 방향 차수는 −2, −1, 0, 1, 2로 **5개**, y 방향 차수는 −1, 0, 1로 **3개**이므로 전체 성분 수는 {math}`H=5\times3=15`입니다.
+예를 들어 `orders=(2, 1)`이면 {math}`N_x=2`, {math}`N_y=1`입니다. x 방향 차수는 −2, −1, 0, 1, 2로 **5개**, y 방향 차수는 −1, 0, 1로 **3개**이므로 전체 성분 수는 {math}`H=5\times3=15`입니다.
 
-다중 입사 차수 설정은 실제 차수 창을 확장하거나 옮길 수 있으므로 그때는 `result.orders_u`, `orders_v`를 직접 읽습니다.
+다중 입사 차수 설정은 실제 차수 창을 확장하거나 옮길 수 있으므로 그때는 `result.reflection.orders_u`, `orders_v`를 직접 읽습니다.
 
 ```{figure} ../../figures/learn/learn/10-orders.svg
 :alt: Fourier 차수 격자와 결과 배열의 행·열 대응
@@ -41,11 +32,11 @@ H=(2N_x+1)(2N_y+1).
 | 설정 | 바꾸는 것 |
 | --- | --- |
 | 재료 래스터의 행·열 수 | 형상 및 재료 분포를 표현하는 칸 |
-| `truncation_order` | 해와 연산자에 남기는 Fourier 차수 |
+| `orders` | 해와 연산자에 남기는 Fourier 차수 |
 | `fourier_coefficients` | 주어진 재료 분포에서 Fourier 계수를 얻는 방법 |
 | `factorization` | 불연속 재료와 장의 곱을 유한 행렬로 만드는 규칙 |
 | `shape_nvf_grid_size` | 도형 NVF 투영장을 표본화하는 격자 |
-| 장 재구성의 `sample_x/y/z` | 이미 계산한 해를 출력할 위치 |
+| 장 표본화 `result.field(x=..., y=..., z=...)` | 이미 계산한 해를 출력할 위치 |
 
 래스터는 한 층을 행·열의 격자로 나누고 각 칸에 재료값을 넣은 배열입니다. 등방성 재료의 유전율과 투자율은 각각 `2.25` 같은 **스칼라값 하나**로 지정할 수 있습니다. 이방성 재료를 표현하려면 각 칸의 유전율 또는 투자율을 **3×3 행렬**로 지정합니다. 행렬의 성분과 입력 방법은 {ref}`7장 <material-anisotropy>`에서 설명합니다.
 
@@ -78,17 +69,17 @@ H=(2N_x+1)(2N_y+1).
 다음은 이방성 재료의 주축을 0.3 rad 회전하고, 사각형 도형을 Li 방식으로 계산하는 예입니다. 재료의 주축만 회전하며 사각형의 변은 x·y축에 정렬되어 있습니다.
 
 ```python
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-crystal = wavebit.Material(epsilon=[2.25, 4., 2.8]).rotated(0.3)
-solver = wavebit.rcwa(
-    wavelength=730., period=(600., 600.), thickness=[173.],
-    structure=[{"background": 1., "shapes": [
-        {"type": "rectangle", "lx": 240., "ly": 300., "material": crystal},
-    ]}],
-    factorization="li", truncation_order=dict(x=3, y=3),
-)
-result = solver.solve()
+crystal = Material(epsilon=[2.25, 4., 2.8]).rotated(0.3)
+problem = rcwa.Problem(
+    units=Units(length="nm"),
+    stack=rcwa.Stack(period=(600., 600.), layers=(rcwa.Layer(
+        thickness=173., background=Material(epsilon=1.),
+        regions=(rcwa.Region(geometry=rcwa.Rectangle(size=(240., 300.)), material=crystal),)),)),
+    excitation=rcwa.Excitation(wavelength=730., sources=(rcwa.PlaneWave(side="top", polarization="s"),)))
+numerics = rcwa.Numerics(orders=(3, 3), factorization="li")
+result = rcwa.prepare(problem, numerics=numerics).run(problem)
 ```
 
 `factorization="li"`를 선택하면 NVF 전용 옵션인 `nvf_projector`, `raster_normal_method`, `shape_nvf_grid_size`는 지정하지 않습니다. 위 차수는 사용 예시의 시작값이며, 관심 결과의 차수 수렴을 확인합니다.

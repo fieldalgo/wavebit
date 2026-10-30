@@ -7,7 +7,7 @@
 
 
 :::{note}
-The `answers` keyword belongs to the retained `wavebit.compat.legacy` solver. The current
+The `answers` keyword belonged to the earlier `wavebit.compat.legacy` solver, retired on 2026-10-15. The current
 `rcwa` lifecycle declares it for you: `rcwa.Outputs(fields=True)` keeps `'field'`, and otherwise
 a solve keeps `'amplitude'` (`src/wavebit/rcwa/_adapt.py`). The measurements below are unchanged.
 :::

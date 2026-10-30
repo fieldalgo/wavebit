@@ -651,9 +651,6 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
     ``tests/rcwa/test_magnetic_layer.py``.
     """
     _require_solved(T1, layer_info_list)
-    if eps_rows is not None and not conical:
-        raise NotImplementedError('the continuity reconstruction is built for the conical path '
-                                  'only; the 2D path still takes the Fourier sum.')
     xp = array_namespace(T1)
     C = T1.dtype
     k0 = 2 * 3.141592653589793 / wavelength
@@ -749,7 +746,7 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
         # (`is not None`), which is the one form a traced `muz_conv_i` can answer.
         if muz_conv_i is not None:
             Uz = muz_conv_i @ Uz
-        if eps_row is not None:
+        if eps_row is not None and conical:
             # Ampere's x row puts the D_x series in Sx's place: it is continuous across the
             # grating's walls, so its sum does not ring, and the jump of E_x enters exactly when
             # the sum is divided by eps(x) below. In this frame z runs into the stack, which
@@ -772,8 +769,12 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
             # `-1j` converts out of `U = i H`; the three minus signs on top of it are the parity
             # into the declared frame (module docstring), so `H_z` keeps the bare conversion.
             comps = [inv_f @ M[:, :, None, None, :, :] for M in (Sx, Sy, -Sz)]
-            if eps_row is not None:
+            if eps_row is not None and conical:
                 comps[0] = comps[0] / xp.reshape(eps_row, (1, 1, 1, -1, 1, 1))
+            elif eps_row is not None:
+                ex, ey = _continuity_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C,
+                                        Sx, Sy, eps_row)
+                comps[0], comps[1] = ex[..., None, None], ey[..., None, None]
             comps += [-1j * (inv_f @ M[:, :, None, None, :, :]) for M in (-Ux, -Uy, Uz)]
             val = xp.concat([c[..., 0] for c in comps], axis=-1)
             cells.append(xp.moveaxis(val, 1, 0))
@@ -911,14 +912,58 @@ def field_1d_conical(wavelength, kx, ky, T1, layer_info_list, lattice,
 
 def field_2d(wavelength, kx, ky, T1, layer_info_list, lattice,
              sample_x=20, sample_y=20, sample_z=20, incidences=('incident',), interface_side='right',
-             _coefficients=False):
+             _coefficients=False, eps_rows=None):
     """Field of a 2D stack. ``(n_selected, nz, sample_y, sample_x, 6)``.
 
     ``nz`` is ``sample_z * n_layers`` for a count, ``len(sample_z)`` for explicit coordinates.
+    ``eps_rows`` selects the continuity reconstruction of ``E_x`` and ``E_y``: one entry per
+    layer record, ``None`` or the engine's ``(ops_x, ops_y, eps)`` (:func:`_continuity_2d`).
     """
     return _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice,
                           sample_x, sample_y, sample_z, incidences, conical=False,
-                          interface_side=interface_side, _coefficients=_coefficients)
+                          interface_side=interface_side, _coefficients=_coefficients,
+                          eps_rows=eps_rows)
+
+
+def _continuity_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, eps_row):
+    """``E_x`` and ``E_y`` of a patterned 2D layer by the line-wise continuity rule.
+
+    ``E_x`` jumps across walls normal to x and is continuous across walls normal to y, so its
+    series is summed one sample row at a time: over the y orders first, which is a series of a
+    function continuous in y, then Li's inverse rule ``[[1/eps]]_x^-1`` of the raster row under
+    that sample turns the x coefficients of ``E_x`` into those of ``D_x``, continuous along the
+    row; that sum is divided by ``eps`` at each sample. ``E_y`` is the same with the axes
+    swapped, line by line along the column under each x sample. This is the near-field rule of
+    P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357 (1998), as RETICOLO's ``res3`` applies it
+    to a Li-factorized texture (``champ=1``); pinned by
+    ``tests/references/test_reticolo_2d_field_golden.py``.
+
+    ``Sx`` / ``Sy`` are ``(nz, n_selected, n_orders, 1)``, orders flattened ``v``-major as the
+    BTTB layout has them, and ``eps_row`` is the engine's ``(ops_x, ops_y, eps)``. The phases
+    are :func:`_inv_fourier`'s separable branch, split by axis. Returns two
+    ``(nz, n_selected, n_y, n_x)`` arrays.
+    """
+    ops_x, ops_y, eps = eps_row
+    dev = _dev(kx)
+    period = periods_of(lattice)
+    x = _axis_samples(xp, sample_x, period[0], C, dev)
+    y = _axis_samples(xp, sample_y, period[1], C, dev)
+    px = xp.exp(1j * xp.reshape(x, (-1, 1)) * xp.reshape(kx, (1, -1)) * k0)     # (n_x, n_u)
+    py = xp.exp(1j * xp.reshape(y, (-1, 1)) * xp.reshape(ky, (1, -1)) * k0)     # (n_y, n_v)
+    n_u, n_v = kx.shape[0], ky.shape[0]
+    lead = Sx.shape[:2]
+    gx = xp.reshape(Sx, (*lead, n_v, n_u))
+    gy = xp.reshape(Sy, (*lead, n_v, n_u))
+    eps = xp.astype(eps, C)
+
+    ex_rows = py @ gx                                              # (.., n_y, n_u)
+    dx = (ops_x @ ex_rows[..., None])[..., 0]
+    ex = (dx @ xp.permute_dims(px, (1, 0))) / eps                  # (.., n_y, n_x)
+
+    ey_cols = xp.moveaxis(gy @ xp.permute_dims(px, (1, 0)), -1, -2)  # (.., n_x, n_v)
+    dy = (ops_y @ ey_cols[..., None])[..., 0]
+    ey = xp.moveaxis(dy @ xp.permute_dims(py, (1, 0)), -1, -2) / eps  # (.., n_y, n_x)
+    return ex, ey
 
 
 def plot_field(field_cell, tetm_index=0, plot_indices=(1, 1, 1, 1, 1, 1), y_slice=0, z_slice=-1,

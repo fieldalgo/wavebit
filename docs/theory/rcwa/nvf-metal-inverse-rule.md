@@ -19,10 +19,11 @@ Targets:
 - `src/wavebit/rcwa/_engine/factorization.py::_jax_floor`, `_torch_floor` — where that derivative enters autodiff (reverse and forward mode), and where a second derivative is refused
 - `src/wavebit/_common/backend.py::forward_tangent` — how a PyTorch forward-mode dual, which has no `requires_grad`, is recognised (`carries_autodiff` asks it)
 - `src/wavebit/rcwa/_engine/factorization.py::INVERSE_RULE_BOUND` — the one constant, and why it is 2
+- `src/wavebit/rcwa/_engine/factorization.py::inverse_rule_bound` — the bound every builder hands over: `None` (no floor) on a readable layer of passive dielectrics, else `max |eps|`
 - `src/wavebit/rcwa/_engine/factorization.py::nvf_conv_matrices`, `nvf_conv_matrices_integrated` — the raster builders' bound, the raster's largest `|eps|`
 - `src/wavebit/rcwa/_engine/boundary.py::conv_mats` — the boundary path's bound, taken region by region
 - `src/wavebit/rcwa/_engine/parametric.py::nvf_from_coeffs` — now delegates to `_nvf_assemble` rather than carrying its own copy of the formula
-- `src/wavebit/rcwa/_engine/parametric.py::largest_eps` — the bound the shape path hands over
+- `src/wavebit/rcwa/_engine/parametric.py::layer_epsilons` — the permittivities the shape path decides its bound from
 - `studies/rcwa/nvf_resonant_spectrum/resonant_nvf_probe.py::direct_from_coeffs` — the diagnostic stand-in for `nvf_from_coeffs`, which takes the bound and ignores it
 - `tests/rcwa/test_nvf_metal_inverse_rule.py`
 
@@ -112,7 +113,18 @@ with square truncation.
 max|eps|)` to that value and keeps the singular vectors. On a two-material layer `<1/eps>` is a
 normal matrix (a linear function of the Hermitian `K`), so this is exactly a clip on the magnitude
 of each eigenvalue with its phase untouched: the mode at the pole keeps its loss angle and loses
-its excursion. It is bit-transparent where nothing is below the floor.
+its excursion. It is bit-transparent where nothing is below the floor. Since 2026-10-28 it is decided
+from the materials first: a layer whose permittivities can all be read and are passive dielectrics
+(`Re eps > 0`, `Im eps ≥ 0`, the case proved below) is not floored at all, so no singular value is
+computed. Any other layer computes the singular values alone, and the full SVD only where one is
+below the floor. A metal, a gain medium, `Re eps = 0` and a permittivity that is an argument of
+a `jax.jit` function (not a constant of the trace, which is read on the host) all take that
+second route. The full SVD was not only the costlier half. PyTorch's (MKL's) failed to converge on the
+`<1/eps>` of a dielectric circle at 961 harmonics (two tight clusters of singular values,
+condition 12.25), which this floor would never have touched. The cause is LAPACK's
+divide-and-conquer driver, not the matrix ([the torch upstream defects page](../../development/torch-upstream-defects.md),
+section 6), so where a layer does need the full SVD a failure on a finite matrix is recomputed
+with the QR-based `?gesvd` and announced with `wavebit.rcwa.diagnostics.SvdConvergenceWarning`.
 
 Why it never binds on a passive dielectric: the numerical range of `<1/eps>` lies in the convex
 hull of the values `1/eps` takes, so the smallest singular value is at least the hull's distance

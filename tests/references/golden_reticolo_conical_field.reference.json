@@ -1,0 +1,138 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_reticolo_conical_field",
+  "physics": "rcwa",
+  "comparison": "same-discretization",
+  "role": "external field oracle (conical path on a patterned layer)",
+  "references": [
+    {
+      "tool": "RETICOLO",
+      "version": "V10",
+      "build": "reticolo_allege_v10 tree given by RETICOLO_PATH (outside the repository)",
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "CC-BY-4.0",
+      "source": "https://doi.org/10.5281/zenodo.14631951",
+      "install": {
+        "kind": "manual",
+        "command": null
+      },
+      "settings": "Octave host via oct2py; interface/Reticolo.py run_res3 -> reticolo_res3.m; grating_type 1 (conical); 4 stacks x (theta, phi) in {(24,0),(24,15),(41,40)} x s/p, WL 620, period 400, top/bot vacuum; stored raw (z, x, y, 6) in RETICOLO's frame",
+      "discretization": "truncation_order 8 (17 orders); same formulation as Wavebit's 1D path; Ex on patterned layers excepted (8.6e-2 to 1.2e-1 at default reconstruction)",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": true
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_reticolo_conical_field.py",
+    "sha256": null,
+    "command": "RETICOLO_PATH=... conda run -n fieldwave python tests/references/gen_goldens_reticolo_conical_field.py",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-08-15",
+  "environment": {
+    "python": null,
+    "numpy": null,
+    "other": "Octave (via oct2py), conda env 'fieldwave' per the docstring command; RETICOLO_PATH"
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_reticolo_conical_field.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_reticolo_conical_field.npz",
+    "format": "npz",
+    "file_sha256": "af89fe7dae1cad62e92feff166b0aeeacd1d353fe7bdcaf9f8d3171a8e24f1af",
+    "arrays": [
+      "bilayer__24__0__p",
+      "bilayer__24__0__s",
+      "bilayer__24__15__p",
+      "bilayer__24__15__s",
+      "bilayer__41__40__p",
+      "bilayer__41__40__s",
+      "bilayer__o",
+      "bilayer__z",
+      "grating__24__0__p",
+      "grating__24__0__s",
+      "grating__24__15__p",
+      "grating__24__15__s",
+      "grating__41__40__p",
+      "grating__41__40__s",
+      "grating__o",
+      "grating__z",
+      "lossy__24__0__p",
+      "lossy__24__0__s",
+      "lossy__24__15__p",
+      "lossy__24__15__s",
+      "lossy__41__40__p",
+      "lossy__41__40__s",
+      "lossy__o",
+      "lossy__z",
+      "uniform__24__0__p",
+      "uniform__24__0__s",
+      "uniform__24__15__p",
+      "uniform__24__15__s",
+      "uniform__41__40__p",
+      "uniform__41__40__s",
+      "uniform__o",
+      "uniform__z",
+      "x"
+    ]
+  },
+  "values_sha256": "9031d53dfbea6ae1ecf066afa751c0b6c9e08e7c6666c540c69164dc2ec88fcd",
+  "content_sha256": "757e178b65524f36bf1c255e9004ea671d1ad6be1629cae4dcca518e35d8adcf",
+  "consumers": [
+    "tests/references/test_reticolo_conical_field_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[0].version": "tests/references/README.md:86, 100, 1369-1370 ('RETICOLO's rows name V10'); generator docstring",
+    "references[0].build": "generator RETICOLO_PATH check ('set RETICOLO_PATH to a reticolo_allege_v10 directory')",
+    "references[0].source": "tools/third_party_licenses.json external_tools.RETICOLO.url; README.md:1310 (Zenodo V10 record 14631951)",
+    "references[0].install": "README.md:86 ('Octave + a RETICOLO V10 tree from its Zenodo record ... (RETICOLO_PATH)'); README.md:1336-1338 (kept outside the repository, pinned by RETICOLO_PATH)",
+    "references[0].execution": "tools/third_party_licenses.json external_tools.Octave.use ('runs RETICOLO as a separate process driven by oct2py'); docs/development/third-party.md:191",
+    "references[0].independence.product_loaded_in_reference_process": "docs/development/third-party.md:191 ('Our .m wrappers run inside Octave and never call Wavebit'). The Python driver process (oct2py) does import wavebit",
+    "comparison": "tests/references/README.md:556-575 (9.8e-14 on every component both resolve)",
+    "role": "tests/references/README.md:109",
+    "references[0].settings": "gen_goldens_reticolo_conical_field.py:71-115; _reticolo_conical_field_cases.py:32-87",
+    "references[0].independence.reference_inputs_built_from_product_objects": "interface/Reticolo.py:12-33 (_index): every texture/half-space index handed to Octave is computed by wavebit.refractive_index_from_eps from the case's permittivity; cases themselves are numpy arrays",
+    "generator imports": "gen_goldens_reticolo_conical_field.py:75 interface.Reticolo (imports wavebit); case helpers import numpy only",
+    "generator.command": "tests/references/gen_goldens_reticolo_conical_field.py:7",
+    "generated_date": "tests/references/README.md:558 ('Added 2026-08-15'); README.md:48-53: regenerated after the 2026-08-20 flip, bit for bit (date not given)",
+    "arrays": "archive keys: <stack>__<theta>__<phi>__<pol>, <stack>__z, <stack>__o, x (33)"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "not in tests/references/README.md, the golden itself or its generator (record reconstructed 2026-10-28)",
+    "environment.python": "not recorded in README.md or the generators",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].install.command": "README.md:86/100 and generators: download from Zenodo and set RETICOLO_PATH; no command; Octave and oct2py install steps not documented",
+    "references[0].modified.description": "README.md and generator docstrings say 'version-pinned V10 tree' but not whether it is pristine (gen_goldens_reticolo.py:24-28 mentions an earlier modified V9 and a V9_pristine tree, both no longer used)",
+    "references[0].modified.value": "README.md and generator docstrings say 'version-pinned V10 tree' but not whether it is pristine (gen_goldens_reticolo.py:24-28 mentions an earlier modified V9 and a V9_pristine tree, both no longer used)"
+  }
+}

@@ -1,40 +1,38 @@
 # 14. 위치별 전기장과 자기장 구하기
 
 :::{note}
-다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
+그림 14-2는 아직 이전 필드 배열을 그립니다. 파장 축이 없고 마지막 세 칸이 Z₀H입니다. 현재 `.values`
+배열은 `(n_wavelengths, nz, ny, nx, 6)`이고 마지막 세 성분은 A/m 단위의 H입니다. 본문과 코드는 현재
+배열을 씁니다.
 :::
 
 반사율·투과율은 빛이 전달하는 전력의 비율입니다. 층 안에서 전기장과 자기장이 어떻게 분포하는지 보려면, 계산이 끝난 뒤 원하는 위치에서 **필드**를 읽습니다. 필드를 읽는다는 것은 그 위치의 전기장·자기장 성분을 구한다는 뜻입니다.
 
-일반 입사, 여러 평면파, 가우시안 빔, 다이폴 소스 모두 `solve()`가 반환한 **결과 객체**에서 필드를 읽습니다. 이 장에서는 계산 준비, 위치 지정, 반환 배열, 경계면의 장을 차례로 설명한 뒤 복소수의 의미와 자기장 단위를 다룹니다.
-
-**현재 예제와 이전 설명의 구분:** 실행 파일은 `Outputs(fields=True)`와 `result.field(x=..., y=..., z=...)`를 사용합니다. 현재 결과에는 파장 축이 있고 H는 이미 A/m입니다. 이 장의 나머지 `answers`, `reconstruct_field`, Z₀H 배열과 단위 변환 설명은 이전 인터페이스의 규약입니다. 현재 결과에 그 변환을 중복 적용하지 마세요. [현재 필드 안내](../../guide/rcwa/fields.md)를 참고하세요.
+평면파 하나, 여러 평면파, 가우시안 빔, 다이폴 소스 모두 `rcwa.run()`이 반환한 **결과 객체**에서 필드를 읽습니다. 이 장에서는 계산 준비, 위치 지정, 반환 배열, 경계면의 장을 차례로 설명한 뒤 복소수의 의미와 자기장 단위를 다룹니다. 같은 규칙을 참조 형식으로 정리한 것은 [필드 안내](../../guide/rcwa/fields.md)입니다.
 
 (field-preparation)=
 ## 계산 결과에서 필드 읽기
 
-층 내부의 필드가 필요하면 `answers="field"`로 계산합니다.
+필드는 계산하기 전에 문제의 `rcwa.Outputs(fields=True)`로 요청합니다.
 
 ```python
-result = solver.solve(answers="field")
-cell = result.reconstruct_field(sample_x=41, sample_y=21, sample_z=20)
+problem = problem.replace(outputs=rcwa.Outputs(fields=True))
+result = rcwa.run(problem, numerics=numerics)
+cell = result.field(x=41, y=21, z=20)
 ```
 
-`result`는 이 계산에 사용한 파수·두께와 층별 계산 상태를 보관합니다. 읽을 위치만 바꿀 때는 다시 풀 필요가 없습니다. 같은 결과에서 여러 위치의 필드를 반복해서 읽을 수 있고, `solver`의 설정을 바꾸거나 다시 계산해도 앞서 얻은 `result`는 처음 계산한 조건의 필드를 반환합니다.
+`result`는 이 계산에 사용한 파수·두께와 층별 계산 상태를 보관합니다. 읽을 위치만 바꿀 때는 다시 계산할 필요가 없습니다. 같은 결과에서 여러 위치의 필드를 반복해서 읽을 수 있고, 다른 문제를 계산하거나 같은 준비로 다시 계산해도 앞서 얻은 `result`는 처음 계산한 조건의 필드를 반환합니다.
 
-`answers`에 따라 계산 후 읽을 수 있는 정보는 다음과 같습니다. 이 규칙은 입사파와 소스를 지정하는 방식에 관계없이 같습니다.
+`Outputs`에 따라 결과가 보관하는 정보는 다음과 같습니다. 이 규칙은 입사파와 소스를 지정하는 방식에 관계없이 같습니다.
 
-| `answers` 설정 | 전력 결과 | 경계면 필드 | 층 내부 필드 |
+| `Outputs` | 전력 결과 | 경계면 필드 | 층 내부 필드 |
 | --- | --- | --- | --- |
-| `"efficiency"` | 보관 | — | — |
-| `"amplitude"` — 기본값 | 보관 | 보관 | — |
-| `"field"` | 보관 | 보관 | 보관 |
+| `Outputs()` — 기본값 | 보관 | — | — |
+| `Outputs(fields=True)` | 보관 | 보관 | 보관 |
 
-경계면의 전기장·자기장은 `result.boundary_fields()`로 읽으며, 계산할 때 `answers="amplitude"` 또는 `"field"`를 지정해야 합니다. 층 내부의 전기장·자기장을 `result.reconstruct_field()`로 읽으려면 `answers="field"`가 필요합니다.
+경계면의 전기장·자기장은 `result.boundary_fields(...)`로, 층 내부의 전기장·자기장은 `result.field(...)`로 읽습니다. 둘 다 `Outputs(fields=True)`가 필요하며, 없으면 코드 `outputs.unavailable`의 `UnsupportedFeatureError`가 납니다. 필드를 요청하지 않은 계산은 경계면 장으로 전력을 구한 뒤 그 장을 버립니다. 나중에 필드가 필요해지면 `Outputs(fields=True)`로 다시 계산합니다.
 
-`answers="efficiency"`에서는 전력을 계산하는 데 사용한 복소 장을 결과에 보관하지 않습니다. 필드가 필요해졌다면 필요한 `answers` 설정으로 다시 `solve()`합니다.
-
-소스를 지정한 결과에서 `result.boundary_power(region)`으로 관측 영역을 바꾸어 전력을 다시 구할 때도 `"amplitude"` 이상이 필요합니다. 처음 지정한 영역에서 이미 구한 전력은 모든 설정에서 `result.power`로 읽을 수 있습니다.
+평면파 하나가 아닌 소스를 쓴 결과에서는 `result.outputs['top']`과 `result.outputs['bottom']`에 문제의 `Outputs(power_region=...)`에서 구한 전력이 들어 있으며, 필드 요청 여부와 관계없습니다. 현재 결과에는 보관한 장으로 다른 영역의 전력을 다시 구하는 메서드가 없으므로, 그 영역으로 문제를 다시 계산합니다.
 
 (ordinary-field-sampling)=
 ## 층 내부의 필드 구하기
@@ -63,24 +61,22 @@ cell = result.reconstruct_field(sample_x=41, sample_y=21, sample_z=20)
 (field-sample-coordinates)=
 ### 읽을 위치 지정하기
 
-`sample_x`, `sample_y`, `sample_z`에는 **점의 개수**를 정수로 넣거나, **좌표 자체**를 1차원 배열로 넣습니다. `reconstruct_field()`에서는 생략한 항목이 각각 `20`입니다.
+`x`, `y`, `z`에는 **점의 개수**를 양의 정수로 넣거나, **좌표 자체**를 비어 있지 않은 1차원 배열로 넣습니다. `field()`는 세 항목이, `boundary_fields()`는 `x`와 `y`가 모두 필요하며 기본값은 없습니다.
 
 | 입력 | 의미 | 예 |
 | --- | --- | --- |
-| `sample_x` | 셀의 x 방향 점 개수, 또는 x 좌표 배열 | `41`, `[-100., 0., 100.]` |
-| `sample_y` | 셀의 y 방향 점 개수, 또는 y 좌표 배열 | `21`, `[0.]` |
-| `sample_z` | 층마다 배치할 점 개수, 또는 층 전체를 기준으로 한 z 좌표 배열 | `20`, `[0., 60., 120.]` |
+| `x` | 셀의 x 방향 점 개수, 또는 x 좌표 배열 | `41`, `[-100., 0., 100.]` |
+| `y` | 셀의 y 방향 점 개수, 또는 y 좌표 배열 | `21`, `[0.]` |
+| `z` | 층마다 배치할 점 개수, 또는 층 전체를 기준으로 한 z 좌표 배열 | `20`, `[0., 60., 120.]` |
 
 위 예제에서 셀 중심의 세 높이만 읽으려면 다음처럼 씁니다.
 
 ```python
-three_heights = result.reconstruct_field(
-    sample_x=[0.], sample_y=[0.], sample_z=[0., 60., 120.],
-)
-print(three_heights.shape)  # (3, 1, 1, 6)
+three_heights = result.field(x=[0.], y=[0.], z=[0., 60., 120.])
+print(three_heights.values.shape)  # (1, 3, 1, 1, 6)
 ```
 
-`sample_z=20`은 **각 층에 20개씩** 점을 배치합니다. 두 층이면 z 방향의 결과가 총 40개입니다. 반면 `sample_z=[20.]`은 높이 20 nm에서 한 번 읽는다는 뜻입니다.
+`z=20`은 **각 층에 20개씩** 점을 배치합니다. 두 층이면 z 방향의 결과가 총 40개입니다. 반면 `z=[20.]`은 높이 20 nm에서 한 번 읽는다는 뜻입니다.
 
 - x·y의 원점은 셀 중심입니다. 직사각형 셀에서 개수를 지정하면 각 방향의 셀 양 끝을 포함해 균일하게 배치합니다. 개수가 1이면 음의 방향 끝점이므로, 중심의 한 점을 읽으려면 `[0.]`을 씁니다.
 - z의 원점은 맨 아래층의 바닥이며, 위쪽으로 갈수록 증가합니다. 좌표 배열은 `0 ≤ z ≤ sum(thickness)` 범위에서 지정합니다.
@@ -92,9 +88,9 @@ x·y 좌표를 배열로 지정하면 모든 x·y 조합을 읽고, 이를 각 z
 
 **층 경계:** 정확히 내부 경계면에 놓인 z 좌표는 위쪽 층의 값으로 읽습니다. `z=0`과 `z=sum(thickness)`에서는 각각 맨 아래층과 맨 위층의 안쪽 값을 읽습니다.
 
-점 개수로 `sample_z`를 지정하면 각 층을 따로 나눕니다. 개수가 2 이상이면 각 층의 양 끝을 포함하므로, 내부 경계면은 아래층 쪽 값과 위층 쪽 값이 한 번씩 들어갑니다. 법선 성분 `Ez`, `Hz`는 재료 경계에서 달라질 수 있습니다. `sample_z=1`은 각 층의 아래쪽 면을 읽습니다.
+점 개수로 `z`를 지정하면 각 층을 따로 나눕니다. 개수가 2 이상이면 각 층의 양 끝을 포함하므로, 내부 경계면은 아래층 쪽 값과 위층 쪽 값이 한 번씩 들어갑니다. 법선 성분 `Ez`, `Hz`는 재료 경계에서 달라질 수 있습니다. `z=1`은 각 층의 아래쪽 면을 읽습니다.
 
-**사선 격자:** 정수 `sample_x`, `sample_y`는 두 격자 벡터를 따라 점을 배치하며, 배열의 수평 축은 `(v, u)`에 대응합니다. 두 항목을 모두 좌표 배열로 넣으면 직교 좌표 x·y의 모든 조합에서 읽습니다. 사선 격자에서는 한쪽만 개수, 다른 쪽은 좌표 배열로 섞어 지정하지 않습니다.
+**사선 격자:** 정수 `x`, `y`는 두 격자 벡터를 따라 점을 배치하며, 배열의 수평 축은 `(v, u)`에 대응합니다. 두 항목을 모두 좌표 배열로 넣으면 직교 좌표 x·y의 모든 조합에서 읽습니다. 사선 격자에서는 한쪽만 개수, 다른 쪽은 좌표 배열로 섞어 지정하지 않습니다.
 
 **다이폴:** 점 다이폴이 놓인 높이에서는 장이 특이하므로, 그 높이를 제외하고 위·아래 위치를 지정합니다. 점 개수 방식이 소스 높이를 포함하는 경우에도 다른 표본 위치를 선택해야 합니다.
 :::
@@ -102,78 +98,81 @@ x·y 좌표를 배열로 지정하면 모든 x·y 조합을 읽고, 이를 각 z
 (fields-detail-id26)=
 ### 반환 배열에서 성분 고르기
 
-모든 결과의 층 내부 필드는 `(nz, ny, nx, 6)` 모양입니다. 앞의 세 축으로 위치를 고르고, 마지막 축으로 성분을 고릅니다.
+`result.field(...)`는 필드 표본 객체를 반환합니다. 그 `.values` 배열은 모든 결과에서 `(n_wavelengths, nz, ny, nx, 6)` 모양입니다. 첫 축은 파장이며 파장이 하나여도 남습니다. 다음 세 축으로 위치를 고르고, 마지막 축으로 성분을 고릅니다. `.components`는 여섯 성분의 이름을, `.units`는 각 성분과 `'coordinates'`의 단위를 알려 줍니다.
 
 ```{figure} ../../figures/learn/learn/13-field-layout.svg
 :alt: 공통 필드 배열은 z, y, x, 성분 순서이며 마지막 축에는 Ex Ey Ez Z0Hx Z0Hy Z0Hz가 들어 있다
 :figclass: learning-figure
 
-그림 14-2. 결과 객체에서 읽는 필드 배열의 축과 여섯 성분. 자기장은 Z₀가 곱해진 정규화 값입니다.
+그림 14-2. 결과 객체에서 읽는 필드 배열의 위치 축과 여섯 성분. 그림은 아직 이전 배열을 그립니다. 현재 `.values` 배열에는 맨 앞에 파장 축이 있고, 마지막 세 성분은 Z₀H가 아니라 A/m 단위의 H입니다.
 ```
 
 | 인덱스 | `0` | `1` | `2` | `3` | `4` | `5` |
 | --- | --- | --- | --- | --- | --- | --- |
-| 성분 | E<sub>x</sub> | E<sub>y</sub> | E<sub>z</sub> | Z<sub>0</sub>H<sub>x</sub> | Z<sub>0</sub>H<sub>y</sub> | Z<sub>0</sub>H<sub>z</sub> |
+| 성분 | E<sub>x</sub> | E<sub>y</sub> | E<sub>z</sub> | H<sub>x</sub> | H<sub>y</sub> | H<sub>z</sub> |
+| 단위 | V/m | V/m | V/m | A/m | A/m | A/m |
 
 ```python
-E = cell[..., :3]           # 전기장 세 성분
-H_normalized = cell[..., 3:] # 정규화된 자기장 세 성분
-Ey = cell[..., 1]           # 모든 위치의 전기장 y 성분
+E = cell.values[..., :3]    # 전기장 세 성분, V/m
+H = cell.values[..., 3:]    # 자기장 세 성분, A/m
+Ey = cell.values[..., 1]    # 모든 파장·위치의 전기장 y 성분
+print(cell.components)      # ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')
 ```
 
-TE/TM에서도 여섯 성분의 위치는 같습니다. 순수 TE에서는 `Ex`, `Ez`, `Hy`가 0이고, 순수 TM에서는 `Ey`, `Hx`, `Hz`가 0입니다.
+여섯 성분의 위치는 편광에 관계없이 같습니다. y 방향으로 변하지 않는 구조에 xz 입사면(`phi=0`)으로 s(TE) 편광이 들어오면 `Ex`, `Ez`, `Hy`가 0이고, p(TM) 편광이면 `Ey`, `Hx`, `Hz`가 0입니다.
 
-일반 결합 계산에서 함께 구한 순수 s·p 편광 응답은 `incidence="s"` 또는 `"p"`로 하나씩 읽습니다. 기본값 `"incident"`는 지정한 입사 조건의 결과입니다.
+`field()`는 지정한 입사 조건의 응답을 반환합니다. 순수 s·p 응답이 필요하면 `polarization="s"`와 `"p"`로 문제를 한 번씩 계산하고 각 결과에서 필드를 읽습니다.
 
-```python
-# s·p 응답을 함께 계산한 결과에서 사용
-s_field = result.reconstruct_field(incidence="s")
-p_field = result.reconstruct_field(incidence="p")
-```
+:::{admonition} 이전 인터페이스
+:class: earlier-interface
 
-이 선택은 서로 다른 입사파의 기여를 분리하는 기능이 아닙니다. 순수 TE/TM과 여러 소스를 합친 결과에서는 `incidence="incident"`만 사용합니다.
+이전 인터페이스의 결합 계산은 순수 s·p 응답도 함께 보관했고, `result.reconstruct_field(incidence="s")` 또는 `incidence="p"`로 읽었습니다. 기본값 `"incident"`는 지정한 입사 조건의 결과였습니다. 현재 `field()`와 `boundary_fields()`에는 `incidence` 인자가 없습니다.
+:::
 
 :::{dropdown} 두께를 자동미분하며 필드를 계산할 때
 
-두께를 바꿀 때마다 해당 두께로 `solve()`하고, 반환된 결과에서 필드를 읽습니다.
+미분 바깥에서 한 번 준비하고, 두께마다 그 두께의 문제로 계산한 뒤 반환된 결과에서 필드를 읽습니다.
 
 ```python
+prepared = rcwa.prepare(problem, numerics=numerics, backend="jax")
+
 def field_for_thickness(d):
-    result = solver.solve(thickness=d, answers="field")
-    return result.reconstruct_field(
-        sample_x=[0.], sample_y=[0.], sample_z=20,
-    )
+    layer = problem.stack.layers[0].replace(thickness=d)
+    live = problem.replace(stack=problem.stack.replace(layers=(layer,)))
+    return prepared.run(live).field(x=[0.], y=[0.], z=20).values
 ```
 
-일반 입사 결과의 공통 필드 함수는 JAX·PyTorch에서 두께에 대한 자동미분을 지원합니다. `sample_z=20`은 각 층 안의 상대 위치에 점을 배치하므로, 두께가 바뀌면 표본의 실제 높이도 함께 바뀝니다.
+평면파 하나의 결과에서 `prepared.run`과 `field`는 JAX·PyTorch에서 두께에 대한 자동미분을 지원합니다. `z=20`은 각 층 안의 상대 위치에 점을 배치하므로, 두께가 바뀌면 표본의 실제 높이도 함께 바뀝니다.
 
-`sample_z=[50., 100.]`처럼 좌표를 넣으면 고정된 높이에서의 변화를 계산합니다. 두께를 바꾸는 동안 표본이 같은 층 안에 머무르는 구간에서 미분할 수 있습니다. 경계가 표본을 통과하면 해당 위치의 재료와 장의 법선 성분이 바뀔 수 있으므로, 그 지점에서 매끄러운 미분을 기대할 수는 없습니다. JAX `jit`에서는 좌표가 층 밖으로 나가지 않도록 입력 범위도 유지해야 합니다.
+`z=[50., 100.]`처럼 좌표를 넣으면 고정된 높이에서의 변화를 계산합니다. 두께를 바꾸는 동안 표본이 같은 층 안에 머무르는 구간에서 미분할 수 있습니다. 경계가 표본을 통과하면 해당 위치의 재료와 장의 법선 성분이 바뀔 수 있으므로, 그 지점에서 매끄러운 미분을 기대할 수는 없습니다. JAX `jit`에서는 좌표가 층 밖으로 나가지 않도록 입력 범위도 유지해야 합니다.
 
-`PlaneWave`·다이폴 등의 소스 계산은 소스 분류와 층 분할에서 구체적인 수치값을 사용합니다. 위 설명은 일반 입사 계산의 자동미분에 해당합니다.
+여러 `PlaneWave`, `GaussianBeam`, 다이폴 같은 다른 소스의 계산은 소스 묶기와 층 분할에서 구체적인 수치값을 사용하며, JAX로 추적한 입력을 거부합니다. 위 설명은 평면파 하나의 계산에 해당합니다.
 :::
 
 (illumination-fields)=
 (fields-detail-id23)=
 ## 경계면의 입사파·출력파·전체 장 읽기
 
-경계면은 `result.boundary_fields(...)`로 읽습니다. 단일 입사에도, 여러 소스를 합친 결과에도 같은 함수를 사용합니다. 아래는 위·아래에서 s 편광을 넣는 예제이며, 아래 입사파의 상대 위상은 90°입니다.
+경계면은 `result.boundary_fields(...)`로 읽습니다. 평면파 하나에도, 여러 소스를 합친 결과에도 같은 메서드를 사용합니다. 아래는 위·아래에서 s 편광을 넣는 예제이며, 아래 입사파의 상대 위상은 90°입니다. 양쪽에 소스가 있는 계산은 회절 효율 대신 포트 전력을 돌려주므로 `Outputs(diffraction=False)`가 필요합니다.
 
 ```python
-field_solver = wavebit.rcwa(
-    wavelength=600., period=(900., 850.),  # 길이 단위: nm
-    top=1., bot=2.25,
-    structure=[dict(background=4.+0.6j, shapes=[])],
-    thickness=[100.], truncation_order=0,
-    kx=0.002, ky=0.,                       # 단위: nm⁻¹
-    excitation={
-        "top": wavebit.PlaneWave(polarization=(1., 0.)),
-        "bottom": wavebit.PlaneWave(
-            polarization=(1., 0.),
-            amplitude=np.exp(1j * np.deg2rad(90.)),
-        ),
-    },
+import numpy as np
+from wavebit import Material, Units, rcwa
+
+field_problem = rcwa.Problem(
+    units=Units(length="nm"),
+    stack=rcwa.Stack(
+        period=(900., 850.),
+        top=Material(epsilon=1.), bottom=Material(epsilon=2.25),
+        layers=(rcwa.Layer(thickness=100., background=Material(epsilon=4. + 0.6j)),)),
+    excitation=rcwa.Excitation(wavelength=600., sources=(
+        rcwa.PlaneWave(side="top", polarization="s", kx=0.002, ky=0.),       # 단위: nm⁻¹
+        rcwa.PlaneWave(side="bottom", polarization="s", kx=0.002, ky=0.,
+                       amplitude=np.exp(1j * np.deg2rad(90.))),
+    )),
+    outputs=rcwa.Outputs(diffraction=False, fields=True),
 )
-field_result = field_solver.solve(answers="field")
+field_result = rcwa.run(field_problem, numerics=rcwa.Numerics(orders=(0, 0)))
 x = np.linspace(-300., 300., 61)
 y = np.array([0.])
 ```
@@ -184,38 +183,38 @@ y = np.array([0.])
 위 경계면은 `z=100 nm`, 아래 경계면은 `z=0`입니다. 다음 코드는 위 경계면의 `y=0`인 선에서 필드를 읽습니다.
 
 ```python
-incoming = field_result.boundary_fields("top", x, y, part="incoming")
-outgoing = field_result.boundary_fields("top", x, y, part="outgoing")
-boundary = field_result.boundary_fields("top", x, y, part="total")
-print(boundary.shape)  # (1, 61, 6)
+incoming = field_result.boundary_fields(side="top", x=x, y=y, part="incoming")
+outgoing = field_result.boundary_fields(side="top", x=x, y=y, part="outgoing")
+boundary = field_result.boundary_fields(side="top", x=x, y=y, part="total")
+print(boundary.values.shape)  # (1, 1, 61, 6)
 # 같은 위치에서 boundary = incoming + outgoing
 ```
 
 | 입력 | 의미 |
 | --- | --- |
 | `side` | `"top"` 또는 `"bottom"`. 읽을 경계면을 지정합니다. |
-| `sample_x`, `sample_y` | 점 개수 또는 좌표 배열. 생략하면 각각 `[0.]`으로 셀 중심을 읽습니다. |
+| `x`, `y` | 점 개수 또는 좌표 배열. 반드시 지정합니다. `[0.]`은 셀 중심입니다. |
 | `part="incoming"` | 선택한 쪽에서 층을 향해 들어오는 파 |
 | `part="outgoing"` | 층에서 선택한 쪽으로 나가는 파 |
 | `part="total"` — 기본값 | 들어오는 파와 나가는 파를 합친 전체 장 |
 
-반환 모양은 `(ny, nx, 6)`이며, 성분 순서는 층 내부와 같습니다. 여러 소스의 기여는 복소수로 합쳐집니다. 양면 입사에서 위쪽의 `outgoing`에는 위 입사파의 반사 성분과 아래 입사파의 투과 성분이 함께 들어 있습니다.
+`.values`의 모양은 `(n_wavelengths, ny, nx, 6)`이며, 성분 순서와 단위는 층 내부와 같습니다. 여러 소스의 기여는 복소수로 합쳐집니다. 양면 입사에서 위쪽의 `outgoing`에는 위 입사파의 반사 성분과 아래 입사파의 투과 성분이 함께 들어 있습니다.
 
 (fields-detail-id25)=
 ### 경계면의 바깥쪽과 안쪽
 
-`boundary_fields()`는 경계면의 **반무한 매질 쪽 값**을 반환합니다. 층 안쪽 값은 `reconstruct_field()`로 읽습니다.
+`boundary_fields()`는 경계면의 **반무한 매질 쪽 값**을 반환합니다. 층 안쪽 값은 `field()`로 읽습니다.
 
 ```python
-inside = field_result.reconstruct_field(x, y, sample_z=[0., 50., 100.])
-print(inside.shape)  # (3, 1, 61, 6)
-middle = inside[1]   # z=50 nm인 선의 필드
+inside = field_result.field(x=x, y=y, z=[0., 50., 100.])
+print(inside.values.shape)  # (1, 3, 1, 61, 6)
+middle = inside.values[0, 1]  # z=50 nm인 선의 필드
 ```
 
 | 호출 | 읽는 쪽 |
 | --- | --- |
-| `field_result.boundary_fields("top", x, y)` | 위 경계면의 `top` 반무한 매질 쪽 |
-| `field_result.reconstruct_field(x, y, sample_z=[100.])` | 위 경계면의 100 nm 층 안쪽 |
+| `field_result.boundary_fields(side="top", x=x, y=y)` | 위 경계면의 `top` 반무한 매질 쪽 |
+| `field_result.field(x=x, y=y, z=[100.])` | 위 경계면의 100 nm 층 안쪽 |
 
 자유 표면 전하·전류가 없는 경계에서 접선 성분 `Ex`, `Ey`, `Hx`, `Hy`는 양쪽에서 이어집니다. 법선 성분 `Ez`, `Hz`는 재료에 따라 달라질 수 있습니다. 층 내부 함수는 모든 소스가 만드는 전체 장을 반환하므로 `part`를 지정하지 않습니다.
 
@@ -228,7 +227,7 @@ middle = inside[1]   # z=50 nm인 선의 필드
 위 `inside` 배열에서 중간 높이의 전기장 y 성분을 꺼내 보겠습니다.
 
 ```python
-Ey = inside[1, 0, :, 1]              # z=50 nm, y=0인 선의 Ey
+Ey = inside.values[0, 1, 0, :, 1]    # z=50 nm, y=0인 선의 Ey
 Ey_amplitude = np.abs(Ey)           # 진폭의 크기
 Ey_phase_deg = np.angle(Ey, deg=True) # 위상, 단위: 도
 ```
@@ -259,8 +258,8 @@ Ey_instant = np.real(Ey * np.exp(-1j * omega_t))
 전기장 세 성분의 크기 제곱을 합한 {math}`|\mathbf E|^2`는 다음처럼 읽습니다.
 
 ```python
-E_squared = np.sum(np.abs(inside[..., :3])**2, axis=-1)
-print(E_squared.shape)  # (3, 1, 61)
+E_squared = np.sum(np.abs(inside.values[..., :3])**2, axis=-1)
+print(E_squared.shape)  # (1, 3, 1, 61)
 ```
 
 이 값은 각 위치에서 전기장이 얼마나 큰지 비교할 때 사용합니다. 전력이 흐르는 방향과 크기는 자기장도 함께 사용한 포인팅 벡터로 구합니다.
@@ -268,29 +267,34 @@ print(E_squared.shape)  # (3, 1, 61)
 (magnetic-field-units)=
 ## 자기장의 정규화와 물리 단위
 
-Wavebit은 Maxwell 방정식을 계산할 때부터 자기장 {math}`\mathbf H` 대신 **정규화된 자기장** {math}`\widetilde{\mathbf H}=Z_0\mathbf H`를 변수로 사용합니다. {math}`Z_0\approx376.73\,\Omega`는 진공 임피던스입니다. 필드 배열에도 이 정규화된 값이 들어 있으므로, 자기장 자체가 필요하면 {math}`Z_0`로 나눕니다.
+Wavebit은 Maxwell 방정식을 계산할 때부터 자기장 {math}`\mathbf H` 대신 **정규화된 자기장** {math}`\widetilde{\mathbf H}=Z_0\mathbf H`를 변수로 사용합니다. {math}`Z_0\approx376.73\,\Omega`는 진공 임피던스입니다. 결과는 반환하기 전에 {math}`Z_0`로 나누므로, 필드 배열에는 이미 자기장 자체가 들어 있습니다.
 
 ```{math}
 \mathbf H=\frac{\widetilde{\mathbf H}}{Z_0}.
 ```
 
-위의 6성분 배열에서는 마지막 세 성분이 정규화된 자기장입니다.
+위의 6성분 배열에서 마지막 세 성분은 A/m 단위의 H입니다. {math}`Z_0`로 다시 나누지 않습니다.
 
 ```python
-E = inside[..., :3]
-H_normalized = inside[..., 3:]
-Z0 = 376.730313668
-H = H_normalized / Z0
+E = inside.values[..., :3]   # V/m
+H = inside.values[..., 3:]   # A/m
+print(inside.units["Hx"])    # A/m
 ```
 
-:::{dropdown} 순수 TM 입력의 진폭 기준
+::::{dropdown} 모든 소스의 진폭 기준
 
-`tetm="tm"`의 순수 1D 계산은 입사파의 정규화된 자기장을 기준으로 진폭을 지정합니다. 반면 `polarization=(a_s, a_p)`와 `PlaneWave`는 전기장 기준입니다. 공통 필드 함수는 이 입력 기준을 그대로 유지하며, 반환한 장을 입사 전력으로 나누거나 자동으로 같은 크기에 맞추지 않습니다.
+모든 소스의 진폭은 전기장 기준입니다. `PlaneWave`의 `amplitude`는 `polarization="s"`, `"p"`, `(a_s, a_p)` 어느 경우에도 V/m이고, 다이폴 모멘트는 C·m입니다. 필드 메서드는 이 크기를 그대로 유지하며, 반환한 장을 입사 전력으로 나누거나 같은 크기로 맞추지 않습니다.
+
+:::{admonition} 이전 인터페이스
+:class: earlier-interface
+
+2026-09-27 전까지 이전 인터페이스의 `tetm="tm"` 순수 1D 계산은 크기 1인 정규화 자기장으로 입사했으므로, 같은 빛에 대한 원뿔 p 장의 `mu_inc/n_inc`배였습니다. 그 인터페이스는 마지막 세 칸에 Z₀H를 돌려주었으므로, 현재 결과와 비교하기 전에 Z₀로 나눕니다.
 :::
+::::
 
-입력 전기장 진폭 `1`을 `1 V/m`로 해석했다면 `E`의 단위는 V/m, 변환한 `H`의 단위는 A/m입니다. 예를 들어 자기장 성분이 `1`로 반환되었다면, 변환한 값은 약 `0.00265 A/m`입니다.
+`PlaneWave` 진폭 `1`은 `1 V/m`이므로 `E`는 V/m, `H`는 A/m입니다. 예를 들어 정규화 자기장 Z₀H가 `1`이면 약 `0.00265 A/m`에 해당합니다.
 
-입력 진폭을 상대값으로만 정했다면 실제 단위를 부여할 기준도 정해야 합니다. 예를 들어 계산의 전기장 `1`을 `10 V/m`에 대응시키려면, 위 `E`와 `H`에 모두 10을 곱합니다. {math}`Z_0`로 나누는 것은 일정한 크기 변환이므로, 자기장의 공간 분포 모양과 위상은 바뀌지 않습니다.
+장은 소스 진폭에 선형입니다. 입사 전기장을 `10 V/m`로 하려면 소스에 `amplitude=10.`을 주거나, 진폭 1로 계산한 `E`와 `H`에 모두 10을 곱합니다. {math}`Z_0`로 나누는 것은 일정한 크기 변환이므로, 자기장의 공간 분포 모양과 위상은 바뀌지 않습니다.
 
 ### 전력 밀도를 구할 때
 
@@ -303,7 +307,7 @@ H = H_normalized / Z0
   (\mathbf E\times\widetilde{\mathbf H}^{\,*}).
 ```
 
-위에서 변환한 `H`를 사용하면 다음과 같습니다.
+필드 배열의 `E`와 `H`를 사용하면 다음과 같습니다.
 
 ```python
 S = 0.5 * np.real(np.cross(E, np.conj(H)))
@@ -312,21 +316,27 @@ Sz = S[..., 2]
 
 `E`를 V/m, `H`를 A/m로 맞추었다면 `S`는 W/m² 단위입니다. `Sz > 0`이면 위쪽인 +z로, `Sz < 0`이면 아래쪽인 −z로 전력이 흐릅니다. 이 값에서 반사율·투과율과 순유입 전력을 구하는 과정은 [13장](power-and-efficiency.md)에서 설명합니다.
 
-반사율·투과율처럼 전력의 비율을 구할 때는 분자와 분모의 `1/Z0`가 상쇄됩니다. 따라서 반환된 `R`, `T`, `output_top`, `output_bottom`에 자기장 단위 변환을 다시 적용하지 않습니다.
+반사율·투과율처럼 전력의 비율을 구할 때는 분자와 분모의 `1/Z0`가 상쇄됩니다. 따라서 반환된 `R`, `T`, `result.outputs['top']`, `result.outputs['bottom']`에 자기장 단위 변환을 다시 적용하지 않습니다.
 
-:::{dropdown} PlaneWave 결과의 result.power를 W 단위로 환산하기
+::::{dropdown} 소스 결과의 포트 전력은 W 단위입니다
 
-`result.power.incoming_top`, `incoming_bottom`, `outgoing_top`, `outgoing_bottom`은 `power_region`에서 평균한 각 입사·출력파의 법선 전력 흐름입니다. 각 파가 들어오거나 나가는 방향을 양의 방향으로 정하며, 공통 인자 `1/Z0`를 생략한 계산 단위로 반환됩니다.
+평면파 하나가 아닌 소스를 쓴 결과에서 `result.outputs['top']`과 `result.outputs['bottom']`에는 각각 `incoming`과 `outgoing`이 있습니다. 그 포트에서 들어오는 파와 나가는 파의 법선 전력 흐름이며, 각 파의 진행 방향을 양의 방향으로 정합니다. V/m 단위로 지정한 소스 진폭에 대한 물리 전력입니다. 셀이나 `Outputs(power_region=...)` 직사각형에서는 `units`가 `'W'`이고 그 영역은 `power_region`에 적혀 있으며, `'infinite'` 영역에서는 단위 면적당 평균인 `'W/m^2'`입니다. 위의 양면 예제에서 `field_result.outputs['top'].incoming`은 약 `9.97e-16` W입니다. 공기 중 1 V/m인 위 입사파의 `cos(theta)/(2 Z0)` W/m²에 900 × 850 nm 셀 면적을 곱한 값입니다.
 
-`result.power`에서 선택한 값을 {math}`P_{\mathrm{calc}}`라 쓰겠습니다. 계산의 전기장 진폭 `1`을 실제 {math}`E_{\mathrm{scale}}\,\mathrm{V/m}`에 대응시키고, 물리적인 관측 면적을 {math}`A_{\mathrm{obs}}\,\mathrm{m}^2`라 하면 총 전력은 다음과 같습니다.
+전력은 소스 진폭의 제곱에 비례합니다. 무한 영역의 평균값만으로는 유한한 총 전력이 정해지지 않으므로, 총 전력을 말하려면 유한한 `power_region`으로 계산합니다.
+
+:::{admonition} 이전 인터페이스
+:class: earlier-interface
+
+이전 인터페이스의 `result.power.incoming_top`, `incoming_bottom`, `outgoing_top`, `outgoing_bottom`은 `power_region`에서 평균하고 공통 인자 `1/Z0`를 생략한 계산 단위였습니다. 선택한 값을 {math}`P_{\mathrm{calc}}`, 계산의 전기장 진폭 `1`에 대응하는 실제 값을 {math}`E_{\mathrm{scale}}\,\mathrm{V/m}`, 물리적인 관측 면적을 {math}`A_{\mathrm{obs}}\,\mathrm{m}^2`라 하면 총 전력은 다음과 같았습니다.
 
 ```{math}
 P\;[\mathrm W]
 =P_{\mathrm{calc}}\,\frac{E_{\mathrm{scale}}^2}{Z_0}\,A_{\mathrm{obs}}.
 ```
 
-예를 들어 관측 영역을 직사각형으로 지정했다면, 그 직사각형의 실제 면적을 m²로 바꾸어 사용합니다. 무한 영역의 평균값만으로는 유한한 총 전력이 정해지지 않으므로, 총 전력을 말하려면 면적도 정해야 합니다.
+현재 결과에는 이 환산을 적용하지 않습니다.
 :::
+::::
 
 :::{dropdown} 다른 RCWA 툴의 자기장 반환 규약
 
@@ -337,5 +347,5 @@ P\;[\mathrm W]
 | <span style="white-space:nowrap">FMMAX</span> | [공식 규약](https://facebookresearch.github.io/fmmax/#fmm-conventions)에서 진공의 ε₀·μ₀·c를 모두 1로 둡니다. 이 단위계의 반환 자기장은 같은 정규화 기준으로 해석합니다. |
 | <span style="white-space:nowrap">RETICOLO</span> | [공식 설명서 4쪽](https://arxiv.org/pdf/2101.00901#page=4)에서 ε₀·μ₀·c를 1로 둔 Maxwell 방정식을 사용합니다. `res3()`의 `H` 성분도 이 단위계를 따릅니다. |
 
-따라서 반환값 이름이 `H`라고 되어 있어도 바로 A/m 단위라고 해석하지 않습니다. 툴 사이의 복소 필드를 비교할 때는 자기장 정규화뿐 아니라 입사 진폭의 기준, 좌표축과 위상 규약도 맞춥니다.
+Wavebit이 반환하는 `H`는 A/m이지만, 다른 툴에서 `H`라고 부르는 값을 바로 A/m 단위라고 해석하지 않습니다. 툴 사이의 복소 필드를 비교할 때는 자기장 정규화뿐 아니라 입사 진폭의 기준, 좌표축과 위상 규약도 맞춥니다.
 :::

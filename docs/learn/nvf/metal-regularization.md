@@ -62,6 +62,8 @@ so the floor is inactive. For lossy materials, the distribution of {math}`1/\var
 
 When no singular value needs correction, the code returns the original {math}`B`, rather than a matrix reconstructed by SVD. This explains the recorded bitwise equality before and after the change in the tested dielectric cases.
 
+Since 2026-10-28 the code first checks the layer's materials. If every permittivity can be read and satisfies {math}`\operatorname{Re}\varepsilon>0` and {math}`\operatorname{Im}\varepsilon\geq 0`, the floor is not evaluated at all, so no singular value of {math}`B` is computed. Otherwise, it computes the singular values alone, and the full SVD only when one of them is below the floor. Skipping the full SVD is not only cheaper. PyTorch's SVD (MKL) once failed to converge on the {math}`B` of a dielectric circle at 961 harmonics, where the floor would not have applied.
+
 ## 2. Changes supported by stored data
 
 First compare the same wavelengths. Values below are rounded from the records.

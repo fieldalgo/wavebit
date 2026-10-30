@@ -71,7 +71,7 @@ PUBLIC = {
                   'check', 'prepare', 'run', 'sample_structure'),
  'wavebit.rcwa.diagnostics': ('AutoDetuneWarning', 'ComplexIncidenceWarning',
                               'ExceptionalPointWarning', 'GainCutoffWarning',
-                              'RayleighPointWarning'),
+                              'RayleighPointWarning', 'SvdConvergenceWarning'),
  'wavebit.rcwa.experimental': ('AffineProfileNVF', 'CartesianPairOpeningPlan',
                                'CartesianPairTransmissionGalerkinGapCell', 'CartesianRectangleNVF',
                                'CartesianRectanglePairNVF', 'ConformingNVF'),

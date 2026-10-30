@@ -1,0 +1,133 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_meep_multilayer_refined",
+  "physics": "fdtd",
+  "comparison": "different-discretization",
+  "role": "Meep constrained multilayer design check (structure oracle), grid-refinement/averaging control subpixel_tol 1e-9",
+  "references": [
+    {
+      "tool": "Meep",
+      "version": "1.34.0",
+      "build": null,
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "GPL-2.0-or-later",
+      "source": "https://github.com/NanoComp/meep",
+      "install": {
+        "kind": null,
+        "command": null
+      },
+      "settings": "resolution 80; durations 50/70; perturbation steps 0.001/0.0005; subpixel_tol 1e-09; layer_smoothing 0.0125; transverse_cells 1; Courant 0.4; PML thickness 1",
+      "discretization": "Meep 3D Yee grid, resolution 80 (dx 1/80), z length 10, z PML 1, Courant 0.4",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/interface/meep_multilayer.py",
+    "sha256": null,
+    "command": "python tests/references/interface/meep_multilayer.py --design artifacts/design.json --subpixel-tol 1e-9 --output artifacts/meep-multilayer-refined.npz",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": null,
+  "environment": {
+    "python": null,
+    "numpy": null
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/interface/meep_multilayer.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_meep_multilayer_refined.npz",
+    "format": "npz",
+    "file_sha256": "61f9d29c9d8bf3f6489c38e079721bea00923bb4c522ecd5aae14bd3da25df0a",
+    "arrays": [
+      "amplitudes",
+      "bottom",
+      "cell_length",
+      "courant",
+      "deltas",
+      "dimensions",
+      "durations",
+      "epsilon",
+      "jacobians",
+      "layer_smoothing",
+      "minimum",
+      "monitor_z",
+      "parameter_names",
+      "parameters",
+      "pml_thickness",
+      "pulse_peak",
+      "pulse_width",
+      "resolution",
+      "source_end",
+      "source_z",
+      "subpixel_tol",
+      "thickness",
+      "top",
+      "total",
+      "transverse_cells",
+      "version",
+      "wavelengths"
+    ]
+  },
+  "values_sha256": "01ad95db1616b24e58fb8ec59b974c2af9d812cfb3204fd79902b444022f81cb",
+  "content_sha256": "c8c504a30b342351943b167d86e54e5583f8057058f2729b2a6e88acd17264c8",
+  "consumers": [
+    "tests/references/test_meep_multilayer.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "physics": "tests/references/README.md:9-14 (Meep rows are FDTD)",
+    "comparison": "tests/references/README.md:9-14: Meep rows are FDTD; both sides carry a grid error; no statement that grids match (row at tests/references/README.md:95); docs compare different Wavebit/Meep grids",
+    "role": "tests/references/README.md:95",
+    "references[0].version": "archive key `version` = 1.34.0",
+    "references[0].settings": "archive keys (resolution, durations, deltas, subpixel_tol, smoothing, profile_grid, courant, pml_thickness)",
+    "references[0].discretization": "archive keys resolution/dimensions/period/cell_length/pml_thickness/courant",
+    "references[0].arrays": "single Meep reference per archive; all keys produced by one bridge run",
+    "references[0].execution": "tests/references/README.md:96-97,1277-1285 and docs ('separate Meep installation/interpreter'); bridges run by hand in a separate Meep interpreter, never imported by tests",
+    "references[0].independence.product_loaded_in_reference_process": "tests/references/interface/meep_multilayer.py:2-16 imports only argparse/sys/warnings/pathlib/numpy/meep; no wavebit or studies import",
+    "references[0].independence.reference_inputs_built_from_product_objects": "tests/references/interface/meep_multilayer.py:93-94 reads only a list of six floats from --design JSON and builds the Meep material function itself; those six numbers are Wavebit's optimizer output (docs/validation/fdtd/fdtd-multilayer-optimization.md:201, 162) — numbers, not product objects",
+    "generator.path": "tests/references/README.md:95, tests/references/interface/README.md",
+    "generator.command": "docs/validation/fdtd/fdtd-multilayer-optimization.md:224",
+    "consumers": "grep of tests/**/*.py for the file name (literal and f-string)"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "The Python/NumPy versions in the docs' Reproduce sections (arm64, Python 3.12.9, NumPy 2.5.1, ...) describe the Wavebit measurement environment, not the Meep generator environment; no Meep-side environment recorded for this golden; archive has no environment keys.",
+    "environment.python": "The Python/NumPy versions in the docs' Reproduce sections (arm64, Python 3.12.9, NumPy 2.5.1, ...) describe the Wavebit measurement environment, not the Meep generator environment; no Meep-side environment recorded for this golden; archive has no environment keys.",
+    "generated_utc": "not in tests/references/README.md, the golden itself or its generator (record reconstructed 2026-10-28)",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "No build string recorded for this golden; Only install command in the repo is tests/references/README.md:1292 `conda create -y -n meep -c conda-forge pymeep`, stated 'for the record' in the crossed/1D generator section; not tied to these bridge goldens. Build string nompi_py312h46debac_101 at docs/guide/fdtd/fdtd.md:153 belongs to the 1D benchmark.",
+    "references[0].install.command": "Only install command in the repo is tests/references/README.md:1292 `conda create -y -n meep -c conda-forge pymeep`, stated 'for the record' in the crossed/1D generator section; not tied to these bridge goldens. Build string nompi_py312h46debac_101 at docs/guide/fdtd/fdtd.md:153 belongs to the 1D benchmark.",
+    "references[0].install.kind": "Only install command in the repo is tests/references/README.md:1292 `conda create -y -n meep -c conda-forge pymeep`, stated 'for the record' in the crossed/1D generator section; not tied to these bridge goldens. Build string nompi_py312h46debac_101 at docs/guide/fdtd/fdtd.md:153 belongs to the 1D benchmark.",
+    "references[0].modified.description": "Searched tests/references/README.md, interface/README.md, docs/validation/fdtd/*.md and docs/development/third-party.md for unmodified/patched/build statements: none for these goldens. Docs say only 'separate/separately installed Meep' and 'public API only'.",
+    "references[0].modified.value": "Searched tests/references/README.md, interface/README.md, docs/validation/fdtd/*.md and docs/development/third-party.md for unmodified/patched/build statements: none for these goldens. Docs say only 'separate/separately installed Meep' and 'public API only'."
+  }
+}

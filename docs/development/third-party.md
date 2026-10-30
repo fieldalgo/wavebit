@@ -153,17 +153,48 @@ installed separately; the numbers they produce are frozen into
 `tests/references/`, and CI, which installs none of them, reads the numbers. [Reference cases](https://github.com/fieldalgo/wavebit/blob/main/tests/references/README.md)
 describes each comparison.
 
-| Tool | SPDX | How it is used |
-| --- | --- | --- |
-| `Meep` | GPL-2.0-or-later | FDTD reference through its documented Python API; the generators and bridges under `tests/references/` run by hand |
-| `S4` | GPL-2.0-or-later | RCWA reference; the `gen_goldens_s4*.py` generators run by hand, and a few unshipped tests and studies call it directly and skip when it is absent |
-| `Octave` | GPL-3.0-or-later | Runs RETICOLO as a separate process. Our `.m` wrappers run inside Octave and never call Wavebit |
-| `RETICOLO` | CC-BY-4.0 | RCWA reference run inside Octave; not shipped. Attribution and history in [LICENSE](https://github.com/fieldalgo/wavebit/blob/main/LICENSE) |
-| `oct2py` | MIT | Python driver for the Octave process |
-| `fmmax` | MIT | RCWA reference in a separate environment |
-| `FDTDX` | MIT | FDTD reference in a separate environment |
-| `PyMoosh` | MIT | Multilayer reference in a throwaway environment |
-| `NGSolve` | LGPL-2.1-only | Optional FEM reference for NVF research studies. Its installed binaries also carry GPL-2.0-or-later UMFPACK code, so that environment is never redistributed |
+The Mode column says how CI meets each tool:
+
+- **stored**: the tool runs by hand outside CI, and required CI compares Wavebit
+  with the numbers committed under `tests/references/`.
+- **local**: a test imports the tool in the same process where it is installed
+  and skips where it is not. CI installs none of these tools, so it does not run
+  these tests, and a skip is never evidence of a pass.
+
+No tool runs in required CI today.
+
+Each entry in `tools/third_party_licenses.json` records its mode as
+`reference.mode`, and a tool that is not permissive also lists every file that
+loads it in `reference.imported_by`. Where such a tool (GPL, AGPL, LGPL or
+another copyleft license) may be loaded depends on the file's path:
+
+| Files | May load it |
+| --- | --- |
+| `src/wavebit/`, `examples/`, the tutorial notebooks | never |
+| `tools/`, `docs/**/*.py`, every `conftest.py` and every other test helper under `tests/` | never; run it as a separate program |
+| test modules, `tests/**/test_*.py` | only inside a test, fixture or function, never at module level (a module-level `try` or `if` counts) and never by a module-level `importorskip` |
+| generators and workers, `tests/references/{gen,refine,check}_*.py` and `tests/references/interface/`, and `studies/` | at any level |
+
+A test or helper may import a generator, worker or study module at module level
+only if that module loads no such tool at module level (the body of
+`if __name__ == "__main__":` does not count). One exception: a test module
+marked `research` as a whole that must also run under `python -m unittest`
+alone, like the NGSolve files, may guard a module-level import with
+`try`/`except ImportError` or an `if`, never with `importorskip`.
+`tests/api/test_reference_zones.py` checks all of this over the git-tracked
+files, and compares the Mode column below with `reference.mode`.
+
+| Tool | SPDX | Mode | How it is used |
+| --- | --- | --- | --- |
+| `Meep` | GPL-2.0-or-later | stored | FDTD reference through its documented Python API; the generators and bridges under `tests/references/` run by hand in a separate Meep environment. Four bridges load Wavebit in the Meep process: `tests/references/interface/validate_grid_meep.py` and `tests/references/interface/validate_grid_dispersive.py` import it, and `tests/references/interface/meep_rotation.py` and `tests/references/interface/meep_adjoint_rotation.py` import a study's density helper, which imports it |
+| `S4` | GPL-2.0-or-later | stored (3 goldens); local (11 test nodes) | RCWA reference; the `gen_goldens_s4*.py` generators run by hand. FieldAlgo's fork build (`s4-fieldalgo`) is imported in the same process by `studies/rcwa/nvf_resonant_spectrum/resonant_nvf_probe.py` and the 11 nodes of `tests/rcwa/test_resonant_nvf_probe.py`, which skip when it is absent |
+| `Octave` | GPL-3.0-or-later | stored | Runs RETICOLO as a separate process. Our `.m` wrappers run inside Octave and never call Wavebit |
+| `RETICOLO` | CC-BY-4.0 | stored | RCWA reference run inside Octave; not shipped. Attribution and history in [LICENSE](https://github.com/fieldalgo/wavebit/blob/main/LICENSE) |
+| `oct2py` | MIT | stored | Python driver for the Octave process |
+| `fmmax` | MIT | stored | RCWA reference in a separate environment |
+| `FDTDX` | MIT | stored | FDTD reference in a separate environment; the `tests/references/interface/validate_grid_fdtdx*.py` workers import Wavebit in the FDTDX process |
+| `PyMoosh` | MIT | stored | Multilayer reference in a throwaway environment |
+| `NGSolve` | LGPL-2.1-only | local (research tier) | Optional FEM reference for NVF research studies; the eight `tests/rcwa/test_nvf_*` files that import it are research tests with a documented import guard. Its installed binaries also carry GPL-2.0-or-later UMFPACK code, so that environment is never redistributed |
 
 ### Past comparisons
 

@@ -77,4 +77,6 @@ See the [runnable first calculation](../../getting-started/rcwa.md) and [common 
 
 .. autoclass:: wavebit.rcwa.diagnostics.GainCutoffWarning
 
+.. autoclass:: wavebit.rcwa.diagnostics.SvdConvergenceWarning
+
 ```

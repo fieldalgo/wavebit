@@ -291,12 +291,18 @@ in the `docs/` write-ups still run what they name.
 
 **A new test of research code** carries `pytestmark = pytest.mark.research` after its imports.
 A file that has to run under `python -m unittest` alone, like the NGSolve reference files,
-guards that import the way they do.
+guards that import the way they do. That guard is the one module-level import of a copyleft
+reference tool that `tests/api/test_reference_zones.py` accepts in a test module, and only in a
+file marked `research` as a whole; any other test loads such a tool inside the test and lists
+its file in the tool's `reference.imported_by`
+([third-party](../docs/development/third-party.md#external-reference-tools)).
 
 ## Goldens
 
 `golden_*.npz` are frozen outputs; each has a `gen_goldens_*.py` beside it that regenerates it.
-They are checked in so the tests run anywhere.
+They are checked in so the tests run anywhere. Each external golden in `references/` also has a
+`golden_<x>.reference.json` provenance record beside it
+([format](references/README.md)); a golden frozen again updates its record in the same change.
 
 **Regenerating a golden is not a way to make a failing test pass.** A golden captured the
 behaviour of an implementation that was believed correct at the time; rewriting it converts a

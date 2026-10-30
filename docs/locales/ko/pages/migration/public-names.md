@@ -310,7 +310,7 @@ native 사례(E, H, 분극 밀도, 스냅샷, 스펙트럼, 7단계 감쇠 창)�
 
 풀이가 낼 수 있는 RCWA 경고는 공개 경로 하나, `wavebit.rcwa.diagnostics`에 있습니다:
 `RayleighPointWarning`, `AutoDetuneWarning`, `ExceptionalPointWarning`,
-`ComplexIncidenceWarning`, `GainCutoffWarning`.
+`ComplexIncidenceWarning`, `GainCutoffWarning`, `SvdConvergenceWarning`.
 
 `Port`는 named tuple이라 속성만 새 이름을 알려 줄 수 있습니다. `port.kx`는 `kx_over_k0`를
 알려 주며 실패하지만, 알 수 없는 필드에 대해 `Port(kx=...)`는 파이썬 자체의 `TypeError`를,

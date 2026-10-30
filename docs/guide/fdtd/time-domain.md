@@ -1,18 +1,13 @@
 # A solve in the time domain
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 :::{note}
 Four examples use the current `wavebit.fdtd` module: the first two, the material derivative under
 [the common scene adapter](#common-scene-adapter) and [source placement](#source-position-independent-of-padding).
-The others still call the earlier periodic factory `wavebit.compat.legacy.fdtd`, or its native grid `fdtd_grid`,
+The others call the earlier periodic factory `wavebit.compat.legacy.fdtd`, or its native grid `fdtd_grid`,
 because raster layers, whole-field time records, plotting, mode fitting, graded or layer-fitted meshes, angle,
 shape, thickness and half-space derivatives, Jones polarization and that route's source, extraction and
-convergence controls are not in the current module yet; each such example says so in its first line.
+convergence controls are not in the current module yet. `wavebit.compat` was retired on 2026-10-15, so those
+examples run only on a historical checkout; each sits in an *Earlier interface* block.
 :::
 
 `wavebit.fdtd` is the second solver. A periodic stack lit by a plane wave is an `fdtd.Problem`
@@ -23,16 +18,17 @@ complex s/p amplitudes and efficiencies RCWA returns, normalized by the plane wa
 measured incident field. [How the solver models a problem](model.md) describes each piece.
 
 The earlier periodic factory, `wavebit.fdtd(stack=..., incidence=...)`, read the same `Stack`
-and `Incidence` as the earlier RCWA factory and returned the same `Result` container. It is
-retained as `wavebit.compat.legacy.fdtd(...)`. With no `backend` argument it runs the legacy
-NumPy solver, including time records and graded meshes; an explicit `backend="numpy"`, `"jax"`
-or `"torch"` selects the shared Yee engine and supports material automatic differentiation.
+and `Incidence` as the earlier RCWA factory and returned the same `Result` container. It was
+kept as `wavebit.compat.legacy.fdtd(...)` until `wavebit.compat` was retired on 2026-10-15. With no
+`backend` argument it ran the legacy NumPy solver, including time records and graded meshes; an
+explicit `backend="numpy"`, `"jax"` or `"torch"` selected the shared Yee engine and supported
+material automatic differentiation.
 See [the common scene adapter](#common-scene-adapter) for its supported inputs, and
 [route parity](../../validation/fdtd/fdtd-route-parity.md) for how the two compare on the same scenes.
 
-This page covers periodic stacks. For `from wavebit.compat.legacy import fd` and its
+This page covers periodic stacks. For the earlier `wavebit.compat.legacy.fd` and its
 explicit `fd.Scene` domain, sources, boundaries and named monitors, see the
-[general FDTD guide](../../migration/general-fdtd-v1.md). The scene types and conventions are
+[general FDTD migration page](../../migration/general-fdtd-v1.md). The scene types and conventions are
 separate.
 
 Both are a **research alpha**. Read the [supported scope and validation evidence](fdtd-alpha.md)
@@ -49,6 +45,11 @@ PML, and the scene's `background` fills every cell no structure claims. A `Plane
 use each outgoing order's own s/p frame with the cell centre as lateral phase origin, its
 `efficiency` is a power fraction, and `reference_plane` and `incident_plane` name the planes
 its phases refer to (the monitor's own plane by default). Fields are E in V/m and H in A/m.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 The earlier factories differ: `wavebit.compat.legacy.rcwa(...)` returns a solver whose
 `.solve()` returns a result, and `wavebit.compat.legacy.fdtd(...)` returns the result directly.
@@ -96,6 +97,7 @@ phase does not change when an unused second period is changed.
 
 For migration details and the exact integration scope, see the
 [solver integration checkpoint](../../development/solver-integration.md).
+:::
 
 ## The same scene, both ways
 
@@ -186,11 +188,17 @@ question is only ever how many wavelengths you want. Matched on accuracy rather 
 on the earlier interface this table was measured with) that reach the same worst per-order
 error — the break-even is:
 
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Measured through the earlier interface; its `truncation_order` is the half-width `N` along each periodic axis of the current `rcwa.Numerics(orders=...)`.
+
 | scene | one FDTD run | the cheapest RCWA that matches it | wavelengths to break even |
 | --- | --- | --- | --- |
 | lossless dielectric grating, 20 nm cell | 0.5 s | `truncation_order` 5, 0.51 ms | ~1000 |
 | the same, 10 nm cell | 2.0 s | `truncation_order` 10, 0.71 ms | ~2850 |
 | 60 nm Drude metal grating, 10 nm cell | 2.4 s | `truncation_order` 60, 21.4 ms | ~112 |
+:::
 
 The figure moves toward the time domain as the RCWA side gets harder, and away as the grid is
 refined. So reach for it when **a band is wanted from one run and the frequency-domain solve is
@@ -212,6 +220,11 @@ Time recording also supports complex coefficients through additional quadrature-
 runs; see [polarization details](fdtd.md#elliptical-and-circular-incidence).
 
 ## The keywords a time-domain run adds
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the keywords and defaults below belong to the earlier factory, not to the current `fdtd` module (its replacements are in the next table).
 
 On the earlier factory the scene keywords are those of the earlier RCWA factory — `structure`,
 `thickness`, `top`, `bot`, `period`, `mu`, `wavelength`, `theta`, `phi`, `tetm`, `psi`.
@@ -237,6 +250,7 @@ defaults are listed under [the common scene adapter](#common-scene-adapter). The
 
 `wavelength` takes a **sequence** as well as a number, and that is the one keyword whose meaning
 grows here: a band comes out of one run, one `Result` per entry.
+:::
 
 The current module has no defaults of this kind: the grid and the duration are always
 declared, and `check` admits or refuses the declared scene by the
@@ -380,6 +394,11 @@ and H, `fdtd.Outputs(final_fields=True)`, each with the coordinates it was sampl
 not record the whole domain over time yet, so this example and the plotting below keep the
 earlier factory.
 
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
+
 ```python
 # Earlier interface: whole-domain time records are not in the current API yet.
 import numpy as np
@@ -454,6 +473,7 @@ With `psi`, the record contains the requested coherent combination of the two so
 polarisations, including both Ey and Ex. The amplitudes retain the raw source scale; they
 are not normalized monitor coefficients. The settling diagnostic reports the larger
 residual of the two basis runs. Recording is still off by default.
+:::
 
 ## Where to read further
 
@@ -464,6 +484,11 @@ what a solve checks about its own answer, and why there is no generic energy war
 [How the solver models a problem](model.md) covers the current module: its grid, structures,
 boundaries, sources, monitors and the accuracy rules a run must pass.
 
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 To record every electric and magnetic component, add `record_components='all'`.
 Read `diag['fields']['hz']['values']` and its `t/z/y/x` axes, or pass `component='hz'`
@@ -477,6 +502,7 @@ energy flow in `S[:, 0:3]`, after interpolating all six fields to common Yee pos
 and times. `sample_fdtd_fields` returns the interpolated E/H directly. Both require
 `record_components='all'`; see [point probes](fdtd.md#point-probes-and-instantaneous-energy-flow)
 for units, sampling limits and the distinction between total and scattered flux.
+:::
 
 
 ## Streaming frequency planes
@@ -485,6 +511,11 @@ In the current module, an `fdtd.FieldMonitor(name, wavelengths=..., plane=fdtd.P
 returns the raw Fourier phasors of the six components on their own Yee points (V·s/m and
 A·s/m), and an `fdtd.FluxMonitor` the net spectral energy through a plane (J/Hz); neither is divided by
 the source spectrum. The rest of this section describes the earlier factory.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 Pass `field_monitors={'near': z_near, 'transmitted': z_out}` together with
 `return_diagnostics=True` to `wavebit.compat.legacy.fdtd`. No `record_field` is needed. Each entry
@@ -511,8 +542,14 @@ See `examples/fdtd/fdtd_frequency_planes.py` for a three-wavelength slab check.
 Storage scales with six components times wavelengths times plane area; it does
 not grow with the number of time steps. These are streaming Fourier measurements,
 not a whole-volume harmonic field reconstruction.
+:::
 
 ## Shared NumPy, JAX and Torch native grids
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 `wavebit.compat.legacy.fdtd_grid` is a Cartesian Yee interface sharing one Array API calculation
 core across NumPy, JAX and Torch. The `backend` selector accepts `'numpy'`, `'jax'`,
@@ -589,9 +626,15 @@ separately in [native CUDA validation](../../validation/fdtd/native-cuda.md).
 `studies/fdtd/grid_benchmark/fdtd_grid_benchmark.py` reports compilation separately from warm execution;
 its measurements, and why the speed-up belongs to the host, are in
 [the design notes](fdtd.md#streaming-fields-and-compiled-native-grids).
+:::
 
 
 ## Native dispersive materials and CPML
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 `fdtd_grid(..., poles=[(omega0, gamma, strength), ...])` advances electric
 polarization with a centered ADE recurrence. Each parameter broadcasts to
@@ -642,11 +685,16 @@ This does not establish arbitrary-band or grazing-angle accuracy.
 `examples/fdtd/fdtd_dispersive_gradient.py` differentiates Lorentz oscillator strength
 with CPML enabled. The historical external comparisons above remain CPU
 evidence; the current API has separate [bounded CUDA field and derivative checks](../../validation/fdtd/native-cuda.md).
+:::
 
 ### CPML strength
 
 In the current module the strength is `fdtd.PML(reflection=1e-8)` and the depth
 `fdtd.PML(cells=12)`, both set once for every `Open()` face through `Numerics(absorber=...)`.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
 On the earlier interface, `fdtd_grid`, `wavebit.compat.legacy.fdtd(..., backend=...)` and
 `wavebit.compat.legacy.fdtd` with `backend` omitted all accept `pml_reflection=1e-8`. It must
 be a finite real static scalar strictly between zero and one; booleans, complex values and arrays
@@ -670,6 +718,7 @@ decay after changing the boundary. In a directional scene, returning amplitudes
 and calibrated scattering tails help distinguish boundary and time errors.
 The [near-Rayleigh strength study](../../validation/fdtd/fdtd-pml-strength.md) records a concrete
 comparison and its remaining limits.
+:::
 
 
 ## Native Bloch phases and incidence gradients
@@ -677,6 +726,11 @@ comparison and its remaining limits.
 In the current module a `Bloch(phase=...)` or `Bloch(k=...)` face pair uses the same
 convention and makes the run complex, and `Bloch.from_source` writes the pair an oblique
 `PlaneWave` needs. The rest of this section describes the earlier native grid, `fdtd_grid`.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 `bloch_phase=(phase_z, phase_y, phase_x)` specifies real phase advances in radians
 across each simulation period: `F(r+L_axis)=exp(1j*phase_axis)*F(r)`. It follows
@@ -701,9 +755,15 @@ fixed-field boundary problem is not automatically an incidence-angle derivative;
 source/initial-field dependencies must be included in the differentiated function.
 `examples/fdtd/fdtd_bloch_gradient.py` varies the source and boundary together with
 vacuum-end CPML and reports a spectral plane-power derivative.
+:::
 
 
 ## Backend architecture
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 The native solver now uses the same `array_api_compat` namespaces and
 `wavebit._common.backend.as_array` conversion as RCWA. Maxwell curls, CPML, ADE, Bloch
@@ -725,6 +785,7 @@ This unifies native-grid **calculation backends**. The `wavebit.compat.legacy.fd
 Stack/Incidence adapter selects this engine when `backend` is explicitly supplied.
 Its static rasterization, current-sheet reference calibration and modal Result
 extraction are described below. Existing native `fdtd_grid` calls remain compatible.
+:::
 
 
 ## Common scene adapter
@@ -762,6 +823,9 @@ its own grid). On JAX, prepare once with concrete values and differentiate
 from concrete values, so a half-space is not differentiable in the current module (see
 [half-space material derivatives](#half-space-material-derivatives)).
 {ref}`Differentiating a run <fdtd-model-differentiating>` lists what is live.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
 
 The rest of this section describes the earlier adapter, `wavebit.compat.legacy.fdtd(...)` with
 an explicit `backend`, which most examples below still use.
@@ -828,6 +892,7 @@ transmission with stored Meep public-API data, and JAX/Torch material derivative
 with finite differences. Crossed dispersive scenes additionally check Torch/
 NumPy agreement and a pole-strength derivative. These scene checks supplement
 the native-core Meep/FDTDX field and derivative references.
+:::
 
 
 ### Transverse rectangle shape derivatives
@@ -837,6 +902,11 @@ The current module differentiates the geometry of a smoothed body given a reserv
 on a half-space `SnappedSlab` or near a `Periodic()` face, and not two smoothed surfaces in one cell;
 it has no ellipse. Each example in this and the next four sections meets one of those limits,
 so they keep the earlier explicit-backend route.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 Explicit backends accept the same layer dictionaries and `Material` objects
 as RCWA for rectangles and squares. The default `shape_integration='separable'`
@@ -907,8 +977,14 @@ Diagnostics report `geometry_kind`, `shape_integration`, `shape_smoothing`, and 
 in cell-centred x/y coordinates for the separable method. These edges describe the material partition;
 the returned Yee `shape`, `spacing` and sampling coordinates remain fixed.
 See the [measured refinement and independent references](../../validation/fdtd/fdtd-rectangle-gradients.md).
+:::
 
 ### Rotated rectangle area integration
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 Set `shape_integration='area'` on an explicit backend to differentiate a
 rectangle's `angle` in radians along with its centre, size and scalar material.
@@ -973,10 +1049,16 @@ geometry and matching graded-profile references.
 Check grid refinement and an independent physical reference when using the
 result as a design gradient. The [rotation measurement](../../validation/fdtd/fdtd-rotation-gradients.md)
 records the independent area, complete graph and optical checks.
+:::
 
 
 
 ### Multiple rotated rectangles
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 Use the same `shapes` list with `shape_integration='area'` to put multiple
 rectangles or squares in one layer. Each rectangle may have its own live
@@ -1033,8 +1115,14 @@ promise for large layouts.
 complete-graph checks from graded optical refinement. Transverse material
 coefficients remain arithmetic averages; this extension does not introduce a
 full interface-effective tensor.
+:::
 
 ### Circular shape derivatives
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 Use `type='circle'` (alias `'disk'`) with `shape_integration='area'` and an
 explicit backend. The shared RCWA convention uses `lx` or `l` as the **diameter**,
@@ -1087,8 +1175,14 @@ are not full effective tensors, so exact cell geometry does not establish
 sharp-interface optical gradient accuracy. Check resolution and a matching
 physical reference. [Disk measurements](../../validation/fdtd/fdtd-circle-gradients.md) separate
 geometry, complete-graph derivatives, profile bias and independent optics.
+:::
 
 ### Elliptical shape derivatives
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 The explicit common route accepts `type='ellipse'` with
 `shape_integration='area'`. `lx` and `ly` are the **full lengths of the two
@@ -1145,11 +1239,17 @@ material coefficients are arithmetic averages, not full curved-interface
 effective tensors. Check an independent reference and resolution convergence
 for the material profile actually optimized. [Ellipse measurements](../../validation/fdtd/fdtd-ellipse-gradients.md)
 separate integration accuracy, complete graphs and graded optical refinement.
+:::
 
 ### Incidence-angle derivatives
 
 In the current module a `PlaneWave`'s `theta` and `phi` are static: they fix the grid and the
 time loop, and a traced value is refused. These examples keep the earlier route.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 With an explicit `backend`, `theta` and `phi` may be real scalar NumPy, JAX or
 Torch arrays. Supply an explicit `truncation_order` whenever either is an array,
@@ -1239,9 +1339,15 @@ thresholds or long-lived resonances, establish spatial and
 temporal convergence before interpreting a sensitivity. See the
 [theta](../../validation/fdtd/fdtd-scene-angles.md) and [azimuth](../../validation/fdtd/fdtd-scene-azimuth.md) validation
 notes for the checked cases and limits.
+:::
 
 
 ### Independent transverse resolution
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 The explicit-backend adapter accepts `transverse_resolution=R` or
 `transverse_resolution=(Rx, Ry)`, in cells per unit length. These positive finite
@@ -1286,6 +1392,7 @@ Independent refinement is useful when one direction limits accuracy, but it
 does not guarantee less work or monotonically smaller error. The
 [transverse refinement study](../../validation/fdtd/fdtd-transverse-resolution.md) separates
 harmonic lattice accuracy from finite-time and finite-boundary differences.
+:::
 
 
 ### Source position independent of padding
@@ -1377,6 +1484,11 @@ example above); each result carries the Yee `k_normal` (the wavevector component
 axis) and `k_parallel` of every order. It has no
 cutoff classification yet, so the example below keeps the earlier route.
 
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
+
 `diffraction_distance` controls the extraction-plane distances from the reflection
 and transmission reference interfaces. It accepts a positive static scalar for
 both legs, or a `(reflection, transmission)` pair in length units. The default
@@ -1440,9 +1552,15 @@ Exact grazing, including roundoff-sized distance from it, is refused before time
 stepping. Orders are not silently discarded. See the
 [near-Rayleigh measurements](../../validation/fdtd/fdtd-rayleigh.md) for a false-open coarse-grid
 channel and an unresolved TM response despite correct cutoff classification.
+:::
 
 
 ### Directional diffraction extraction
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 The default `diffraction_method='electric'` preserves the existing extraction.
 With an explicit backend, `diffraction_method='directional'` uses both E and H
@@ -1503,6 +1621,7 @@ still oscillating; its apparent incoming components may include that error.
 Compare amplitude tails, runtime, grid, padding and PML independently. See the
 [directional measurements](../../validation/fdtd/fdtd-directional.md) for exact-mode verification
 and a near-Rayleigh example that still fails temporal convergence.
+:::
 
 
 ### Gaussian source width
@@ -1513,6 +1632,11 @@ frequency_sigma_hz)`, the standard deviation of its amplitude spectrum in Hz. Th
 length: 2.25e13 Hz for `w = 3` µm. The usable band ends where that spectrum falls to the
 pulse's `cutoff` (1e-3 by default), and a `DiffractionMonitor` wavelength outside it comes back NaN.
 The rest of this section describes the earlier route's `pulse_width`.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 The explicit-backend scene adapter accepts `pulse_width`, a positive static scalar
 in c=1 time units (the same numerical units as length). It is the Gaussian
@@ -1566,9 +1690,15 @@ and material autodiff. The width itself is static. The legacy scene path has no
 `pulse_width` keyword; the native grid API accepts an explicit pulse array.
 See the [oblique-pulse measurement](../../validation/fdtd/fdtd-oblique-pulse.md) for the separate
 effects of source tails, dispersive interfaces and patterned metal corners.
+:::
 
 
 ### Suppressing selected source frequencies
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 The explicit-backend scene adapter also accepts `pulse_notches`: a positive
 static frequency or a vector of one or two frequencies in inverse c=1 time units,
@@ -1635,9 +1765,15 @@ A spectral zero changes excitation, not the material or open-boundary model;
 it does not guarantee shorter convergence. See the
 [cutoff-source measurements](../../validation/fdtd/fdtd-pulse-notches.md) before using it near a
 diffraction threshold.
+:::
 
 
 ### Shared-backend time records and user monitors
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 ```python
 # Earlier interface: whole-domain records and calibrated user planes are not in the current API yet.
@@ -1701,6 +1837,7 @@ compare streaming and offline DFTs, check every recording-interval tail, compare
 three backends, differentiate histories and monitor powers, preserve circular
 quadrature, and exercise plot/probe compatibility. Enabling recording leaves the
 diffraction result unchanged.
+:::
 
 
 ### Half-space material derivatives
@@ -1709,6 +1846,11 @@ The current module refuses this derivative: a half-space reaches an `Open()` fac
 PML there is built once from the material's concrete values, so a traced permittivity or
 permeability in it raises `ValueError` before any time step. These examples keep the earlier
 route.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 With an explicit backend, `top` and `bot` accept positive real scalar
 permittivities, or `Material(epsilon, mu)` with positive real scalar
@@ -1773,12 +1915,18 @@ material range. Check resolution, padding, physical PML thickness and duration
 at relevant design points. The [verification note](../../validation/fdtd/fdtd-halfspace-gradients.md)
 separates finite-grid derivative correctness from continuum and external-solver
 agreement.
+:::
 
 ### Internal layer thickness derivatives
 
 In the current module a `SnappedSlab`'s span is static, so a traced `z` is refused, and a ranged,
 differentiable `Box` layer cannot stand flush on a half-space `SnappedSlab` or another cell-snapped
 face. The examples in this and the next section keep the earlier route.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 Pass static `mesh_thickness` to choose the z mesh while backend `thickness`
 values move the internal interfaces. The actual lengths must stay positive,
@@ -1840,8 +1988,14 @@ the fixed cells. The option also works with grading, bottom illumination,
 cropped records and field monitors. Diagnostics return original-order static
 `mesh_thickness` and live `layer_planes`. Invalid concrete values raise; JIT
 invalidity masks scattering and normalized fields and sets `stable=False`.
+:::
 
 ### Changing the total stack depth
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 Set `variable_depth=True` with an explicit backend, `mesh_thickness` and
 `subpixel=True` to optimize layer lengths independently. All physical lengths
@@ -1904,8 +2058,14 @@ one-sided phase derivative. Different adjacent cell widths can therefore
 produce a phase-slope kink even when material fractions are smoothed. Assess
 physical accuracy with mesh refinement; see the
 [moving-depth measurements](../../validation/fdtd/fdtd-variable-depth.md).
+:::
 
 ### Continuous first derivatives at internal interfaces
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 Set `layer_smoothing=h` with an explicit backend and `mesh_thickness` to average
 each internal interface position uniformly over `[-h/2, h/2]` before material
@@ -1939,12 +2099,18 @@ design separately when that is the intended physical structure. The
 [smoothing measurements](../../validation/fdtd/fdtd-layer-smoothing.md) distinguish this bias from
 finite-grid error. Run the coating example with `--smoothing-cells 1` for
 backtracking optimization followed by both smoothed and sharp finer-grid checks.
+:::
 
 ### Bottom illumination in the common engine
 
 In the current module, light from below is a `PlaneWave(direction='+z')` placed below the
 stack, with the `wave='reflected'` monitor below it and the `wave='transmitted'` monitor above the
 stack; the scene itself does not change.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 On the earlier factory, set `Incidence(..., incidence_side='bottom')` or pass `incidence_side='bottom'`.
 Both of its periodic routes support this; this section details the explicit engine. The structure, top/bottom materials and layer ordering
@@ -1981,12 +2147,18 @@ at resolution 80. Increasing Meep's duration from 30 to 40 changes the reference
 by less than 7e-15. Only documented Meep APIs were used; its implementation was
 not read. See `tests/references/interface/validate_scene_bottom_meep.py` and the frozen reference
 in `tests/references/golden_scene_bottom_meep.json`.
+:::
 
 
 ### Static nonuniform z meshes
 
 The current module's grid is uniform and cubic; this section and the next describe the
 earlier engine.
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 The shared engine now accepts `z_spacing`, a static positive vector with one
 cell width per z index. It overrides `spacing[0]`; x and y stay uniform.
@@ -2049,8 +2221,14 @@ illumination data, and JAX/Torch derivatives through graded records and monitors
 The Meep reference uses a uniform grid, so the comparison establishes optical
 agreement under refinement rather than identical discretizations. No Meep
 implementation was read.
+:::
 
 ### Aligning every layer boundary
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 The explicit-backend scene API accepts `align_layers=True` independently of
 `grading`. For a layer of thickness `d`, it uses `ceil(d * resolution)` equal
@@ -2096,8 +2274,14 @@ different layers inside a normal Ez cell, but does not change the dispersive
 averaging model or align lateral raster edges. The
 [multilayer measurements](../../validation/fdtd/fdtd-layer-alignment.md) check complex TE/TM
 refinement and distinguish this planar improvement from unresolved metal corners.
+:::
 
 ### Pulse-decay diagnostics in the common engine
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 `fdtd_grid(..., convergence_window=N, convergence_tol=1e-4)` inspects the last
 `N` steps without changing the time loop or stopping early. `N` must be a positive
@@ -2198,8 +2382,14 @@ the four scene runs and prefix spectra, without additional time stepping.
 There is still no automatic termination. The [lossy ENZ measurements](../../validation/fdtd/fdtd-enz.md)
 show a case where the s column settles well before the p column, and where both
 eventually pass despite a significant time-discretization error.
+:::
 
 ### Subsampling frequency monitors
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 `dft_subsample=K` is available on `fdtd_grid` and the explicit-backend scene API.
 The default is `1`. It must be a positive integer no larger than the number of
@@ -2234,8 +2424,14 @@ its quadrature weight between prefix and tail. Thus the prefix spectrum matches
 a shorter run with the same stride and starting sample. The field-decay norm is
 still evaluated at every update. An apparently settled subsampled spectrum does
 not certify freedom from aliasing; see the [sampling measurement](../../validation/fdtd/fdtd-dft-sampling.md).
+:::
 
 ### Recording a region of the native grid
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 `fdtd_grid(..., record_field=N, record_region=(z, y, x))` stores only the selected
 region at each requested snapshot. Each entry is an integer index or a slice
@@ -2266,8 +2462,14 @@ field-history values at the same components and snapshot count. This is an array
 storage ratio, not a peak-process-memory or speed claim. Spatial subsampling
 selects nodes without filtering or interpolation. Region coordinates are not
 differentiable; recorded field values retain material/source gradients.
+:::
 
 ### Physical record bounds for Stack scenes
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 The explicit-backend `fdtd` scene API accepts `record_bounds`, a nonempty mapping
 from any of `x`, `y`, `z` to `(lower, upper)` physical coordinates. It requires
@@ -2304,8 +2506,14 @@ snapshot accumulation; bounds covering the full domain still record that domain.
 gradients retain their original behavior. Bounds are static geometry, not
 optimization parameters. For direct grid-index selection on `fdtd_grid`, use
 `record_region` instead.
+:::
 
 ### Fitting frequencies and decay rates from a time trace
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 `wavebit.compat.legacy.fit_fdtd_modes(t, signal, modes=...)` analyzes a single point/component
 after the source becomes negligible. It has no current equivalent yet. It is NumPy
@@ -2356,8 +2564,14 @@ residual but changing frequencies and decay rates. This neither certifies Q nor
 justifies automatically extrapolating a DFT to infinite time. The
 [ringdown measurements](../../validation/fdtd/fdtd-ringdown.md) show this limitation near a diffraction
 threshold and validate the fitter against exact modes and external Meep records.
+:::
 
 ### Checking residual material oscillations
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 When `convergence_window` is enabled, the native convergence mapping also reports
 activity for every ADE pole, in input pole order. At each E-component control
@@ -2402,3 +2616,4 @@ maxima retain gradients where differentiable.
 See the [low-loss mixed-metal measurement](../../validation/fdtd/fdtd-mixed-metal.md) for a case
 where calibrated amplitudes settle before material motion decays, together with
 separate checks of grid error and material-parameter sensitivities.
+:::

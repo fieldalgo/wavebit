@@ -1,13 +1,14 @@
 # A book about the whole of Wavebit
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 :::{note}
-The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
+The downloadable teaching scripts, the text and the snippets of every chapter use the current
+`rcwa.Problem` / `rcwa.run` API. A few passages describe features the current API does not have
+yet, such as the `psi`/`chi` polarization angles and the pure 1D `tetm` path; they sit in boxes
+titled "Earlier interface" (retired with `wavebit.compat` on 2026-10-15). Some figures keep the
+earlier labels, and the chapters that show them name the current equivalents. Compare the
+[current getting-started guide](../../getting-started/index.md) and
+[migration guide](../../migration/index.md). Historical measurement files and their source
+provenance remain unchanged.
 :::
 
 **From drawing a structure to calculating its optical response and changing its design.** Rather than list Wavebit's features one by one, this book follows a calculation through its stages. If you have already studied NVF, you can now see where it fits into the complete solver.

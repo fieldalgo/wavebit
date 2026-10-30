@@ -1,0 +1,110 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_low_loss_metal_meep",
+  "physics": "fdtd",
+  "comparison": "same-discretization",
+  "role": "Meep low-loss mixed Drude/Lorentz metal reference (CPML and dispersive materials row)",
+  "references": [
+    {
+      "tool": "Meep",
+      "version": "1.34.0",
+      "build": null,
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "GPL-2.0-or-later",
+      "source": "https://github.com/NanoComp/meep",
+      "install": {
+        "kind": null,
+        "command": null
+      },
+      "settings": "worker validate_grid_dispersive.py --model low-loss-mixed; eps_inf 1.5, poles (0,0.08,160),(10,0.12,40); wavelengths 0.9/1/1.1, duration 160, PML width 1, Courant 0.4, point pole sampling",
+      "discretization": "Meep 1D Yee grid at resolutions 40/80",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": true,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/interface/validate_grid_dispersive.py",
+    "sha256": null,
+    "command": "for res in 40 80; do \"$MEEP_PYTHON\" tests/references/interface/validate_grid_dispersive.py --backend meep --model low-loss-mixed --resolution \"$res\" --duration 160 --output \"artifacts/low-loss-meep-$res.json\"; done",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-09-08",
+  "environment": {
+    "python": null,
+    "numpy": null
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/interface/validate_grid_dispersive.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_low_loss_metal_meep.json",
+    "format": "json",
+    "file_sha256": "200c0c3875d30849f63d427d91bfe558f1230ec41091160d71743072a94c0fc0",
+    "arrays": [
+      "description",
+      "epsilon_inf",
+      "generated",
+      "poles",
+      "runs",
+      "worker",
+      "worker_sha256"
+    ]
+  },
+  "values_sha256": null,
+  "content_sha256": "d479a7698f958563c3a83b1882894811704c5983566ef987224d3386ced2c9d9",
+  "consumers": [
+    "tests/references/test_native_material_external.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[].source": "tools/third_party_licenses.json external_tools.<tool>.url",
+    "references[].execution": "tests/references/README.md:1277-1285 (Meep run by hand in its own environment) / README row 'separate Meep and FDTDX interpreters'",
+    "comparison": "README.md:1516-1518 (Meep and point-sampled Wavebit agree within 1.2e-7)",
+    "role": "README.md:122,1512-1513",
+    "references[0].version": "JSON runs[].version",
+    "references[0].arrays": "top-level keys description, generated, worker, worker_sha256, epsilon_inf, poles, runs",
+    "references[0].settings": "JSON keys epsilon_inf, poles, runs[].duration/pml_width/wavelengths/pole_sampling; README.md:1512-1517",
+    "references[0].independence": "JSON key worker -> validate_grid_dispersive.py:10 (module-level wavebit import)",
+    "generator": "JSON key worker; README.md:1525-1529 (worker loop); freeze step is the inline snippet README.md:1531-1548",
+    "generated_date": "JSON key generated; docs/validation/fdtd/fdtd-mixed-metal.md:3"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "not recorded",
+    "environment.python": "not recorded",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "not recorded",
+    "references[0].install.command": "only '$MEEP_PYTHON' named",
+    "references[0].install.kind": "only '$MEEP_PYTHON' named",
+    "references[0].modified.description": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified",
+    "references[0].modified.value": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified",
+    "values_sha256": "a nested JSON payload has no array digest; file_sha256 locks its bytes"
+  }
+}

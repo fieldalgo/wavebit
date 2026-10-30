@@ -1,11 +1,5 @@
 # Keyword reference
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 :::{note}
 This page lists the fields of the current RCWA declarations in `wavebit.rcwa` and of the
 `wavebit.Execution` that runs them. It used to list the keywords of the earlier
@@ -230,17 +224,21 @@ than ignored.
 | `projector` | `nvf_projector` | Identifies the NVF projection, separate from the incident polarization. |
 
 The current names are the `rcwa.Numerics` fields above, and the earlier interface's `rcwa(...)`,
-solver attributes and per-call settings such as `solve(...)` take them too. The previous names
+solver attributes and per-call settings such as `solve(...)` took them too. The previous names
 are rejected; they are not aliases. Defaults, accepted option values and numerical algorithms
 are unchanged. `linear` / `circular` remain projection choices, and are not renamed to
 `real` / `complex`: the linear shape construction can also carry complex material-dependent
 components.
 
-The earlier `JobSpec` (`wavebit.compat.legacy`) writes schema version **10**. For a version-7
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+The earlier `JobSpec` (`wavebit.compat.legacy`, retired on 2026-10-15) wrote schema version **10**. For a version-7
 document, rename these keys in `numerics` when present and keep their option values. Also
 reverse `stack.layers` and review the coordinate migration in [Conventions](common/conventions.md)
 before setting version 10. The capability manifest has used the new option keys since version
 **10**. Earlier JobSpec versions also require their own material and coordinate migrations.
+:::
 
 ## Where the run happens
 
@@ -300,8 +298,8 @@ result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(2, 2), factorization='
 
 Write the string in a `wavebit.Job`: `Job.to_json()` and `Job.key` refuse an
 `Execution(backend=Backend.TORCH)` with "Backend is not portable job data". The `rcwa.Numerics`
-fields take their string literals. The earlier interface's other constants are importable only
-from `wavebit.compat.legacy`. `Answers` and `Tetm` name choices with no current field; the other
+fields take their string literals. The earlier interface's other constants were importable only
+from `wavebit.compat.legacy`, retired on 2026-10-15. `Answers` and `Tetm` name choices with no current field; the other
 six -- `FourierCoefficients`, `Factorization`, `NormalMethod`, `Projector`, `Nesting` and
 `Formulation` -- equal their strings, so `rcwa.Numerics` accepts them, but a `Job` refuses them
 the same way.

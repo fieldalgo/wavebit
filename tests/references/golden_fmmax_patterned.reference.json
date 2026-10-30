@@ -1,0 +1,108 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_fmmax_patterned",
+  "physics": "rcwa",
+  "comparison": "different-discretization",
+  "role": "external oracle by convergence (both fmmax formulations frozen; tolerance is their spread)",
+  "references": [
+    {
+      "tool": "fmmax",
+      "version": "1.7.1",
+      "build": null,
+      "modified": {
+        "value": false,
+        "description": "pip-installed fmmax release, used as shipped"
+      },
+      "spdx": "MIT",
+      "source": "https://github.com/facebookresearch/fmmax",
+      "install": {
+        "kind": "pip",
+        "command": "conda create -y -n fwref python=3.11 && conda run -n fwref pip install fmmax"
+      },
+      "settings": "patterned gyrotropic pillar (Hermitian eps with off-diagonal), eigensolve_anisotropic_media; WL 620, period 340, thickness 185, theta 8 deg, raster 96x96 transposed [y,x]->[x,y]; Formulation.FFT (*__fft) and JONES_DIRECT (*__jones); [R_s, T_s, R_p, T_p]",
+      "discretization": "generate_expansion approximate_num_terms=(2*14+1)**2, Truncation.PARALLELOGRAMIC (MAX_ORDER 14); different factorization from Wavebit's Popov-Neviere rule, so agreement is by convergence",
+      "arrays": [
+        "*"
+      ],
+      "execution": "in-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_fmmax_patterned.py",
+    "sha256": null,
+    "command": "conda run -n fwref python tests/references/gen_goldens_fmmax_patterned.py",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-08-14",
+  "environment": {
+    "python": "3.11",
+    "numpy": "2.4.6",
+    "other": "jax 0.10.2, jaxlib 0.10.2, conda env fwref; jax_enable_x64=True set by the generator"
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_fmmax_patterned.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_fmmax_patterned.npz",
+    "format": "npz",
+    "file_sha256": "33ad2ca61d7010bfa46102213bb63704bb601582f7cbf0b7226dd284e5e53008",
+    "arrays": [
+      "gyro_pillar_n115_g010__fft",
+      "gyro_pillar_n115_g010__jones",
+      "gyro_pillar_n130_g020__fft",
+      "gyro_pillar_n130_g020__jones",
+      "gyro_pillar_n160_g030__fft",
+      "gyro_pillar_n160_g030__jones"
+    ]
+  },
+  "values_sha256": "bbe58beabceb81905ec257c217d68f01278d15d291e2d54f0fc118ce972d3d5c",
+  "content_sha256": "e681aaaae610aad7b9f14efa851c4a77f9f9455e1a0fabcbdf729164f18d8e07",
+  "consumers": [
+    "tests/references/test_fmmax_patterned_golden.py",
+    "tests/references/test_tensor_li_golden.py",
+    "tests/references/test_tensor_shape_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[*].version": "tests/references/README.md:1377-1384",
+    "references[*].source": "tools/third_party_licenses.json external_tools.fmmax.url",
+    "references[*].install": "tests/references/README.md:1347-1350 (fwref env); gen_goldens_fmmax.py:13",
+    "environment": "tests/references/README.md:1377 ('fmmax 1.7.1, jax and jaxlib 0.10.2, numpy 2.4.6, Python 3.11, in fwref'); README.md:1387 (fwref held exactly those versions since 2026-08-10)",
+    "references[*].execution": "generator imports fmmax in its own process (main())",
+    "references[*].independence": "generator and its _fmmax_*_cases.py helpers import numpy/jax/fmmax/tools.repository_paths only; _fmmax_cases.py:4-7 and README.md:1352-1355 ('fwref has no wavebit')",
+    "references[*].modified": "README.md:1347-1350 plain 'pip install fmmax' in fwref; no patch mentioned",
+    "comparison": "gen_goldens_fmmax_patterned.py:15-20 ('arbitrates by convergence, not by identity')",
+    "role": "gen_goldens_fmmax_patterned.py:15-20",
+    "references[*].settings": "gen_goldens_fmmax_patterned.py:50-117; _fmmax_patterned_cases.py:29-47",
+    "arrays": "archive keys: <case>__fft, <case>__jones",
+    "generator.command": "tests/references/gen_goldens_fmmax_patterned.py:docstring (conda run -n fwref ...)",
+    "generated_date": "tests/references/README.md:1379; note README.md:1388-1390: refrozen on 2026-10-15 this archive moved in the last bits (5.8e-17 at worst); README does not say whether the refrozen file replaced it"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "README.md fwref section and 'What each golden was frozen with'; no wheel/build identifier beyond the version"
+  }
+}

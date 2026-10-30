@@ -1,15 +1,9 @@
 # Coherent illumination and internal sources
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 :::{note}
 Every example below uses the current `rcwa` lifecycle. The number of calculation groups is
-`result.diagnostics['source_group_counts']`, one count per wavelength. One quantity is still
-reported only by the earlier `wavebit.compat.legacy` interface, because the current result does
+`result.diagnostics['source_group_counts']`, one count per wavelength. One quantity was
+reported only by the earlier `wavebit.compat.legacy` interface (retired 2026-10-15), and the current result does
 not carry it yet: a finite region's net flux with its incoming/outgoing interference
 (`net_into_stack`). The examples say where.
 :::

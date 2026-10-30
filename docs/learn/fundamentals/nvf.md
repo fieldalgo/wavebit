@@ -1,13 +1,9 @@
 # 11. Where does NVF enter the calculation?
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 :::{note}
-The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
+This page's text and code use the current `rcwa` API. Its figures may still show the earlier
+constructor's names (`bot`, `structure`, `lx` for a circle's diameter); see
+[conventions](conventions.md) for their current spellings.
 :::
 
 NVF is **a way of constructing Fourier matrices for products of materials and fields while respecting material boundary conditions**. These matrices determine each layer’s eigenmodes; matching boundary conditions between layers then gives reflection, transmission, and electric and magnetic fields. This chapter follows the need for NVF through its directional representation, settings and calculation sequence.
@@ -52,27 +48,32 @@ The default shape NVF grid is `max(1024, 4*Nx+1, 4*Ny+1)`. If reducing it to spe
 
 ## Selecting NVF and running a calculation
 
-Pass structure and incidence to `wavebit.rcwa()` and specify `factorization="nvf"`. Calling the returned object’s `solve()` runs NVF matrix construction and the reflection/transmission calculation.
+Describe the structure and light in `rcwa.Problem` and select `factorization="nvf"` in `rcwa.Numerics`. `rcwa.run(problem, numerics=numerics)` builds the NVF matrices and calculates reflection and transmission.
 
-This example calculates a 180 nm layer containing a circular shape of diameter 320 nm. Lengths are in nm; `material=4.` and `bot=2.25` are relative permittivities of the shape and lower medium respectively.
+This example calculates a 180 nm layer containing a circle of radius 160 nm (diameter 320 nm). Lengths are in nm; `Material(epsilon=4.)` and `bottom=Material(epsilon=2.25)` are the relative permittivities of the shape and the lower medium.
 
 ```python
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-solver = wavebit.rcwa(
-    wavelength=900., period=(700., 700.), thickness=[180.],
-    top=1., bot=2.25,
-    theta=0.2, phi=0.3, polarization=(0., 1.),
-    structure=[{"background": 1., "shapes": [
-        {"type": "circle", "cx": 0., "cy": 0., "lx": 320., "material": 4.},
-    ]}],
-    truncation_order=dict(x=2, y=2),
+problem = rcwa.Problem(
+    units=Units(length="nm"),
+    stack=rcwa.Stack(
+        period=(700., 700.),
+        top=Material(epsilon=1.), bottom=Material(epsilon=2.25),
+        layers=(rcwa.Layer(
+            thickness=180., background=Material(epsilon=1.),
+            regions=(rcwa.Region(geometry=rcwa.Circle(radius=160.),
+                                 material=Material(epsilon=4.)),)),)),
+    excitation=rcwa.Excitation(wavelength=900., sources=(
+        rcwa.PlaneWave(side="top", theta=0.2, phi=0.3, polarization=(0., 1.)),)))
+numerics = rcwa.Numerics(
+    orders=(2, 2),
     fourier_coefficients="integrated",
     factorization="nvf",
     nvf_projector="linear",
     shape_nvf_grid_size=128,
 )
-result = solver.solve()
+result = rcwa.run(problem, numerics=numerics)
 print("Total reflectance:", result.R.sum())
 print("Total transmittance:", result.T.sum())
 ```
@@ -83,8 +84,8 @@ print("Total transmittance:", result.T.sum())
 
 Convergence checking **tests whether the quantity of interest stays sufficiently stable as calculation settings are refined**. The Fourier order and NVF grid in the example are starting settings. Compare the following according to your required accuracy.
 
-1. Hold `truncation_order` fixed and increase `shape_nvf_grid_size`, for example through 128, 256 and 512. Compare the requested reflectance and transmittance.
-2. Hold NVF grid size fixed and increase `truncation_order`, for example through `dict(x=2, y=2)`, `dict(x=3, y=3)` and `dict(x=4, y=4)`.
+1. Hold `orders` fixed and increase `shape_nvf_grid_size`, for example through 128, 256 and 512. Compare the requested reflectance and transmittance.
+2. Hold NVF grid size fixed and increase `orders`, for example through `(2, 2)`, `(3, 3)` and `(4, 4)`.
 3. Refine both together and check that changes remain within the required tolerance. If optimization uses derivatives, compare those as well.
 
 All materials here are lossless, so also check whether total reflectance plus transmittance is near 1. However, individual reflection and transmission values can still vary with order or grid size despite conservation; convergence comparisons remain necessary.
