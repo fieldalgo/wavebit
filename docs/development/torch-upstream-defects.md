@@ -162,7 +162,9 @@ and the thread count and looks random to a caller.
 It reaches wavebit only through the NVF inverse-rule floor, which needs singular vectors on a
 layer where it binds (`rcwa/_engine/factorization.py::_svd`):
 
-- a layer of passive dielectrics skips the vector SVD wherever its singular values can be read;
+- a layer of passive dielectrics skips the vector SVD wherever its permittivity or its singular
+  values can be read (a material that is a constant of a `jax.jit` trace included); a layer
+  whose permittivity is a jit argument or a vmap lane cannot tell, and takes the SVD;
 - an eager failure on a finite matrix, on any backend, is recomputed with the QR-based `?gesvd`
   (SciPy's on the host for NumPy and torch, `SvdAlgorithm.QR` for JAX, whose `?gesdd` returns
   NaN factors instead of raising) and announced with `wavebit.rcwa.diagnostics.SvdConvergenceWarning`;

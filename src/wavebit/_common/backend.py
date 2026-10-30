@@ -1230,11 +1230,12 @@ class SvdConvergenceWarning(UserWarning):
     Public path: ``wavebit.rcwa.diagnostics.SvdConvergenceWarning``.
 
     The NVF inverse-rule floor takes singular vectors of ``<1/eps>`` on a layer where it binds
-    (a metal beside a dielectric; under ``jax.jit``, every NVF layer, since whether it binds
-    cannot be read there). Every backend takes them from LAPACK's divide-and-conquer driver,
-    ``?gesdd``. When that driver reports no convergence on a finite matrix, an eager run
-    recomputes the factors with the QR-based driver, ``?gesvd``, and warns. The factors are
-    constants to the floor's derivative rules, so the recomputed ones change no derivative.
+    (a metal beside a dielectric), and on one where that cannot be decided first: a layer whose
+    permittivity is a ``jax.jit`` argument or a vmap lane. Every backend takes them from LAPACK's
+    divide-and-conquer driver, ``?gesdd``. When that driver reports no convergence on a finite
+    matrix, an eager run recomputes the factors with the QR-based driver, ``?gesvd``, and warns.
+    The factors are constants to the floor's derivative rules, so the recomputed ones change no
+    derivative.
     Under ``jax.jit`` they cannot be recomputed. JAX returns NaN factors, NaN singular values
     are below no floor, and the layer keeps its unfloored inverse rule: harmless on a passive
     dielectric, where the floor does not bind, but on a layer where it does (a metal beside a
