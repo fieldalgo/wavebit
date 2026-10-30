@@ -246,9 +246,15 @@ def test_material_gradients_follow_the_same_split(backend, medium):
 
 
 @pytest.mark.parametrize('gap', (-.3, .3))
-def test_a_nonflush_pair_remains_refused(gap):
-    with pytest.raises(ValueError, match='does not stand flush'):
-        quiet(fd.plan, scene_of(gap=gap))
+def test_a_nonflush_pair_is_no_junction(gap):
+    """A pillar lifted or sunk by 0.3 of a cell is not flush, so no junction rule reads it.
+
+    Until C10 the pair was refused; it is now answered by the clip (the lifted pillar is
+    provably apart from the substrate, the sunk one shares an exact volume with its unturned
+    Box face), so what this holds is that the junction does not claim it.
+    """
+    plan = quiet(fd.plan, scene_of(gap=gap))
+    assert not plan.junctions and len(plan.clips) == 1
 
 
 def test_magnetic_and_late_overlays_remain_refused():
@@ -326,7 +332,7 @@ def test_no_junction_never_classifies_or_changes_the_skeleton(monkeypatch):
     assert plan.junctions == ()
     assert plan.shape_ranges == ()
     original_static = {f.name: getattr(plan, f.name) for f in dataclasses.fields(plan)
-                       if f.name not in ('skeleton', 'junctions', 'shape_ranges', 'decay')}
+                       if f.name not in ('skeleton', 'junctions', 'clips', 'shape_ranges', 'decay')}
     assert plan.skeleton == skeleton_of(**original_static)
     assert not quiet(fd.check, scene).junctions
 
@@ -336,8 +342,13 @@ def test_unvalidated_geometries_remain_refused(case):
     scene = scene_of()
     sub, pillar = scene.structures
     if case == 'sphere':
+        # Since C10 a sphere touching the face is clipped (it shares no volume with the
+        # substrate); a sphere SUNK into it shares an exact one and is clipped too. The
+        # junction's own refusal of a sphere stays: no junction is recorded.
         pillar = fd.Structure(fd.Sphere(radius=.15, center=(0,0,.15+.0125)), 4.)
-        phrase = 'sphere touches a face'
+        plan = quiet(fd.plan, scene.replace(structures=(sub, pillar)))
+        assert not plan.junctions and len(plan.clips) == 1
+        return
     elif case == 'turned':
         pillar = fd.Structure(fd.Box(size=(.25,.25,.4), center=(0,0,.2125), angle=30), 4.)
         phrase = 'turned fd.Box'

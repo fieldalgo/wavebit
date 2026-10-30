@@ -159,7 +159,8 @@ def _read_as_one_number(scene, plan, key):
     if key < 0:
         return True
     shape = scene.structures[key].shape
-    if shape.body() is not None or any(key in r.media for r in plan.junctions):
+    if shape.body() is not None or any(key in r.media
+                                       for r in tuple(plan.junctions) + tuple(plan.clips)):
         return True
     support = shape.support(plan.grid)
     return any(_intersect(support, tuple((lo - 1, hi + 1)
