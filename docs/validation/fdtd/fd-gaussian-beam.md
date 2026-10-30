@@ -144,6 +144,9 @@ accuracy stated rather than hidden. The reasons:
   it is within the registered limit.
 - It is of the size by which the paraxial formula itself departs from the exact beam over the
   same range (2.1e-3 rad).
+- In the comparison below, Meep's and FDTDX's beams differ from the exact beam's Gouy phase
+  by more at both spacings (3.6e-3 and 3.7e-3 rad at 0.05 µm), and Meep's does not fall with
+  resolution. That is context for what a grid beam can be expected to do, not a verdict.
 
 The guide (`docs/guide/fdtd/gaussian-beam.md`) and the class docstring state the measured
 error and ask for a spacing convergence of any result that depends on the phase along the
@@ -171,3 +174,34 @@ errors in the back-radiation prediction. Each time the source was restored byte 
 As for the mode source, the H rows' half-cell group delay changes only the off-centre
 back-radiation. G5 reports that part and the exact prediction follows it, so no limit bounds
 the delay.
+
+## Comparison with Meep and FDTDX
+
+Added 2026-10-30, after every verdict above, and it changes none of them. The tools, versions
+and the way they ran are those of the comparison in `fd-mode-source.md`, and the same golden,
+record and test hold this table and each statement below.
+
+What was matched: Setup B (vacuum, waist 1.5 µm, wavelength 1 µm, TE), the same spacings and
+time step. Meep's `GaussianBeamSource` puts the focus where Wavebit's is. FDTDX's
+`GaussianPlaneSource` cannot: it multiplies a truncated Gaussian by one plane-wave E/H pair, so
+its focus is always its own plane. Its row is therefore a variant with the focus on the source
+plane, its width measured 2 µm past that plane against the exact beam of the same focal field,
+and its Gouy phase from 0.5 to 3 µm. The focal shift into glass (G3) cannot be set up in FDTDX.
+
+| Quantity | Wavebit | Meep | FDTDX |
+| --- | --- | --- | --- |
+| Beam width against the exact beam, w / w_exact - 1 (0.05 / 0.025) | +1.1e-8 / -7.2e-9 | +8.6e-3 / +8.6e-3 | -4.2e-3 / -4.8e-3 |
+| Largest Gouy-phase difference from the exact beam, rad (0.05 / 0.025) | 2.2e-3 / 5.4e-4 | 3.6e-3 / 4.8e-3 | 3.7e-3 / 2.3e-3 |
+| Backward / forward power at 1.0 um (0.05 / 0.025) | 1.4e-13 / 8.5e-14 | 8.0e-4 / 1.1e-4 | 2.6e-5 / 2.6e-5 |
+| Focal peak in glass, abs(z - 1.37398 um) (0.05 / 0.025) | 2.6e-2 / 3.1e-3 | 1.1e-1 / 4.9e-2 | cannot be set up |
+
+What the comparison shows:
+
+- Meep's beam is 0.86 % wide at both resolutions, so the difference is its beam's definition
+  and not its grid. Its Gouy-phase difference does not fall with resolution, and its focal peak
+  falls short of the exact one; whether for the same reason has not been established. Its
+  back-radiation falls with resolution.
+- FDTDX's width and back-radiation do not fall with the grid: a pointwise plane-wave pair is not
+  a beam of the grid.
+- Wavebit's Gouy-phase difference, the G2 failure, is below both tools' at both spacings and
+  falls at second order. The support decision above uses this as context, not as a verdict.
