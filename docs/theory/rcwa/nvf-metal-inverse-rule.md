@@ -120,7 +120,10 @@ computed. Any other layer computes the singular values alone, and the full SVD o
 below the floor. A metal, a gain medium, `Re eps = 0` and a `jax.jit` trace all take that second
 route. The full SVD was not only the costlier half. PyTorch's (MKL's) failed to converge on the
 `<1/eps>` of a dielectric circle at 961 harmonics (two tight clusters of singular values,
-condition 12.25), which this floor would never have touched.
+condition 12.25), which this floor would never have touched. The cause is LAPACK's
+divide-and-conquer driver, not the matrix ([the torch upstream defects page](../../development/torch-upstream-defects.md),
+section 6), so where a layer does need the full SVD a failure on a finite matrix is recomputed
+with the QR-based `?gesvd` and announced with `wavebit.rcwa.diagnostics.SvdConvergenceWarning`.
 
 Why it never binds on a passive dielectric: the numerical range of `<1/eps>` lies in the convex
 hull of the values `1/eps` takes, so the smallest singular value is at least the hull's distance
