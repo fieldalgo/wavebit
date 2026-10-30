@@ -51,10 +51,7 @@ _U = r'(?<![\w.])'
 #: messages spell those publicly where they are raised.
 _SHARED = ('Plane', 'Box', 'Sphere', 'Cylinder', 'Prism', 'PlaneWave', 'TFSF', 'Bloch',
            'Boundaries', 'Periodic', 'PEC', 'PMC', 'InitialField', 'Domain', 'Shape', 'Structure',
-           'PML')
-
-#: Stage-7 placeholders have never implemented a calculation.
-_UNIMPLEMENTED = ('ModeSource', 'ModeMonitor', 'GaussianBeam')
+           'PML', 'ModeMonitor', 'ModeSource', 'GaussianBeam')
 
 PHRASES = (
     # A static refusal ends with the engine's leaves; the public module has its own.
@@ -121,7 +118,6 @@ PHRASES = (
     # CSG is named as a spelling to come; it is in neither namespace yet.
     (_FD + r'(Union|Intersection|Difference)\b', r'\1'),
     (_FD + r'(' + '|'.join(_SHARED) + r')\b', r'fdtd.\1'),
-    (_FD + r'(' + '|'.join(_UNIMPLEMENTED) + r')\b', r'\1 (unimplemented)'),
     # The engine's calls without the prefix. A keyword the public spelling takes at the same
     # value keeps the value; one the engine holds in its own units (an end time, a bandwidth)
     # is spelled without the number; the compat namespace is retired, so every call is named

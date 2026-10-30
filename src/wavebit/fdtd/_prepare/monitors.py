@@ -485,6 +485,17 @@ def _clear_of_sources(where, scene, grid, lo, hi, closed, tfsf=True):
                     f'{low_side} field, at {AXES[P]} = {position + grid.dx:g} or above the '
                     f'{high_side} field. The power the sheet injects is '
                     f'res.sources[{src.name!r}].intensity().')
+        elif type(src).__name__ == 'ModeSheet':
+            P, k = src.axis, src.k
+            # The sheet's E plane and the H half plane its corrections write, a cell each way.
+            if lo[P] - 1 <= k <= hi[P] + 1:
+                from wavebit.errors import ValidationError
+                raise ValidationError(
+                    f'{where}: the {shape} (nodes {_nodes_text(lo, hi)}) is within a cell of the '
+                    f'sheet of {src.kind}({src.name!r}) at node {k} along {AXES[P]}, where the '
+                    f'field jumps from the total field on one side to the scattered field on the '
+                    f'other. Move it at least two cells off the sheet.',
+                    code='monitor.source_sheet', path='outputs')
         elif isinstance(src, TFSF) and tfsf:
             tlo = [_node(grid, a, src.box.low[a]) for a in range(3)]
             thi = [_node(grid, a, src.box.high[a]) for a in range(3)]

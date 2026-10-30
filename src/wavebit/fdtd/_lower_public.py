@@ -87,6 +87,44 @@ def _continue_box(item, shape, pad, physical_low, physical_high,
                          center=tuple((a+b)/2 for a,b in zip(low,high)))
 
 
+def _continue_snapped(item, shape, pad, physical_low, physical_high, allocated_high, allocated_low,
+                      dx):
+    """A cell-snapped body declared to run straight through the Open faces of one axis.
+
+    A waveguide core: a ``SnappedBox`` that reaches the named physical faces and continues,
+    unchanged in its cross-section, through their absorbing layers. Its cells along that axis
+    are the same in every layer, so no interface lies inside the layer -- the condition the
+    engine's absorbing-layer rule asks (``_prepare/checks.py::check_absorbing_layers``). Each
+    named face's PML stays matched to its own medium (the background, unless
+    ``PML(reference_media=)`` names another): a core is not the medium the layer is graded for.
+    A smoothed body is not admitted here (a smoothed rod through a PML is refused; see
+    ``docs/guide/fdtd/waveguide-modes.md``), and neither is a body that touches an Open face of
+    another axis, which the caller's rule below still refuses.
+    """
+    path = 'scene.structures.' + item.name
+    def refuse(message):
+        raise UnsupportedFeatureError(message, code='fdtd.padding_continuation', path=path)
+    axes = {face[0] for face in item.continuation}
+    if len(axes) != 1:
+        refuse('a continued SnappedBox runs through the Open faces of one axis only')
+    axis_name = next(iter(axes))
+    axis = 'xyz'.index(axis_name)
+    low, high = list(shape.low), list(shape.high)
+    for face in item.continuation:
+        if not pad[face]:
+            refuse(f'continuation must name an Open face with absorbing padding; {face!r} has none')
+        if face[1] == '-':
+            if not low[axis] <= physical_low[axis] + 1e-9 * dx:
+                refuse(f'the continued SnappedBox must reach the physical face {face!r}')
+            low[axis] = allocated_low[axis] - 2 * dx
+        else:
+            if not high[axis] >= physical_high[axis] - 1e-9 * dx:
+                refuse(f'the continued SnappedBox must reach the physical face {face!r}')
+            high[axis] = allocated_high[axis] + 2 * dx
+    return shape.replace(size=tuple(b - a for a, b in zip(low, high)),
+                         center=tuple((a + b) / 2 for a, b in zip(low, high)))
+
+
 def _pulse(value, units):
     if not isinstance(value, sources.GaussianPulse):
         raise ValidationError('expected GaussianPulse', code='source.pulse', path='sources.pulse')
@@ -112,7 +150,13 @@ def _full_cell_plane(plane, path):
             code=_area(path)+'.plane_span', path=path, expected='no transverse spans', actual=spans)
 
 
-def _source(source, units):
+def _source(source, units, problem=None, numerics=None):
+    if isinstance(source, sources.ModeSource):
+        from ._mode_source import mode_sheet
+        return mode_sheet(source, problem, numerics, units)
+    if isinstance(source, sources.GaussianBeam):
+        from ._beam_source import beam_sheet
+        return beam_sheet(source, problem, numerics, units)
     if not isinstance(source, (sources.PlaneWave, sources.CurrentDipole, sources.TFSF)):
         raise UnsupportedFeatureError('unsupported source', code='source.type', path='sources', actual=type(source).__name__)
     kw = dict(name=source.name, band=_pulse(source.pulse, units),
@@ -164,8 +208,21 @@ def _monitor_geometry(m, field, expected):
 _ENGINE_SIDE = {'reflected': 'reflect', 'transmitted': 'transmit'}
 
 
-def _monitor(m, problem):
+def _monitor(m, problem, numerics=None):
     """The engine monitor for public monitor ``m``, built explicitly (never by class name)."""
+    if isinstance(m, monitors.ModeMonitor):
+        # A plane flux over exactly the mode window; the projection onto the modes is made
+        # from its accumulators when the result is adapted (src/wavebit/fdtd/_modes.py).
+        if not isinstance(m.plane, geometry.Plane):
+            raise ValidationError('expected Plane', code='monitor.plane', path='outputs.'+m.name+'.plane')
+        from ._modes import window_plane
+        if m.source is not None and not any(isinstance(s, sources.ModeSource) and s.name == m.source
+                                            for s in problem.sources):
+            raise ValidationError(f'ModeMonitor(source={m.source!r}) names no ModeSource of the '
+                                  f'problem', code='monitor.source',
+                                  path='outputs.'+m.name+'.source', actual=m.source)
+        return old_monitors.Flux(name=m.name, wavelengths=m.wavelengths,
+                                 plane=window_plane(problem, numerics, m.plane))
     if isinstance(m, monitors.TimeSeriesMonitor):
         return old_monitors.Record(m.name, at=m.at, component=m.component)
     if isinstance(m, (monitors.FieldMonitor, monitors.FluxMonitor)):
@@ -217,8 +274,10 @@ def validate_sources(problem):
     names = set()
     for index, source in enumerate(problem.sources):
         indexed = f'sources[{index}]'
-        if not isinstance(source, (sources.PlaneWave, sources.CurrentDipole, sources.TFSF)):
-            raise UnsupportedFeatureError('expected PlaneWave, CurrentDipole or TFSF',
+        if not isinstance(source, (sources.PlaneWave, sources.CurrentDipole, sources.TFSF,
+                                   sources.ModeSource, sources.GaussianBeam)):
+            raise UnsupportedFeatureError('expected PlaneWave, CurrentDipole, TFSF, ModeSource or '
+                                          'GaussianBeam',
                                           code='source.type', path=indexed, actual=type(source).__name__)
         if not isinstance(source.name, str) or not source.name:
             raise ValidationError('source name must be a nonempty string', code='source.name', path=indexed+'.name')
@@ -312,7 +371,25 @@ def lower_problem(problem, numerics, *, plan=None):
     for item in scene.structures:
         material = lower_material(item.material, units=units)
         shape = _geometry(item.shape, numerics.geometry_ranges.get(item.name))
-        if item.continuation:
+        if item.continuation and isinstance(shape, old_geometry.Region):
+            # A cell-snapped core through the faces of its own axis; the faces keep their match.
+            shape = _continue_snapped(item, shape, pad, physical_low, physical_high,
+                                      allocated_high, allocated_low, dx)
+        elif item.continuation and isinstance(shape, old_geometry.Slab):
+            # A slab runs the whole box on its other two axes already; naming their faces is
+            # the explicit consent the crossing check below asks for. Its own axis keeps the
+            # half-space rule.
+            if any(face[0] == shape.axis for face in item.continuation):
+                raise UnsupportedFeatureError(
+                    'a SnappedSlab continues through its own axis by reaching the face (a '
+                    'half-space); continuation names faces of the two axes it runs along',
+                    code='fdtd.padding_continuation', path='scene.structures.'+item.name)
+            for face in item.continuation:
+                if not pad[face]:
+                    raise UnsupportedFeatureError(
+                        f'continuation must name an Open face with absorbing padding; {face!r} has none',
+                        code='fdtd.padding_continuation', path='scene.structures.'+item.name)
+        elif item.continuation:
             shape = _continue_box(item, shape, pad, physical_low, physical_high,
                                   allocated_low, allocated_high, dx)
             for face in item.continuation:
@@ -328,9 +405,10 @@ def lower_problem(problem, numerics, *, plan=None):
                     bounds[index] = allocated_low[axis] if index == 0 else allocated_high[axis]
                     faces[face] = material
             shape = shape.replace(**{axis_name:tuple(bounds)})
-            # A slab cutting an orthogonal open face is heterogeneous along that face.
-            if any(n for f,n in pad.items() if f[0] != axis_name):
-                raise UnsupportedFeatureError('a slab crossing an orthogonal Open face has no homogeneous PML continuation', code='fdtd.padding_continuation', path='scene.structures.'+item.name)
+            # A slab cutting an orthogonal open face is heterogeneous along that face, unless
+            # the structure declares that it continues through it (a slab waveguide).
+            if any(n for f,n in pad.items() if f[0] != axis_name and f not in item.continuation):
+                raise UnsupportedFeatureError('a slab crossing an orthogonal Open face has no homogeneous PML continuation; a slab waveguide declares continuation=(...) for the faces it runs through', code='fdtd.padding_continuation', path='scene.structures.'+item.name)
         elif any(pad.values()):
             # Supported bodies are fully contained in the physical region; their lowerer
             # subsequently applies the stricter Yee/interpolation halo clearance checks.
@@ -414,7 +492,7 @@ def lower_problem(problem, numerics, *, plan=None):
             raise ValidationError('expected fdtd.InitialField',code='initial.type',path='initial')
         initial=old_sources.InitialField(E=problem.initial.E,H=_scaled_initial(problem.initial.H,Z0),amplitude=problem.initial.amplitude)
     # Validate physical monitor positions before adding the implementation padding.
-    outputs=tuple(_monitor(m,problem) for m in problem.outputs.monitors)
+    outputs=tuple(_monitor(m,problem,numerics) for m in problem.outputs.monitors)
     for m in outputs:
         _monitor_plane_bounds(m, physical_low, physical_high)
         if isinstance(m,old_monitors.Record):
@@ -422,7 +500,13 @@ def lower_problem(problem, numerics, *, plan=None):
                 raise ValidationError('monitor is outside the physical domain',code='monitor.outside_domain',path='outputs.'+m.name)
         else:old_scene._monitor_inside(m,physical_low,physical_high)
     for source in problem.sources:
-        if isinstance(source,sources.PlaneWave):
+        if isinstance(source,(sources.ModeSource,sources.GaussianBeam)):
+            if not isinstance(source.plane, geometry.Plane):
+                raise ValidationError('expected Plane', code='source.plane', path='sources.'+source.name+'.plane')
+            axis=source.plane.axis
+            if not physical_low[axis]<=source.plane.position<=physical_high[axis]:
+                raise ValidationError('source is outside the physical domain',code='source.outside_domain',path='sources.'+source.name+'.plane')
+        elif isinstance(source,sources.PlaneWave):
             if not isinstance(source.plane, geometry.Plane):
                 raise ValidationError('expected Plane', code='source.plane', path='sources.'+source.name+'.plane')
             axis=source.plane.axis
@@ -436,7 +520,7 @@ def lower_problem(problem, numerics, *, plan=None):
                 raise ValidationError('source is outside the physical domain',code='source.outside_domain',path='sources.'+source.name+'.box')
     legacy=old_scene.Scene(domain=old_scene.Domain(size=size,center=center),
         boundaries=old_boundaries.Boundaries(**converted),resolution=old_scene.Resolution(dx=dx),run=run,
-        background=background,structures=tuple(structures),sources=tuple(_source(s,units) for s in problem.sources),
+        background=background,structures=tuple(structures),sources=tuple(_source(s,units,problem,numerics) for s in problem.sources),
         monitors=outputs,initial=initial)
     # The engine reads a junction rule only on the standing member of a flush
     # pair. In particular, a continued substrate and unrelated bodies retain

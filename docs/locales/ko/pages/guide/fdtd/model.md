@@ -198,7 +198,7 @@ Kottke, Farjadpour, Johnson(*Phys. Rev. E* **77**, 036611, 2008)의 비등방 �
 | 바디가 경계 짓는 가장 작은 폭이 4셀 이상이어야 합니다. 4~8셀이면 경고 | 그보다 적은 셀에서는 섞인 셀이 어디에 떨어지느냐가 바디보다 답을 더 좌우합니다 |
 | 재료: 유전율과 투자율이 스칼라인 `Material`. 축별 값은 안 됩니다 | 섞는 규칙은 성분별로 적용되고 등방 바디를 가정합니다 |
 | `ConductiveMaterial`, `DispersiveMaterial`은 안 됩니다. 셀 전체에 걸친 평평한 필름만 예외 | 손실·분산 재료의 섞기는 그 필름 범위에서만 검증됐습니다 |
-| `Open()` 면에 닿으면 안 됩니다. 회전하지 않고 가로 방향으로 균일한 `Box`가 `Structure.continuation`을 명시적으로 선언한 경우만 예외 | 유한한 바디의 연장은 추론하지 않습니다. [영문 스무딩 기판 가이드](substrate-gradients.md)를 참고하세요 |
+| `Open()` 면에 닿으면 안 됩니다. 회전하지 않고 가로 방향으로 균일한 `Box`가 `Structure.continuation`을 명시적으로 선언한 경우만 예외 | 유한한 바디의 연장은 추론하지 않습니다. [영문 스무딩 기판 가이드](substrate-gradients.md)를 참고하세요. 셀에 맞춘 도파관 코어는 대신 이어질 수 있습니다([일반 장면 API의 범위](#일반-장면-api의-범위) 참고) |
 | `Periodic()` 면에 닿으면 안 됩니다. 단 주기 전체를 덮으면서 양쪽 면을 한 셀 **넘게** 지나가면 됩니다 | 그렇지 않으면 이음매에서 일부가 사라집니다 |
 | 두 스무딩 표면이 같은 셀을 지나가면 안 됩니다 | 섞는 규칙은 셀당 매질 둘, 표면 하나를 기술합니다. 한 셀 이상 떨어뜨리거나 한 바디로 쓰세요 |
 | 스무딩 표면이 셀 스냅 면이 자르는 셀을 함께 자르면 안 됩니다 | 그 셀에 매질이 셋 생깁니다(아래 참고) |
@@ -309,7 +309,7 @@ stencil의 지원 범위는 그대로입니다. 진공 속 구 하나와 미분�
 
 | 면 | 의미 |
 | --- | --- |
-| `Open()` | 바깥으로 나가는 면: 물리 도메인 바깥의 PML이 그 면에 닿는 균일 매질에 맞춰집니다. 균일 매질만 닿을 수 있습니다. 배경, 그 축을 가로지르는 `SnappedSlab`, 또는 `Structure.continuation`을 선언하고 가로 방향 양쪽 면을 한 셀 넘게 지나가는 회전하지 않은 `Box`입니다. 그 밖의 유한한 바디가 닿거나, 슬래브나 이어지는 `Box`가 직교하는 `Open()` 면을 가로지르면 거절됩니다([일반 장면 API의 범위](#일반-장면-api의-범위) 참고). |
+| `Open()` | 바깥으로 나가는 면: 물리 도메인 바깥의 PML이 그 면에 닿는 균일 매질에 맞춰집니다. 균일 매질만 닿을 수 있습니다. 배경, 그 축을 가로지르는 `SnappedSlab`, `Structure.continuation`을 선언하고 가로 방향 양쪽 면을 한 셀 넘게 지나가는 회전하지 않은 `Box`, 또는 그 면을 지나 이어진다고 선언한 `SnappedBox` 코어입니다. 그 밖의 유한한 바디가 닿거나, 슬래브나 이어지는 `Box`가 직교하는 `Open()` 면을 가로지르면 거절됩니다([일반 장면 API의 범위](#일반-장면-api의-범위) 참고). |
 | `Periodic()` | 두 면이 위상 없이 이어집니다. 주기 셀에서의 수직 입사. |
 | `Bloch(phase=φ)` 또는 `Bloch(k=k)` | 두 면이 위상을 두고 이어집니다. 실행이 복소수가 되어 메모리와 계산이 두 배입니다. `Bloch.from_source(source, units=...)`가 비스듬한 `PlaneWave`에 필요한 면을 만들어 줍니다. |
 | `PEC()` / `PMC()` | 벽에서 접선 E / 접선 H가 0입니다. 벽 너머로 뻗은 구조물은 잘리고 `GeometryClippedWarning`이 납니다. |
@@ -363,7 +363,7 @@ stencil의 지원 범위는 그대로입니다. 진공 속 구 하나와 미분�
 
 ## 소스
 
-`Problem.sources`에는 `PlaneWave`, `CurrentDipole`, `TFSF`를 넣습니다. 이름은 중복되지 않는
+`Problem.sources`에는 `PlaneWave`, `CurrentDipole`, `TFSF`, `ModeSource`, `GaussianBeam`을 넣습니다. 이름은 중복되지 않는
 빈 문자열이 아닌 문자열이어야 하며, 펄스는 `GaussianPulse`여야 합니다. `check`와
 `Prepared.validate`는 잘못된 선언을 `sources[i]`, 잘못되거나 중복된 이름을
 `sources[i].name`, 잘못된 펄스 형식을 `sources.<name>.pulse` 경로에 보고합니다.
@@ -393,6 +393,8 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 | `PlaneWave(name, plane=..., pulse=..., direction="-z", theta=0, phi=0, polarization="s")` | `plane`에 가장 가까운 노드 평면의 한 방향 시트로, `direction` 쪽으로만 내보냅니다. `theta`는 진행 축으로부터의 극각, `phi`는 첫 번째 가로 축(z 방향 파동이면 x)으로부터의 방위각입니다. `"s"`는 E가 입사면에 수직, `"p"`는 입사면 안입니다. 가로 면은 `Periodic()`(수직 입사)이거나 `Bloch.from_source`가 만든 `Bloch` 면이어야 합니다. 가로 파수 벡터는 펄스의 중심 파장에서 고정되므로, 비스듬한 광대역 펄스는 일정한 각도의 조명이 아닙니다. |
 | `CurrentDipole(name, center=..., pulse=..., component="Ey", kind="electric", current_moment=1)` | 점 **전류**(A·m), 또는 `kind="magnetic"`이면 그 자기 등가물(V·m)입니다. 매끄러운 스탬프(기본 `"bspline"` 또는 `"tent"`, 둘 다 반폭 두 셀)에 퍼뜨려, 중심이 어디에 있든 모멘트와 무게중심이 정확합니다. C·m 단위의 쌍극자 모멘트가 아닙니다. |
 | `TFSF(name, box=..., pulse=..., direction="-z", polarization="x")` | `SnappedBox` 안에만 있는 평면파(안은 전체장, 밖은 산란장)로, 유한한 산란체용입니다. 축 방향만 되고, 그 축의 두 면은 `Open()`이어야 합니다. |
+| `ModeSource(name, plane=..., pulse=..., direction="+z", mode=0, amplitude=1)` | `plane`에 가장 가까운 노드 면의 시트에서 한쪽으로 내보내는 `solve_modes`의 도파관 모드입니다. [도파관 모드](waveguide-modes.md)를 참고하세요. |
+| `GaussianBeam(name, plane=..., pulse=..., waist=..., focus=(0, 0, 0), polarization="x", direction="+z")` | `plane`에 가장 가까운 노드 면의 시트에서 한쪽으로 내보내는 집속 가우시안 빔입니다. [가우시안 빔](gaussian-beam.md)을 참고하세요. |
 | `InitialField(E, H, amplitude=1)` | 실행이 시작하는 장: `t = 0`의 E와 `t = -dt/2`의 H를 배열로, 또는 각 성분의 Yee 점에서 평가되는 호출 가능 객체로 줍니다. |
 
 `PlaneWave.plane`에는 `fdtd.Plane(z=.5)`처럼 `fdtd.Plane`을 넣어야 합니다.
@@ -661,11 +663,12 @@ for w, r, t in zip(wavelengths, R, T):
 
 - CUDA는 [명시한 Torch 범위](../../validation/fdtd/general-cuda.md)로 제한되며, 다른 GPU 백엔드와 단정밀도는 거부합니다. 격자는 균일한 정육면체입니다.
 - 셀별 배열과 비균일 z 격자는 `fdtd.native`로 선언합니다. 일반 장면의 CSG 합집합·교집합·차집합과 기울어진 밀어내기 축은 지원하지 않습니다.
-- 일반 장면의 가우시안 빔·모드 소스·모드 모니터는 아직 구현하지 않았습니다.
+- 모드 광원, 모드 모니터, 모드 솔버는 [도파관 모드](waveguide-modes.md)에, 가우시안 빔은
+  [가우시안 빔](gaussian-beam.md)에 설명되어 있습니다.
 - 자동 정지는 `fdtd.DecayStop`, 단계형 전도도 흡수층은 `fdtd.ConductiveAbsorber`로 제공합니다. [정지와 흡수층](stopping-and-absorbers.md)을 참고하세요.
 - `fdtd.Shape`는 사용자 정의 고정 도형을 받으며 prepared 재사용 시 선언 상태를 검사합니다. 도형의 셀 support는 Open padding에 닿지 않아야 합니다.
 - 손실·분산 스무딩 바디는 평평한 필름으로 제한됩니다.
-- **단면보다 좁은 바디는 흡수층 안으로 이어질 수 없습니다.** `Open()` 면의 PML 안으로 이어지는 것은 균일 매질뿐입니다. 배경, 그 축을 가로지르는 `SnappedSlab`, 그리고 `Structure.continuation`을 선언하고 가로 방향 양쪽 면을 한 셀 넘게 지나가는 회전하지 않은 `Box`(기판. [영문 스무딩 기판 가이드](substrate-gradients.md) 참고)입니다. `Open()` 면에 닿는 유한한 바디(`Cylinder`, `Prism`, `Sphere`, 또는 `Box`나 `SnappedBox` 코어)는 거절되고, 면 가까이에서 끝나 스무딩된 가장자리가 흡수층에 닿는 스무딩 바디도 거절됩니다. 그래서 원형이든 사각형이든 코어가 흡수층 안으로 이어지는 도파관 장면은 아직 지원하지 않으며, 일정도 정해져 있지 않습니다. 코어를 흡수층 앞에서 끝내고 스무딩된 가장자리를 흡수층 밖에 두면 거절은 피하지만, 그 끝면이 반사하므로 다른 문제를 푸는 셈입니다.
+- **흡수층 안으로 이어질 수 있는 코어는 셀에 맞춘 코어뿐입니다.** `Open()` 면의 PML 안으로 이어지는 것은 배경, 그 축을 가로지르는 `SnappedSlab`(또는 `Structure(continuation=...)`을 선언하면 슬래브가 뻗어 있는 축의 면으로), `Structure.continuation`을 선언하고 가로 방향 양쪽 면을 한 셀 넘게 지나가는 회전하지 않은 `Box`(기판. [영문 스무딩 기판 가이드](substrate-gradients.md) 참고), 그리고 `Structure(continuation=('z-', 'z+'))`(어느 한 축)를 선언하고 그 물리 면까지 닿는 `SnappedBox` 코어입니다. 코어는 단면을 그대로 유지한 채 패딩 안으로 연장되므로 PML의 모든 층이 같은 매질을 봅니다. 측정한 도파 모드 반사는 [검증 기록](../../validation/fdtd/fd-waveguide-through-pml.md)에 있습니다. 단면보다 좁은 스무딩 코어(`Box`, `Cylinder`, `Prism`, `Sphere`)는 여전히 `Open()` 면에서 거절되고, 면 가까이에서 끝나 스무딩된 가장자리가 흡수층에 닿는 스무딩 바디, 그리고 다른 축의 `Open()` 면에 닿는 연장 코어도 거절됩니다.
 
 ## 더 읽을거리
 

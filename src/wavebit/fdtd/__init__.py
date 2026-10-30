@@ -3,24 +3,28 @@ from ._problem import Problem, Scene
 from ._geometry import (Domain, Shape, SnappedSlab, SnappedBox, Plane, Sphere, Box, Cylinder, Prism,
                         Structure)
 from ._boundaries import Open, Periodic, Bloch, PEC, PMC, MirrorSymmetry, InvariantAxis, Boundaries
-from ._sources import GaussianPulse, PlaneWave, CurrentDipole, TFSF, InitialField
+from ._sources import (GaussianPulse, PlaneWave, CurrentDipole, TFSF, ModeSource, GaussianBeam,
+                       InitialField)
 from ._monitors import (TimeSeriesMonitor, FieldMonitor, FluxMonitor, DiffractionMonitor,
-                        FarFieldMonitor, Outputs)
+                        FarFieldMonitor, ModeMonitor, Outputs)
 from ._numerics import UniformGrid, Duration, PML, ConductiveAbsorber, DecayStop, Numerics
 from ._api import Prepared, check, prepare, run
 from ._result import Result, SpectralFlux, FarFieldSpectrum
+from ._modes import solve_modes, WaveguideMode, WaveguideModes, ModeSpectrum
 from . import native, periodic
 
 __all__ = ['Problem', 'Scene',
            'Domain', 'Shape', 'SnappedSlab', 'SnappedBox', 'Plane', 'Sphere', 'Box', 'Cylinder',
            'Prism', 'Structure',
            'Open', 'Periodic', 'Bloch', 'PEC', 'PMC', 'MirrorSymmetry', 'InvariantAxis', 'Boundaries',
-           'GaussianPulse', 'PlaneWave', 'CurrentDipole', 'TFSF', 'InitialField',
+           'GaussianPulse', 'PlaneWave', 'CurrentDipole', 'TFSF', 'ModeSource', 'GaussianBeam',
+           'InitialField',
            'TimeSeriesMonitor', 'FieldMonitor', 'FluxMonitor', 'DiffractionMonitor',
-           'FarFieldMonitor', 'Outputs',
+           'FarFieldMonitor', 'ModeMonitor', 'Outputs',
            'UniformGrid', 'Duration', 'PML', 'ConductiveAbsorber', 'DecayStop', 'Numerics',
            'Prepared', 'check', 'prepare', 'run',
            'Result', 'SpectralFlux', 'FarFieldSpectrum',
+           'solve_modes', 'WaveguideMode', 'WaveguideModes', 'ModeSpectrum',
            'native', 'periodic']
 
 #: Names this module no longer has, and what replaced them. Each is a tombstone, not an alias:

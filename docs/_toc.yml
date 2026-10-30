@@ -113,6 +113,8 @@ subtrees:
           - file: guide/fdtd/general-fdtd
           - file: guide/fdtd/model
           - file: guide/fdtd/time-domain
+          - file: guide/fdtd/waveguide-modes
+          - file: guide/fdtd/gaussian-beam
   - file: reference/index
     title: API reference
     subtrees:
@@ -252,6 +254,10 @@ subtrees:
               - file: validation/fdtd/fd-public-numerics-refusals
               - file: validation/fdtd/fd-subpixel-occupancy
               - file: validation/fdtd/fd-two-debye-film
+              - file: validation/fdtd/fd-waveguide-modes
+              - file: validation/fdtd/fd-waveguide-through-pml
+              - file: validation/fdtd/fd-mode-source
+              - file: validation/fdtd/fd-gaussian-beam
               - file: validation/fdtd/fdtd-adjoint-validation
               - file: validation/fdtd/fdtd-bragg-cavity
               - file: validation/fdtd/fdtd-circle-gradients

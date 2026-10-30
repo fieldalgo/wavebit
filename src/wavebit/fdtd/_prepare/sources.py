@@ -59,6 +59,7 @@ from wavebit.fdtd._legacy_sources import Dipole
 from wavebit.fdtd._legacy_sources import PlaneWave
 from wavebit.fdtd._legacy_sources import TFSF
 from wavebit.fdtd._legacy_sources import _is_complex
+from wavebit.fdtd._mode_source import ModeSheet
 from wavebit.fdtd._kernel.grid import OFFSETS
 from wavebit.fdtd._kernel.masks import Slab
 from wavebit.fdtd._kernel.sources import ColumnTerm
@@ -168,11 +169,37 @@ def source_terms(scene, plan):
             term = _plane_wave_term(scene, plan, src, row)
         elif isinstance(src, TFSF):
             term = _tfsf_term(scene, plan, src, row)
+        elif isinstance(src, ModeSheet):
+            term = _mode_sheet_term(scene, plan, src, row)
         else:                                       # Scene already refused anything else
             raise TypeError(public_name(src))
         terms.append(term)
         row += len(term.rows)
     return tuple(terms)
+
+
+def _mode_sheet_term(scene, plan, src, row):
+    """The kernel term of a mode or beam sheet (``src/wavebit/fdtd/_kernel/mode_sheet.py``)."""
+    from wavebit.fdtd._kernel.mode_sheet import ModeSheetTerm
+    w, u, v = src.axis, (src.axis + 1) % 3, (src.axis + 2) % 3
+    (u0, u1), (v0, v1) = src.window
+    k = src.k
+    h_plane = (k - 1, k) if src.sign > 0 else (k, k + 1)
+
+    def slab(c, along_w):
+        ranges = {u: (u0, u1), v: (v0, v1), w: along_w}
+        return Slab(c=c, z=ranges[2], y=ranges[1], x=ranges[0])
+    s = src.sign
+    # Each incident component is a sum of patterns, each on one of the sheet's rows.
+    base = (('H', slab(u, h_plane), 'Ev', float(s)), ('H', slab(v, h_plane), 'Eu', float(-s)),
+            ('E', slab(u, (k, k + 1)), 'Hv', float(s)), ('E', slab(v, (k, k + 1)), 'Hu', float(-s)))
+    corrections = tuple((slot, sl, label, sign, r) for slot, sl, component, sign in base
+                        for label, r in src.components[component])
+    for _, sl, _, _ in base:
+        for a, (lo, hi) in enumerate((sl.x, sl.y, sl.z)):
+            _check_indices(f'{src.kind}({src.name!r})', a, lo, hi - 1, scene, plan)
+    return ModeSheetTerm(name=src.name, row=row, corrections=corrections,
+                         row_offsets=src.row_offsets, rows=src.shifts)
 
 
 def dipole_indices(src, grid):
@@ -832,6 +859,8 @@ def lower_sources(scene, plan, rt):
         if isinstance(term, DipoleTerm):
             center = tuple(rt.array(c, 'float64') for c in src.center)
             entry['stamp'] = stamp(term, center, plan.grid, rt)
+        elif isinstance(src, ModeSheet):
+            entry['pattern'] = _sheet_patterns(src, rt)
         else:
             entry['column'] = lower(column_scene(scene, src, plan), term.sub, rt)
             if term.driver is not None:
@@ -841,6 +870,16 @@ def lower_sources(scene, plan, rt):
                 entry['pattern'] = _pattern(scene, plan, term.axis, rt)
         out[term.name] = entry
     return out
+
+
+def _sheet_patterns(src, rt):
+    """A mode sheet's four incident patterns, each shaped like its correction slabs."""
+    w, u, v = src.axis, (src.axis + 1) % 3, (src.axis + 2) % 3
+    position = {u: 0, v: 1, w: 2}
+    order = [position[2], position[1], position[0]]   # local (u, v, w) -> stored (z, y, x)
+    return {label: rt.array(np.transpose(np.asarray(array, dtype=np.float64)[:, :, None], order),
+                            'float64')
+            for label, array in src.patterns.items()}
 
 
 def _pattern(scene, plan, P, rt):
