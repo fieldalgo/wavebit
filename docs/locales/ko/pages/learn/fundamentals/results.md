@@ -111,7 +111,20 @@ phase_deg = np.angle(zero.t_s, deg=True)
 
 ## 입사 편광과 출력 편광 구분하기
 
-결과를 담는 객체의 이름은 어떤 **입사 편광**으로 계산했는지 나타냅니다.
+`r_s`, `t_p`, `R_s`, `T_p`의 아래첨자 `s`, `p`와 현재 API의 `result.reflection.amplitude_s` /
+`amplitude_p`, `result.transmission.amplitude_s` / `amplitude_p`에 붙은 `s`, `p`는 **출력 편광**,
+즉 나가는 각 차수의 s 성분과 p 성분을 나타냅니다.
+
+**입사 편광**은 그 실행의 `PlaneWave(polarization=...)`이며 기본값은 `'s'`입니다. 현재 결과는 그
+입사 하나에 대한 답이고, `result.R`과 `result.T`도 그 입사의 반사율·투과율입니다. 순수 s와 순수 p에
+대한 응답은 `'s'`와 `'p'`로 두 번 실행해서 얻고, 두 실행의 진폭을 선형 결합하면 임의의 Jones 쌍에
+대한 진폭이 됩니다([빛 안내서](../../guide/rcwa/light.md#the-polarization-comes-in-three-kinds) 참고).
+
+:::{admonition} 이전 인터페이스
+:class: earlier-interface
+
+이전 인터페이스(2026-10-15에 `wavebit.compat`와 함께 퇴역)는 한 번의 풀이에서 **입사 편광**에 따라
+이름 붙인 결과 객체 세 개를 돌려주었습니다.
 
 | 결과 객체 | 입사 조건 |
 | --- | --- |
@@ -119,11 +132,12 @@ phase_deg = np.angle(zero.t_s, deg=True)
 | `result.s_inc` | 같은 입사 방향에서 순수 s 편광으로 입사 |
 | `result.p_inc` | 같은 입사 방향에서 순수 p 편광으로 입사 |
 
-`tetm`, `psi`, `polarization`을 모두 생략하면 기본 s 편광으로 계산하며, 그 결과가 `result.incident`에 들어갑니다. `result.R`, `result.T`도 이 입사의 반사율·투과율입니다.
-
-반면 `r_s`, `t_p`, `R_s`, `T_p`의 아래첨자에 해당하는 `s`, `p`는 **출력 편광**을 나타냅니다. 예를 들어 `result.s_inc.t_p`는 s 편광으로 입사했을 때 투과파에 생긴 p 성분의 복소 진폭 계수입니다.
-
-`s_inc`, `p_inc`는 두 편광을 함께 다루는 계산에서 `answers="amplitude"` 또는 `"field"`일 때 제공합니다. `tetm="te"`나 `"tm"`으로 한 편광만 계산하거나 `answers="efficiency"`를 선택하면 두 객체는 `None`이며, 계산한 입사의 결과는 `result.incident`로 읽습니다.
+`tetm`, `psi`, `polarization`을 모두 생략하면 s 편광으로 계산해 `result.incident`에 담았고,
+`result.R`, `result.T`도 이 입사의 값이었습니다. `result.s_inc.t_p`는 s 편광으로 입사했을 때 투과파에
+생긴 p 성분의 복소 진폭이었습니다. `s_inc`, `p_inc`는 두 편광을 함께 다루는 계산에서
+`answers="amplitude"` 또는 `"field"`일 때 제공했고, `tetm="te"`나 `"tm"`으로 한 편광만 계산하거나
+`answers="efficiency"`를 선택하면 둘 다 `None`이었습니다.
+:::
 
 ## 투과율이 0인 차수와 소멸파
 
