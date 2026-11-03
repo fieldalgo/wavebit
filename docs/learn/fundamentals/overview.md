@@ -3,7 +3,8 @@
 :::{note}
 The downloadable teaching scripts, the text and the snippets of every chapter use the current
 `rcwa.Problem` / `rcwa.run` API. A few passages describe features the current API does not have
-yet, such as the `psi`/`chi` polarization angles and the pure 1D `tetm` path; they sit in boxes
+yet, such as the `psi`/`chi` polarization angles and the earlier `tetm` declaration (whose pure 1D
+path the words `"s"` and `"p"` now take); they sit in boxes
 titled "Earlier interface" (retired with `wavebit.compat` on 2026-10-15). Some figures keep the
 earlier labels, and the chapters that show them name the current equivalents. Compare the
 [current getting-started guide](../../getting-started/index.md) and

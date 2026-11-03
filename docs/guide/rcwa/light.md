@@ -15,9 +15,10 @@ Plane-wave amplitude is in V/m. Polarization is `"s"`, `"p"`, or a complex `(s,p
 The [reference](../../reference/rcwa/index.md) lists their constructors. The sections below give the details of direction, polarization and incidence side.
 
 :::{note}
-Three features below are not in the current API yet, so their passages use the earlier
-`wavebit.compat.legacy` interface and say so: the pure 1D `tetm` declaration, the `psi`/`chi`
-polarization coordinates, and the one-solve s/p responses `s_inc`/`p_inc`.
+Two features below are not in the current API yet, so their passages use the earlier
+`wavebit.compat.legacy` interface and say so: the `psi`/`chi` polarization coordinates, and the
+one-solve s/p responses `s_inc`/`p_inc`. A third, the pure 1D `tetm` declaration, is now the
+words `'s'` and `'p'` (below).
 :::
 
 Specify the incident direction of each source with either angles or transverse wavevector
@@ -178,8 +179,10 @@ that reaches the far side.
 
 ## The polarization comes in three kinds
 
-The current `PlaneWave` takes the third kind, `polarization='s'`, `'p'` or `(a_s, a_p)`. The
-first two are earlier-interface declarations that the current API does not have yet.
+The current `PlaneWave` takes `polarization='s'`, `'p'` or `(a_s, a_p)`. The pair is the third
+kind below, and the words now do the first kind's work: they declare the polarization fixed (see
+"The words are a declaration" below). The second kind, the coordinates, is an earlier-interface
+form the current API does not have yet.
 
 :::{admonition} Earlier interface
 :class: earlier-interface
@@ -203,7 +206,8 @@ rcwa.PlaneWave(polarization=(1, -1j))           # the pair, straight from anothe
 Retired with `wavebit.compat` on 2026-10-15; this runs only on a historical checkout.
 
 ```python
-# Earlier interface: the current API has no tetm or psi/chi declaration yet.
+# Earlier interface: the current API has no psi/chi declaration yet, and tetm's pure path
+# is taken by polarization='s' / 'p'.
 import numpy as np
 from wavebit.compat import legacy as wavebit
 
@@ -213,9 +217,52 @@ wavebit.rcwa(psi=0.4, chi=np.pi / 4, ...)       # circular
 ```
 :::
 
-The current `polarization='s'` / `'p'` at `phi=0` runs the conical formulation: on a one-row
-raster grating its amplitudes and efficiencies match `tetm='te'` / `'tm'` to 5e-15 (measured
-2026-10-15), without the pure path's speed.
+### The words are a declaration, the pair is a value
+
+`polarization='s'` or `'p'` says the polarization is fixed: not a parameter anyone sweeps or
+differentiates. That is what the pure 1D TE/TM formulation needs, so since 2026-11-03 a word
+takes it wherever it answers the same light: every layer a one-row raster (`Layer(epsilon=...)`
+of shape `(1, Nx)`), an axis-aligned cell, and `phi` and `ky` absent or a zero that nothing
+traces or differentiates. `'s'` is TE and `'p'` is TM. Before that date every one-row raster
+solved on the conical formulation.
+
+Everywhere else a word solves exactly as the pair it names, `(1, 0)` or `(0, 1)`, and nothing is
+refused:
+
+- a skewed cell, whose grooves do not run along y, solves on the 2D path;
+- a nonzero `phi` or `ky`, or one that is traced or differentiated (`jax.jit`, `jax.grad`,
+  `vmap`, a `requires_grad` tensor), solves on the conical path, the one that carries an azimuth
+  and its derivative;
+- `Numerics(formulation='first_order')` solves on the 2D layout it is written on;
+- `Outputs(scattering=True)` stays conical, because the requested matrix keeps both
+  polarizations' ports (`2N x 2N`, channel `'sp'`) and the pure path's has one polarization's.
+
+A Jones pair is a value, and always keeps the conical path, `(1, 0)` included: it may be swept
+or differentiated. The two formulations agree to round-off, 2e-13 relative or better on every
+amplitude, efficiency, power, field and boundary field across the cases in
+`tests/api/test_unified_rcwa_pure_1d.py`, including their JAX and PyTorch gradients. The pure
+one is faster and smaller; see "Cost" below. `check(...).resolved['solve_path']` names the
+path a run will take, and `result.diagnostics['solve_path']` the one each wavelength took:
+`'1d_te'`, `'1d_tm'`, `'1d_conical'` or `'2d'`. The first is read from the concrete problem
+`check` or `prepare` was given, so a prepared run that traces `phi` -- inside `jax.jit`, say --
+reports the plan `'1d_te'` and records `'1d_conical'`, the path it took.
+
+#### Cost
+
+Measured on 2026-11-03 through the public `rcwa.run`: NumPy on a 10-core laptop, a
+1000 nm cell holding a 560 nm bar of permittivity 12.25 in air, 200 nm thick, at 1363 nm and
+normal incidence, a 50-pixel raster with `fourier_coefficients='integrated'`, `'p'` against
+`(0, 1)`. Times are the best of 7, 3 and 1 runs. Memory is the process's peak footprint above its
+baseline during the run.
+
+| `orders` | `'p'` (pure TM) | `(0, 1)` (conical) | time ratio | peak memory, pure / conical | `sum(R)` apart |
+| --- | --- | --- | --- | --- | --- |
+| `(50, 0)` | 0.017 s | 0.045 s | 2.7x | 1.8 / 26 MB | 5e-13 |
+| `(200, 0)` | 0.29 s | 1.22 s | 4.1x | 31 / 251 MB | 8e-12 |
+| `(800, 0)` | 10.8 s | 57.8 s | 5.3x | 0.39 / 5.9 GB | 4e-10 |
+
+The conical layout solves matrices twice the side of the pure one's, so the gap in time and
+memory widens with the truncation, and so does the last-digit difference between the two answers.
 
 :::{admonition} Earlier interface
 :class: earlier-interface

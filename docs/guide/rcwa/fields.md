@@ -125,11 +125,18 @@ The time convention is `e^{-iωt}`: the instantaneous real field is
 `real(E * exp(-1j*omega*t))`. `abs(E)` and `angle(E)` give each component's magnitude
 and phase. See [conventions](../../reference/common/conventions.md) for the source phase reference.
 
-Every input is an electric amplitude: coupled s/p, `PlaneWave`, and the earlier interface's
-pure 1D TM solve included. (Until 2026-09-27 the pure 1D TM solve was lit by a unit magnetic
+Every input is an electric amplitude: coupled s/p, `PlaneWave`, and the pure 1D TM solve
+included. (Until 2026-09-27 the pure 1D TM solve was lit by a unit magnetic
 input, so its field was `mu_inc/n_inc` of the conical p field for the same light.) The
 result API preserves the solved input's scale; it does not rescale the field by incident
 power.
+
+A `PlaneWave` written `'s'` or `'p'` on a one-row raster solves on that pure TE/TM path
+([the light guide](light.md#the-words-are-a-declaration-the-pair-is-a-value) says when), and its
+`field` and `boundary_fields` carry the same six components as the conical path's, to round-off.
+The three the polarization does not excite -- `E_x`, `E_z` and `H_y` for `'s'`, `E_y`, `H_x` and
+`H_z` for `'p'` -- are exact zeros there, where the conical path returns round-off (1e-16 of the
+excited components).
 
 ## Boundary waves and polarization variants
 

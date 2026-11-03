@@ -217,4 +217,6 @@ result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(10, 0)))
 Each value has one place, so there is no second spelling for it to collide with: the cell,
 the half-spaces and the layers in `Stack`, the wavelength in `Excitation`, direction and
 polarization in the source, truncation in `Numerics`. The earlier `tetm='te'` is
-`polarization='s'` at `phi=0.` here.
+`polarization='s'` here: on a one-row `raster` it takes the same pure TE/TM path
+(`result.diagnostics['solve_path']` reads `('1d_te',)`), where a Jones pair would take the
+conical one. See [the light guide](light.md#the-words-are-a-declaration-the-pair-is-a-value).

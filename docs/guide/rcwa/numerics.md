@@ -11,6 +11,8 @@ numerics = rcwa.Numerics(
 
 `orders=(Mu, Mv)` retains orders −Mu…Mu along the first lattice vector and −Mv…Mv along the second; it is always an explicit pair of nonnegative integers (`numerics.orders` refuses a bare integer). Result arrays place the wavelength axis first, then v, then u. Algorithms are `"smm"` or `"etm"`; formulations are `"auto"`, `"first_order"` or `"second_order"`. Factorization choices are explicit, with support checked against the material and geometry. The example's small settings are for a quick calculation, not a convergence recommendation.
 
+The solve path is not a setting: the structure and the source decide whether a run takes the pure 1D TE/TM path, the 1D conical path or the 2D one ([the light guide](light.md#the-words-are-a-declaration-the-pair-is-a-value) says how). `rcwa.check(...).resolved['solve_path']` names the path a run will take, and `result.diagnostics['solve_path']` records the one each wavelength took: `'1d_te'`, `'1d_tm'`, `'1d_conical'` or `'2d'`.
+
 Rayleigh detuning is opt-in: `detuning=None` requests the exact physical input. A positive `detuning` declares a relative step and the result records the changed coordinates. Never interpret a detuned result as the unmodified requested wavelength without reading that metadata.
 
 `topology_check='device'` uses available array guards and refuses other traced geometry.
