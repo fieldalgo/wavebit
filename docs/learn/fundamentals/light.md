@@ -257,12 +257,12 @@ te_result = rcwa.run(grating("s"), numerics=numerics)   # TE
 tm_result = rcwa.run(grating("p"), numerics=numerics)   # TM
 ```
 
-These run the general (conical) formulation, which also handles 2D patterns and nonzero `ky`. On a one-row raster grating at `phi=0` its amplitudes and efficiencies match a dedicated TE/TM solve to 5e-15 (measured 2026-10-15); it does not have that solve's speed.
+On a one-row raster grating like this one, with `phi` and `ky` absent or zero, these run the dedicated TE/TM solve: the words `"s"` and `"p"` declare the polarization fixed, and that is what the solve needs (since 2026-11-03; `result.diagnostics["solve_path"]` reads `("1d_te",)` or `("1d_tm",)`). Written as a Jones pair, `(1, 0)` or `(0, 1)`, the same light runs the general (conical) formulation, which also handles 2D patterns and nonzero `ky`; the two agree to round-off, and the dedicated solve is several times faster on a fine truncation. A skewed cell, a nonzero or differentiated azimuth, and a requested scattering matrix keep the general formulation for the words too.
 
 :::{admonition} Earlier interface
 :class: earlier-interface
 
-The earlier interface (retired with `wavebit.compat` on 2026-10-15) had a dedicated declaration for this case: `tetm="te"` or `tetm="tm"` solved TE or TM alone, 2 to 4 times faster than the conical formulation. It required `ky` to be zero (omitted, or explicitly `ky=0.`); nonzero `ky` raised an error. Because it declared a problem with no polarization degree of freedom, it could not be combined with `psi`, `chi` or `polarization`. The current API has no `tetm` declaration yet.
+The earlier interface (retired with `wavebit.compat` on 2026-10-15) had a dedicated declaration for this case: `tetm="te"` or `tetm="tm"` solved TE or TM alone, 2 to 4 times faster than the conical formulation. It required `ky` to be zero (omitted, or explicitly `ky=0.`); nonzero `ky` raised an error. Because it declared a problem with no polarization degree of freedom, it could not be combined with `psi`, `chi` or `polarization`. In the current API the words `"s"` and `"p"` take that solve where it applies, and refuse nothing where it does not.
 
 ```python
 # Earlier interface only; runs on a historical checkout.
