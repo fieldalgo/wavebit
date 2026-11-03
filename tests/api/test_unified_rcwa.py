@@ -182,6 +182,39 @@ assert 'torch' not in sys.modules
     subprocess.run([sys.executable, '-c', code], check=True, env=env, cwd=tempfile.gettempdir())
 
 
+def test_jit_of_the_jones_pair_0_1_compiles_instead_of_aborting():
+    """A jitted run whose Jones pair is exactly ``(0, 1)``, against the eager NumPy run.
+
+    The runtime guard squared the pair's magnitude with ``abs``, and XLA (jaxlib 0.11.0) reads the
+    constant ``(0, 1)`` as an iota and rewrites ``abs(iota)`` to the iota itself, a complex value
+    where a real one belongs: the compile aborted the whole process, under ``jit`` and
+    ``jit(grad)`` alike, while ``(1, 0)`` and ``'p'`` compiled. In a subprocess, so a regression
+    fails this test instead of ending the session that runs it.
+    """
+    pytest.importorskip('jax')
+    code = '''
+import jax, jax.numpy as jnp, numpy as np
+jax.config.update('jax_enable_x64', True)
+from wavebit import Material, Units, rcwa
+def problem(phi):
+    return rcwa.Problem(units=Units(length='nm'), stack=rcwa.Stack(
+        period=(1000., 1000.), top=Material(1.), bottom=Material(2.25),
+        layers=(rcwa.Layer(thickness=200., epsilon=np.array([[1., 1., 12.25, 12.25]])),)),
+        excitation=rcwa.Excitation(wavelength=1363., sources=(
+            rcwa.PlaneWave(polarization=(0., 1.), theta=.2, phi=phi),)),
+        outputs=rcwa.Outputs(fields=False))
+numerics = rcwa.Numerics(orders=(4, 0))
+prepared = rcwa.prepare(problem(0.), numerics=numerics, backend='jax')
+R = lambda phi: prepared.run(problem(phi)).R.sum()
+eager = float(rcwa.run(problem(0.), numerics=numerics).R.sum())
+assert abs(float(jax.jit(R)(jnp.float64(0.))) - eager) < 1e-12
+assert np.isfinite(float(jax.jit(jax.grad(R))(jnp.float64(0.))))
+'''
+    import wavebit
+    env = dict(os.environ, PYTHONPATH=str(Path(wavebit.__file__).parents[1]))
+    subprocess.run([sys.executable, '-c', code], check=True, env=env, cwd=tempfile.gettempdir())
+
+
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 def test_empty_stack_is_the_single_interface_with_physical_port_labels(side):
     top, bottom = Material(2.25), Material(3.24)

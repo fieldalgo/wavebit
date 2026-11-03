@@ -222,7 +222,11 @@ def _runtime_checks(problem, execution, partitions):
     for source in problem.excitation.sources:
         if hasattr(source, 'polarization') and not isinstance(source.polarization, str):
             a = _adapt._array(xp, source.polarization, execution, True)
-            polarization = polarization & (xp.sum(xp.abs(a)**2) > 0)
+            # |a|^2 as a times its conjugate, never as abs(a)**2: under jax.jit, XLA's algebraic
+            # simplifier (jaxlib 0.11.0) reads the constant pair (0, 1) as an iota and rewrites
+            # abs(iota) to the iota itself, a complex value where a real one belongs, and the
+            # compile aborts the process (a RET_CHECK in HandleAbs). The truth value is the same.
+            polarization = polarization & (xp.sum(xp.real(a*xp.conj(a))) > 0)
     if _adapt.single_plane(problem):
         polarization = polarization & (xp.abs(_adapt._array(xp, problem.excitation.sources[0].amplitude,
                                                            execution, True)) > 0)
