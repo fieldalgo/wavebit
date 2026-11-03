@@ -145,6 +145,12 @@ def _report(problem, numerics, execution, solvers):
                   'layer_count': len(problem.stack.layers), 'fourier_coefficients': scene.fourier_coefficients.value,
                   'factorization': scene.factorization.value,
                   'algorithm': numerics.algorithm, 'formulation': numerics.formulation,
+                  # The layout a solve takes, read from the solver before any has run:
+                  # '1d_te' / '1d_tm' (the pure path a polarization word takes on a one-row
+                  # raster), '1d_conical' or '2d' (also every coherent-source run, whose cascade
+                  # is 2D). Result.diagnostics['solve_path'] has the layout each wavelength's
+                  # solve took.
+                  'solve_path': solvers[0]._solve_path(planned=True),
                   'half_space_merge_tolerance': numerics.half_space_merge_tolerance,
                   'shape_nvf_grid_size': scene.shape_nvf_grid_size if scene.factorization.value == 'nvf' else None,
                   'backend': execution.backend, 'device': execution.device, 'precision': execution.precision,

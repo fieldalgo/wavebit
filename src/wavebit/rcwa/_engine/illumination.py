@@ -465,6 +465,14 @@ class CoherentSolver:
     def formulation_assigned(self):
         return 'first_order'
 
+    def _solve_path(self, planned=False):
+        """``'2d'``, planned or taken: the side-resolved cascade is written on the 2D layout.
+
+        The scene's own :meth:`~wavebit.rcwa._engine.engine.CoreSolveMixin._solve_path` would
+        answer ``None`` after a solve, since this cascade never routes it.
+        """
+        return '2d'
+
     @property
     def backend(self):
         return self._backend

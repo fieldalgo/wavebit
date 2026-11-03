@@ -55,7 +55,9 @@ CARRIED = (
 #: fact about the *flatten* (it compared the `Lattice.drawn` declaration with a concrete cell),
 #: not about the solver; `test_the_declaration_survives_every_backend_and_the_jit_boundary` and
 #: `test_the_flatten_check_is_carried_and_keyed_on_the_objects_it_compared` pin it.
-AUX_NOT_IN_CARRIED = {'psi_given', 'device', 'drawn_checked'}
+#: `polarization_word` is the word `polarization` was written as, beside the pair that
+#: attribute reads back; `test_a_polarization_word_survives_beside_its_pair` checks it.
+AUX_NOT_IN_CARRIED = {'psi_given', 'device', 'drawn_checked', 'polarization_word'}
 
 
 def _scene(**over):
@@ -182,6 +184,23 @@ def test_psi_given_survives_because_the_psi_child_would_overwrite_it():
         solver = _scene(**kw) if given else _one_row(**kw)
         assert solver._psi_given is given, kw
         assert _round_trip(solver)._psi_given is given, kw
+
+
+def test_a_polarization_word_survives_beside_its_pair():
+    """`polarization='p'` is a declaration beside the pair `(0, 1)` it reads back as.
+
+    The pair is a child and comes back as a value; without the word in aux the rebuilt solver
+    would hold a pair, and its solve would take the conical path where the original took the
+    pure one. A pair written as a pair has no word, and must not gain one.
+    """
+    for given, word in (('p', 'p'), ((0.0, 1.0), None)):
+        solver = _one_row(polarization=given)
+        assert solver._polarization_word == word
+        rebuilt = _round_trip(solver)
+        assert rebuilt._polarization_word == word
+        assert _same(rebuilt.polarization, solver.polarization)
+        solver.solve(), rebuilt.solve()
+        assert rebuilt.grating_type == solver.grating_type == (0 if word else 1)
 
 
 def test_a_declaration_assigned_after_construction_comes_back():

@@ -585,7 +585,10 @@ RESULTS = {
                               'relative phase psi cannot spell — (1, -1j)/sqrt(2) and '
                               '(1, +1j)/sqrt(2) are the circular states. The pair is '
                               'normalized to unit incident flux (overall scale is free, '
-                              'overall phase is kept)',
+                              "overall phase is kept). The words 's' and 'p' are the pairs "
+                              '(1, 0) and (0, 1) declared fixed: the pure 1D TE/TM path solves '
+                              'them on a one-row raster in an axis-aligned cell with phi and ky '
+                              "absent or a zero nothing traces, and the pair's path everywhere else",
     },
     'incidence_side': {
         'values': ('top', 'bottom'),
