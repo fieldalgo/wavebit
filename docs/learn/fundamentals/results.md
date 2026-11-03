@@ -111,7 +111,21 @@ Power depends on both electric and magnetic fields, so converting an amplitude c
 
 ## Distinguishing incident and output polarization
 
-The name of a result object indicates which **incident polarization** was used.
+The suffixes `s` and `p` in `r_s`, `t_p`, `R_s` and `T_p` -- and in the current
+`result.reflection.amplitude_s` / `amplitude_p` and `result.transmission.amplitude_s` /
+`amplitude_p` -- describe **output polarization**: the s and p components of each outgoing order.
+
+The **incident polarization** is the `PlaneWave(polarization=...)` of the run, `'s'` by default.
+A current result answers that one incidence, and `result.R` and `result.T` describe it. The
+responses to pure s and pure p come from two runs, `'s'` and `'p'`, and their amplitudes combine
+linearly into those of any Jones pair (see the
+[light guide](../../guide/rcwa/light.md#the-polarization-comes-in-three-kinds)).
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+The earlier interface (retired with `wavebit.compat` on 2026-10-15) returned three result objects
+from one solve, named by **incident polarization**:
 
 | Result object | Incidence |
 | --- | --- |
@@ -119,11 +133,13 @@ The name of a result object indicates which **incident polarization** was used.
 | `result.s_inc` | Pure s polarization from the same incident direction |
 | `result.p_inc` | Pure p polarization from the same incident direction |
 
-Omitting `tetm`, `psi`, and `polarization` selects the default s-polarized incidence, whose result is stored in `result.incident`. `result.R` and `result.T` also describe this incidence.
-
-In contrast, the suffixes `s` and `p` in `r_s`, `t_p`, `R_s`, and `T_p` describe **output polarization**. For example, `result.s_inc.t_p` is the complex amplitude coefficient of the transmitted p component under s-polarized incidence.
-
-`s_inc` and `p_inc` are provided for calculations treating both polarizations with `answers="amplitude"` or `"field"`. If only one polarization is calculated with `tetm="te"` or `"tm"`, or if `answers="efficiency"` is selected, both objects are `None`; read the calculated incidence from `result.incident`.
+Omitting `tetm`, `psi` and `polarization` selected s-polarized incidence, stored in
+`result.incident`, which `result.R` and `result.T` also described. `result.s_inc.t_p` was the
+complex amplitude of the transmitted p component under s-polarized incidence. `s_inc` and `p_inc`
+were provided for calculations treating both polarizations with `answers="amplitude"` or
+`"field"`; with `tetm="te"` or `"tm"`, which calculated one polarization, or with
+`answers="efficiency"`, both were `None`.
+:::
 
 ## Zero-transmittance orders and evanescent waves
 
