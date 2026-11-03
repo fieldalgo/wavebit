@@ -1,10 +1,6 @@
 # 12. 결과 읽기: 큰 R/T와 작은 r/t
 
-:::{note}
-다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
-:::
-
-`solver.solve()`가 반환하는 `result`에는 **회절차수별 전력 비율**과 **회절차수별 복소 진폭 계수**가 들어 있습니다. 큰 `R`, `T`는 각 차수의 반사·투과 전력을 입사 전력으로 나눈 비율입니다. 작은 `r_s`, `r_p`, `t_s`, `t_p`는 각 차수의 반사·투과파를 s·p 편광 성분으로 나타낸 복소 진폭 계수입니다.
+`rcwa.run(...)`이 반환하는 `result`에는 **회절차수별 전력 비율**과 **회절차수별 복소 진폭 계수**가 들어 있습니다. 큰 `R`, `T`는 각 차수의 반사·투과 전력을 입사 전력으로 나눈 비율입니다. 작은 계수인 `result.reflection`, `result.transmission`의 `amplitude_s`, `amplitude_p`는 각 차수의 반사·투과파를 s·p 편광 성분으로 나타낸 복소 진폭 계수이며, 이 장에서는 이를 `r_s`, `r_p`, `t_s`, `t_p`로 씁니다.
 
 ## 차수별 반사율·투과율 읽기
 
@@ -14,13 +10,12 @@
 
 ### 한 차수의 반사율·투과율 읽기
 
-`result.order(m, n)`은 지정한 회절차수의 결과를 꺼냅니다. `m`, `n`은 두 격자 방향의 차수 번호이며, 이 1D 예제에서는 `n=0`입니다. 0차 결과는 다음처럼 읽습니다.
+`result.reflection`과 `result.transmission`은 양쪽으로 나가는 차수들을 담고 있으며, 그 `order(m, n)`이 차수 하나를 꺼냅니다. `m`, `n`은 두 격자 방향의 차수 번호이며, 이 1D 예제에서는 `n=0`입니다. 모든 값은 맨 앞에 파장 축을 유지하므로, 파장이 하나이면 길이 1인 배열이 됩니다. 0차 결과는 다음처럼 읽습니다.
 
 ```python
-result = solver.solve()
-zero = result.order(0, 0)
-R_00 = zero.R
-T_00 = zero.T
+result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(10, 0)))
+R_00 = result.reflection.order(0, 0).efficiency[0]
+T_00 = result.transmission.order(0, 0).efficiency[0]
 print(f"0차 반사율: {R_00:.4f}")   # 0.2053
 print(f"0차 투과율: {T_00:.4f}")   # 0.3531
 ```
@@ -57,36 +52,34 @@ T_{\mathrm{total}}
 
 ### 배열의 행·열이 가리키는 차수 확인하기
 
-결과 배열의 **열은 차수 `m`에, 행은 차수 `n`에 대응합니다.** `orders_u`는 각 열의 차수 번호, `orders_v`는 각 행의 차수 번호를 알려줍니다.
+결과 배열의 모양은 **(파장, order_v, order_u)** 입니다. 파장마다 한 항목이 있고, 그 안에서 **행은 차수 `n`에, 열은 차수 `m`에 대응합니다.** `result.reflection`이나 `result.transmission`의 `orders_u`는 각 열의 차수 번호, `orders_v`는 각 행의 차수 번호를 알려줍니다.
 
-4장 예제의 `rcwa.Numerics(orders=(10, 0))`은 `m=-10`부터 `+10`까지 21개 차수와 `n=0`을 남깁니다. 따라서 결과 배열 크기는 **1행 × 21열**입니다.
+4장 예제의 `rcwa.Numerics(orders=(10, 0))`은 `m=-10`부터 `+10`까지 21개 차수와 `n=0`을 남깁니다. 따라서 파장 하나에서 결과 배열 크기는 **1 × 1행 × 21열**입니다.
 
 ```python
-print(result.T.shape)    # (1, 21)
-print(result.orders_u)   # 각 열의 m: -10, -9, ..., 0, ..., 9, 10
-print(result.orders_v)   # 각 행의 n: [0]
+print(result.T.shape)                  # (1, 1, 21)
+print(result.transmission.orders_u)    # 각 열의 m: (-10, -9, ..., 0, ..., 9, 10)
+print(result.transmission.orders_v)    # 각 행의 n: (0,)
 
-T_00_by_index = result.T[0, 10]
-T_00_by_order = result.order(0, 0).T   # 같은 값
+T_00_by_index = result.T[0, 0, 10]
+T_00_by_order = result.transmission.order(0, 0).efficiency[0]   # 같은 값
 ```
 
-파이썬 배열 인덱스는 0부터 시작하므로 이 배열의 0차는 `[0, 10]`에 있습니다. `result.order(0, 0)`을 사용하면 배열 위치를 직접 계산하지 않고 차수 번호로 읽을 수 있습니다.
+파이썬 배열 인덱스는 0부터 시작하므로 이 배열의 0차는 `[0, 0, 10]`, 즉 첫 파장, 유일한 행, 열한 번째 열에 있습니다. `order(0, 0)`을 사용하면 배열 위치를 직접 계산하지 않고 차수 번호로 읽을 수 있습니다.
 
 (diffraction-amplitude-coefficients)=
 ## 차수별 복소 진폭 계수 읽기
 
-단일 평면파 입사의 복소 진폭 계수는 다음 네 배열로 읽습니다.
+단일 평면파 입사의 복소 진폭 계수는 다음 네 배열로 읽습니다. 모두 `result.R`과 같은 (파장, order_v, order_u) 모양입니다.
 
 | 결과 배열 | 각 회절차수에 담긴 계수 |
 | --- | --- |
-| `result.r_s` | 반사파의 s 편광 성분 |
-| `result.r_p` | 반사파의 p 편광 성분 |
-| `result.t_s` | 투과파의 s 편광 성분 |
-| `result.t_p` | 투과파의 p 편광 성분 |
+| `result.reflection.amplitude_s` | 반사파의 s 편광 성분, `r_s` |
+| `result.reflection.amplitude_p` | 반사파의 p 편광 성분, `r_p` |
+| `result.transmission.amplitude_s` | 투과파의 s 편광 성분, `t_s` |
+| `result.transmission.amplitude_p` | 투과파의 p 편광 성분, `t_p` |
 
-`result.incident`는 현재 입사 조건으로 계산한 반사·투과 결과를 담습니다. 위 네 속성은 이 결과를 바로 읽는 방법입니다. 예를 들어 `result.r_s`와 `result.incident.r_s`는 같은 배열을 가리킵니다.
-
-`rcwa(answers="efficiency", ...)`로 반사율·투과율 등 전력 결과만 요청한 경우에는 이 네 진폭 계수를 반환하지 않으며, 네 값 모두 `None`입니다.
+같은 자리의 `amplitude_xyz`는 나가는 각 차수의 전기장을 고정된 직교 좌표계로 나타내며, 맨 뒤에 (x, y, z) 축이 붙습니다. 결과에는 항상 진폭이 들어 있으며, 전력 비율만 돌려받는 설정은 없습니다.
 
 각 계수는 **입사파의 기준 전기장 진폭에 대한 비율**입니다. 그 기준 진폭을 {math}`E_{\mathrm{in}}`이라 하면, {math}`(m,n)`차의 투과 s 성분은 다음과 같습니다.
 
@@ -94,28 +87,32 @@ T_00_by_order = result.order(0, 0).T   # 같은 값
 t_s^{(m,n)}=\frac{E_{t,s}^{(m,n)}}{E_{\mathrm{in}}}.
 ```
 
-입사파의 기준 진폭을 1로 두면 계수 자체가 해당 출력 성분의 복소 진폭이 됩니다. 각 출력 성분은 해당 차수의 진행 방향에 맞춘 s·p 기저로 표현합니다. 반사 계수의 위상은 입사 쪽 경계면에서, 투과 계수의 위상은 반대쪽 출사 경계면에서 읽습니다.
+입사파의 기준 진폭을 1로 두면 계수 자체가 해당 출력 성분의 복소 진폭이 됩니다. 각 출력 성분은 해당 차수의 진행 방향에 맞춘 s·p 기저로 표현합니다. 반사 계수의 위상은 입사 쪽 경계면에서, 투과 계수의 위상은 반대쪽 출사 경계면에서 읽으며, 그 높이는 각 포트의 `reference['plane']`에 기록됩니다. 가로 방향의 기준은 셀 중심 `x = y = 0`입니다.
 
 **복소 진폭 계수는 크기와 위상을 함께 나타냅니다.** 예를 들어 {math}`t_s^{(m,n)}=0.5e^{i\pi/4}`이면 해당 투과 성분의 전기장 진폭 크기는 입사 기준 진폭의 0.5배이고, 위상차는 45°입니다. 복소수의 절댓값이 진폭의 크기이고, 편각이 위상입니다.
 
 ```python
 import numpy as np
 
-r_s = result.r_s            # 모든 차수의 반사 s 성분 계수 배열
-zero = result.order(0, 0)    # (0, 0)차의 결과
-amplitude = np.abs(zero.t_s)
-phase_deg = np.angle(zero.t_s, deg=True)
+r_s = result.reflection.amplitude_s                    # 모든 차수의 반사 s 성분 계수 배열
+t_s = result.transmission.order(0, 0).amplitude_s[0]   # 첫 파장에서 (0, 0)차
+amplitude = np.abs(t_s)                                # 0.4852
+phase_deg = np.angle(t_s, deg=True)                    # 115.5
 ```
 
 전력은 전기장과 자기장을 함께 사용해 계산하므로, 투과율에는 매질과 진행 방향에 따른 환산이 필요합니다. **진폭 계수에서 투과율을 구하는 식과 그 유도**는 {ref}`13장 <amplitude-to-efficiency>`에서 설명합니다. 계산된 차수별 전력 비율은 `result.R`, `result.T`로 읽습니다.
 
+:::{admonition} 이전 인터페이스
+:class: earlier-interface
+
+이전 인터페이스(2026-10-15에 `wavebit.compat`와 함께 퇴역)는 `solver.solve()`로 결과를 돌려주었습니다. 그 `result.order(m, n)`에는 한 차수의 `R`, `T`, `r_s`, `r_p`, `t_s`, `t_p`가 함께 들어 있었습니다. `result.r_s` .. `result.t_p`는 파장 축이 없는 (order_v, order_u) 모양의 배열이었고, `result.incident.r_s` .. `t_p`와 같은 배열이었습니다. 솔버를 `answers="efficiency"`로 만들면 전력 비율만 돌려주었고, 그때 네 계수는 모두 `None`이었습니다.
+:::
+
 ## 입사 편광과 출력 편광 구분하기
 
-`r_s`, `t_p`, `R_s`, `T_p`의 아래첨자 `s`, `p`와 현재 API의 `result.reflection.amplitude_s` /
-`amplitude_p`, `result.transmission.amplitude_s` / `amplitude_p`에 붙은 `s`, `p`는 **출력 편광**,
-즉 나가는 각 차수의 s 성분과 p 성분을 나타냅니다.
+`amplitude_s`, `amplitude_p`에 붙은 `s`, `p`, 즉 이 장의 `r_s`, `t_p`는 **출력 편광**, 다시 말해 나가는 각 차수의 s 성분과 p 성분을 나타냅니다.
 
-**입사 편광**은 그 실행의 `PlaneWave(polarization=...)`이며 기본값은 `'s'`입니다. 현재 결과는 그
+**입사 편광**은 그 실행의 `PlaneWave(polarization=...)`이며 기본값은 `'s'`입니다. 결과는 그
 입사 하나에 대한 답이고, `result.R`과 `result.T`도 그 입사의 반사율·투과율입니다. 순수 s와 순수 p에
 대한 응답은 `'s'`와 `'p'`로 두 번 실행해서 얻고, 두 실행의 진폭을 선형 결합하면 임의의 Jones 쌍에
 대한 진폭이 됩니다([빛 안내서](../../guide/rcwa/light.md#the-polarization-comes-in-three-kinds) 참고).
@@ -134,9 +131,9 @@ phase_deg = np.angle(zero.t_s, deg=True)
 
 `tetm`, `psi`, `polarization`을 모두 생략하면 s 편광으로 계산해 `result.incident`에 담았고,
 `result.R`, `result.T`도 이 입사의 값이었습니다. `result.s_inc.t_p`는 s 편광으로 입사했을 때 투과파에
-생긴 p 성분의 복소 진폭이었습니다. `s_inc`, `p_inc`는 두 편광을 함께 다루는 계산에서
-`answers="amplitude"` 또는 `"field"`일 때 제공했고, `tetm="te"`나 `"tm"`으로 한 편광만 계산하거나
-`answers="efficiency"`를 선택하면 둘 다 `None`이었습니다.
+생긴 p 성분의 복소 진폭이었고, `R_s`, `T_p` 등은 s·p로 나눈 효율이었습니다. `s_inc`, `p_inc`는 두
+편광을 함께 다루는 계산에서 `answers="amplitude"` 또는 `"field"`일 때 제공했고, `tetm="te"`나
+`"tm"`으로 한 편광만 계산하거나 `answers="efficiency"`를 선택하면 둘 다 `None`이었습니다.
 :::
 
 ## 투과율이 0인 차수와 소멸파
@@ -149,7 +146,7 @@ phase_deg = np.angle(zero.t_s, deg=True)
 k_z^2=(n_{\mathrm{out}}k_0)^2-k_x^2-k_y^2.
 ```
 
-차수마다 {math}`k_x`, {math}`k_y`가 다르므로, 같은 출사 매질에서도 {math}`k_z`가 실수인 차수와 순허수인 차수가 나뉠 수 있습니다.
+차수마다 {math}`k_x`, {math}`k_y`가 다르므로, 같은 출사 매질에서도 {math}`k_z`가 실수인 차수와 순허수인 차수가 나뉠 수 있습니다. 각 포트의 `k_parallel`과 `k_normal`이 이 성분들을 차수마다, 길이 단위당 라디안으로 알려줍니다.
 
 | 위 식의 오른쪽 값 | 해당 차수의 {math}`k_z` | 출사파의 형태 |
 | --- | --- | --- |
@@ -170,13 +167,13 @@ RCWA는 소멸파 성분도 함께 사용해 재료 경계에서 전기장과 �
 두께를 지정해 쌓은 층들이 전체적으로 흡수한 전력은, **입사 쪽 경계면으로 들어온 순전력에서 반대쪽 경계면으로 나간 전력을 뺀 값**입니다. 이 절에서는 각 전력을 입사 쪽 경계면에서의 입사파만의 전력으로 나누어 비율로 읽습니다.
 
 ```python
-R_total = result.R.sum()           # 반사파만의 전력 비
-T_total = result.T.sum()           # 반대쪽으로 나간 투과 전력 비
-P_enter = result.power_entering    # 층들 안으로 들어온 순전력 비
-A = result.absorption             # P_enter - T_total
+R_total = result.R.sum()                       # 반사파만의 전력 비
+T_total = result.T.sum()                       # 반대쪽으로 나간 투과 전력 비
+P_enter = result.outputs['power_entering']     # 층들 안으로 들어온 순전력 비, 파장마다
+A = result.absorption                          # P_enter - T_total, 파장마다
 ```
 
-`power_entering`은 입사파와 반사파의 전기장·자기장을 각각 합친 뒤, 그 전체 장으로 계산한 순유입 전력의 비율입니다. `absorption`은 두께를 지정한 모든 층의 흡수를 합한 비율이며, 반무한 매질인 `top`, `bot`에서 흡수된 전력은 포함하지 않습니다.
+`power_entering`은 입사파와 반사파의 전기장·자기장을 각각 합친 뒤, 그 전체 장으로 계산한 순유입 전력의 비율입니다. `absorption`은 두께를 지정한 모든 층의 흡수를 합한 비율이며, 반무한 매질인 `top`, `bottom`에서 흡수된 전력은 포함하지 않습니다. 둘 다 파장마다 값이 하나씩 있습니다.
 
 입사 매질이 무손실이고 입사파가 전파파이면, 전체 장의 전력에서 입사·반사파의 교차항이 상쇄됩니다. 따라서 `P_enter = 1 - R_total`이고 다음 식으로 흡수를 구할 수 있습니다.
 
@@ -186,6 +183,6 @@ A=1-R_{\mathrm{total}}-T_{\mathrm{total}}.
 
 **무손실 매질에서도 전기장과 자기장은 간섭합니다.** 위에서 상쇄되는 것은 표면에 수직한 시간평균 전력의 교차항이며, 장의 간섭 무늬가 없어지는 것은 아닙니다.
 
-흡수성 입사 매질에서는 전력의 교차항이 남을 수 있으므로 `1 - R_total`만으로 순유입 전력을 구할 수 없습니다. `result.power_entering`은 이 기여까지 포함하며, `result.absorption`은 여기서 `T_total`을 뺀 값입니다. **간섭항은 양수도 음수도 될 수 있으며, 그 부호가 매질의 흡수·이득 여부를 뜻하지는 않습니다.**
+흡수성 입사 매질에서는 전력의 교차항이 남을 수 있으므로 `1 - R_total`만으로 순유입 전력을 구할 수 없습니다. `result.outputs['power_entering']`은 이 기여까지 포함하며, `result.absorption`은 여기서 `T_total`을 뺀 값입니다. **간섭항은 양수도 음수도 될 수 있으며, 그 부호가 매질의 흡수·이득 여부를 뜻하지는 않습니다.**
 
 전체 장에서 간섭항이 나오는 과정과 무손실·손실 매질의 비교는 {ref}`13장의 순유입 전력 유도 <incident-reflected-power>`에서 설명합니다.
