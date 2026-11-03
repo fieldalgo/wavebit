@@ -29,6 +29,26 @@ def test_explicit_units_expand_the_same_sweep_and_keep_per_order_complex_amplitu
         np.testing.assert_allclose(a.transmission.amplitude_p[0],b.incident.t_p,atol=2e-13)
 
 
+@pytest.mark.parametrize('tetm,word',[('te','s'),('tm','p'),('TM','p')])
+def test_a_tetm_declaration_migrates_to_the_word_for_the_same_light(tetm,word):
+    """`tetm` became the word naming the same light; it raised AttributeError until 2026-11-04.
+
+    The original run solves on the pure 1D TE/TM path. The migrated job is compared with it amplitude
+    for amplitude: TE against s, TM against p, and the cross-polarized pair against its exact zeros.
+    """
+    from wavebit._common._jobs_v1 import JobSpec
+    doc=document();doc.pop('sweep');doc['incidence']=dict(wavelength=900.,theta=.13,tetm=tetm)
+    job=migrate_legacy_jobs(doc,units=Units(length='nm'))[0]
+    assert job.problem.excitation.sources[0].polarization==word
+    a,b=run(job),original_run(JobSpec.from_dict(doc))
+    np.testing.assert_allclose(a.R[0],b.R,atol=2e-13)
+    np.testing.assert_allclose(a.T[0],b.T,atol=2e-13)
+    for port,prefix in (('reflection','r'),('transmission','t')):
+        for channel in ('s','p'):
+            np.testing.assert_allclose(getattr(getattr(a,port),'amplitude_'+channel)[0],
+                                       getattr(b.incident,f'{prefix}_{channel}'),atol=2e-13)
+
+
 def test_migration_requires_units_and_keeps_original_version_gate():
     with pytest.raises(TypeError):migrate_legacy_jobs(document())
     with pytest.raises(ValueError):migrate_legacy_jobs(dict(document(),version='2'),units=Units(length='nm'))

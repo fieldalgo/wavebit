@@ -17,7 +17,7 @@ def migrate_legacy_jobs(document, *, units):
     """
     import numpy as np
     from wavebit import rcwa
-    from wavebit._common._jobs_v1 import JobSpec
+    from wavebit._common._jobs_v1 import JobSpec, _normalise_tetm
     from wavebit._common.execution import Execution
     from wavebit.jobs import Job
     from wavebit.materials import Material, TabulatedMaterial
@@ -78,7 +78,10 @@ def migrate_legacy_jobs(document, *, units):
         if old.polarization is not None:
             polarization=old.polarization
         elif old.tetm is not None:
-            polarization='s' if old.tetm.name.lower()=='te' else 'p'
+            # The reader stores the word ('te' / 'tm', `_normalise_tetm`), not a Tetm member, so
+            # reading `.name` off it raised AttributeError on every v10 document that declared tetm.
+            # 's' is TE and 'p' is TM: the same light, amplitude for amplitude.
+            polarization='s' if _normalise_tetm(old.tetm)=='te' else 'p'
         elif old.psi is None:
             polarization='s'
         elif old.chi is None:
