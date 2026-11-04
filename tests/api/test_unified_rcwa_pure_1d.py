@@ -371,14 +371,7 @@ def test_a_jones_pair_is_a_value_and_stays_conical():
 
 
 def test_a_traced_or_differentiated_azimuth_stays_conical(kernels):
-    """`phi` swept or differentiated is a degree of freedom only the conical path carries.
-
-    The pair for ``'p'`` is written ``(0, 2)``, which the public door normalizes to exactly
-    ``(0, 1)``. Written ``(0, 1)``, ``jax.jit`` of the run aborts the process -- before this
-    change as after it, and on a pair alone: XLA's algebraic simplifier (jaxlib 0.11.0) reads the
-    runtime guard's constant ``(0, 1)`` as an iota and rewrites its complex ``abs`` to a value of
-    the wrong type.
-    """
+    """`phi` swept or differentiated is a degree of freedom only the conical path carries."""
     jax = _jax()
     import jax.numpy as jnp
     torch = pytest.importorskip('torch')
@@ -391,7 +384,6 @@ def test_a_traced_or_differentiated_azimuth_stays_conical(kernels):
         return lambda ph: jnp.sum(prepared.run(grating(polarization, phi=ph, fields=False)).R)
 
     for word, (pair, _) in WORDS.items():
-        pair = (0.0, 2.0) if word == 'p' else pair
         R = {polarization: total_R(polarization) for polarization in (word, pair)}
         kernels.clear()
         for name, transform in transforms.items():
