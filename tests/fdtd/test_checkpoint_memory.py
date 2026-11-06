@@ -156,20 +156,27 @@ def test_jax_gradient_memory_is_set_by_the_segment_not_the_step_count():
     assert checkpointed < 2, checkpointed
 
 
-# Torch is measured as the rise of the process's peak resident memory during one gradient, in
-# a fresh process. The grid is 20 x 20 x 48 so the gradient, and not the imports before it,
-# sets the peak.
+# Torch is measured as the rise of resident memory during one gradient, in a fresh process. The
+# grid is 20 x 20 x 48 so the gradient, and not the imports before it, sets the peak.
+#
+# Linux needs two things Windows does not. ``ru_maxrss`` is the peak over the whole process, so
+# a gradient smaller than the imports or the first forward run reads as a rise of zero (it did
+# on the CI runner). And glibc keeps freed heap pages resident and hands them back out, so a
+# gradient can reuse memory that is already counted. The window is therefore reset just before
+# the gradient (``/proc/self/clear_refs`` = 5 resets ``VmHWM``, Linux >= 4.0), after
+# ``malloc_trim`` and with a low mmap threshold so that large tensors are mapped and unmapped
+# rather than recycled. Windows trims a process's working set on its own.
 _TORCH_PEAK = textwrap.dedent('''
     import json, sys, warnings
     warnings.simplefilter('ignore')
     import torch
     torch.set_num_threads(1)
-    from tests.fdtd.test_checkpoint_memory import EPSILON, loss_of, numerics, peak_bytes, problem
+    from tests.fdtd.test_checkpoint_memory import EPSILON, loss_of, numerics, peak_bytes, problem, reset_peak
     from wavebit import fdtd
     steps, block = int(sys.argv[1]), (None if sys.argv[2] == 'none' else int(sys.argv[2]))
     prepared = fdtd.prepare(problem(width=1., sigma=2e13), numerics=numerics(block, steps, .05), backend='torch')
     prepared.run(problem(width=1., sigma=2e13))
-    before = peak_bytes()
+    before = reset_peak()
     eps = torch.tensor(EPSILON, dtype=torch.float64, requires_grad=True)
     loss = loss_of(prepared.run(problem(eps, width=1., sigma=2e13)), torch)
     torch.autograd.grad(loss, eps)
@@ -177,8 +184,19 @@ _TORCH_PEAK = textwrap.dedent('''
 ''')
 
 
+def _proc_status(field):
+    """A ``kB`` field of ``/proc/self/status`` (Linux), in bytes."""
+    with open('/proc/self/status') as status:
+        for line in status:
+            if line.startswith(field + ':'):
+                return int(line.split()[1]) * 1024
+    raise LookupError(field)
+
+
 def peak_bytes():
-    """The process's peak resident memory so far, in bytes."""
+    """The process's peak resident memory since the last ``reset_peak``, in bytes."""
+    if sys.platform.startswith('linux'):
+        return _proc_status('VmHWM')
     if sys.platform == 'win32':
         import ctypes
         from ctypes import wintypes
@@ -200,17 +218,34 @@ def peak_bytes():
             raise ctypes.WinError(ctypes.get_last_error())
         return counters.PeakWorkingSetSize
     import resource
-    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    return peak if sys.platform == 'darwin' else peak * 1024
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss  # bytes on macOS
+
+
+def reset_peak():
+    """Start a new peak window where the platform allows it; return the memory it starts from.
+
+    On Linux the window is reset and starts from the current resident size. Elsewhere the peak
+    cannot be reset, and the window starts from the peak so far.
+    """
+    if sys.platform.startswith('linux'):
+        import ctypes
+        ctypes.CDLL('libc.so.6').malloc_trim(0)
+        with open('/proc/self/clear_refs', 'w') as refs:
+            refs.write('5')
+        return _proc_status('VmRSS')
+    return peak_bytes()
 
 
 def torch_peak_rise(steps, block):
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    env = dict(os.environ, PYTHONPATH=os.pathsep.join(
+    env = dict(os.environ, MALLOC_MMAP_THRESHOLD_='65536', PYTHONPATH=os.pathsep.join(
         [root] + [p for p in (os.environ.get('PYTHONPATH'),) if p]))
     out = subprocess.run([sys.executable, '-c', _TORCH_PEAK, str(steps), str(block).lower()],
                          cwd=root, env=env, capture_output=True, text=True, check=True)
-    return json.loads(out.stdout.strip().splitlines()[-1])
+    rise = json.loads(out.stdout.strip().splitlines()[-1])
+    # A gradient always allocates; a zero is a blind instrument, not a small gradient.
+    assert rise > 0, f'the peak-memory reading saw no gradient ({steps} steps, block {block})'
+    return rise
 
 
 @pytest.mark.slow
