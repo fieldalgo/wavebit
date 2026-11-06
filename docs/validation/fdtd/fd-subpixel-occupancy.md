@@ -3098,32 +3098,38 @@ Counts and timings are in the run record `fdtd_traced_substrate_validation.json`
 `studies/fdtd/traced_substrate/fdtd_traced_substrate_validation.py` regenerates it. The raw logs
 are in the archived `fdtd_traced_substrate_controls` directory.
 
-### A traced Bloch k: the survey reads the wave's own k (issue #31, 2026-11-07)
+### A traced Bloch k: the grazing rule at the live k (issue #31, 2026-11-07)
 
 **What was wrong.** The survey counts the orders and the PlaneWave's own incidence from
 the transverse `k` of each Bloch or Axis1D face (`grazing._transverse_k`). A traced `k`, or a
-traced Bloch phase, has no host value, so every row was skipped. `refused_bands` returned
-nothing, so the substrate guard above held nothing either. A scene the concrete plan refuses
-ran with `stable` True. Reproduced on `main` (`63caefe1`): the pillar-less substrate cell
-below, lit at 10, 15 and 20 degrees, is refused by its concrete plan and ran stable with the
-x `k` a Torch leaf. A second check was skipped the same way. `sources._plane_wave_term`
-refuses a concrete face whose `k` is not the wave's, because a sheet launched with one `k`
-into a cell that imposes another is a plane wave of neither. A traced `k` was not compared,
-so a mismatched one also ran stable.
+traced Bloch phase, has no host value, so every row was skipped and `refused_bands` returned
+nothing (the substrate guard above then held nothing either). A scene the concrete plan
+refuses ran with `stable` True. Reproduced on `main` (`63caefe1`): the pillar-less substrate
+cell below, lit at 10, 15 and 20 degrees, is refused by its concrete plan and ran stable with
+the x `k` a Torch leaf.
 
-**The fix.** A PlaneWave cell is a plane wave only where its faces carry the wave's own
-transverse `k`. That `k` is concrete: the angle, band centre and background must all be
-concrete for the PlaneWave to plan at all. So:
+**The fix.** A traced `k` lowered through a plan is the run's `k`. The PlaneWave column is
+driven with the face's live value, so sweeping `k` through one plan sweeps the incidence:
+`tests/fdtd/test_fd_stage3_grad.py` differentiates an Axis1D `k` at 2.0 and 3.2 through a plan
+built at 2.655. So the rows are judged at run time at the live `k`, as the traced substrate's
+were:
 
-* `grazing._transverse_k` reads a traced face's `k` as the wave's (`grazing.wave_k`, the
-  same expression as `_plane_wave_term`'s). Every row is then judged on the host as for a
-  concrete scene, by name, including a stabilized face's exact return. `refused_bands` counts
-  its bands at that `k`, which gives the substrate guard bands to hold a traced medium to
-  beside a traced `k`.
-* `sources.bloch_match_guard` asks `_plane_wave_term`'s question of the live value at run
-  time: a traced `k` (Bloch or Axis1D) or phase more than `1e-9` of that check's scale away
-  from the wave's makes the coefficients `nan`. The certificate is constant to autodiff. It
-  is built only where a `k` is traced, so every other run's `stable` is unchanged.
+* `grazing.live_valid` mirrors `_survey` row for row on the backend. It judges every order
+  leaving a PML face along the PlaneWave's axis in each medium of its layer, at every
+  Diffraction wavelength, and the incidence on the column's two faces at those wavelengths and
+  the band centre. A row is refused where it propagates at an exit `cos` below
+  `accepted_cos`, computed in the survey's float arithmetic.
+* `k` is reduced by the nearest whole `g` first, so a static window holds the orders of any
+  live `k`. With `|k| < g/2` the reduction subtracts exactly zero, so each wavenumber is the
+  eager survey's float.
+* A traced medium among them is counted at its live index, up to the resolution floor.
+* `shape_ranges.grazing_guard` makes the coefficients `nan` where a row is refused. It is built
+  only where a `k` is traced, so every other run's `stable` is unchanged.
+* A stabilized face is judged on its exact return as well, which has no runtime twin, so a
+  traced `k` beside one is refused by name (`shape_ranges._refuse_stabilized_bloch`).
+
+A first version (the commit before this one) read a traced `k` as the PlaneWave's own `k` and held the live
+value to it. It made the sweep above `nan`; the run-time judgement here replaces it.
 
 The public `wavebit.fdtd` door does not take a traced Bloch phase or InvariantAxis `k` yet
 (`prepared.run` refuses it as a static field, per the differentiation guide). This hole was
@@ -3131,28 +3137,28 @@ on the internal scene path, and it had to be closed before that door can open.
 
 **Measurements and regressions** (`tests/fdtd/test_fd_traced_bloch_grazing.py`, eight
 functions). The cell is the traced-material probe's substrate cell (period .6, 8-cell PMLs,
-eps 2.25 glass filling the bottom layer) without its pillar, lit at `phi = 0`.
+eps 2.25 glass filling the bottom layer) without its pillar, lit at `phi = 0`, planned once at
+5 degrees.
 
 * The concrete plan refuses the band of incidences from 5.0324 to 21.3654 degrees, located by
-  bisection to 1e-9 degree: the (-1, 0) order grazes out through the glass. A traced `k`
-  gets the concrete verdict, refused with the same message or run stable, at 1e-6 degree
-  either side of each end and at eight angles from 0.5 to 30 degrees.
-* A traced Bloch phase gets the same verdicts. So does a traced `k` with no Diffraction
-  monitor, where only the incidence is judged and is refused from about 70 degrees. So does
-  a traced Axis1D `k`, with and without the monitors. A face stabilized with `rho = .05`
-  gives the concrete scene's refusal, by name, on its exact return.
-* The traced `k` and the substrate's eps traced together: across eps 1.3 to 2.55 at 3 and 5
-  degrees the run is `nan` exactly where the concrete plan refuses.
-* The match: a traced `k` (Bloch `k`, Bloch phase or Axis1D `k`) equal to the wave's, or
-  `1e-12` away, runs stable; `1e-6` away either way is `nan`, where the concrete face is
-  refused ("carries k"). Under `jax.jit` with `k` the argument, one program does both, and a
-  refused angle is refused by name while the program is traced.
+  bisection to 1e-9 degree: the (-1, 0) order grazes out through the glass. A traced `k` runs
+  stable exactly where the concrete plan at that angle plans, at 1e-6 degree either side of
+  each end and at eight angles from 0.5 to 30 degrees.
+* A `k` swept through the 5-degree plan with the PlaneWave left at 5 degrees follows `k`, and
+  `k + g`, `k - g` and `k + 3g` (past the window's own margin) hold where `k` holds.
+* A traced Bloch phase gives the same verdicts. So does a traced `k` with no Diffraction
+  monitor, where only the incidence is judged, refused from about 70 degrees. So does a traced
+  Axis1D `k`, with and without the monitors.
+* The traced `k` and the substrate's eps traced together, eps 1.3 to 2.55 at 3 and 5 degrees.
+* Under `jax.jit` with `k` the argument, one program gives every verdict.
+* A stabilized face (`rho = .05`) beside a traced `k` is refused by name.
 
-**Witnesses.** All eight functions fail on the unfixed source. Seven mutations of the fix
-were each caught by at least one function, then restored byte for byte (SHA-256 compared):
-the Bloch fallback dropped, the Axis1D fallback dropped, the wave's `k` off by `1e-6`, the
-match always passing, its Axis1D branch or its phase branch dropped, and the guard not
-called.
+**Witnesses.** All eight functions fail on the unfixed source. Nine mutations of the fix were
+each caught by at least one function, then restored byte for byte (SHA-256 compared): the
+guard never built; no reduction by `g`; the incidence not judged; the orders not judged; a
+traced medium read at its seed; an Axis1D `k` read as zero; a phase not divided by the
+period; the stabilized refusal dropped; and the acceptance read at the design wavelength.
+`tests/fdtd/test_fd_stage3_grad.py`'s fifteen gradient cases pass again.
 
 ### The metasurface against RCWA (C7, 2026-10-03)
 

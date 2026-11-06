@@ -214,11 +214,12 @@ gradients, and `result.diagnostics['stable']` reads `False`. The runtime checks:
 | Lifted operator | a star of the smoothed operator is not positive definite at its lift | constitutive certificate |
 | Resolution | a traced medium falls below 8 cells per wavelength at the band's shortest or any `Diffraction` wavelength; the report wavelength also refuses a metal with less than one cell per skin depth | "cells per wavelength" or "skin depth" |
 | Grazing order | a traced medium filling a PML layer along a PlaneWave's axis lets an order a `Diffraction` monitor asks for leave at an exit angle the layer does not accept | "Grazing order refused" |
-| The wave's own `k` | a traced Bloch `k` or phase, or a traced Axis1D `k`, differs from the PlaneWave's transverse wavevector by more than the concrete check's `1e-9` | "carries k" |
+| Grazing at a traced `k` | a traced Bloch `k` or phase, or a traced Axis1D `k`, lets a `Diffraction` order or the PlaneWave's own incidence leave a pure-stretch PML at an exit angle the layer does not accept | "Grazing order refused" |
 
-A traced transverse `k` is not a reason to skip the grazing rule: the orders and the
-incidence are counted at the PlaneWave's own `k`, which is concrete, and a scene refused at
-that `k` is refused by name, traced or not. The check above then holds the live `k` to it.
+A traced transverse `k` lowered through a plan is the run's `k`: the PlaneWave's column is
+driven with the face's live value, so sweeping `k` through one plan sweeps the incidence. The
+grazing rule is then counted at that live `k`. Next to a stabilized PML face, whose rule also
+reads the face's exact return on the host, a traced `k` is refused by name.
 
 The grazing check runs for every traced plain material in a judged PML layer, including
 cell-snapped Slabs and scenes without smoothed bodies. A fixed PML reference medium fixes

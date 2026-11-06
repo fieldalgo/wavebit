@@ -216,6 +216,32 @@ def _refuse_stabilized_materials(scene, plan):
                 'time.')
 
 
+def _refuse_stabilized_bloch(scene, plan):
+    """A traced transverse ``k`` beside a stabilized PML face along the PlaneWave's axis.
+
+    ``grazing._survey`` judges the orders and the incidence leaving through such a face on its
+    exact discrete return as well (``grazing._judge``), on the host, at a concrete ``k``.
+    ``grazing.live_valid`` holds a traced ``k`` to the pure-stretch threshold only, so it is
+    refused here rather than run past the rule the face would apply (issue #31)."""
+    from wavebit.fdtd._legacy_boundaries import PML
+    from wavebit.fdtd._prepare.grazing import _stabilize
+    from wavebit.fdtd._prepare.grazing import traced_k
+    from wavebit.fdtd._prepare.monitors import plane_waves
+    if not traced_k(scene, plan):
+        return
+    P = plane_waves(scene)[0].axis
+    for side in ('-', '+'):
+        name = 'xyz'[P] + side
+        face = scene.boundaries.face(name)
+        if isinstance(face, PML) and _stabilize(face) > 0.0:
+            raise ValueError(
+                f'A traced Bloch k (or phase) beside the stabilized PML face {name!r}: the '
+                'grazing rule judges the orders and the PlaneWave\'s incidence leaving '
+                'through that face on the face\'s exact return, on the host only, at a '
+                'concrete k. Keep k concrete, or make the face a pure stretch '
+                '(PML(stabilizing_loss=0)), whose rule is checked at run time.')
+
+
 def _mirror_could_couple(scene, plan, term, a, side):
     """Whether ``term``'s cross coefficients in its end layer on the ``side`` face of axis
     ``a`` can be nonzero beside a traced medium: a smoothed body in the term has a fractional
@@ -632,9 +658,11 @@ def validate(scene, plan):
     coupling it first hears the refusals of what no runtime guard checks
     (:func:`_seeded_materials` with ``substitute=False``), which ``fd.run`` asks too.
     The stabilized-PML refusal applies to every traced material in a judged layer,
-    independently of geometry smoothing.
+    independently of geometry smoothing, and the stabilized-PML refusal of a traced Bloch
+    ``k`` (:func:`_refuse_stabilized_bloch`) to every scene.
     """
     _refuse_stabilized_materials(scene, plan)
+    _refuse_stabilized_bloch(scene, plan)
     if not traced(scene):
         if seeded(scene, plan):
             _seeded_materials(scene, plan, 'with smoothed structures', substitute=False)
@@ -751,6 +779,15 @@ def _floor_index(scene, plan):
     return min(wavelengths) / (8.0 * plan.dx) if wavelengths else None
 
 
+def _live_index(material, rt):
+    """A plain Material's live ``min_c eps_c mu_c``, the ``n^2`` the grazing rule reads."""
+    index = None
+    for e, m in zip(material.eps, material.mu_value):
+        product = rt.array(e, 'float64') * rt.array(m, 'float64')
+        index = product if index is None else rt.xp.minimum(index, product)
+    return index
+
+
 def grazing_guard(scene, plan, rt, previous):
     """The grazing rule, asked of every traced medium in a judged PML layer at run time.
 
@@ -762,12 +799,32 @@ def grazing_guard(scene, plan, rt, previous):
     :func:`resolution_guard`'s, above which the run is ``nan`` already), or the run's
     coefficients are ``nan``. Built for every scene with a traced material in such a
     layer, so every other run's ``stable`` is unchanged.
+
+    A traced transverse ``k`` (a Bloch or Axis1D face's ``k``, or a Bloch phase) leaves the
+    survey nothing to count on the host: it skips every row, and the bands above are empty.
+    Those rows are judged here instead, at the live ``k`` (``grazing.live_valid``), the
+    incidence with them, and a traced medium among them at its live index (issue #31).
     """
-    if not materials_traced(scene):
-        return previous
     from wavebit.materials._time_domain import Material
     from wavebit.materials._time_domain import as_material
+    from wavebit.fdtd._prepare.grazing import live_valid
     from wavebit.fdtd._prepare.grazing import refused_bands
+    from wavebit.fdtd._prepare.grazing import traced_k
+    if traced_k(scene, plan):
+        live = {}
+        for key, material in _materials(scene):
+            material = as_material(material)
+            if type(material) is Material and _carries(material):
+                live['the background' if key < 0 else f'structures[{key}]'] = _live_index(
+                    material, rt)
+        valid = live_valid(scene, plan, rt, _floor_index(scene, plan), live)
+        if valid is None:
+            return previous
+        value = rt.constant(rt.xp.where(valid, rt.array(1., 'float64'),
+                                        rt.array(float('nan'), 'float64')))
+        return value if previous is None else previous * value
+    if not materials_traced(scene):
+        return previous
     floor = _floor_index(scene, plan)
     if floor is None:
         return previous
@@ -781,10 +838,7 @@ def grazing_guard(scene, plan, rt, previous):
         intervals = [b for (_, medium), held in bands.items() if medium == label for b in held]
         if not intervals:
             continue
-        index = None
-        for e, m in zip(material.eps, material.mu_value):
-            product = rt.array(e, 'float64') * rt.array(m, 'float64')
-            index = product if index is None else rt.xp.minimum(index, product)
+        index = _live_index(material, rt)
         for low, high in intervals:
             ok = ~((index > low) & (index < high))
             valid = ok if valid is None else valid & ok

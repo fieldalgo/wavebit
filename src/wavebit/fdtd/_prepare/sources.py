@@ -307,7 +307,7 @@ def _plane_wave_term(scene, plan, src, row):
             given = concrete(face.k) if face.k is not None else (
                 None if concrete(face.phase) is None else concrete(face.phase) / L)
             if given is None:
-                continue                    # a traced k or phase: bloch_match_guard, at run time
+                continue                    # a traced phase: nothing to compare against
             if abs(given - expected) > 1e-9 * max(abs(expected), 2.0 * math.pi / L):
                 raise ValueError(
                     f'PlaneWave({src.name!r}): the Bloch face on {AXES[a]} carries k = '
@@ -372,52 +372,6 @@ def _plane_wave_term(scene, plan, src, row):
                       ks=ks + off, corrections=corrections, entry_E=k0i + off,
                       entry_H=entry_H + off, plane_E=plane,
                       plane_H=plane + src.sign * 0.5 * grid.dx, current_gain=current_gain)
-
-
-def bloch_match_guard(scene, plan, rt, previous):
-    """:func:`_plane_wave_term`'s check that a Bloch or Axis1D face carries the PlaneWave's
-    transverse ``k``, asked of a traced ``k`` (or Bloch phase) at run time.
-
-    The host check refuses a concrete face whose ``k`` differs from the wave's by more than
-    ``1e-9`` of the larger of the two scales it names: a sheet launched with one ``k`` into a
-    cell that imposes another is a plane wave of neither, and the grazing survey reads a
-    traced face's ``k`` as the wave's (``grazing._transverse_k``). A traced ``k`` outside that
-    tolerance makes the run's coefficients ``nan``. The certificate is constant to autodiff,
-    so an admitted ``k``'s derivatives are untouched. Built only where a ``k`` is traced, so
-    every other run's ``stable`` is unchanged.
-    """
-    valid = None
-    xp = rt.xp
-    index = as_material(scene.background, 'Scene(background=)').index_bound()
-    for src in scene.sources:
-        if not isinstance(src, PlaneWave):
-            continue
-        wavelength = src.band.concrete_wavelength
-        if wavelength is None or index is None:
-            continue                         # refused by _plane_wave_term
-        k0 = index * 2.0 * math.pi / wavelength
-        k, _, _ = src.vectors()
-        for a in range(3):
-            if a == src.axis:
-                continue
-            face, expected = scene.boundaries.face(AXES[a] + '-'), k0 * k[a]
-            if isinstance(face, Axis1D) and concrete(face.k) is None:
-                live, scale = rt.array(face.k, 'float64'), max(abs(expected), k0)
-            elif isinstance(face, Bloch) and face.k is not None and concrete(face.k) is None:
-                live = rt.array(face.k, 'float64')
-                scale = max(abs(expected), 2.0 * math.pi / plan.grid.size[a])
-            elif isinstance(face, Bloch) and face.k is None and concrete(face.phase) is None:
-                live = rt.array(face.phase, 'float64') / plan.grid.size[a]
-                scale = max(abs(expected), 2.0 * math.pi / plan.grid.size[a])
-            else:
-                continue
-            ok = xp.abs(live - expected) <= 1e-9 * scale
-            valid = ok if valid is None else valid & ok
-    if valid is None:
-        return previous
-    value = rt.constant(xp.where(valid, rt.array(1., 'float64'),
-                                 rt.array(float('nan'), 'float64')))
-    return value if previous is None else previous * value
 
 
 def _discrete_k_par(scene, plan, src):
