@@ -68,6 +68,19 @@ PHRASES = (
     # The scene-wide wavelength has no public spelling; the pulse's does.
     (r'Give the scene fd\.Resolution\(wavelength=\.\.\.\), or a concrete Band\(wavelength=\.\.\.\)\.',
      'Give the source a concrete fdtd.GaussianPulse(wavelength=...).'),
+    # The resolution rules' own words: the grid's spacing is UniformGrid(spacing=...), and the
+    # band a refusal reads is the sources' pulses. "Refine dx" told a public caller to change
+    # a field it cannot name, with a constant of the legacy engine as the reason.
+    (r"the legacy engine's CELLS_PER_WAVELENGTH", 'the eight-cells-per-wavelength rule'),
+    (r", the sources' band\.shortest_wavelength",
+     ", the shortest wavelength of the sources' pulses"),
+    (r'a source band is traced, so the cells-per-wavelength check at '
+     r'band\.shortest_wavelength did not run',
+     'a source pulse is traced, so the cells-per-wavelength check at its shortest wavelength '
+     'did not run'),
+    (r'\b([Rr])efine dx\b', r'\1efine UniformGrid(spacing=...)'),
+    (r', dx ([^,)\s]+)\)', r', spacing \1)'),
+    (r'\bdx\*K=', 'spacing*K='),
     # Grid, duration and pulse live in Numerics and GaussianPulse.
     (_FD + r'Resolution\(dx=\.\.\.\)', 'fdtd.UniformGrid(spacing=...)'),
     (_FD + r'Run\(courant=\.\.\.\)', 'fdtd.Numerics(courant=...)'),
