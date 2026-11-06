@@ -664,6 +664,15 @@ register_dataclass(Numerics,static_fields=('spacing','duration_seconds','algorit
 _PACKAGE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def _wrapper_prefixes():
+    """The package's own directory, and torch._dynamo's when torch has been imported."""
+    import sys
+    dynamo = sys.modules.get('torch._dynamo')
+    if dynamo is None:
+        return (_PACKAGE,)
+    return (_PACKAGE, os.path.dirname(os.path.abspath(dynamo.__file__)))
+
+
 def _public_warnings(call, numerics, *args, **kwargs):
     """Run ``call``, re-emitting its warnings with any engine setting they name reworded.
 
@@ -681,10 +690,12 @@ def _public_warnings(call, numerics, *args, **kwargs):
         text = re.sub(r'Raise n_periods \(it is [^)]*\)',
                       f'Raise periodic.Numerics(duration_seconds=...) (it is '
                       f'{numerics.duration_seconds:.3g} s)', str(w.message))
-        # Attributed to the caller's own line, the first frame outside the package; an
-        # unchanged warning is re-emitted as the very object, whatever it carries.
+        # Attributed to the caller's own line: the first frame outside the package and the
+        # torch.compile guard every public door is wrapped in once torch is imported
+        # (``_common.backend.eager_under_torch_compile``). An unchanged warning is re-emitted
+        # as the very object, whatever it carries.
         warnings.warn(w.message if text == str(w.message) else w.category(text),
-                      skip_file_prefixes=(_PACKAGE,))
+                      skip_file_prefixes=_wrapper_prefixes())
     return out
 
 
