@@ -101,10 +101,12 @@ def execute(plan, params, rt):
                 # run, so the amplitude, phase, delay and band differentiate.
                 traced = dict(traced, waveform=waveform_table(plan, traced, rt))
 
-            def body(state, n):
-                return step(plan, traced, state, n, rt)
+            # The parameters go to the scan as an argument, not through the closure: Torch's
+            # checkpointed segments must see every live tensor as one of their inputs.
+            def body(state, n, p):
+                return step(plan, p, state, n, rt)
             state = initial_state(plan, traced, rt)
-            return rt.scan(body, state, plan.steps, plan.schedule)
+            return rt.scan(body, state, plan.steps, plan.schedule, params=traced)
         return go
 
     return rt.jit_for(plan, make)(rt.to_device(params))

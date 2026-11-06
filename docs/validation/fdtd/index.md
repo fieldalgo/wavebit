@@ -4,7 +4,8 @@ Spatial, temporal, material and boundary studies. Each report states its measure
 
 Current public API: [automatic stopping with incident source columns](fd-source-decay.md)
 and [native Yee-grid CUDA validation](native-cuda.md), with separate evidence for
-[bounded general-scene CUDA execution](general-cuda.md). The
+[bounded general-scene CUDA execution](general-cuda.md), and
+[memory-bounded reverse mode on JAX and Torch](checkpointing.md). The
 [outer-jit memory of area-painted derivatives](fdtd-jit-painting-memory.md) measures the current
 periodic API and the study engine together.
 

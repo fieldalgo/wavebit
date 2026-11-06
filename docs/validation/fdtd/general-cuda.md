@@ -1024,8 +1024,10 @@ dispersion, long-time stability or optical derivatives.
 
 `Numerics(checkpoint_steps=K)` selects a positive static integer block length
 for fixed-duration Torch CUDA execution. The default `None` preserves the
-ordinary scan. CPU backends, other devices and `DecayStop` are refused for explicit
-checkpoint settings; invalid values, booleans (including boolean tensors), and
+ordinary scan. When this section was recorded, CPU backends, other devices and `DecayStop`
+were refused for explicit checkpoint settings. JAX and Torch on CPU are now admitted, with a
+nested schedule and a Torch segment that replaced `torch.utils.checkpoint`; see
+[memory-bounded reverse mode](checkpointing.md). NumPy and `DecayStop` remain refused; invalid values, booleans (including boolean tensors), and
 differentiable or transform-carried block lengths are rejected before planning.
 The surrounding CUDA feature limits still apply.
 

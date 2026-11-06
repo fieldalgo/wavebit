@@ -611,22 +611,27 @@ With `backend="jax"` or `backend="torch"`, a prepared run is differentiable in i
 material values, source amplitude, phase, delay and pulse, and the initial-field amplitude. JAX
 needs `jax.config.update("jax_enable_x64", True)` before arrays are built.
 
-For fixed-duration Torch CUDA runs in the admitted scope, set
-`Numerics(checkpoint_steps=11)` to recompute blocks during reverse mode.
-`None` keeps the ordinary scan. An explicit setting must be a positive static
-integer; CPU execution and `DecayStop` are refused. Source and observation histories
-remain retained, so the setting is not a memory cap. A block longer than the
-run leaves an ordinary tail. The chosen schedule appears in the check report's
-`resolved['checkpoint_steps']`, the prepared contract's
+A long run's gradient keeps every step's intermediates, so its memory grows with the step
+count. For fixed-duration JAX or Torch runs (on CPU, or on the Torch CUDA route), set
+`Numerics(checkpoint_steps=K)` to recompute segments of `K` steps during reverse mode
+instead. `None` keeps the ordinary scan. The schedule is nested: a run of `K**L` steps
+stores about `L * K` states plus one segment's intermediates and runs the forward sweep
+`L + 1` times, so eight times more steps cost about one more level of memory, not eight
+times as much. An explicit setting
+must be a positive static integer; NumPy (which has no reverse mode) and `DecayStop` are
+refused. Source and observation histories are part of every stored state, so the setting is
+not a memory cap. A run no longer than `K` is an ordinary scan. The chosen schedule appears
+in the check report's `resolved['checkpoint_steps']`, the prepared contract's
 `resolved_checkpoint_steps`, and the result's `provenance['checkpoint_steps']`.
-Prepare again to change the schedule. See the [CUDA checkpoint validation](../../validation/fdtd/general-cuda.md)
-for derivative coverage and measured costs: checkpointing increased or reduced
-memory depending on the differentiated inputs in the conductor fixture.
+Prepare again to change the schedule. See the
+[checkpointing validation](../../validation/fdtd/checkpointing.md) for gradient agreement,
+second derivatives and measured memory ratios, and the
+[CUDA checkpoint validation](../../validation/fdtd/general-cuda.md) for the CUDA route.
 `None` is omitted from the Job, so a job that does not set it keeps its key;
 explicit schedules round-trip with the Job.
 
 Under `torch.no_grad()` or `torch.inference_mode()`, execution bypasses the
-backward checkpoint wrappers and block copies. Policy metadata remains intact;
+backward checkpoint segments and their copies. Policy metadata remains intact;
 later prepared reuse with gradient recording enabled uses the requested schedule.
 
 Float64 Drude susceptibility rescales large damping to preserve the tested frequency

@@ -59,8 +59,8 @@ def expected(kind, amplitude, parameter, dt, discrete_k, initial, spatial):
 
 
 @pytest.mark.parametrize('kind', ['lorentz', 'drude'])
-@pytest.mark.parametrize('device,block', [('cpu', None), ('cuda:0', None), ('cuda:0', 7)],
-                         ids=['cpu-plain', 'cuda-plain', 'cuda-k7'])
+@pytest.mark.parametrize('device,block', [('cpu', None), ('cpu', 3), ('cuda:0', None), ('cuda:0', 7)],
+                         ids=['cpu-plain', 'cpu-k3-nested', 'cuda-plain', 'cuda-k7'])
 def test_homogeneous_record_amplitude_material_full_hessian(device, block, kind, record_property):
     torch = pytest.importorskip('torch')
     torch.set_num_threads(1)

@@ -24,10 +24,11 @@ def test_checkpoint_rejects_nonpositive_or_noninteger_block_before_planning(monk
     with pytest.raises(ValidationError):fdtd.prepare(p,numerics=n,backend='torch',device='cuda')
 
 
-@pytest.mark.parametrize('backend',['numpy','torch','jax'])
-def test_checkpoint_is_not_silently_ignored_by_cpu_backends(monkeypatch,backend):
+def test_checkpoint_is_not_silently_ignored_by_numpy(monkeypatch):
+    # NumPy has no reverse mode; JAX and Torch on CPU take the schedule
+    # (tests/fdtd/test_checkpoint_memory.py).
     monkeypatch.setattr(Execution,'validate',lambda self:self)
-    report=fdtd.check(closed_problem(),numerics=fixed_numerics().replace(checkpoint_steps=11),backend=backend)
+    report=fdtd.check(closed_problem(),numerics=fixed_numerics().replace(checkpoint_steps=11),backend='numpy')
     assert not report.ok and report.issues[0].code=='numerics.checkpoint_scope'
     assert report.issues[0].path=='numerics.checkpoint_steps'
 

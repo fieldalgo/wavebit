@@ -567,20 +567,25 @@ host에서만 검사할 수 있는 지원되지 않는 trace는 명시적으로 
 재료 값, 소스의 진폭·위상·지연·펄스, 초기장 진폭입니다. JAX는 배열을 만들기 전에
 `jax.config.update("jax_enable_x64", True)`가 필요합니다.
 
-허용 범위의 고정 길이 Torch CUDA 실행은 `Numerics(checkpoint_steps=11)`로
-역방향 미분 중 블록을 재계산할 수 있습니다. `None`은 기존 스캔을 유지합니다.
-명시적 설정은 양의 정적 정수여야 하며 CPU 실행과 `DecayStop`에서는 거부합니다.
-광원·관측 이력은 계속 보존하므로 메모리 상한이 아닙니다. 블록이 전체 실행보다
-길면 일반 tail만 남습니다. 선택한 스케줄은 check 보고서의
-`resolved['checkpoint_steps']`, prepared 계약의 `resolved_checkpoint_steps`,
-결과의 `provenance['checkpoint_steps']`에 표시됩니다. 바꾸려면 다시
-prepare하세요. 미분 범위와 한계는 [CUDA 체크포인트 검증](../../validation/fdtd/general-cuda.md)을
-참고하세요. 전도체 실측에서는 미분하는 입력에 따라 체크포인트가 메모리를
-늘리거나 줄였습니다. `None`은 Job에서 생략하므로 이 값을 지정하지 않은 Job은 키가 바뀌지 않으며, 명시적
-스케줄은 Job과 함께 저장·복원됩니다.
+긴 실행의 기울기는 매 단계의 중간값을 모두 보관하므로 메모리가 단계 수에 비례해
+커집니다. 고정 길이 JAX·Torch 실행(CPU 또는 Torch CUDA 경로)에서는
+`Numerics(checkpoint_steps=K)`로 역방향 미분 중 `K` 단계짜리 구간을 대신 재계산할 수
+있습니다. `None`은 기존 스캔을 유지합니다. 스케줄은 중첩 구조입니다. `K**L` 단계의 실행은
+약 `L * K`개의 상태와 구간 하나의 중간값만 보관하고 순방향 계산을 `L + 1`번 수행합니다.
+그래서 단계 수가 8배 늘어도 메모리는 8배가 아니라 스케줄 단계 하나만큼 늘어납니다.
+명시적 설정은 양의 정적 정수여야 하며, 역방향
+모드가 없는 NumPy와 `DecayStop`에서는 거부합니다. 광원·관측 이력은 모든 보관 상태에
+포함되므로 메모리 상한이 아닙니다. 실행이 `K` 단계 이하이면 일반 스캔입니다. 선택한
+스케줄은 check 보고서의 `resolved['checkpoint_steps']`, prepared 계약의
+`resolved_checkpoint_steps`, 결과의 `provenance['checkpoint_steps']`에 표시됩니다.
+바꾸려면 다시 prepare하세요. 기울기 일치, 2차 미분, 측정한 메모리 비율은
+[체크포인트 검증](../../validation/fdtd/checkpointing.md)을, CUDA 경로는
+[CUDA 체크포인트 검증](../../validation/fdtd/general-cuda.md)을 참고하세요. `None`은
+Job에서 생략하므로 이 값을 지정하지 않은 Job은 키가 바뀌지 않으며, 명시적 스케줄은 Job과
+함께 저장·복원됩니다.
 
-`torch.no_grad()` 또는 `torch.inference_mode()`에서는 역방향용 체크포인트
-래퍼와 블록 복사를 생략합니다. 정책 메타데이터는 유지하며 이후 기울기
+`torch.no_grad()` 또는 `torch.inference_mode()`에서는 역방향용 체크포인트 구간과
+그 복사를 생략합니다. 정책 메타데이터는 유지하며 이후 기울기
 기록을 켠 prepared 재사용은 요청한 스케줄을 사용합니다.
 
 float64 Drude 감수율은 큰 감쇠에서 식을 재스케일링하여, 공개 SI 모델과 정규화된
