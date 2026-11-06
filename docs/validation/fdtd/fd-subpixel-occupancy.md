@@ -3098,6 +3098,62 @@ Counts and timings are in the run record `fdtd_traced_substrate_validation.json`
 `studies/fdtd/traced_substrate/fdtd_traced_substrate_validation.py` regenerates it. The raw logs
 are in the archived `fdtd_traced_substrate_controls` directory.
 
+### A traced Bloch k: the survey reads the wave's own k (issue #31, 2026-11-07)
+
+**What was wrong.** The survey counts the orders and the PlaneWave's own incidence from
+the transverse `k` of each Bloch or Axis1D face (`grazing._transverse_k`). A traced `k`, or a
+traced Bloch phase, has no host value, so every row was skipped. `refused_bands` returned
+nothing, so the substrate guard above held nothing either. A scene the concrete plan refuses
+ran with `stable` True. Reproduced on `main` (`63caefe1`): the pillar-less substrate cell
+below, lit at 10, 15 and 20 degrees, is refused by its concrete plan and ran stable with the
+x `k` a Torch leaf. A second check was skipped the same way. `sources._plane_wave_term`
+refuses a concrete face whose `k` is not the wave's, because a sheet launched with one `k`
+into a cell that imposes another is a plane wave of neither. A traced `k` was not compared,
+so a mismatched one also ran stable.
+
+**The fix.** A PlaneWave cell is a plane wave only where its faces carry the wave's own
+transverse `k`. That `k` is concrete: the angle, band centre and background must all be
+concrete for the PlaneWave to plan at all. So:
+
+* `grazing._transverse_k` reads a traced face's `k` as the wave's (`grazing.wave_k`, the
+  same expression as `_plane_wave_term`'s). Every row is then judged on the host as for a
+  concrete scene, by name, including a stabilized face's exact return. `refused_bands` counts
+  its bands at that `k`, which gives the substrate guard bands to hold a traced medium to
+  beside a traced `k`.
+* `sources.bloch_match_guard` asks `_plane_wave_term`'s question of the live value at run
+  time: a traced `k` (Bloch or Axis1D) or phase more than `1e-9` of that check's scale away
+  from the wave's makes the coefficients `nan`. The certificate is constant to autodiff. It
+  is built only where a `k` is traced, so every other run's `stable` is unchanged.
+
+The public `wavebit.fdtd` door does not take a traced Bloch phase or InvariantAxis `k` yet
+(`prepared.run` refuses it as a static field, per the differentiation guide). This hole was
+on the internal scene path, and it had to be closed before that door can open.
+
+**Measurements and regressions** (`tests/fdtd/test_fd_traced_bloch_grazing.py`, eight
+functions). The cell is the traced-material probe's substrate cell (period .6, 8-cell PMLs,
+eps 2.25 glass filling the bottom layer) without its pillar, lit at `phi = 0`.
+
+* The concrete plan refuses the band of incidences from 5.0324 to 21.3654 degrees, located by
+  bisection to 1e-9 degree: the (-1, 0) order grazes out through the glass. A traced `k`
+  gets the concrete verdict, refused with the same message or run stable, at 1e-6 degree
+  either side of each end and at eight angles from 0.5 to 30 degrees.
+* A traced Bloch phase gets the same verdicts. So does a traced `k` with no Diffraction
+  monitor, where only the incidence is judged and is refused from about 70 degrees. So does
+  a traced Axis1D `k`, with and without the monitors. A face stabilized with `rho = .05`
+  gives the concrete scene's refusal, by name, on its exact return.
+* The traced `k` and the substrate's eps traced together: across eps 1.3 to 2.55 at 3 and 5
+  degrees the run is `nan` exactly where the concrete plan refuses.
+* The match: a traced `k` (Bloch `k`, Bloch phase or Axis1D `k`) equal to the wave's, or
+  `1e-12` away, runs stable; `1e-6` away either way is `nan`, where the concrete face is
+  refused ("carries k"). Under `jax.jit` with `k` the argument, one program does both, and a
+  refused angle is refused by name while the program is traced.
+
+**Witnesses.** All eight functions fail on the unfixed source. Seven mutations of the fix
+were each caught by at least one function, then restored byte for byte (SHA-256 compared):
+the Bloch fallback dropped, the Axis1D fallback dropped, the wave's `k` off by `1e-6`, the
+match always passing, its Axis1D branch or its phase branch dropped, and the guard not
+called.
+
 ### The metasurface against RCWA (C7, 2026-10-03)
 
 C7 asked whether the public path -- every default, the split junction under a pillar flush on
