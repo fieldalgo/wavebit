@@ -96,6 +96,16 @@ property of the compiled program. Torch is measured by the rise of the process's
 resident memory during one gradient, in a fresh process, after a forward run of the same
 prepared plan.
 
+On Linux the process peak (`ru_maxrss`) covers the whole process, so a gradient smaller than
+the imports or the first forward run reads as no rise at all. This happened on the CI
+runner. glibc also keeps freed heap pages resident and reuses them. The Linux measurement
+therefore resets the peak just before the gradient (writing `5` to `/proc/self/clear_refs`
+resets `VmHWM`), after `malloc_trim` and with `MALLOC_MMAP_THRESHOLD_=65536`, so that large
+tensors are mapped and unmapped rather than recycled. It reads the rise as `VmHWM` minus the
+resident size at the reset. A rise of zero fails the test as a blind measurement. On WSL2
+Ubuntu, Torch 2.13 CPU, the ratios were 1.24 with `K = 8` and 6.91 without checkpointing.
+The table below is the Windows measurement.
+
 | backend | `checkpoint_steps` | 128 steps | 1,024 steps | ratio |
 | --- | --- | --- | --- | --- |
 | JAX (XLA scratch) | 8 | 6.5 MB | 9.8 MB | 1.50 |
