@@ -467,6 +467,10 @@ def _segment_series(xp, left, width, half_width):
     uniform layer's matrix *exactly* ``eps * I``
     (``tests/rcwa/test_factorization_core.py::test_a_uniform_cell_factorizes_to_exactly_eps_times_identity``),
     and why ``left_0 = 0`` exactly, so the wrap-around jump's phase is exactly one.
+
+    ``left`` and ``width`` may be ``(n_lines, m)``, each line with segments of its own, and then
+    so is ``a``, which is what a shape structure's continuity rule has. The two-axis branch is
+    separate so that the one-axis matmul keeps its bits.
     """
     orders = list(range(-2 * half_width, 2 * half_width + 1))
 
@@ -476,10 +480,14 @@ def _segment_series(xp, left, width, half_width):
         k = xp.astype(xp.asarray(orders, device=dev), dtype)
         scale = xp.asarray([0j if o == 0 else 1.0 / (2j * math.pi * o) for o in orders],
                            dtype=dtype, device=dev)
-        weights = xp.exp(-2j * math.pi * (xp.astype(left, dtype)[:, None] * k[None, :]))
+        weights = xp.exp(-2j * math.pi * (xp.astype(left, dtype)[..., None] * k))
         jumps = a - xp.roll(a, 1, axis=-1)
-        ac = jumps @ (weights * scale[None, :])                           # (..., n_k)
-        dc = xp.expand_dims(a @ xp.astype(width, dtype), axis=-1)         # (..., 1)
+        if left.ndim == 2:
+            ac = (jumps[:, None, :] @ (weights * scale))[:, 0, :]         # (n_lines, n_k)
+            dc = xp.sum(a * xp.astype(width, dtype), axis=-1, keepdims=True)
+        else:
+            ac = jumps @ (weights * scale[None, :])                       # (..., n_k)
+            dc = xp.expand_dims(a @ xp.astype(width, dtype), axis=-1)     # (..., 1)
         return xp.where(xp.asarray([o == 0 for o in orders], device=dev), dc, ac)
 
     return series
@@ -565,10 +573,15 @@ def line_inverse_rules(xp, grid, half_width):
     (:func:`wavebit.rcwa._engine.fields._continuity_2d`).
     """
     grid = xp.astype(grid, _complex_dtype(xp, grid))
+    return _inverse_of_series(xp, _raster_series(xp, half_width, _pixel_correction)(1.0 / grid),
+                              half_width)
+
+
+def _inverse_of_series(xp, lines, half_width):
+    """``[T]^-1`` of each line's coefficients of ``1/eps``, ``lines`` being ``[j, k]``."""
     n = 2 * half_width + 1
-    lines = _raster_series(xp, half_width, _pixel_correction)(1.0 / grid)    # [j, k]
-    at = _toeplitz_positions(xp, half_width, _device(xp, grid))
-    return xp.linalg.inv(xp.reshape(xp.take(lines, at, axis=1), (grid.shape[0], n, n)))
+    at = _toeplitz_positions(xp, half_width, _device(xp, lines))
+    return xp.linalg.inv(xp.reshape(xp.take(lines, at, axis=1), (lines.shape[0], n, n)))
 
 
 def _nesting(nesting):

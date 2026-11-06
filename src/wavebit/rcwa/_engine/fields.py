@@ -930,7 +930,7 @@ def _continuity_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, eps_r
 
     ``E_x`` jumps across walls normal to x and is continuous across walls normal to y, so its
     series is summed one sample row at a time: over the y orders first, which is a series of a
-    function continuous in y, then Li's inverse rule ``[[1/eps]]_x^-1`` of the raster row under
+    function continuous in y, then Li's inverse rule ``[[1/eps]]_x^-1`` of the row through
     that sample turns the x coefficients of ``E_x`` into those of ``D_x``, continuous along the
     row; that sum is divided by ``eps`` at each sample. ``E_y`` is the same with the axes
     swapped, line by line along the column under each x sample. This is the near-field rule of

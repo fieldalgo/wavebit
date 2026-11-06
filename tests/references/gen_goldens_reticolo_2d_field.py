@@ -4,8 +4,11 @@ Run once, on a machine with Octave and a RETICOLO V10 tree; ``test_reticolo_2d_f
 then runs anywhere.
 
     RETICOLO_PATH=... python tests/references/gen_goldens_reticolo_2d_field.py
+    RETICOLO_PATH=... python tests/references/gen_goldens_reticolo_2d_field.py off-grid
 
-Rerun it only to add cases -- never to make a failing test pass.
+Rerun it only to add cases -- never to make a failing test pass. ``off-grid`` writes
+``golden_reticolo_2d_field_off_grid.npz`` alone: the same stack with walls on no pixel line, for
+a shape structure, under ``champ = 1`` and ``champ = 0``.
 
 **What it stores.** ``res3``'s raw cell for every case of ``_reticolo_2d_field_cases.py``, under
 **both** of RETICOLO's in-plane reconstructions: ``champ = 1`` (``E`` normal to a wall rebuilt
@@ -39,24 +42,26 @@ HERE = repository_path('tests/references')
 sys.path.insert(0, str(HERE.parents[1]))
 
 OUT = HERE / 'golden_reticolo_2d_field.npz'
+OUT_OFF_GRID = HERE / 'golden_reticolo_2d_field_off_grid.npz'
 
 
-def _run(reticolo, angle, champ):
+def _run(reticolo, angle, champ, layers=None, rows=None):
     import scipy.io as sio
     from tests.references._reticolo_2d_field_cases import (
-        ANGLES, EINC, LAYERS, MAX_ORDER, NPTS, N_BOT, N_TOP, PERIOD, WL, blocks, samples)
-    assert angle in ANGLES
+        EINC, LAYERS, MAX_ORDER, NPTS, N_BOT, N_TOP, PERIOD, WL, blocks, samples)
+    layers = LAYERS if layers is None else layers
+    rows = blocks if rows is None else rows
     theta, phi = angle
     x, y = samples()
     # Octave's `sparse` refuses integer arrays, so every count crosses as a double.
     case = dict(wavelength=WL, period=np.array(PERIOD), nn=np.array([MAX_ORDER, MAX_ORDER], float),
                 k_parallel=N_TOP * np.sin(np.deg2rad(theta)), delta0=phi, champ=float(champ),
-                n_top=N_TOP, n_bot=N_BOT, n_layers=float(len(LAYERS)),
-                thickness=np.array([layer['thickness'] for layer in LAYERS]),
+                n_top=N_TOP, n_bot=N_BOT, n_layers=float(len(layers)),
+                thickness=np.array([layer['thickness'] for layer in layers]),
                 x=x, y=y, npts=float(NPTS), n_einc=float(len(EINC)))
-    for k, layer in enumerate(LAYERS, 1):
+    for k, layer in enumerate(layers, 1):
         case[f'bg_{k}'] = layer['background']
-        case[f'blocks_{k}'] = blocks(layer)
+        case[f'blocks_{k}'] = rows(layer)
     for k, pol in enumerate(EINC, 1):
         case[f'einc_{k}'] = np.array(EINC[pol], dtype=complex)
     with tempfile.TemporaryDirectory() as tmp:
@@ -75,7 +80,20 @@ def main():
         raise SystemExit('set RETICOLO_PATH to a reticolo_allege_v10 directory to regenerate this '
                          'golden; the committed .npz is what the tests read.')
     reticolo = os.path.expanduser(reticolo)
-    from tests.references._reticolo_2d_field_cases import ANGLES, key, samples
+    from tests.references._reticolo_2d_field_cases import (
+        ANGLES, OFF_GRID_ANGLE, OFF_GRID_LAYERS, key, off_grid_blocks, samples)
+
+    if sys.argv[1:] == ['off-grid']:
+        out = {}
+        for champ in (1, 0):
+            cells, z, o = _run(reticolo, OFF_GRID_ANGLE, champ, OFF_GRID_LAYERS, off_grid_blocks)
+            for pol, e in cells.items():
+                out[f'champ{champ}__{key(OFF_GRID_ANGLE, pol)}'] = e
+        out['z'], out['o'] = z, o
+        out['x'], out['y'] = samples()
+        np.savez_compressed(str(OUT_OFF_GRID), **out)
+        print(f'wrote {len(out)} arrays to {OUT_OFF_GRID.name}; cell {e.shape}')
+        return
 
     out = {}
     for angle in ANGLES:

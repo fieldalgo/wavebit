@@ -1,0 +1,95 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_reticolo_2d_field_off_grid",
+  "physics": "rcwa",
+  "comparison": "same-discretization",
+  "role": "external oracle for the line-wise continuity rule on a shape structure: walls on no pixel line, under both of RETICOLO res3's in-plane rules",
+  "references": [
+    {
+      "tool": "RETICOLO",
+      "version": "V10",
+      "build": "V10_2025",
+      "modified": {
+        "value": false,
+        "description": "the V10_2025 tree as unpacked from the published archive"
+      },
+      "spdx": "CC-BY-4.0",
+      "source": "https://doi.org/10.5281/zenodo.14631951",
+      "install": {
+        "kind": "manual",
+        "command": "download V10 from the source record and point RETICOLO_PATH at reticolo_allege_v10"
+      },
+      "settings": "res3 raw cell for OFF_GRID_LAYERS of tests/references/_reticolo_2d_field_cases.py, champ=1 and champ=0; run in Octave through tests/references/interface/reticolo_res3_2d.m",
+      "discretization": "same truncation on both sides, and the same exact rectangles (cases module)",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_reticolo_2d_field.py",
+    "sha256": "82c2a8e5dd77b3dfabc0d5511c738a698aebffc589de508fd23e4deddae238cf",
+    "command": "RETICOLO_PATH=... python tests/references/gen_goldens_reticolo_2d_field.py off-grid",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-10-30",
+  "environment": {
+    "python": "3.12.9",
+    "numpy": "2.5.1",
+    "octave": "9.4.0"
+  },
+  "cost": {
+    "wall_seconds": 3.5
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_reticolo_2d_field.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_reticolo_2d_field_off_grid.npz",
+    "format": "npz",
+    "file_sha256": "274939a886d9f88edc1358c580ddf7517f4f037e32fd5a18e53e4255758a7b95",
+    "arrays": [
+      "champ0__25_30_p",
+      "champ0__25_30_s",
+      "champ1__25_30_p",
+      "champ1__25_30_s",
+      "o",
+      "x",
+      "y",
+      "z"
+    ]
+  },
+  "values_sha256": "0c09cb01bd781d3d6f64185c321ee52de5f8be0599261b398b115ff183344dfa",
+  "content_sha256": "e0f2de24dc4a49d486196c5f06530dffe2ae7e4e03deb0a3cc4511367c2c58b7",
+  "consumers": [
+    "tests/references/test_reticolo_2d_field_golden.py"
+  ],
+  "provenance_status": "complete",
+  "sources": {
+    "references[0].independence": "the generator process imports numpy, scipy and the cases module only; the cases module imports numpy only",
+    "comparison": "tests/references/README.md row 'RETICOLO, the 2D field'"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "generator.product_commit": "the generator does not load the product and records no commit",
+    "generator.clean_tree": "the generator does not load the product and records no commit",
+    "outcomes.matched": "what the comparison found is in the consumer test and tests/references/README.md",
+    "outcomes.not_matched": "what the comparison found is in the consumer test and tests/references/README.md",
+    "outcomes.reference_self_check": "what the comparison found is in the consumer test and tests/references/README.md",
+    "outcomes.failed_or_discarded": "what the comparison found is in the consumer test and tests/references/README.md",
+    "outcomes.not_run": "what the comparison found is in the consumer test and tests/references/README.md"
+  }
+}

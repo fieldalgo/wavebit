@@ -339,7 +339,7 @@ from the one a preparation fixed; its `.path` names the declaration that changed
 | `execution` | `execution.backend`, `execution.backend_unavailable`, `execution.device`, `execution.device_unavailable`, `execution.precision`, `execution.jax_x64`; `execution.cuda_scope` (outside the qualified FDTD CUDA route) | every solver; `fdtd` |
 | `experimental` | `experimental.orders` | `rcwa.experimental` |
 | `fdtd` | `fdtd.invalid`, `fdtd.unsupported`, `fdtd.padding_continuation` | `fdtd` |
-| `field` | `field.coordinates` | `rcwa` |
+| `field` | `field.coordinates`, `field.discontinuous` | `rcwa` |
 | `geometry` | `geometry.cell_snapped` (a warning) | `fdtd` |
 | `initial` | `initial.type` | `fdtd` |
 | `job`, `record` | `job.encoding`, `job.schema`, `record.format` | `wavebit.Job`, run records |

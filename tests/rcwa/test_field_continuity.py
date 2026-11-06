@@ -18,6 +18,7 @@ import numpy as np
 import pytest
 
 import wavebit
+from wavebit.rcwa._engine.continuity import sample_pixels
 from wavebit.rcwa._factory import rcwa
 
 PERIOD, NX = 400.0, 40
@@ -154,7 +155,7 @@ def test_refusals_name_what_is_missing():
                   structure=[dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
                                                                 lx=150.0, ly=PERIOD, material=4.0)])])
     shaped.solve()
-    with pytest.raises(NotImplementedError, match='raster'):
+    with pytest.raises(NotImplementedError, match='one order along an axis'):
         shaped.reconstruct_field(discontinuous='continuity')
     first_order = rcwa(backend='numpy', top=1.0, bot=2.25, period=[PX, PY], truncation_order=[2, 2],
                        wavelength=620.0, thickness=THICKNESS_2D, structure=GRID_2D, answers='field')
@@ -271,3 +272,89 @@ def test_2d_gradient_through_the_raster_values():
     h = 1e-4
     fd = float((power(1.0 + h) - power(1.0 - h)) / (2 * h))
     assert grad == pytest.approx(fd, rel=1e-6)
+
+
+def _grid_solver(backend='numpy', **kw):
+    kw.setdefault('structure', _grid_2d())
+    s = rcwa(backend=backend, top=1.0, bot=2.25, period=[PX, PY], truncation_order=[2, 2],
+             wavelength=620.0, thickness=THICKNESS_2D, answers='field', **kw)
+    s.solve()
+    return s
+
+
+def test_the_rule_reads_the_structure_the_solve_was_posed_with():
+    """The modes are the solve's, so the structure has to be: edits wait for the next solve."""
+    assigned = _grid_solver()
+    before = np.asarray(assigned.reconstruct_field(5, 5, 3, discontinuous='continuity'))
+    changed = _grid_2d()
+    changed[0, 0:2, 0:2] = 9.0
+    assigned.structure = changed
+    after = assigned.reconstruct_field(5, 5, 3, discontinuous='continuity')
+    np.testing.assert_array_equal(np.asarray(after), before)
+    assigned.solve()
+    resolved = np.asarray(assigned.reconstruct_field(5, 5, 3, discontinuous='continuity'))
+    assert np.max(np.abs(resolved - before)) > 1e-2
+
+    in_place = _grid_solver()
+    in_place.structure[0, 0, 0] = 9.0
+    after = in_place.reconstruct_field(5, 5, 3, discontinuous='continuity')
+    np.testing.assert_array_equal(np.asarray(after), before)
+
+
+def test_a_torch_raster_with_the_conjugate_bit_reads_the_rule():
+    torch = pytest.importorskip('torch')
+    plain = _grid_solver('torch', structure=torch.as_tensor(np.conj(_grid_2d())))
+    lazy = _grid_solver('torch', structure=torch.conj(torch.as_tensor(_grid_2d())))
+    np.testing.assert_allclose(lazy.reconstruct_field(5, 5, 3, discontinuous='continuity').numpy(),
+                               plain.reconstruct_field(5, 5, 3, discontinuous='continuity').numpy(),
+                               rtol=0, atol=1e-13)
+
+
+def test_a_sample_on_a_wall_in_single_precision_is_on_its_positive_side():
+    """A period held in single precision rounds a wall sample by more than the old lift."""
+    period = np.float32(500.3)
+    walls = (np.arange(9, dtype=np.float32) / 8 - np.float32(0.5)) * period
+    rows = sample_pixels(walls, period, 8, float(np.finfo(np.float32).eps))
+    np.testing.assert_array_equal(rows, [0, 1, 2, 3, 4, 5, 6, 7, 0])
+
+
+def test_matrices_handed_to_solve_conv_have_no_structure_to_read():
+    """Measured before the refusal: 0.28 from the correct field, with the sum 0.0 from it."""
+    s = _grid_solver()
+    s.solve_conv(*s.eps_conv_matrices())
+    s.reconstruct_field(5, 5, 3)
+    with pytest.raises(NotImplementedError, match='solve_conv'):
+        s.reconstruct_field(5, 5, 3, discontinuous='continuity')
+    s.solve()
+    s.reconstruct_field(5, 5, 3, discontinuous='continuity')
+
+
+def test_a_traced_structure_over_an_eager_solve_reads_the_solve():
+    jax = pytest.importorskip('jax')
+    s = _grid_solver('jax')
+    before = np.asarray(s.reconstruct_field(5, 5, 3, discontinuous='continuity'))
+
+    def field(value):
+        s.structure = jax.numpy.asarray(_grid_2d()) * value
+        return s.reconstruct_field(5, 5, 3, discontinuous='continuity')
+
+    np.testing.assert_allclose(np.asarray(jax.jit(field)(2.0)), before, rtol=0, atol=1e-12)
+
+
+@pytest.mark.parametrize('tetm', ['tm', None], ids=['tm', 'conical'])
+def test_counts_on_a_negative_side_read_eps_under_each_sample_of_a_grating(tetm):
+    """On the object a solve returns, a count runs down the cell, and ``eps`` is read where it lands."""
+    grid = np.ones((2, 1, 48))
+    grid[0, 0, 9:30] = 9.0
+    grid[1] = 2.25
+    kw = dict(backend='numpy', top=1.0, bot=2.25, truncation_order=[11, 0], wavelength=720.0, thickness=[100.0, 60.0],
+              theta=0.2, phi=0.0 if tetm else 0.3, answers='field', structure=grid, factorization='li')
+    if tetm:
+        kw['tetm'] = tetm
+    z = [20.0, 120.0]
+    negative = rcwa(lattice=np.array([[-530.0, 0.0], [0.0, 1.0]]), **kw).solve()
+    positive = rcwa(lattice=np.array([[530.0, 0.0], [0.0, 1.0]]), **kw).solve()
+    x = np.linspace(-0.5, 0.5, 13) * -530.0
+    np.testing.assert_allclose(negative.reconstruct_field(13, [0.0], z, discontinuous='continuity'),
+                               positive.reconstruct_field(x, [0.0], z, discontinuous='continuity'),
+                               rtol=0, atol=1e-11)

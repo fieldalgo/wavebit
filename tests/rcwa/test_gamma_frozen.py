@@ -327,7 +327,8 @@ COMPANION_RASTER = np.array([[[1.0, 4.0, 4.0, 1.0], [4.0, 1.0, 1.0, 4.0]]])
 
 #: What a solve writes on the solver, and so what a traced call may leave changed: its state.
 SOLVE_STATE = frozenset({'_formulation_assigned', '_frozen_geometry', '_grating_type',
-                         '_half_space_merged', '_solved_scene', 'layer_info_list', 'T1'})
+                         '_half_space_merged', '_solved_scene', '_solved_structure',
+                         'layer_info_list', 'T1'})
 
 
 def _companion_raster_solver(**over):
