@@ -535,3 +535,40 @@ def test_a_compat_plane_wave_angle_is_still_quoted_in_degrees():
             'PlaneWave(theta=95): the polar angle from the propagation axis, in degrees, '
             'in [0, 90).')):
         fd.PlaneWave('pw', band=fd.Band(wavelength=.8, df=.1), z=.5, theta=95)
+
+
+#: The resolution rules' engine words: a field a public caller cannot name, and the legacy
+#: engine's constant as the reason.
+RESOLUTION_WORDS = re.compile(r"\b[Rr]efine dx\b|, dx [^,)\s]+\)|\bdx\*K=|CELLS_PER_WAVELENGTH"
+                              r"|band\.shortest_wavelength")
+
+
+def test_every_resolution_message_the_engine_holds_names_the_public_grid():
+    """"Refine dx to at most 0.0227441" told a public caller to change a field it cannot name;
+    it is ``UniformGrid(spacing=...)``. Every engine string with one of these words reads
+    without it in the public vocabulary."""
+    read, left = 0, []
+    for where, text in engine_strings():
+        if RESOLUTION_WORDS.search(text):
+            read += 1
+            out = to_public(text)
+            if RESOLUTION_WORDS.search(out):
+                left.append(f'{where}: {RESOLUTION_WORDS.findall(out)}')
+    assert read >= 6, read          # the coarse and skin-depth refusals, the Debye bounds
+    assert not left, 'resolution words with no public spelling:\n  ' + '\n  '.join(left)
+
+
+def test_a_coarse_grid_is_refused_in_the_public_vocabulary():
+    """The refusal a public caller meets most: a pulse sampled below eight cells per
+    wavelength, reported by ``check`` with the public grid and pulse and the number to use."""
+    numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05), duration=fdtd.Duration(steps=20),
+                             absorber=fdtd.PML(cells=12))
+    pulse = fdtd.GaussianPulse(wavelength=.2, frequency_sigma_hz=4e13)
+    (issue,) = fdtd.check(_film(pulse), numerics=numerics).issues
+    message = issue.message
+    assert 'cells per wavelength' in message, message
+    assert ", the shortest wavelength of the sources' pulses, spacing 0.05)" in message, message
+    assert 'the eight-cells-per-wavelength rule' in message, message
+    assert 'Refine UniformGrid(spacing=...) to at most ' in message, message
+    assert not RESOLUTION_WORDS.search(message), message
+    assert not UNPREFIXED.search(message) and not VOCABULARY.search(message), message
