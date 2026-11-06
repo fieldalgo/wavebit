@@ -36,7 +36,7 @@ by the owner's decision of 2026-11-06, which also accepts C10 as complete in its
 | C8 | Dispersive and lossy smoothing | **partial**: flat films and separated stacks only | the C8 film and stack pages below |
 | C9 | A structure crossing the absorbing layer | **narrow routes only** | [matched absorption](fd-constitutive-absorber.md); [substrate continuation](../../guide/fdtd/substrate-gradients.md) |
 | C10 | Two smoothed surfaces in one voxel (the polytope clip) | **partial**: answered where one surface is flat; arm L passes, **the dimer gate fails**, so two curved surfaces stay refused | [the polytope clip](fd-polytope-clip.md) |
-| C11 | The off-diagonal constitutive slot | **closed as realised** by the C3-era cross coupling (owner decision, 2026-11-06); the registered 1e-12 non-Hermiticity gate is not asserted as written | [C11 record](fd-stage4-c11.md) |
+| C11 | The off-diagonal constitutive slot | **closed as realised** by the C3-era cross coupling (owner decision, 2026-11-06); the registered 1e-12 non-Hermiticity gate is asserted on the production operator by two tests added with the decision | [C11 record](fd-stage4-c11.md) |
 | C12 | These documents and this report | this page | -- |
 
 ## C0-C2: the protocol, the kernel and the rule
@@ -159,11 +159,10 @@ failing the TE arm at contrast 12, and the cross terms raised the glass sphere f
 **Owner decision (2026-11-06):** C11 is closed as already realised. The isotropic cross coupling
 that landed during C3's work (`src/wavebit/fdtd/_prepare/constitutive.py` and the kernel's
 constitutive term) counts as its implementation, and the coupling's existing self-adjoint checks
-stand in for the registered gate. That gate -- a non-Hermiticity assertion below 1e-12 -- is not
-asserted as written by any existing test: the dense finite-operator test checks the production
-operator against a symmetric matrix on one vector, and the inhomogeneous adjoint identity is
-asserted on the study comparator, not the production kernel. The [C11 record](fd-stage4-c11.md)
-lists each test and what it asserts. Two cases stay stated limitations: the voxel path's TE
+stand in for the registered gate. None of those asserted that gate -- a non-Hermiticity
+assertion below 1e-12 -- as written, so two tests added with the decision now do, on the
+production operator's dense matrix and on planned coefficients on every execution path. The
+[C11 record](fd-stage4-c11.md) lists each test and what it asserts. Two cases stay stated limitations: the voxel path's TE
 epsilon-12 cylinder (1.603), which the public stencil cannot take because it accepts a lone
 `Sphere` only, and anisotropic materials in a smoothed cell, which stay refused.
 
@@ -173,7 +172,6 @@ epsilon-12 cylinder (1.603), which the public stencil cannot take because it acc
 * C7's M3 order and its unidentified cause;
 * dispersive and lossy smoothing beyond flat films and stacks (curved metals);
 * a finite or curved body through a PML;
-* C11's registered non-Hermiticity gate, which no test asserts as written on the production
-  operator, and anisotropic materials in a smoothed cell (refused);
+* anisotropic materials in a smoothed cell (refused; C11 does not cover them);
 * two curved surfaces in one voxel (C10's failed dimer gate), the other C10 refusals listed in
   its record, and public CSG.

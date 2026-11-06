@@ -101,20 +101,25 @@
 올렸습니다. 이 결정과 함께 바뀌는 코드는 없습니다. 질문 1의 답은 (a)입니다.
 
 **등록한 관문과, 그 자리를 대신하는 것.** C11의 관문은 1e-12 미만의 비에르미트성 단언이었습니다.
-소유자는 그 자리에 결합의 기존 자기수반 확인을 받아들입니다. 각 시험이 실제로 단언하는 것을
-시험 코드에서 읽으면:
+소유자는 그 자리에 결합의 기존 자기수반 확인을 받아들였습니다. 읽어 보니 그중 관문을 쓰인
+그대로 단언하는 것이 없어서, 그렇게 단언하는 시험 두 개를 이 결정과 함께 더했습니다(마지막 두 행).
+각 시험이 실제로 단언하는 것을 시험 코드에서 읽으면:
 
 | 시험 | 단언하는 것 | 등록한 관문과 비교 |
 | --- | --- | --- |
 | `tests/fdtd/test_fd_constitutive.py::test_finite_box_operator_is_adjoint_and_encloses_its_exact_eigenvalues` (E와 H) | 무작위 비균질 3x2x2x3 시험 자료에서 제품 `cross_action(..., bounded=True)`가, 독립 이웃 색인으로 만든 명시적 대칭 조밀 행렬을 **무작위 벡터 하나**에 곱한 값과 절대 3e-14 안에서 같음; 포함 구간이 그 행렬의 모든 고윳값을 감쌈 | 제품 연산자이고 허용치도 1e-12보다 훨씬 작지만, 행렬-벡터 곱 하나를 대칭 기준과 비교할 뿐 연산자를 만들어 그 비대칭을 단언하지는 않음 |
 | `tests/fdtd/test_fd_constitutive_study.py::test_inhomogeneous_cross_action_is_self_adjoint` | 무작위 비균질 계수와 필드에서 `|<u, A v> - <A u, v>| < 3e-14 |u| |v|` | 등록한 형태이고 세기도 1e-12보다 훨씬 강하지만, 제품 커널의 유계(bounded) 판이 아니라 연구 비교기의 주기 `cross_action`(`studies/fdtd/subpixel_constitutive/`)에 대한 것 |
 | `tests/fdtd/test_fd_constitutive.py::test_closed_electric_and_magnetic_coupling_conserves_energy` | 전기·자기 결합이 있는 닫힌 공동이 모든 백엔드에서 에너지를 상대 폭 3e-13 안으로 유지 | 자기수반 연산자의 결과이지 연산자에 대한 단언은 아님 |
+| `tests/fdtd/test_fd_constitutive.py::test_production_cross_operator_is_symmetric_below_the_registered_gate` (E와 H), 2026-11-06 추가 | 무작위 비균질 3x4x5x6 시험 자료 세 개에서 단위 벡터로 만든 제품 `cross_action(..., bounded=True)`의 조밀 행렬이 `max|A - A^T| / max|A| < 1e-12`를 만족(측정값 0.0) | **등록한 관문, 제품 연산자에 대해** |
+| `tests/fdtd/test_fd_constitutive.py::test_planned_cross_coefficients_satisfy_the_adjoint_identity` (numpy, jax, jit, torch), 2026-11-06 추가 | `fd.lower`가 매끈한 구에 대해 쓰는 E·H 계수에서 `|<u, A v> - <A u, v>| / (max|K| |u| |v|) < 1e-12`(측정값 최대 6.64e-19) | **등록한 관문, 계획된 제품 계수에 대해, 모든 실행 경로에서** |
 
-**따라서 등록한 관문을 쓰인 그대로 단언하는 기존 시험은 없습니다**: 제품 연산자의
-비에르미트성 척도가 1e-12 미만이라는 단언. 가장 가까운 것은 조밀 유한 연산자 시험으로, 벡터
-하나에서 제품 연산을 대칭 행렬에 묶습니다. 이 결정은 등록한 관문의 통과가 아니라 이 확인들에
-대한 소유자의 수용에 기댑니다. *메모:* 직접 확인 -- `bounded=True`인 제품 `cross_action`에 대한
-수반 항등식, 또는 조밀 연산자의 비대칭 -- 은 작성되지 않았고, 이를 더하면 이 틈이 닫힙니다.
+**이 결정 전에는 등록한 관문을 쓰인 그대로 단언하는 시험이 없었습니다**: 제품 연산자의
+비에르미트성 척도가 1e-12 미만이라는 단언. 앞의 세 행은 가장 가깝지만 그것을 단언하지 않습니다.
+**이 결정과 함께 더한 두 시험이 이를 직접 단언하고 통과합니다**: 제품 연산자의 조밀 비대칭과,
+계획된 계수에 대한 수반 항등식이 모두 1e-12 미만입니다. 두 시험 모두 `cross_action`의 제품 코드
+변이 두 개(한 도착 평균의 앞쪽 이동, 교차항의 두 도착에 서로 다른 가중치)에서 실패함을 보았고,
+그 뒤 소스를 정확히 되돌렸습니다. 따라서 관문은 단언됩니다. 다만 위에 기록한 대로 C11을 닫은 것은
+등록한 규칙이 아니라 소유자의 결정입니다.
 
 **두 경우는 C11 작업이 아니라 적어 둔 한계로 남습니다.**
 
