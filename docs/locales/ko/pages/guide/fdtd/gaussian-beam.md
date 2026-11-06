@@ -51,3 +51,14 @@ beam = fdtd.GaussianBeam('b', plane=fdtd.Plane(z=-4.), direction='+z', waist=1.5
   파장은 안 됩니다(`mode.traced`).
 - 수직 입사만 됩니다. 빔의 축은 면의 법선입니다. 시트에서 한 칸 안쪽의 플럭스 측정기는
   거절됩니다(`monitor.source_sheet`).
+
+## 기울기와 메모리
+
+JAX와 Torch 백엔드에서 빔의 `amplitude`, `phase`, `delay_seconds`나 다른 곳의 추적된 구조에
+대한 실행의 미분은 실행 전체의 역방향 미분으로 구합니다
+({ref}`실행 미분하기 <fdtd-model-differentiating>` 참고). 여기에는 알려진 한계가 있습니다.
+역방향 미분은 모든 시간 스텝을 저장하므로 메모리가 스텝 수에 따라 늘어납니다. CPU의 JAX
+백엔드에서는 검증 설정만큼 긴 실행(약 1만 2천 스텝)이 메모리에 들어가지 않았습니다. 블록을
+저장하지 않고 다시 계산하는 `Numerics(checkpoint_steps=)`는 Torch CUDA에서만 허용됩니다. 이
+한계가 해결되기 전까지는 JAX에서 미분할 실행의 스텝 수를 메모리를 생각해 정하세요. 측정한
+내용은 [검증 기록](../../validation/fdtd/fd-mode-source.md)에 있습니다.

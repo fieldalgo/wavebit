@@ -133,6 +133,18 @@ re-entering its own source. Each time the source was restored byte for byte. One
 bounded by no limit: the H row's half-cell group delay changes only the off-centre leakage,
 which S2 reports rather than limits, and the exact prediction follows it.
 
+### Known limitation: reverse-mode memory on JAX
+
+Recorded on 2026-11-06, after the results; no verdict above changes. On the JAX backend on a
+CPU, a reverse-mode derivative of a run keeps every step, so its memory grows with the step
+count. The registered S7 run did not fit, and the 15-period probe needed 13 GB (S7's
+amendment above). `Numerics(checkpoint_steps=)`, which recomputes blocks instead, is admitted
+only on Torch CUDA. This is a known limitation of the time-stepping engine, not of
+`ModeSource`, and is left open here as separate work. The guide pages for
+[`ModeSource`](../../guide/fdtd/waveguide-modes.md) and
+[`GaussianBeam`](../../guide/fdtd/gaussian-beam.md) state it where their derivatives are
+described.
+
 ## Comparison with Meep and FDTDX
 
 Added 2026-10-30, after every verdict above, and it changes none of them: it is evidence about

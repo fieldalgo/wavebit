@@ -154,6 +154,15 @@ beam. No runtime warning is added. These grids sample the wavelength at 20 and 4
 above the 8 to 12 cells where `CoarseMeshWarning` already warns, and a notice on every beam
 run would say nothing about that run.
 
+### Completion decision (2026-11-06)
+
+Recorded after the support decision and kept apart from the verdicts, which stand. The
+stage-7 work (mode solver, `ModeMonitor`, `ModeSource`, the waveguide door through `PML` and
+`GaussianBeam`) is complete as measured. G2 stays recorded as failed: its test stays a strict
+expected failure and its 2e-3 rad limit is unchanged. Nothing is added to meet it. The
+reverse-mode memory growth on JAX that S7 and G7 met is a known limitation, stated in
+`fd-mode-source.md`, and is separate work.
+
 Two details of the runs, neither a change to a limit. G3's half-space crosses the x faces,
 so it declares `continuation=('x-', 'x+')`, the slab door of `fd-waveguide-through-pml.md`.
 The `FluxMonitor`s span x in ±5.9 µm, clear of the absorbing layers, as a flux plane must.
