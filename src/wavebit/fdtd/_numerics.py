@@ -119,11 +119,14 @@ class Numerics:
     (not a bool). ``None`` keeps the engine's default limit. This prediction is not a cap on
     total process memory.
 
-    ``checkpoint_steps`` optionally recomputes blocks during reverse-mode differentiation of
-    fixed-duration Torch CUDA runs. A positive static integer selects the block length;
-    ``None`` preserves the ordinary scan. This is a compute/memory tradeoff, not a memory cap.
-    Observation and source histories are retained, and a block longer than the run leaves only
-    an ordinary tail.
+    ``checkpoint_steps`` optionally recomputes segments during reverse-mode differentiation of
+    fixed-duration JAX or Torch runs (CPU, or the Torch CUDA route). A positive static integer
+    ``K`` selects the segment length; ``None`` preserves the ordinary scan. The schedule is
+    nested: a run of ``K**L`` steps stores at most about ``L * K`` states plus one ``K``-step
+    segment's intermediates, so the gradient's memory grows with the logarithm of the step
+    count rather than with the step count, and the forward sweep runs ``L + 1`` times. This is
+    a compute/memory tradeoff, not a memory cap. Observation and source histories are part of
+    every stored state, and a run no longer than ``K`` is an ordinary scan.
     """
     grid: UniformGrid
     duration: Duration

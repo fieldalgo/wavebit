@@ -98,8 +98,9 @@ def _checkpoint(numerics,execution):
     except (TypeError,ValueError) as exc:
         raise ValidationError('checkpoint_steps must be a positive static integer or None',
                               code='numerics.checkpoint_steps',path=path) from exc
-    if execution.backend!='torch' or execution.device.split(':')[0]!='cuda':
-        raise UnsupportedFeatureError('checkpoint_steps currently requires Torch CUDA execution',
+    if execution.backend not in ('jax','torch'):
+        # NumPy has no reverse mode, so a schedule there would be silently ignored.
+        raise UnsupportedFeatureError('checkpoint_steps requires a differentiable backend (JAX or Torch)',
                                       code='numerics.checkpoint_scope',path=path)
     if numerics.stopping is not None:
         raise UnsupportedFeatureError('checkpoint_steps requires fixed-duration execution without a DecayStop',

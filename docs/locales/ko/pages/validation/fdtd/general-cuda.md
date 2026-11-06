@@ -956,7 +956,10 @@ PEC-high와 PMC-low는 외부 ghost를 사용하며 저장된 층을 추가로 0
 
 `Numerics(checkpoint_steps=K)`는 고정 실행 길이의 Torch CUDA에서 양의
 정적 정수 블록 길이를 선택합니다. 기본값 `None`은 기존 스캔을 유지합니다.
-명시적 체크포인트는 CPU 백엔드, 다른 장치, `DecayStop`에서 거부합니다. 잘못된
+이 절을 기록할 당시 명시적 체크포인트는 CPU 백엔드, 다른 장치, `DecayStop`에서
+거부했습니다. 이제 JAX와 Torch CPU도 허용하며, 중첩 스케줄과 `torch.utils.checkpoint`를
+대체한 Torch 구간을 사용합니다. [메모리 상한이 있는 역방향 미분](checkpointing.md)을
+참고하세요. NumPy와 `DecayStop`은 계속 거부합니다. 잘못된
 값, 불리언(불리언 텐서 포함), 미분·변환을 거치는 블록 길이는 계획 전에
 거부하며 기존 CUDA 기능 범위도 그대로 적용합니다.
 

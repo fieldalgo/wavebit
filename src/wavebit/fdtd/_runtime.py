@@ -5,8 +5,8 @@ of them. What each primitive is on each backend was decided by measurement
 (``studies/fdtd/slab_add_cost/fdtd_slab_add_cost.py``, 2026-09-18, CPU), and the table is the contract:
 
     primitive        NumPy                         JAX                              Torch
-    scan             for loop                      nested lax.scan under            Python loop; torch.utils.checkpoint
-                                                   jax.checkpoint per block         (non-reentrant) per block
+    scan             for loop                      lax.scan; nested segments under  Python loop; torch.utils.checkpoint
+                                                   jax.checkpoint (``_segment``)    (non-reentrant) per nested segment
     slab_add         np.add(view, v, out=view)     4-D index scatter-add            autograd.Function: add_ in place,
                                                    (never a slice add)              mark_dirty; backward slices g
     slab_mul         in place                      4-D index scatter-multiply       same Function pattern with mul_
@@ -150,6 +150,39 @@ def _flatten(tree):
     if tree is None:
         return [], lambda flat: None
     return [tree], lambda flat: flat[0]
+
+
+def _bound(body, params):
+    """``body`` as ``body(carry, n)``: with ``params`` it is ``body(carry, n, params)``."""
+    if params is None:
+        return body
+    return lambda carry, n: body(carry, n, params)
+
+
+def _segment(steps, block):
+    """The length of the checkpointed segments a run of ``steps`` is cut into at its top level.
+
+    The schedule is nested: a run of at most ``block`` steps is an ordinary scan; a longer one
+    is ``steps // unit`` checkpointed segments of ``unit`` steps, each scheduled the same way
+    one level down, followed by the remainder, also scheduled the same way. ``unit`` is the
+    largest power of ``block`` below ``steps``, so a level holds at most ``block`` segment
+    inputs and a run of ``block**L`` steps stores at most ``L * block`` states plus the
+    intermediates of one ``block``-step scan, against ``steps / block`` states for a single
+    level. Reverse mode runs the forward sweep once more per level: ``L + 1`` sweeps in all.
+
+    This is the uniform multi-level schedule, not the optimal binomial one of Griewank and
+    Walther, "Algorithm 799: Revolve: an implementation of checkpointing for the reverse or
+    adjoint mode of computational differentiation", ACM TOMS 26(1), 19-45 (2000). Revolve
+    reaches C(s + r, s) steps with ``s`` stored states and ``r`` recomputations; this schedule
+    reaches ``block**L`` with ``s = L * block`` and ``r = L``, inside that bound. It is used
+    because every level is one fixed-length scan, so JAX traces one body per level rather than
+    one per step of a revolve schedule.
+    """
+    unit = block
+    # A block of one step has no powers to climb: every step is its own segment, one level.
+    while block > 1 and unit * block < steps:
+        unit *= block
+    return unit
 
 
 def _slab_indices(slab):
@@ -403,7 +436,8 @@ class NumpyRuntime:
         """The value itself: NumPy carries no gradient to stop."""
         return x
 
-    def scan(self, body, carry, steps, schedule=None):
+    def scan(self, body, carry, steps, schedule=None, params=None):
+        body = _bound(body, params)
         for n in range(steps):
             carry = body(carry, n)
         return carry
@@ -582,8 +616,9 @@ class JaxRuntime(_Functional):
         """
         return self.jax.lax.cond(pred, fn, lambda a: a, operand)
 
-    def scan(self, body, carry, steps, schedule=None):
+    def scan(self, body, carry, steps, schedule=None, params=None):
         lax, jnp = self.jax.lax, self.xp
+        body = _bound(body, params)
 
         def one(c, n):
             return body(c, n), None
@@ -592,18 +627,23 @@ class JaxRuntime(_Functional):
             carry, _ = lax.scan(one, carry, jnp.arange(steps))
             return carry
         K = int(schedule)
-        blocks, rem = divmod(steps, K)
 
-        @self.jax.checkpoint
-        def block(c, b):
-            c, _ = lax.scan(lambda c2, i: (body(c2, b * K + i), None), c, jnp.arange(K))
-            return c, None
+        def nested(c, start, n):
+            # ``start`` is the first step's index (traced inside a segment); ``n`` is static.
+            if n <= K:
+                c, _ = lax.scan(lambda c2, i: (body(c2, start + i), None), c, jnp.arange(n))
+                return c
+            unit = _segment(n, K)
+            blocks, rem = divmod(n, unit)
 
-        if blocks:
-            carry, _ = lax.scan(block, carry, jnp.arange(blocks))
-        if rem:
-            carry, _ = lax.scan(one, carry, blocks * K + jnp.arange(rem))
-        return carry
+            @self.jax.checkpoint
+            def block(c2, b):
+                return nested(c2, start + b * unit, unit), None
+
+            c, _ = lax.scan(block, c, jnp.arange(blocks))
+            return nested(c, start + blocks * unit, rem) if rem else c
+
+        return nested(carry, 0, steps)
 
     def jit(self, fn):
         return self.jax.jit(fn)
@@ -662,7 +702,47 @@ def _torch_functions(torch):
             ga[ctx.slices] *= ctx.m
             return ga, None, None
 
-    return SlabAdd, SlabMul
+    class Segment(torch.autograd.Function):
+        """One checkpointed segment: ``run(tensors)`` forward without a graph, again in backward.
+
+        Only the inputs are kept. Backward recomputes the segment under grad and asks
+        ``autograd.grad`` for the input cotangents; inside the recompute the nested segments
+        are again ``Segment`` nodes, so one level's graph is alive at a time. Under
+        ``create_graph`` the recompute starts from a fresh view of each saved input rather than
+        from a detached copy, so the returned cotangents stay connected to the inputs and a
+        Hessian passes through the segment. It must be a view and not the input itself:
+        ``autograd.grad`` with respect to the input would also follow it back through the
+        earlier segments and return the total derivative where the chain rule wants this
+        segment's own (a 17-step toy scan with block 3 returned a gradient 6x too large).
+        """
+
+        @staticmethod
+        def forward(ctx, run, *tensors):
+            ctx.run = run
+            ctx.save_for_backward(*tensors)
+            return run(tensors)
+
+        @staticmethod
+        def backward(ctx, *grads):
+            saved = ctx.saved_tensors
+            need = ctx.needs_input_grad[1:]
+            higher = torch.is_grad_enabled()
+            with torch.enable_grad():
+                xs = tuple(x.view_as(x) for x in saved) if higher else tuple(
+                    x.detach().requires_grad_(n) for x, n in zip(saved, need))
+                outs = ctx.run(xs)
+            wanted = [i for i, n in enumerate(need) if n]
+            pairs = [(o, g) for o, g in zip(outs, grads) if o.requires_grad and g is not None]
+            result = [None] * len(saved)
+            if wanted and pairs:
+                got = torch.autograd.grad([o for o, _ in pairs], [xs[i] for i in wanted],
+                                          [g for _, g in pairs], allow_unused=True,
+                                          create_graph=higher)
+                for i, g in zip(wanted, got):
+                    result[i] = g
+            return (None, *result)
+
+    return SlabAdd, SlabMul, Segment
 
 
 class TorchRuntime(_Functional):
@@ -676,7 +756,7 @@ class TorchRuntime(_Functional):
         self.torch, self.xp = torch, xp
         self.device = torch.device('cpu' if device is None else device)
         self._place = {'device': self.device}
-        self.SlabAdd, self.SlabMul = _torch_functions(torch)
+        self.SlabAdd, self.SlabMul, self.Segment = _torch_functions(torch)
 
     def dtype(self, name):
         return {'float64': self.torch.float64, 'complex128': self.torch.complex128}[name]
@@ -762,38 +842,82 @@ class TorchRuntime(_Functional):
         """``fn(operand)`` if ``pred`` else ``operand``: ``pred`` is a Python bool here."""
         return fn(operand) if pred else operand
 
-    def scan(self, body, carry, steps, schedule=None):
-        # Block copies protect backward replay. Forward-only execution has no
-        # replay; do not infer this from carry leaves, since live parameters can
-        # instead be captured in the body's closure.
-        if schedule is None or not self.torch.is_grad_enabled():
+    def scan(self, body, carry, steps, schedule=None, params=None):
+        """The step loop; with a schedule and grad enabled, the nested segments of ``_segment``.
+
+        ``torch.utils.checkpoint`` was the first implementation and is not bounded: its
+        non-reentrant form drops each step's saved tensors but keeps every step's graph
+        nodes, about 80 kB a step almost whatever the grid (a 20 x 20 x 48 and a 10 x 10 x 48
+        grid measured alike), so a 12,000-step gradient still held a gigabyte of graph. A
+        ``Segment`` (``_torch_functions``) is one node; the graph inside it exists only while
+        its own backward runs.
+
+        With ``params`` the body is ``body(carry, n, params)``. A segment takes the tensor
+        leaves of ``params`` as inputs, so their gradients come back through it; a live tensor
+        that reached the step only through the body's closure would get none, which is why a
+        checkpointed scan refuses to run without them.
+        """
+        torch = self.torch
+        # Forward-only execution has no replay; do not infer this from carry leaves, since
+        # live parameters can instead be captured in the body's closure.
+        if schedule is None or not torch.is_grad_enabled():
+            if params is not None:
+                return self._loop(body, carry, 0, steps, params)
             for n in range(steps):
                 carry = body(carry, n)
             return carry
-        from torch.utils.checkpoint import checkpoint
+        if params is None:
+            raise ValueError('a checkpointed Torch scan takes its live parameters as params=')
         K = int(schedule)
-        blocks, rem = divmod(steps, K)
-        leaves, rebuild = _flatten(carry)
+        p_leaves, p_rebuild = _flatten(params)
+        p_at = [i for i, x in enumerate(p_leaves) if isinstance(x, torch.Tensor)]
 
-        def block(b, *flat):
-            # A block works on copies of the state it is handed. The checkpoint keeps those
-            # inputs to recompute the block in backward, and the step writes in place
-            # wherever nothing is differentiated yet -- a CPML psi before the field is live,
-            # a series accumulator -- so without the copy the first block's own writes (or
-            # the next block's) moved an input the recompute reads, and backward raised a
-            # version-counter error on every source run and on a stage-0 ``fd.Record``. One
-            # copy of the state per block, not per step.
-            c = rebuild([x.clone() if hasattr(x, 'clone') else x for x in flat])
-            for i in range(K):
-                c = body(c, b * K + i)
-            return tuple(_flatten(c)[0])
+        def nested(c, start, n, ps):
+            # ``ps`` are the parameter leaves this call reads: the caller's at the top, a
+            # Segment's own inputs inside it. Inside a Segment's no-grad forward the whole
+            # segment is one loop; only its recompute, under grad, nests further.
+            if n <= K or not torch.is_grad_enabled():
+                return self._loop(body, c, start, n, p_rebuild(ps))
+            unit = _segment(n, K)
+            blocks, rem = divmod(n, unit)
+            for b in range(blocks):
+                c = segment(c, start + b * unit, unit, ps)
+            return nested(c, start + blocks * unit, rem, ps) if rem else c
 
-        for b in range(blocks):
-            leaves = list(checkpoint(block, b, *leaves, use_reentrant=False))
-        carry = rebuild(leaves)
-        for n in range(blocks * K, steps):
-            carry = body(carry, n)
-        return carry
+        def segment(c, first, count, ps):
+            leaves, rebuild = _flatten(c)
+            c_at = [i for i, x in enumerate(leaves) if isinstance(x, torch.Tensor)]
+
+            def run(tensors):
+                # A segment works on copies of the state it is handed. The Segment keeps those
+                # inputs to recompute itself in backward, and the step writes in place wherever
+                # nothing is differentiated -- everywhere in the no-grad forward, a CPML psi
+                # before the field is live in the recompute -- so without the copy a segment's
+                # own writes moved an input a later recompute reads. One copy per segment.
+                flat, qs = list(leaves), list(ps)
+                for i, x in zip(c_at, tensors[:len(c_at)]):
+                    flat[i] = x.clone()
+                for i, x in zip(p_at, tensors[len(c_at):]):
+                    qs[i] = x
+                out = _flatten(nested(rebuild(flat), first, count, qs))[0]
+                if len(out) != len(leaves) or [i for i, x in enumerate(out)
+                                               if isinstance(x, torch.Tensor)] != c_at:
+                    raise ValueError('a checkpointed segment changed the shape of the state')
+                return tuple(out[i] for i in c_at)
+
+            out = self.Segment.apply(run, *[leaves[i] for i in c_at], *[ps[i] for i in p_at])
+            flat = list(leaves)
+            for i, x in zip(c_at, out):
+                flat[i] = x
+            return rebuild(flat)
+
+        return nested(carry, 0, steps, p_leaves)
+
+    @staticmethod
+    def _loop(body, c, start, n, params):
+        for i in range(n):
+            c = body(c, start + i, params)
+        return c
 
     def jit(self, fn):
         return fn
