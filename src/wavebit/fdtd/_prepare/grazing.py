@@ -292,21 +292,45 @@ def reflection_for(cos, tolerance=GRAZING_TOLERANCE, g=GRAZING_EXPONENT):
 # ---------------------------------------------------------------------------------------------
 
 def _transverse_k(scene, grid, a):
-    """``(k, period, single)`` along transverse axis ``a``; ``None`` if not a periodic axis."""
+    """``(k, period, single)`` along transverse axis ``a``; ``None`` if not a periodic axis.
+
+    A traced ``k`` (or Bloch phase) is read as the one the scene's PlaneWave launches
+    (:func:`wave_k`): a run is a plane wave only where the face carries that ``k``, which
+    ``fd.plan`` checks of a concrete face and ``sources.bloch_match_guard`` of a traced one at
+    run time. Without that wave its ``k`` is ``None``: nothing can count it.
+    """
     face = scene.boundaries.face(AXES[a] + '-')
     if isinstance(face, Periodic):
         return 0.0, grid.size[a], False
     if isinstance(face, Axis1D):
         k = concrete(face.k)
-        return (None if k is None else k), None, True
+        return (wave_k(scene, a) if k is None else k), None, True
     if isinstance(face, Bloch):
         if face.k is not None:
             k = concrete(face.k)
         else:
             phase = concrete(face.phase)
             k = None if phase is None else phase / grid.size[a]
-        return k, grid.size[a], False
+        return (wave_k(scene, a) if k is None else k), grid.size[a], False
     return None
+
+
+def wave_k(scene, a):
+    """The transverse wavevector along axis ``a`` of the scene's one PlaneWave, at its band
+    centre in the background: what ``sources._plane_wave_term`` requires a Bloch or Axis1D
+    face along ``a`` to carry. ``None`` without exactly one PlaneWave or with a traced band
+    centre or background."""
+    from wavebit.fdtd._prepare.monitors import plane_waves
+    waves = plane_waves(scene)
+    if len(waves) != 1:
+        return None
+    src = waves[0]
+    wavelength = src.band.concrete_wavelength
+    index = as_material(scene.background, 'Scene(background=)').index_bound()
+    if wavelength is None or index is None:
+        return None
+    k, _, _ = src.vectors()
+    return index * 2.0 * math.pi / wavelength * k[a]
 
 
 #: How far the refusal of a ``'lossy'`` face searches for the cell count that would pass.
@@ -637,8 +661,9 @@ def survey(scene, plan):
     ``'ok'``, ``'needs'`` (below the default reach, and the face or the run falls short),
     ``'lossy'`` (a face with the stabilizing loss that returns this order above both the
     tolerance and what its pure stretch returns), ``'weak'`` (below the face's own
-    ``cos_min``) or ``'floor'`` (below 0.204). A face that cannot be counted (a traced medium,
-    band or Bloch phase) has ``verdict='skipped'``. A row on a stabilized face also carries
+    ``cos_min``) or ``'floor'`` (below 0.204). A face that cannot be counted (a traced medium
+    or band; a traced Bloch ``k`` is read as the PlaneWave's, :func:`_transverse_k`) has
+    ``verdict='skipped'``. A row on a stabilized face also carries
     ``'stabilize'``, ``'n'``, ``'k_par'``, ``'axis1d'``, ``'K'``, ``'polarisations'`` and
     ``'pure_verdict'``, and, where the pure verdict is ``'ok'`` or ``'needs'``, the fields of
     :func:`judge_returns`; it is judged at every propagating order. A row on a pure-stretch
