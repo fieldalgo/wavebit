@@ -50,8 +50,15 @@ def public_description(shape):
     ``describe()`` itself stays the engine's spelling: a flush pair's junction signature records
     it, so it is plan data. Only a spelling that starts with a renamed engine class name changes
     (``Region(size=...)`` reads ``SnappedBox(size=...)``); a slab's ``z=(...)`` names no class.
+    A turned Box or Prism holds its ``angle`` in the engine's degrees; inside a public call it
+    reads in the radians the caller gave (``_spelling.angle``), as a PlaneWave's angles do.
     """
     text = shape.describe()
+    turned = getattr(shape, 'angle', None)
+    if turned and type(shape).__module__ == 'wavebit.fdtd._legacy_geometry':
+        from wavebit.fdtd._spelling import angle, angle_unit
+        if angle_unit() == 'radians':
+            text = text.replace(f', angle={turned}', f', angle={angle(turned)}', 1)
     for cls in type(shape).__mro__:
         public = _renamed(cls)
         if public and text.startswith(cls.__name__ + '('):

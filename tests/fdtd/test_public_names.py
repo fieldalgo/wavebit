@@ -338,3 +338,37 @@ def test_grazing_rows_and_an_invariant_diffraction_reference_use_the_public_name
         reference = r[name].reference
         assert (reference['port'], reference['wave'], reference['cell_measure_units']) == (port, wave, '1')
         assert reference['cell_measure'] == pytest.approx(1.)
+
+
+def _turned(shapes):
+    """Two smoothed bodies whose surfaces share voxels: the refusal names both."""
+    return fdtd.Problem(units=UM, scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(.8, .8, .8)),
+        boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.PEC()),
+        structures=tuple(fdtd.Structure(f's{i}', shape=s, material=Material(epsilon=2. + i))
+                         for i, s in enumerate(shapes))),
+        sources=(fdtd.CurrentDipole('d', center=(.3, .3, .3), delay_seconds=1e-15,
+                                    pulse=fdtd.GaussianPulse(wavelength=1.6,
+                                                             frequency_sigma_hz=2e13)),),
+        outputs=fdtd.Outputs(final_fields=True,
+                             monitors=(fdtd.TimeSeriesMonitor('e', at=(0, 0, 0), component='Ey'),)))
+
+
+def test_a_turned_body_reads_its_angle_in_the_radians_it_was_given():
+    """A public Box or Prism takes ``angle`` in radians and the engine holds degrees; a refusal
+    describing the body read the degrees (``angle=28.64788975654116`` for 0.5). The engine's
+    own description keeps them: it is plan data (a junction signature records it)."""
+    from wavebit.fdtd._legacy_geometry import Box
+    from wavebit.fdtd._public_names import public_description
+    prism = fdtd.Prism(vertices=((-.1, -.1), (.1, -.1), (0., .1)), height=.2, angle=.3)
+    box = fdtd.Box(size=(.2, .2, .2), center=(.05, 0., 0.), angle=.5)
+    n = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.02), duration=fdtd.Duration(steps=2))
+    with pytest.raises(ValueError, match='surfaces pass through the same voxel') as caught:
+        fdtd.prepare(_turned((prism, box)), numerics=n)
+    message = str(caught.value)
+    assert 'Prism(' in message and ', angle=0.3)' in message, message
+    assert 'Box(' in message and ', angle=0.5, axis=' in message, message
+    assert '17.18' not in message and '28.64' not in message, message
+    engine = Box(size=(.2, .2, .2), angle=30.)
+    assert engine.describe() == "Box(size=(0.2, 0.2, 0.2), center=(0.0, 0.0, 0.0), angle=30.0, axis='z')"
+    assert public_description(engine) == engine.describe()
