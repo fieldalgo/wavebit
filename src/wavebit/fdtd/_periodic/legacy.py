@@ -178,20 +178,18 @@ PML_ALPHA_RELATIVE = 1.5
 #: Round-trip amplitude reflection the conductivity grading is aimed at.
 PML_TARGET_REFLECTION = 1e-8
 
-class UnsettledFieldWarning(UserWarning):
-    """The run ended with the field still ringing, so the DFT is of a truncated signal.
-
-    Emitted when the field at the transmission monitor has not decayed to
-    :data:`SETTLED_RESIDUAL` of its peak. A truncated running DFT returns a number shaped
-    exactly like an efficiency, so this is the one diagnostic a caller must not have to go
-    looking for.
-
-    **It matters far more at oblique incidence**, where the scattered wave leaves at an angle
-    and a nearly-grazing order can take several times as long to clear as a normal-incidence
-    run does. Measured on the benchmark grating at 15 degrees: 60 optical cycles leaves a
-    residual of 5.9e-2 and an answer wrong by 3.4e-2, while 120 cycles leaves 4.5e-3. Raise
-    ``n_periods`` until it stops warning.
-    """
+# The run ended with the field still ringing, so the DFT is of a truncated signal: emitted as
+# the public :class:`wavebit.fdtd.diagnostics.UnsettledFieldWarning` (one class, so a public
+# filter or ``pytest.warns`` sees it) when the field at the transmission monitor has not decayed
+# to :data:`SETTLED_RESIDUAL` of its peak. A truncated running DFT returns a number shaped
+# exactly like an efficiency, so this is the one diagnostic a caller must not have to go
+# looking for. It matters far more at oblique incidence, where the scattered wave leaves at an
+# angle and a nearly-grazing order can take several times as long to clear as a
+# normal-incidence run does. Measured on the benchmark grating at 15 degrees: 60 optical
+# cycles leaves a residual of 5.9e-2 and an answer wrong by 3.4e-2, while 120 cycles leaves
+# 4.5e-3. Raise ``n_periods`` (publicly ``periodic.Numerics(duration_seconds=...)``) until it
+# stops warning.
+from wavebit.fdtd.diagnostics import UnsettledFieldWarning  # noqa: E402
 
 
 #: Residual -- the field at the transmission monitor as a fraction of its own peak -- above
