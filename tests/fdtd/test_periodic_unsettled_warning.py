@@ -42,6 +42,20 @@ def test_the_reference_route_warns_the_public_class_with_public_advice():
         assert w.filename == __file__, w.filename             # the caller's line
 
 
+def test_it_points_at_the_caller_with_torch_imported():
+    """Once torch is imported every public door runs inside its compile guard (a frame of
+    torch's dynamo package), which is outside this package: the warning skips that frame too.
+    CI met it when another test in the same worker had imported torch first."""
+    pytest.importorskip('torch')
+    import torch._dynamo  # noqa: F401
+    problem, numerics = _short_run()
+    with pytest.warns(UnsettledFieldWarning) as caught:
+        periodic.run(problem, numerics=numerics)
+    unsettled = [w for w in caught if issubclass(w.category, UnsettledFieldWarning)]
+    assert unsettled and all(w.filename == __file__ for w in unsettled), \
+        [w.filename for w in unsettled]
+
+
 def test_a_public_filter_sees_it():
     problem, numerics = _short_run()
     with warnings.catch_warnings():
