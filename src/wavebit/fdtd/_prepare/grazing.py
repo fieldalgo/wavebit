@@ -292,45 +292,21 @@ def reflection_for(cos, tolerance=GRAZING_TOLERANCE, g=GRAZING_EXPONENT):
 # ---------------------------------------------------------------------------------------------
 
 def _transverse_k(scene, grid, a):
-    """``(k, period, single)`` along transverse axis ``a``; ``None`` if not a periodic axis.
-
-    A traced ``k`` (or Bloch phase) is read as the one the scene's PlaneWave launches
-    (:func:`wave_k`): a run is a plane wave only where the face carries that ``k``, which
-    ``fd.plan`` checks of a concrete face and ``sources.bloch_match_guard`` of a traced one at
-    run time. Without that wave its ``k`` is ``None``: nothing can count it.
-    """
+    """``(k, period, single)`` along transverse axis ``a``; ``None`` if not a periodic axis."""
     face = scene.boundaries.face(AXES[a] + '-')
     if isinstance(face, Periodic):
         return 0.0, grid.size[a], False
     if isinstance(face, Axis1D):
         k = concrete(face.k)
-        return (wave_k(scene, a) if k is None else k), None, True
+        return (None if k is None else k), None, True
     if isinstance(face, Bloch):
         if face.k is not None:
             k = concrete(face.k)
         else:
             phase = concrete(face.phase)
             k = None if phase is None else phase / grid.size[a]
-        return (wave_k(scene, a) if k is None else k), grid.size[a], False
+        return k, grid.size[a], False
     return None
-
-
-def wave_k(scene, a):
-    """The transverse wavevector along axis ``a`` of the scene's one PlaneWave, at its band
-    centre in the background: what ``sources._plane_wave_term`` requires a Bloch or Axis1D
-    face along ``a`` to carry. ``None`` without exactly one PlaneWave or with a traced band
-    centre or background."""
-    from wavebit.fdtd._prepare.monitors import plane_waves
-    waves = plane_waves(scene)
-    if len(waves) != 1:
-        return None
-    src = waves[0]
-    wavelength = src.band.concrete_wavelength
-    index = as_material(scene.background, 'Scene(background=)').index_bound()
-    if wavelength is None or index is None:
-        return None
-    k, _, _ = src.vectors()
-    return index * 2.0 * math.pi / wavelength * k[a]
 
 
 #: How far the refusal of a ``'lossy'`` face searches for the cell count that would pass.
@@ -661,9 +637,8 @@ def survey(scene, plan):
     ``'ok'``, ``'needs'`` (below the default reach, and the face or the run falls short),
     ``'lossy'`` (a face with the stabilizing loss that returns this order above both the
     tolerance and what its pure stretch returns), ``'weak'`` (below the face's own
-    ``cos_min``) or ``'floor'`` (below 0.204). A face that cannot be counted (a traced medium
-    or band; a traced Bloch ``k`` is read as the PlaneWave's, :func:`_transverse_k`) has
-    ``verdict='skipped'``. A row on a stabilized face also carries
+    ``cos_min``) or ``'floor'`` (below 0.204). A face that cannot be counted (a traced medium,
+    band or Bloch phase) has ``verdict='skipped'``. A row on a stabilized face also carries
     ``'stabilize'``, ``'n'``, ``'k_par'``, ``'axis1d'``, ``'K'``, ``'polarisations'`` and
     ``'pure_verdict'``, and, where the pure verdict is ``'ok'`` or ``'needs'``, the fields of
     :func:`judge_returns`; it is judged at every propagating order. A row on a pure-stretch
@@ -790,6 +765,124 @@ def _survey(scene, plan, faces=None, periods=_OWN, only=None, wavelengths=None, 
                            periods)[0]
                     for w, c in angles])
     return rows
+
+
+def traced_k(scene, plan):
+    """Whether :func:`_survey` would count orders or an incidence for one PlaneWave but cannot,
+    because a transverse Bloch or Axis1D ``k`` (or a Bloch phase) is traced: every transverse
+    face is periodic and at least one of their ``k`` has no concrete value."""
+    from wavebit.fdtd._prepare.monitors import plane_waves
+    waves = plane_waves(scene)
+    if len(waves) != 1:
+        return False
+    kpar = [_transverse_k(scene, plan.grid, a) for a in range(3) if a != waves[0].axis]
+    return all(k is not None for k in kpar) and any(k[0] is None for k in kpar)
+
+
+def _live_k(scene, grid, a, rt):
+    """:func:`_transverse_k` with the live value: ``(k, period, single)``, ``k`` on the backend."""
+    face = scene.boundaries.face(AXES[a] + '-')
+    if isinstance(face, Periodic):
+        return rt.array(0.0, 'float64'), grid.size[a], False
+    if isinstance(face, Axis1D):
+        return rt.array(face.k, 'float64'), None, True
+    if face.k is not None:
+        return rt.array(face.k, 'float64'), grid.size[a], False
+    return rt.array(face.phase, 'float64') / grid.size[a], grid.size[a], False
+
+
+def _live_axis(k, L, single, k_max, rt):
+    """The transverse wavenumbers of one axis's orders, ``k + m g`` over a static window.
+
+    ``k`` is first reduced by the nearest whole ``g``, which relabels the orders and changes no
+    order's wavenumber: a live ``k`` may be anywhere, while the window is fixed when the program
+    is built. ``m`` then spans every order with ``|k + m g| < k_max`` and one more each way, as
+    :func:`_orders` does. With ``|k| < g / 2`` the reduction subtracts exactly zero, so each
+    wavenumber is the eager survey's own float."""
+    if single or L is None:
+        return [k]
+    g = 2.0 * math.pi / L
+    k = k - rt.xp.round(k / g) * g
+    m_max = int(math.ceil((k_max + g / 2.0) / g)) + 1
+    return [k + m * g for m in range(-m_max, m_max + 1)]
+
+
+def live_valid(scene, plan, rt, n_floor, live_index):
+    """The pure-stretch rows of :func:`_survey` at the live transverse ``k``, on the backend.
+
+    A backend boolean, false where :func:`enforce` would refuse the scene at the live ``k``, or
+    ``None`` when nothing is judged. A traced ``k`` lowered through a plan is the run's ``k``:
+    the PlaneWave column is driven with the face's live value, so a sweep of it through one plan
+    is a sweep of the incidence. This mirrors ``_survey`` row for row: every order leaving
+    through a PML face along the PlaneWave's axis in each medium of that face's layer, at every
+    wavelength a Diffraction monitor asks for, and the PlaneWave's own incidence on its column's
+    two faces at those wavelengths and the band centre. Each is refused where it propagates at
+    an exit ``cos`` below the face's :func:`accepted_cos`, the pure-stretch verdict's threshold,
+    in the survey's own float arithmetic. ``live_index`` maps a traced medium's label to its live
+    ``n^2``; its orders are counted up to ``n_floor``, past which the resolution guard has made
+    the run ``nan`` already. A traced medium of any other kind is skipped, as the survey skips
+    it. A face with ``stabilize > 0`` is also judged on its exact return, which has no runtime
+    twin; ``shape_ranges.validate`` refuses a traced ``k`` beside one by name."""
+    from wavebit.fdtd._legacy_boundaries import Absorbing
+    from wavebit.fdtd._legacy_monitors import Diffraction
+    from wavebit.fdtd._prepare.monitors import plane_waves
+    xp = rt.xp
+    pw = plane_waves(scene)[0]
+    P = pw.axis
+    kpar = [_live_k(scene, plan.grid, a, rt) for a in range(3) if a != P]
+    diffraction = [m for m in scene.monitors if isinstance(m, Diffraction)]
+    asked = sorted({w for m in diffraction for w in m.wavelengths})
+    periods = _periods(scene, plan, pw)
+    design = dict(plan.pml_wavelengths)
+    valid = None
+
+    def refuse(s2, c):
+        nonlocal valid
+        propagating = s2 < 1.0
+        cos = xp.sqrt(xp.where(propagating, 1.0 - s2, xp.ones_like(s2)))
+        ok = ~(propagating & (cos < c))
+        valid = ok if valid is None else valid & ok
+
+    if diffraction:
+        for side in ('-', '+'):
+            name = AXES[P] + side
+            face = scene.boundaries.face(name)
+            if not isinstance(face, PML):
+                continue
+            for label, n in _layer_media(scene, plan.grid, P, side, face.cells):
+                if label in live_index:
+                    n, n_max = xp.sqrt(live_index[label]), n_floor
+                elif n is None:
+                    continue
+                else:
+                    n_max = n
+                for w in asked:
+                    c = accepted_cos(face.reflection, face.cells,
+                                     exponent(w / design[name]), periods)
+                    k0 = n * 2.0 * math.pi / w
+                    k_max = n_max * 2.0 * math.pi / w
+                    u, v = (_live_axis(k, L, single, k_max, rt) for k, L, single in kpar)
+                    for ku in u:
+                        for kv in v:
+                            refuse((ku * ku + kv * kv) / (k0 * k0), c)
+    n_bg = as_material(scene.background, 'Scene(background=)').index_bound()
+    centre = pw.band.concrete_wavelength
+    if n_bg is not None and centre is not None:
+        for w in sorted(set(asked) | {centre}):
+            k0 = n_bg * 2.0 * math.pi / w
+            s2 = (kpar[0][0] * kpar[0][0] + kpar[1][0] * kpar[1][0]) / (k0 * k0)
+            for side in ('-', '+'):
+                name = AXES[P] + side
+                face = scene.boundaries.face(name)
+                if not isinstance(face, PML):
+                    if isinstance(face, Absorbing):
+                        continue
+                    face, face_wavelength = PML(), centre     # the column's own padded layer
+                else:
+                    face_wavelength = design[name]
+                refuse(s2, accepted_cos(face.reflection, face.cells,
+                                        exponent(w / face_wavelength), periods))
+    return valid
 
 
 def _floor2(x):
