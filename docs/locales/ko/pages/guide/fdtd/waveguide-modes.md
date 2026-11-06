@@ -146,6 +146,17 @@ t.forward_energy[:, 0] / t.injected_energy   # TE0 전력 투과율
 구체값이어야 합니다. 광원의 `amplitude`, `phase`, `delay_seconds`와 다른 곳의 구조는 추적된
 값을 지닐 수 있습니다. 펄스 파장은 안 됩니다. 모드를 그 파장에서 풀기 때문입니다.
 
+## 기울기와 메모리
+
+JAX와 Torch 백엔드에서 광원의 `amplitude`, `phase`, `delay_seconds`나 광원 면에서 떨어진
+추적된 구조에 대한 실행의 미분은 실행 전체의 역방향 미분으로 구합니다
+({ref}`실행 미분하기 <fdtd-model-differentiating>` 참고). 여기에는 알려진 한계가 있습니다.
+역방향 미분은 모든 시간 스텝을 저장하므로 메모리가 스텝 수에 따라 늘어납니다. CPU의 JAX
+백엔드에서는 검증 설정만큼 긴 실행(약 1만 2천 스텝)이 메모리에 들어가지 않았습니다. 블록을
+저장하지 않고 다시 계산하는 `Numerics(checkpoint_steps=)`는 Torch CUDA에서만 허용됩니다. 이
+한계가 해결되기 전까지는 JAX에서 미분할 실행의 스텝 수를 메모리를 생각해 정하세요. 측정한
+내용은 [검증 기록](../../validation/fdtd/fd-mode-source.md)에 있습니다.
+
 ## 정확도
 
 등록한 검사와 측정 결과는 [검증 기록](../../validation/fdtd/fd-waveguide-modes.md)에
