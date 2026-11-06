@@ -177,6 +177,22 @@ def polarization(source, xp, execution):
     return pair / norm
 
 
+def plane_wave_polarization(problem, source, xp, execution):
+    """What the engine is handed as one plane wave's polarization: the word, or the pair.
+
+    A word, ``'s'`` or ``'p'``, goes over as written. The engine reads it as a fixed polarization
+    and decides from the structure and the incidence whether its pure 1D TE/TM path answers it
+    (``CoreSolveMixin._polarization_word_holds``); where that path does not, the word solves as
+    the pair it names. The one fact the engine cannot see is what the run asks for: a requested
+    scattering matrix keeps both polarizations' ports (``2N x 2N``, channel ``'sp'``), while the
+    pure path's has one polarization's (``N x N``, ``'te'`` / ``'tm'``). So a run that requests
+    one hands over the pair, and solves on the pair's path. A Jones pair is always a pair.
+    """
+    if isinstance(source.polarization, str) and not problem.outputs.scattering:
+        return source.polarization
+    return polarization(source, xp, execution)
+
+
 def single_plane(problem):
     return len(problem.excitation.sources) == 1 and type(problem.excitation.sources[0]) is PlaneWave
 
@@ -292,7 +308,8 @@ def build_solver(problem, numerics, execution, wavelength):
         kwargs['thickness'] = _array(xp, [0.], execution)
     if single_plane(problem):
         source = problem.excitation.sources[0]
-        kwargs.update(incidence_side=source.side, polarization=polarization(source, xp, execution))
+        kwargs.update(incidence_side=source.side,
+                      polarization=plane_wave_polarization(problem, source, xp, execution))
         kwargs.update({k: getattr(source, k) for k in ('theta', 'phi', 'kx', 'ky') if getattr(source, k) is not None})
     else:
         adapted = tuple(_engine_source(source, xp, execution) for source in problem.excitation.sources)

@@ -492,14 +492,15 @@ on 2026-08-13 noted against each part, because the reasoning is what a future ax
 need and the code alone does not carry it.
 
 **The principle is already in the codebase.** `engine.py::_assign_grating_type` reads the `structure`
-shape, `tetm` and `phi` and picks the cheapest formulation that can express the problem — its
+shape, the incidence's declaration (`tetm`, or a polarization word `'s'` / `'p'`) and `phi` and `ky`,
+and picks the cheapest formulation that can express the problem — its
 docstring opens *"Pick the formulation this scene needs: pure 1D TE/TM, 1D conical, or 2D."*
 1D TE/TM splits into scalars, 1D conical does not, 2D couples everything. Anisotropy adds axes to
 that same decision rather than a new kind of decision.
 
 | axis | read from | branches |
 |---|---|---|
-| grating dimensionality *(exists)* | `structure` shape, `tetm`, `phi` | 1D TE/TM, 1D conical, 2D |
+| grating dimensionality *(exists)* | `structure` shape, `tetm` or a polarization word, `phi`, `ky` | 1D TE/TM, 1D conical, 2D |
 | **z row of the tensor** *(exists)* | whether the four z-row slots were given | second-order, first-order |
 | **permeability** | `mu != 1` | existing operator, magnetic operator |
 | **patterned or uniform** | layer has in-plane structure | factorization, or scaled identities |
@@ -521,8 +522,11 @@ answered for s light whichever of the two it named. The message names the pair t
 the same light, `polarization=(1, 0)` / `(0, 1)` at `phi = 0`, and
 `tests/rcwa/test_tetm_off_the_pure_path.py` checks that it does: beside an all-zero z row, and under
 a forced `'first_order'`, the pair reproduces the pure `tetm` solve. `tetm` belongs to the
-earlier interface only: `rcwa.PlaneWave` always names the polarization (`'s'`, `'p'` or a Jones
-pair), so the current lifecycle never meets this refusal.
+earlier interface only, so the current lifecycle never meets this refusal. It reaches the pure
+path through a polarization word instead (`PlaneWave(polarization='s')` / `'p'`, since
+2026-11-03), which declares the polarization fixed rather than absent and so is never refused:
+beside a z row, under `'first_order'`, on a skewed cell or with a free azimuth it solves as the
+pair it names, on the path that carries it (`engine.py::_polarization_word_holds`).
 
 ### Why it has to be automatic
 
@@ -576,7 +580,9 @@ exactly this reason. A silent 8x is indistinguishable from a slow machine, and a
 cannot say which formulation it measured is not a benchmark. The attribute is
 `solver.formulation_assigned`, `'second_order'` or `'first_order'`, set by every 2D solve and `None`
 before the first one. Both are attributes of the earlier interface's solver. The current
-`rcwa.Result` does not report the formulation or the path that ran yet, and the check report's
+`rcwa.Result` reports the path each wavelength's solve took, `diagnostics['solve_path']`
+(`'1d_te'`, `'1d_tm'`, `'1d_conical'` or `'2d'`), and the check report names the one a run will
+take, `resolved['solve_path']`. It does not report which formulation a 2D solve assigned yet:
 `resolved['formulation']` is the requested value (`'auto'` by default), not the one assigned.
 
 ## References
