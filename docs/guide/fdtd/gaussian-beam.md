@@ -57,3 +57,16 @@ focal-plane waist, the power and the back-radiation match their predictions far 
   The pulse wavelength may not (`mode.traced`).
 - Normal incidence only: the beam's axis is the plane's normal. A flux monitor within one
   cell of the sheet is refused (`monitor.source_sheet`).
+
+## Gradients and memory
+
+On the JAX and Torch backends, derivatives of a run with respect to the beam's `amplitude`,
+`phase` and `delay_seconds`, or to a traced structure elsewhere, come from reverse-mode
+differentiation of the whole run (see
+{ref}`Differentiating a run <fdtd-model-differentiating>`). This has a known limitation:
+reverse mode keeps every time step, so its memory grows with the step count. On the JAX
+backend on a CPU, a run as long as the validation setups (about twelve thousand steps) did
+not fit in memory. `Numerics(checkpoint_steps=)`, which recomputes blocks instead of storing
+them, is admitted only on Torch CUDA. Until this is addressed, plan the step count of a run
+you differentiate on JAX with its memory in mind. The
+[validation record](../../validation/fdtd/fd-mode-source.md) states what was measured.

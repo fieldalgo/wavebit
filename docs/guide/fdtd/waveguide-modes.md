@@ -160,6 +160,19 @@ field jumps there. A structure that reaches the source plane must be concrete. T
 `amplitude`, `phase` and `delay_seconds`, and structures elsewhere, may carry traced values.
 The pulse wavelength may not, because the mode is solved at it.
 
+## Gradients and memory
+
+On the JAX and Torch backends, derivatives of a run with respect to the source's `amplitude`,
+`phase` and `delay_seconds`, or to a traced structure away from the source plane, come from
+reverse-mode differentiation of the whole run (see
+{ref}`Differentiating a run <fdtd-model-differentiating>`). This has a known limitation:
+reverse mode keeps every time step, so its memory grows with the step count. On the JAX
+backend on a CPU, a run as long as the validation setups (about twelve thousand steps) did
+not fit in memory. `Numerics(checkpoint_steps=)`, which recomputes blocks instead of storing
+them, is admitted only on Torch CUDA. Until this is addressed, plan the step count of a run
+you differentiate on JAX with its memory in mind. The
+[validation record](../../validation/fdtd/fd-mode-source.md) states what was measured.
+
 ## Accuracy
 
 The registered checks and their measured results are in the
