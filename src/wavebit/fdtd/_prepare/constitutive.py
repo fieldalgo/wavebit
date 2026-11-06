@@ -132,6 +132,9 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, n
             for record in plan.junctions:
                 if index == min(record.face, record.standing):
                     grounds[record] = held
+            for record in plan.clips:
+                if index == record.first:
+                    grounds[record] = held
             cut = _intersect(box, structure.shape.support(plan.grid))
             if cut is None:
                 continue
@@ -168,6 +171,9 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, n
                     if plan.junctions and field == "E":
                         from wavebit.fdtd._prepare.junction import proxy_mask
                         active = active & proxy_mask(plan, index, cut)
+                    if plan.clips and field == "E":
+                        from wavebit.fdtd._prepare.clip import proxy_mask as clip_mask
+                        active = active & clip_mask(plan, index, cut)
                     gap = np.abs(np.asarray(moment)-np.asarray(normal)**2)
                     worst = float(gap[np.asarray(active)].max(initial=0.))
                     name = type(body).__name__
@@ -194,6 +200,11 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, n
             for record in plan.junctions:
                 tensor, cross, held = paint_nodes(rt, record, scene, plan, term,
                                                    tensor, cross, held, grounds[record])
+        if plan.clips:
+            from wavebit.fdtd._prepare.clip import paint_nodes as clip_nodes
+            for record in plan.clips:
+                tensor, cross, held = clip_nodes(rt, record, scene, plan, term,
+                                                 tensor, cross, held, grounds[record])
         out[term.name] = cross
         if nodes is not None:
             nodes[term.name] = (tensor, 1.0/held)

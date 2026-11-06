@@ -147,6 +147,47 @@ def test_finite_box_operator_is_adjoint_and_encloses_its_exact_eigenvalues(field
     assert lo < .7 and hi > .7
 
 
+@pytest.mark.parametrize('field', ('E', 'H'))
+def test_production_cross_operator_is_symmetric_below_the_registered_gate(field):
+    # C11's registered gate, asserted on the production operator itself: the dense
+    # matrix of cross_action(bounded=True), built column by column from unit vectors
+    # on a random inhomogeneous fixture, against its own transpose. Seeds 1/7/31
+    # measured max|A - A^T|/max|A| = 0.0 for E and H; 1e-12 is the registered bar.
+    shape = (3, 4, 5, 6)
+    count = int(np.prod(shape))
+    for seed in (1, 7, 31):
+        cross = np.random.default_rng(seed).normal(size=shape)
+        matrix = np.stack([cross_action(unit.reshape(shape), cross, np, field, bounded=True).ravel()
+                           for unit in np.eye(count)], axis=1)
+        assert np.abs(matrix).max() > .5
+        assert np.abs(matrix - matrix.T).max() / np.abs(matrix).max() < 1e-12
+
+
+@pytest.mark.parametrize('backend', BACKENDS)
+def test_planned_cross_coefficients_satisfy_the_adjoint_identity(backend):
+    # The same gate on the coefficients fd.lower writes for a smoothed sphere, on
+    # every execution path: |<u, A v> - <A u, v>| / (max|K| |u| |v|). Measured at
+    # most 6.64e-19 (numpy/jax/jit/torch, E and H, seed 3); 1e-12 is the registered bar.
+    scene = cavity()
+    plan = quiet(fd.plan, scene)
+    rt = runtime('jax' if backend == 'jit' else backend)
+    params = fd.lower(scene, plan, rt)
+    assert {term.field for term in plan.constitutive} == {'E', 'H'}
+    for term in plan.constitutive:
+        cross = params['constitutive'][term.name]
+        action = lambda v, k, f=term.field: cross_action(v, k, rt.xp, f, bounded=True)
+        if backend == 'jit':
+            import jax
+            action = jax.jit(action)
+        u, v = np.random.default_rng(3).normal(size=(2,) + tuple(cross.shape))
+        av = to_numpy(action(rt.array(v), cross))
+        au = to_numpy(action(rt.array(u), cross))
+        scale = np.abs(to_numpy(cross)).max()
+        assert scale > 0
+        gap = abs(np.sum(u*av) - np.sum(au*v))
+        assert gap / (scale*np.linalg.norm(u)*np.linalg.norm(v)) < 1e-12
+
+
 @pytest.mark.parametrize('backend', BACKENDS)
 def test_closed_electric_and_magnetic_coupling_conserves_energy(backend):
     scene = cavity()

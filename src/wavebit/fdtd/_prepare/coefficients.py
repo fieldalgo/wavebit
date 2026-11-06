@@ -50,8 +50,11 @@ the first mixture as a medium and puts a second interface across it, leaving the
 with weight ``(1-f1)(1-f2)`` in a voxel that holds none of it, measured 73% high on two half
 spaces of the same material and up to 122% on one ``fd.Sphere`` declared twice. That is a
 refusal (``checks.check_smoothed``, door 5), except for a validated flush pair stored in
-``Plan.junctions``. Such a pair captures its ground before either member is painted, then
-replaces only its recorded write set with the separate split or staircase rule.
+``Plan.junctions`` and, since C10, a pair whose shared volume is exact in every such voxel,
+stored in ``Plan.clips`` (``src/wavebit/fdtd/_prepare/clip.py``). Each captures its ground
+before its first member is painted, then replaces only its recorded write set: the junction
+with its split or staircase rule, the clip with exact per-medium fills and one projection over
+both interfaces.
 
 The two are not one branch of the other, and the reason is bits rather than taste. A
 cell-snapped shape *is* the mixing rule at ``f = 1``, algebraically -- but ``mix`` returns
@@ -133,7 +136,9 @@ def mix(xp, held, value, fill, w):
     *isotropic*. All three neighbouring cases are refused rather than approximated, each by
     name and each with the number the scene reads with its door held open
     (``checks.check_smoothed``): two smoothed surfaces in one voxel, 73% on two half spaces of
-    the same material and up to 122% on one ``fd.Sphere`` declared twice (door 5); an
+    the same material and up to 122% on one ``fd.Sphere`` declared twice (door 5, which the
+    junction and, since C10, ``clip.diagonal`` -- this rule over three media, the same
+    expression with one medium absent -- answer where they are exact); an
     anisotropic ``eps`` or ``mu``, for which the Kottke construction is the tau-transform and
     not a per-component blend (door 4); and a conductivity or a pole, which C8 owns (door 1).
     A smoothed shape arriving over a cell-snapped one is one of them only where a snapped face
@@ -237,8 +242,9 @@ class _Smoothed:
     while the voxel holds one surface -- an earlier cell-snapped shape puts none in it
     (measured 2.0e-16 for a ball on a snapped substrate) and an earlier smoothed shape that
     fills the voxel whole puts none in it either (a core inside a shell). Two smoothed
-    surfaces in one voxel is the case it cannot do, and ``checks.check_smoothed`` refuses it
-    before the scene reaches here rather than this class approximating it.
+    surfaces in one voxel is the case it cannot do, and it does not approximate it:
+    ``checks.check_smoothed`` either refuses the pair or records a junction or a C10 clip, whose
+    own rule replaces the voxels it writes after every painter has run (:func:`_blend`).
 
     **Only the support box is touched.** The rest of the array is carried through untouched
     rather than mixed at ``f = 0``, for the same reason the snapped painter is not written as
@@ -339,12 +345,17 @@ def painters(scene, plan, axes, occ):
 
 
 def _blend(rt, paint_list, background_value, structure_values, component, field, rule,
-           junctions=(), scene=None, plan=None):
+           junctions=(), scene=None, plan=None, clips=()):
     """``background`` everywhere, then each structure in turn -- replacing it or mixed into it.
 
     The values may be traced, so this is a chain of ``xp.where`` and ``mix`` and never an
     assignment into an array. With no structure it returns the background scalar, which is
     what keeps a vacuum run on the stage-0 Python scalars.
+
+    A junction or a C10 clip records the value its pair's voxels held before the pair's first
+    member was painted -- its ground -- and replaces its own written points after every painter
+    has run. Their write sets are disjoint (``clip.finish``), so the order of the two passes
+    does not matter.
     """
     out = rt.array(background_value[component], 'float64')
     grounds = {}
@@ -352,10 +363,17 @@ def _blend(rt, paint_list, background_value, structure_values, component, field,
         for record in junctions:
             if k == min(record.face, record.standing):
                 grounds[record] = out
+        for record in clips:
+            if k == record.first:
+                grounds[record] = out
         out = painter.paint(rt, out, value[component], component, field, rule)
     if junctions:
         from wavebit.fdtd._prepare.junction import paint
         for record in junctions:
+            out = paint(rt, record, scene, plan, out, grounds[record], component)
+    if clips and field == 'E' and rule == 'mix':
+        from wavebit.fdtd._prepare.clip import paint
+        for record in clips:
             out = paint(rt, record, scene, plan, out, grounds[record], component)
     return out
 
@@ -488,7 +506,7 @@ def build(scene, plan, rt):
         paint_list = painters(scene, plan, axes, occ) if structures else []
         eps = _stack(rt, paint_list, background.eps_for_update(dt),
                      [s.material.eps_for_update(dt) for s in structures], 'E', 'mix',
-                     junctions=plan.junctions, scene=scene, plan=plan)
+                     junctions=plan.junctions, scene=scene, plan=plan, clips=plan.clips)
         mu = _stack(rt, paint_list, background.mu_value,
                     [s.material.mu_value for s in structures], 'H', 'mix' if magnetic else 'keep')
         sigma = _stack(rt, paint_list, background.sigma,
@@ -524,7 +542,7 @@ def _with_minus(out):
 
 
 def _stack(rt, paint_list, background_value, structure_values, field, rule,
-           junctions=(), scene=None, plan=None):
+           junctions=(), scene=None, plan=None, clips=()):
     """A ``(3, ...)`` array of one material quantity: background, then each structure.
 
     ``field`` says which set of Yee points a smoothed structure is read at -- ``'E'`` for
@@ -534,7 +552,7 @@ def _stack(rt, paint_list, background_value, structure_values, field, rule,
     serve them in stage 1 and what keeps those scenes bit-identical here.
     """
     parts = [_blend(rt, paint_list, background_value, structure_values, c, field, rule,
-                    junctions=junctions, scene=scene, plan=plan)
+                    junctions=junctions, scene=scene, plan=plan, clips=clips)
              for c in range(3)]
     parts = [rt.xp.broadcast_to(p, _broadcast_shape(parts)) for p in parts]
     return rt.xp.stack(parts, axis=0)
