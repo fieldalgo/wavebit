@@ -10,6 +10,9 @@ Targets: `src/wavebit/fdtd/_prepare/coefficients.py`, `src/wavebit/fdtd/_prepare
 
 ## TL;DR
 
+*2026-11-06: the owner closed C11 as already realised by the C3-era cross coupling; see
+"Owner decision (2026-11-06)" at the end. The text below is the 2026-10-27 record.*
+
 **C11 is not written, and it is not closed by its registered rule either: the rule's
 premise is not met, so the decision is left to the owner.** No code changes with this record.
 
@@ -89,3 +92,42 @@ measured price is already in `coefficients.mix`'s docstring (the S1 orders above
    own gate. The production coupling is self-adjoint by construction (adjoint averages) and is
    checked by an inhomogeneous adjoint identity and a dense finite-operator test; whether that
    counts as C11's gate is the owner's call.
+
+## Owner decision (2026-11-06)
+
+*Added 2026-11-06. The sections above are the record as written on 2026-10-27 and are not
+changed; this section records the owner's decision on the questions they leave open.*
+
+**C11 is closed as already realised.** The off-diagonal cross coupling that landed during C3's
+work counts as C11's implementation: `src/wavebit/fdtd/_prepare/constitutive.py` and the
+kernel's constitutive term (`src/wavebit/fdtd/_kernel/constitutive.py`), which raised the glass
+sphere from order 1.714 to 2.023. No code changes with this decision. This answers question 1
+with (a).
+
+**The registered gate, and what stands in for it.** C11's gate was a non-Hermiticity assertion
+below 1e-12. The owner accepts the coupling's existing self-adjoint checks in its place. What
+each of them asserts, read from the tests:
+
+| Test | What it asserts | Against the registered gate |
+| --- | --- | --- |
+| `tests/fdtd/test_fd_constitutive.py::test_finite_box_operator_is_adjoint_and_encloses_its_exact_eigenvalues` (E and H) | The production `cross_action(..., bounded=True)` on a random inhomogeneous 3x2x2x3 fixture equals, within absolute 3e-14, an explicitly symmetric dense matrix (built from independent neighbour indices) applied to **one** random vector; the enclosure bounds every eigenvalue of that matrix | Production operator and a tolerance well under 1e-12, but it compares one matrix-vector product with a symmetric reference; it does not form the operator and assert its asymmetry |
+| `tests/fdtd/test_fd_constitutive_study.py::test_inhomogeneous_cross_action_is_self_adjoint` | `|<u, A v> - <A u, v>| < 3e-14 |u| |v|` for random inhomogeneous coefficients and fields | The registered form, at a strength well under 1e-12, but on the study comparator's periodic `cross_action` (`studies/fdtd/subpixel_constitutive/`), not on the production kernel's bounded one |
+| `tests/fdtd/test_fd_constitutive.py::test_closed_electric_and_magnetic_coupling_conserves_energy` | A closed cavity with electric and magnetic coupling keeps its energy to a relative span under 3e-13 on every backend | A consequence of a self-adjoint operator, not an assertion on the operator |
+
+**So no existing test asserts the registered gate as written**: a non-Hermiticity measure of
+the production operator below 1e-12. The closest is the dense finite-operator test, which pins
+the production action to a symmetric matrix on one vector. The decision rests on the owner's
+acceptance of these checks, not on the registered gate passing. *Note:* the direct check -- the
+adjoint identity, or the dense operator's asymmetry, on the production `cross_action` with
+`bounded=True` -- is not written; adding it would close this gap.
+
+**Two cases stay stated limitations, not C11 work.**
+
+* **The voxel path's TE epsilon-12 cylinder** (order 1.603 with the cross terms, under the 1.8
+  line; question 2). The extended stencil passes that cylinder at 2.138, but that number is the
+  research study's: the public `discretisation='stencil'` takes a lone `fd.Sphere` only and
+  refuses a `Cylinder` (`StencilShapeRefused`). The advice to use the stencil therefore holds
+  for a sphere today; for a high-contrast cylinder there is no public route that passes the
+  line.
+* **An anisotropic material inside a smoothed cell** stays refused (door 4 of
+  `checks.check_smoothed`). No study measured it.
