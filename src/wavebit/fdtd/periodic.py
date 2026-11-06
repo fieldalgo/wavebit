@@ -5,6 +5,7 @@ Geometry is in declared length units; all times and material rates are SI.
 ``algorithm='shared'`` supports NumPy/JAX/Torch; ``'reference'`` selects the
 independent NumPy stepping formulation, useful for historical reproduction.
 """
+import os
 from dataclasses import field
 from collections.abc import Mapping
 import numpy as np
@@ -659,11 +660,39 @@ register_dataclass(Numerics,static_fields=('spacing','duration_seconds','algorit
     'decay_check','orders'))
 
 
+#: Where the package lives: a re-emitted warning skips its frames (``_public_warnings``).
+_PACKAGE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _public_warnings(call, numerics, *args, **kwargs):
+    """Run ``call``, re-emitting its warnings with any engine setting they name reworded.
+
+    The reference route advises raising ``n_periods``, the engine's run length, which a public
+    caller sets as ``Numerics(duration_seconds=...)``; the advice names that setting and its
+    current value instead (issue #55). Every warning is re-emitted with its own category, in
+    order, so the caller's filters apply to it as they would have.
+    """
+    import re
+    import warnings
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        out = call(*args, **kwargs)
+    for w in caught:
+        text = re.sub(r'Raise n_periods \(it is [^)]*\)',
+                      f'Raise periodic.Numerics(duration_seconds=...) (it is '
+                      f'{numerics.duration_seconds:.3g} s)', str(w.message))
+        # Attributed to the caller's own line, the first frame outside the package; an
+        # unchanged warning is re-emitted as the very object, whatever it carries.
+        warnings.warn(w.message if text == str(w.message) else w.category(text),
+                      skip_file_prefixes=(_PACKAGE,))
+    return out
+
+
 def _run(problem,numerics,execution):
     from ._periodic.adapter import solve_periodic_fdtd
     with execution._scope():
         options,backend=_arguments(problem,numerics,execution)
-        raw,diag=_engine(solve_periodic_fdtd,options,backend=backend)
+        raw,diag=_public_warnings(_engine,numerics,solve_periodic_fdtd,options,backend=backend)
         return _adapt(raw,diag,problem,numerics,execution)
 
 
