@@ -199,8 +199,6 @@ def lower(scene, plan, rt='numpy', device=None):
             guard = held if guard is None else guard * held
     guard = resolution_guard(scene, plan, rt, guard)
     guard = grazing_guard(scene, plan, rt, guard)
-    from wavebit.fdtd._prepare.sources import bloch_match_guard
-    guard = bloch_match_guard(scene, plan, rt, guard)
     guard = shape_guard(scene, plan, rt, guard)
     if plan.constitutive:
         from wavebit.fdtd._prepare.constitutive import guard as constitutive_guard
