@@ -123,6 +123,7 @@ compares the code to itself proves continuity, not correctness.
 | **Independent pair closure variation and native public geometry mapping** | `test_nvf_cartesian_rectangle_pair_api.py` | Frozen input indices preserve the two physical rectangles and material association; shared height/y/contact tangents, exact Fourier sets, uniform optical controls and package-only optional-backend behavior remain explicit. |
 | **An outside solver** | `test_reticolo_golden.py`, `test_fmmax_laurent_golden.py`, `test_oblique_lattice.py` (published Li 1997 table) | The strongest evidence here: a different group's code, in a different language. RETICOLO and fmmax's `FFT` formulation (against `factorization='laurent'`, which assembles the same operator) validate individual diffraction *orders*, not only totals. |
 | **Independent uniform interfaces** | `test_uniform_interfaces.py`, `fixtures/rcwa/uniform_interfaces/` | Do independent equal/neighboring material inputs preserve R/T, pointwise fields and derivatives against a 120-digit Fresnel reference, plus multilayer port and boundary continuity? |
+| **A second formulation of the same problem** | `api/test_unified_rcwa_pure_1d.py` | Does the pure 1D TE/TM solve a polarization word takes reproduce every observable, field and derivative of the conical solve of the Jones pair it names, to round-off, under every backend and transform -- and does a word the pure path cannot answer solve bit for bit as that pair? The two kernels are written separately, so their agreement is evidence about both. They share the convolution matrices, so a factorization error is outside what it can see. |
 | **Physics** | `test_lossy_media.py`, `test_stability.py`, `test_fp_warnings.py`, `test_polarization.py` (circular states against the gyrotropic-slab Airy answer), `test_smm_field_state.py` (the plane wave inside a reflectionless uniform layer, every path's field, at complex angles and past the ETM's cap; SMM's field against the ETM's where its old states failed, at a layer light line, and against a label-free continuity-and-ports oracle), `test_slot_order.py` (every private builder splatted into `_solve_conv`), energy checks throughout | R+T = 1 on a lossless stack, Airy recursion on uniform layers. Independent of how we implement it. |
 | **Exact interface normals and material continuity** | `test_nvf_seam_materials.py` | Distinct equal-modulus materials retain the exact seam normal and a Hermitian rank-one projector; coefficient and optical changes shrink with the material perturbation, listings agree, and JAX/Torch gradients match secants. The study's opening creates a positive geometric gap. This does not certify optical convergence. |
 | **Painted material limits and geometric invariants** | `test_painted_material_continuity.py` | Real, absorbing and metallic equality ramps have no fixed step. Exact straight-interface normals, rank-one projectors, physical rotation/reflection, passivity, chunking, and JAX/Torch material derivatives constrain the contrast envelope independently of its construction. |
@@ -291,12 +292,18 @@ in the `docs/` write-ups still run what they name.
 
 **A new test of research code** carries `pytestmark = pytest.mark.research` after its imports.
 A file that has to run under `python -m unittest` alone, like the NGSolve reference files,
-guards that import the way they do.
+guards that import the way they do. That guard is the one module-level import of a copyleft
+reference tool that `tests/api/test_reference_zones.py` accepts in a test module, and only in a
+file marked `research` as a whole; any other test loads such a tool inside the test and lists
+its file in the tool's `reference.imported_by`
+([third-party](../docs/development/third-party.md#external-reference-tools)).
 
 ## Goldens
 
 `golden_*.npz` are frozen outputs; each has a `gen_goldens_*.py` beside it that regenerates it.
-They are checked in so the tests run anywhere.
+They are checked in so the tests run anywhere. Each external golden in `references/` also has a
+`golden_<x>.reference.json` provenance record beside it
+([format](references/README.md)); a golden frozen again updates its record in the same change.
 
 **Regenerating a golden is not a way to make a failing test pass.** A golden captured the
 behaviour of an implementation that was believed correct at the time; rewriting it converts a

@@ -1,0 +1,112 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_native_bloch_external",
+  "physics": "fdtd",
+  "comparison": "same-discretization",
+  "role": "FDTDX complex Bloch boundaries: three-axis phase advance, real/imaginary E/H and material derivative",
+  "references": [
+    {
+      "tool": "FDTDX",
+      "version": "0.6.2",
+      "build": null,
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "MIT",
+      "source": "https://github.com/ymahlau/fdtdx",
+      "install": {
+        "kind": null,
+        "command": null
+      },
+      "settings": "worker tests/references/interface/validate_grid_fdtdx_bloch.py --backend fdtdx; phases (0.3,-0.2,0.4) in (z,y,x), 37 steps, Courant 0.2, complex initial E/H, no source or CPML",
+      "discretization": "FDTDX 9x7x5 grid with BlochBoundary on all faces, nonuniform diagonal eps/mu",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": true,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/interface/freeze_grid_references.py",
+    "sha256": null,
+    "command": null,
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-09-08",
+  "environment": {
+    "python": null,
+    "numpy": null
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/interface/freeze_grid_references.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_native_bloch_external.npz",
+    "format": "npz",
+    "file_sha256": "47d06c570a51113227845ab6d134f699dfdd5ac2bc1da8862ce5fb0a390d217c",
+    "arrays": [
+      "E",
+      "E_imag",
+      "H",
+      "H_imag",
+      "finite_difference",
+      "gradient",
+      "metadata",
+      "value"
+    ]
+  },
+  "values_sha256": "16aff6328b7107da6c9e715ec9223d8615d634ebc6bafac8ebfcafe9c9c27b9a",
+  "content_sha256": "7ea1eabb4cb9ac066497175130d7162ed943899a2fc3dca9f8517f3868780d4a",
+  "consumers": [
+    "tests/references/test_native_bloch_external.py",
+    "tests/references/test_native_torch_external.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[].source": "tools/third_party_licenses.json external_tools.<tool>.url",
+    "references[].execution": "tests/references/README.md:1277-1285 (Meep run by hand in its own environment) / README row 'separate Meep and FDTDX interpreters'",
+    "comparison": "README.md:1636-1637 (differences below 2.23e-16)",
+    "role": "README.md:123,1641-1642",
+    "references[0].version": "metadata key JSON: version",
+    "references[0].arrays": "archive keys E,H,E_imag,H_imag,value,gradient,finite_difference,metadata",
+    "references[0].settings": "README.md:1632-1637",
+    "references[0].independence": "validate_grid_fdtdx_bloch.py:7 (module-level wavebit import, current file)",
+    "generator": "README.md:1647; freeze_grid_references.py:28-41",
+    "generated_date": "README.md:1630 section heading '(2026-09-08)'"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "not recorded",
+    "environment.python": "not recorded",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.command": "tests/references/README.md documents the freeze command with its inputs in a temporary directory, while the worker commands write to artifacts/; neither is copied here",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "metadata holds version, update_sha256, input/generator sha256 only",
+    "references[0].install.command": "only '$FDTDX_PYTHON' named",
+    "references[0].install.kind": "only '$FDTDX_PYTHON' named",
+    "references[0].modified.description": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified",
+    "references[0].modified.value": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified"
+  }
+}

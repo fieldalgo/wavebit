@@ -1,12 +1,8 @@
 # 06. 정사각형 바깥으로: 격자와 두 좌표계
 
-> **과거 API 재현:** 이 페이지에서 `wavebit.compat`를 쓰는 코드·설명은 현재 설치의 API가 아닙니다.
-> 해당 이름은 [퇴역 전 소스 `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a)에 있습니다.
-> 측정 재현에는 본문에 적힌 원래 커밋·환경을 우선 사용하세요. 원본 측정값은 갱신하지 않았습니다.
-
-
 :::{note}
-다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
+이 페이지의 본문과 코드는 현재 `rcwa` API를 씁니다. 그림에는 이전 생성자의 이름(`bot`, `structure`,
+원의 지름 `lx`)이 남아 있을 수 있습니다. 현재 표기는 [기본 약속](conventions.md)을 참고하세요.
 :::
 
 **래스터는 격자 칸에 재료를 붙이고, 도형은 실제 공간에 모양을 정합니다.** 아래에서는 두 변의 길이를 모두 600 nm로 유지하고, 두 격자 벡터 사이의 각도 `α`만 90°에서 60°로 바꿉니다. 여기서 바꾸는 것은 두 변 사이의 각도입니다. 구조 전체를 통째로 회전시키는 경우와 구별합니다.
@@ -14,8 +10,11 @@
 `period=(600., 600.)`은 직교 셀을 쓰는 방법입니다. 사선 셀은 두 기본 벡터를 갖는 `Lattice`로 표현합니다. `period`와 `lattice`는 한 셀에 대한 두 표현이므로 동시에 넘기지 않습니다.
 
 ```python
-A90 = wavebit.Lattice.rectangular(600., 600.)
-A60 = wavebit.Lattice.oblique(600., 600., np.deg2rad(60.))
+import numpy as np
+from wavebit import Lattice
+
+A90 = Lattice.rectangular(600., 600.)
+A60 = Lattice.oblique(600., 600., np.deg2rad(60.))
 X, Y = A60.meshgrid_xy((64, 96))
 # X와 Y: 60° 셀 안에 있는 각 픽셀 중심의 실제 x, y 좌표, 단위 nm
 ```
@@ -41,22 +40,22 @@ X, Y = A60.meshgrid_xy((64, 96))
 | 한 셀 안 원기둥 수 | 1개 | 2개 |
 | 셀 면적 | `√3a²/2` | `√3a²` |
 
-왼쪽 그림의 반복 셀과 원기둥 단면은 다음처럼 입력합니다. 각도는 라디안이며, 원의 지름은 실제 xy 길이로 지정합니다.
+왼쪽 그림의 반복 셀과 원기둥 단면은 다음처럼 입력합니다. 각도는 라디안이며, 원의 반지름은 실제 xy 길이로 지정합니다.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Lattice, Material, rcwa
 
-a = 600.  # 가장 가까운 원기둥 중심 사이 거리, nm
-lattice = wavebit.Lattice.oblique(a, a, np.deg2rad(60.))
-structure = [{
-    "background": 1.,
-    "shapes": [{
-        "type": "circle", "cx": 0., "cy": 0.,
-        "lx": 240., "material": 4.,  # 지름 240 nm, 상대 유전율 4
-    }],
-}]
-# rcwa(lattice=lattice, structure=structure, thickness=[...], ...)에 전달
+a = 600.  # 가장 가까운 중심 사이 거리, nm
+lattice = Lattice.oblique(a, a, np.deg2rad(60.))
+layer = rcwa.Layer(
+    thickness=180.,
+    background=Material(epsilon=1.),
+    regions=(rcwa.Region(
+        geometry=rcwa.Circle(radius=120.),   # 반지름 120 nm (지름 240 nm)
+        material=Material(epsilon=4.)),),    # 상대 유전율 4
+)
+stack = rcwa.Stack(lattice=lattice, layers=(layer,))   # rcwa.Problem(stack=...)에 사용
 ```
 
 `Lattice.hexagonal(a, np.deg2rad(60.))`로도 같은 셀을 만들 수 있습니다. `Lattice.hexagonal(a)`의 기본 각도는 120°이므로 위 그림과 같은 두 벡터를 원하면 60°를 명시합니다. 60°와 120° 기저는 같은 삼각 격자를 생성하지만, 같은 차수 번호로 잘라 낸 Fourier 파수 집합까지 같지는 않습니다.
@@ -86,7 +85,7 @@ r = (u − 1/2) a₁ + (v − 1/2) a₂
 
 위쪽 파란 무늬는 원을 24×24 래스터 칸으로 근사한 것입니다. 두 그림에서 **재료가 칠해진 배열 원소는 완전히 같습니다.** 그런데 칸 자체가 정사각형에서 평행사변형으로 변하므로 실제 공간의 무늬도 함께 찌그러집니다. 매끄러운 원을 이 변환으로 옮기는 이상적인 경우에는 타원이 되며, 그림에서는 그 계단 근사가 보입니다.
 
-아래쪽 초록 원은 `cx=0, cy=0, lx=240`인 도형입니다. 지름 240 nm라는 조건은 실제 xy 길이에 대한 조건이므로 셀을 기울여도 그대로 원입니다.
+아래쪽 초록 원은 셀 중심에 놓은 `rcwa.Circle(radius=120.)`입니다. 지름 240 nm라는 조건은 실제 xy 길이에 대한 조건이므로 셀을 기울여도 그대로 원입니다.
 
 ```{figure} ../../figures/learn/learn/06b-lattice-shapes.svg
 :alt: 위: 동일한 래스터 배열을 고정하면 칸과 원 모양이 함께 변형된다. 아래: 실제 지름 240 nm의 도형을 고정하면 원은 유지되고 반복 격자만 달라진다. 네 장면은 같은 xy 축척이다.

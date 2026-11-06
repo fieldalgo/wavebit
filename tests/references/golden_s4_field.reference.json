@@ -1,0 +1,130 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_s4_field",
+  "physics": "rcwa",
+  "comparison": "same-discretization",
+  "role": "external field oracle (the first external field oracle; uniform stacks only)",
+  "references": [
+    {
+      "tool": "S4",
+      "version": "0.1.0+b98c80e",
+      "build": "s4-fieldalgo 0.1.0+b98c80e: FieldAlgo's fork of S4 1.1 (victorliu/S4), built against Accelerate for Python 3.12; b98c80e is a commit of the fork's unpublished history; release tag v0.1.0 (3940533) on fieldalgo/S4 has a byte-identical S4/ source tree",
+      "modified": {
+        "value": true,
+        "description": "FieldAlgo fork of S4 1.1 (not upstream victorliu/S4); what the fork changes is not described in the repository"
+      },
+      "spdx": "GPL-2.0-or-later",
+      "source": "https://github.com/fieldalgo/S4",
+      "install": {
+        "kind": "fork build",
+        "command": null
+      },
+      "settings": "uniform isotropic stacks two_media/three_media in vacuum, real permittivity; WL 620, period (400, 380); theta 0/24/47 deg, phi 0/35 deg, s and p; six components E,H from GetFields at layer-interior z samples (RES_Z=7 per layer, interior 1..5); __stack arrays hold (thickness, permittivity)",
+      "discretization": "NumBasis=1 (uniform stacks; no truncation on either side)",
+      "arrays": [
+        "*"
+      ],
+      "execution": "in-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_s4_field.py",
+    "sha256": null,
+    "command": "conda run -n fieldwave python tests/references/gen_goldens_s4_field.py",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-10-14",
+  "environment": {
+    "python": "3.12",
+    "numpy": null,
+    "other": "S4 extension s4-fieldalgo 0.1.0+b98c80e (Accelerate) in the project env"
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_s4_field.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_s4_field.npz",
+    "format": "npz",
+    "file_sha256": "05fcd02fc545f470c071d2a1584dd83365f5f4275fcbe42d0a7bea4b01129be2",
+    "arrays": [
+      "three_media__0_0_p",
+      "three_media__0_0_s",
+      "three_media__0_35_p",
+      "three_media__0_35_s",
+      "three_media__24_0_p",
+      "three_media__24_0_s",
+      "three_media__24_35_p",
+      "three_media__24_35_s",
+      "three_media__47_0_p",
+      "three_media__47_0_s",
+      "three_media__47_35_p",
+      "three_media__47_35_s",
+      "three_media__stack",
+      "three_media__z",
+      "two_media__0_0_p",
+      "two_media__0_0_s",
+      "two_media__0_35_p",
+      "two_media__0_35_s",
+      "two_media__24_0_p",
+      "two_media__24_0_s",
+      "two_media__24_35_p",
+      "two_media__24_35_s",
+      "two_media__47_0_p",
+      "two_media__47_0_s",
+      "two_media__47_35_p",
+      "two_media__47_35_s",
+      "two_media__stack",
+      "two_media__z"
+    ]
+  },
+  "values_sha256": "3f4e1c320dcd89b3f680449bc08ef2701a40b4db23346ce0313c4c94e92e331d",
+  "content_sha256": "ca6ca18d1deff4c3e8a68543547a871c1e7e34e245813ac731ee87f648c059ad",
+  "consumers": [
+    "tests/references/test_s4_field_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[0].version": "tests/references/README.md:1374-1375 ('the same build'); gen_goldens_s4_field.py:54-57 (regenerate with the project env's S4 build; a Python 3.11/OpenBLAS build reproduces only to 1.1e-15)",
+    "references[0].build": "tests/references/README.md:1374",
+    "references[0].source": "tests/references/README.md:1374 (tag v0.1.0 on fieldalgo/S4); upstream victorliu/S4 also in tools/third_party_licenses.json external_tools.S4.url",
+    "references[0].modified": "tests/references/README.md:1374 ('FieldAlgo's fork of S4 1.1')",
+    "references[0].install": "tests/references/README.md:1374 ('build that tag to reproduce these goldens')",
+    "environment": "tests/references/README.md:1374",
+    "comparison": "tests/references/README.md:105 (exact at ~1e-15); gen_goldens_s4_field.py:19-22; NumBasis=1 at line 110",
+    "role": "gen_goldens_s4_field.py:1; README.md:394-407",
+    "references[0].settings": "tests/references/gen_goldens_s4_field.py:72-137",
+    "references[0].execution": "gen_goldens_s4_field.py:109 'import S4' in the generator process",
+    "references[0].independence": "gen_goldens_s4_field.py imports only sys, pathlib, tools.repository_paths, numpy, S4; stacks are literal tuples (lines 87-90)",
+    "generator.command": "tests/references/gen_goldens_s4_field.py:6",
+    "generated_date": "tests/references/README.md:1375: first frozen 2026-08-14, regenerated 2026-10-14 on the same build (every field array bit for bit; only the two __stack arrays changed); also README.md:51-56 and gen_goldens_s4_field.py:47-52",
+    "arrays": "archive keys: <stack>__<theta>_<phi>_<pol> fields, <stack>__z, <stack>__stack (28 arrays)"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "README.md 'What each golden was frozen with' and the generator docstring; no numpy version recorded",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].install.command": "README.md:1374 says only 'build that tag'; no build/install command in README.md, the generators or docs/development/third-party.md"
+  }
+}

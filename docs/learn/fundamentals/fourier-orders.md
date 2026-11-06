@@ -1,28 +1,18 @@
 # 10. Fourier orders: accuracy and computational cost
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
-:::{note}
-The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
-:::
-
 Fourier order determines the range of spatial-frequency components retained in a calculation. First examine the relation between orders and matrix size, then distinguish what geometry resolution, coefficient calculation, Li and NVF each change.
 
 ## Fourier order and matrix size
 
-Write the maximum x and y orders in `truncation_order` as {math}`N_x` and {math}`N_y`. For ordinary single-wave zeroth-order incidence, the retained components have {math}`m=-N_x,\ldots,N_x` and {math}`n=-N_y,\ldots,N_y`. Their combinations give the **total number of Fourier components**, {math}`H`:
+Write the maximum orders in `rcwa.Numerics(orders=(N_x, N_y))` as {math}`N_x` and {math}`N_y`; on a rectangular cell the first lattice vector is x and the second is y. For ordinary single-wave zeroth-order incidence, the retained components have {math}`m=-N_x,\ldots,N_x` and {math}`n=-N_y,\ldots,N_y`. Their combinations give the **total number of Fourier components**, {math}`H`:
 
 ```{math}
 H=(2N_x+1)(2N_y+1).
 ```
 
-For example, `truncation_order=dict(x=2, y=1)` gives {math}`N_x=2`, {math}`N_y=1`. There are **five** x orders, −2, −1, 0, 1, 2, and **three** y orders, −1, 0, 1, for a total of {math}`H=5\times3=15` components.
+For example, `orders=(2, 1)` gives {math}`N_x=2`, {math}`N_y=1`. There are **five** x orders, −2, −1, 0, 1, 2, and **three** y orders, −1, 0, 1, for a total of {math}`H=5\times3=15` components.
 
-Multiple incident orders can expand or shift the actual order window. In that case, inspect `result.orders_u` and `orders_v` directly.
+Multiple incident orders can expand or shift the actual order window. In that case, inspect `result.reflection.orders_u` and `orders_v` directly.
 
 ```{figure} ../../figures/learn/learn/10-orders.svg
 :alt: Fourier-order grid and its correspondence to rows and columns of the result array
@@ -42,11 +32,11 @@ Increasing both directions multiplies the number of orders. Storage for many cen
 | Setting | What it changes |
 | --- | --- |
 | Rows and columns in the material raster | Cells representing geometry and material distribution |
-| `truncation_order` | Fourier orders retained in the solution and operators |
+| `orders` | Fourier orders retained in the solution and operators |
 | `fourier_coefficients` | Method used to obtain Fourier coefficients from the specified material distribution |
 | `factorization` | Rule mapping products of discontinuous materials and fields to finite matrices |
 | `shape_nvf_grid_size` | Grid sampling the shape NVF projector field |
-| Field reconstruction `sample_x/y/z` | Output positions for an already calculated solution |
+| Field sampling `result.field(x=..., y=..., z=...)` | Output positions for an already calculated solution |
 
 A raster divides a layer into rows and columns, storing material values in each cell. Isotropic permittivity and permeability can each be specified by **one scalar**, such as `2.25`. To represent anisotropy, specify each cell’s permittivity or permeability as a **3×3 matrix**. {ref}`Chapter 7 <material-anisotropy>` explains components and inputs.
 
@@ -79,17 +69,17 @@ See the {ref}`calculation-flow diagram in Chapter 2 <factorization-flow>` for th
 This example rotates the principal axes of an anisotropic material by 0.3 rad and calculates a rectangular shape using Li. Only the material axes rotate; the rectangle’s edges remain aligned with x and y.
 
 ```python
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-crystal = wavebit.Material(epsilon=[2.25, 4., 2.8]).rotated(0.3)
-solver = wavebit.rcwa(
-    wavelength=730., period=(600., 600.), thickness=[173.],
-    structure=[{"background": 1., "shapes": [
-        {"type": "rectangle", "lx": 240., "ly": 300., "material": crystal},
-    ]}],
-    factorization="li", truncation_order=dict(x=3, y=3),
-)
-result = solver.solve()
+crystal = Material(epsilon=[2.25, 4., 2.8]).rotated(0.3)
+problem = rcwa.Problem(
+    units=Units(length="nm"),
+    stack=rcwa.Stack(period=(600., 600.), layers=(rcwa.Layer(
+        thickness=173., background=Material(epsilon=1.),
+        regions=(rcwa.Region(geometry=rcwa.Rectangle(size=(240., 300.)), material=crystal),)),)),
+    excitation=rcwa.Excitation(wavelength=730., sources=(rcwa.PlaneWave(side="top", polarization="s"),)))
+numerics = rcwa.Numerics(orders=(3, 3), factorization="li")
+result = rcwa.prepare(problem, numerics=numerics).run(problem)
 ```
 
 With `factorization="li"`, do not specify NVF-only options `nvf_projector`, `raster_normal_method` or `shape_nvf_grid_size`. The order above is an initial example setting; check order convergence for the quantity of interest.

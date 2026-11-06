@@ -18,7 +18,7 @@ This course recommends starting with the public API. If you read internal functi
 ## Exercises
 
 1. Change `material=4.` to 1 in Example 1. The material contrast between the patterned region and background disappears. Check whether changing the circle size also stops changing the result. The substrate remains, so total reflectance need not become zero.
-2. Change Example 1's `truncation_order=(2,2)` to `(3,1)`. Check that the output array shape is `(3,7)`, and explain why using the mode-count formula.
+2. Change Example 1's `orders=(2, 2)` to `(3, 1)`. Check that the output array shape is `(3,7)`, and explain why using the mode-count formula.
 3. In Chapter 3's 50:50 example, set both permittivities to 4. Calculate whether A and B⁻¹ become equal and Δ becomes zero.
 4. Explain how n and J differ at the right boundary of a circle and at its center. In the interaction, compare θ=30° with −150° and check why opposite arrows give the same P.
 5. In the JAX example, increase only shape_nvf_grid_size and compare both T and dT/dε. Then increase only the truncation order and compare again. Record why agreement with finite differences and convergence of a physical gradient are separate questions.
@@ -39,7 +39,7 @@ This course recommends starting with the public API. If you read internal functi
 | truncation | Retaining a finite subset of infinitely many Fourier modes |
 | raster | A structure representation assigning a material value to each pixel |
 | shape / parametric | A shape representation defined by continuous parameters such as center, width, and angle |
-| freeze_geometry | Preparation step recording discrete geometry choices before tracing |
+| `rcwa.prepare` | Preparation step recording discrete geometry choices on concrete values, before tracing |
 | convergence | Checking that the change in a quantity of interest falls within the required tolerance as numerical resolution increases |
 
 ## References and the scope of this course's validation

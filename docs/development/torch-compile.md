@@ -1,5 +1,11 @@
 # `torch.compile` — why it failed, why it is not worth chasing, and why wavebit runs eagerly under it
 
+> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
+> The namespace is absent from current installations; the pre-retirement baseline is
+> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
+> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
+
+
 Written: 2026-08. Measured on macOS arm64 (CPU only) against `develop` at `8257e2c`, with
 NumPy 2.5.1 / SciPy 1.18.0 / jax 0.11.0. **Updated 2026-10 (§6)**, on torch 2.13.0; §6's defect is fixed in torch 2.14.0 (noted 2026-10-16).
 

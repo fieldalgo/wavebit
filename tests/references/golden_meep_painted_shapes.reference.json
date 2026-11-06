@@ -1,0 +1,142 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_meep_painted_shapes",
+  "physics": "fdtd",
+  "comparison": "different-discretization",
+  "role": "Meep graded painted rectangles (structure oracle), resolution 40, profile grid 256",
+  "references": [
+    {
+      "tool": "Meep",
+      "version": "1.34.0",
+      "build": null,
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "GPL-2.0-or-later",
+      "source": "https://github.com/NanoComp/meep",
+      "install": {
+        "kind": null,
+        "command": null
+      },
+      "settings": "shape painted_rectangles; resolution 40; durations 80/100; perturbation steps 0.0001/5e-05; subpixel_tol 1e-08; shape_smoothing 0.05; profile_grid 256; Courant 0.4; PML thickness 1",
+      "discretization": "Meep 3D Yee grid, resolution 40 (dx 1/40), 0.6/0.6 period, z length 8, z PML 1, Courant 0.4",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": true,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/interface/meep_rotation.py",
+    "sha256": null,
+    "command": null,
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": null,
+  "environment": {
+    "python": null,
+    "numpy": null
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/interface/meep_rotation.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_meep_painted_shapes.npz",
+    "format": "npz",
+    "file_sha256": "5cacc03bbe72da751cfeac72da5503b7fe4649aa08f8dabe856bedb9eb9f8189",
+    "arrays": [
+      "amplitudes",
+      "bottom",
+      "cell_length",
+      "centre",
+      "courant",
+      "deltas",
+      "dimensions",
+      "durations",
+      "epsilon",
+      "global_centre",
+      "jacobians",
+      "local_rectangles",
+      "ly",
+      "material_grid_averaging",
+      "monitor_positions",
+      "paint_epsilon",
+      "paint_rule",
+      "parameter_names",
+      "parameters",
+      "period",
+      "pml_thickness",
+      "profile_grid",
+      "profile_probe_error",
+      "profile_sampling",
+      "pulse_peak",
+      "pulse_width",
+      "resolution",
+      "shape",
+      "shape_smoothing",
+      "source_end",
+      "source_position",
+      "subpixel_tol",
+      "thickness",
+      "top",
+      "version",
+      "wavelength"
+    ]
+  },
+  "values_sha256": "7ae5447a573316b063ea1876026854b5f9db2c2222092c9bfe7566b82bd876d5",
+  "content_sha256": "4645affd4b1650619d212fef37c425d8abbf03d91c5213f14b505501dcc116ac",
+  "consumers": [
+    "tests/references/test_meep_painted_shapes.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "physics": "tests/references/README.md:9-14 (Meep rows are FDTD)",
+    "comparison": "tests/references/README.md:9-14: Meep rows are FDTD; both sides carry a grid error; no statement that grids match (row at tests/references/README.md:90); docs compare different Wavebit/Meep grids",
+    "role": "tests/references/README.md:90",
+    "references[0].version": "archive key `version` = 1.34.0",
+    "references[0].settings": "archive keys (resolution, durations, deltas, subpixel_tol, smoothing, profile_grid, courant, pml_thickness)",
+    "references[0].discretization": "archive keys resolution/dimensions/period/cell_length/pml_thickness/courant",
+    "references[0].arrays": "single Meep reference per archive; all keys produced by one bridge run",
+    "references[0].execution": "tests/references/README.md:96-97,1277-1285 and docs ('separate Meep installation/interpreter'); bridges run by hand in a separate Meep interpreter, never imported by tests",
+    "references[0].independence.product_loaded_in_reference_process": "tests/references/interface/meep_rotation.py:32-43 imports `density` from studies/cross_solver/painted_shapes/fdtd_painted_shapes.py when smoothing>0; that module imports studies._support._fdtd_legacy (module level), which imports wavebit.rcwa/wavebit.materials (studies/_support/_fdtd_legacy.py:15-20); docs/development/third-party.md:189 states meep_rotation.py loads Wavebit in the Meep process",
+    "references[0].independence.reference_inputs_built_from_product_objects": "Geometry built in tests/references/interface/meep_rotation.py with hard-coded constants; the MaterialGrid weights come from `density` in studies/cross_solver/painted_shapes/fdtd_painted_shapes.py, a pure NumPy/SciPy Fourier profile (no wavebit objects used in that function)",
+    "generator.path": "tests/references/README.md:90, tests/references/interface/README.md",
+    "consumers": "grep of tests/**/*.py for the file name (literal and f-string)"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "The Python/NumPy versions in the docs' Reproduce sections (arm64, Python 3.12.9, NumPy 2.5.1, ...) describe the Wavebit measurement environment, not the Meep generator environment; no Meep-side environment recorded for this golden; archive has no environment keys.",
+    "environment.python": "The Python/NumPy versions in the docs' Reproduce sections (arm64, Python 3.12.9, NumPy 2.5.1, ...) describe the Wavebit measurement environment, not the Meep generator environment; no Meep-side environment recorded for this golden; archive has no environment keys.",
+    "generated_utc": "not in tests/references/README.md, the golden itself or its generator (record reconstructed 2026-10-28)",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.command": "docs/validation/fdtd/fdtd-painted-shapes.md:202-205 gives an exact command only for resolution 20/profile 256 and then says to repeat at resolution 40 and separately with `--profile-grid 512` at resolution 20; no exact command line for this variant",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "No build string recorded for this golden; Only install command in the repo is tests/references/README.md:1292 `conda create -y -n meep -c conda-forge pymeep`, stated 'for the record' in the crossed/1D generator section; not tied to these bridge goldens. Build string nompi_py312h46debac_101 at docs/guide/fdtd/fdtd.md:153 belongs to the 1D benchmark.",
+    "references[0].install.command": "Only install command in the repo is tests/references/README.md:1292 `conda create -y -n meep -c conda-forge pymeep`, stated 'for the record' in the crossed/1D generator section; not tied to these bridge goldens. Build string nompi_py312h46debac_101 at docs/guide/fdtd/fdtd.md:153 belongs to the 1D benchmark.",
+    "references[0].install.kind": "Only install command in the repo is tests/references/README.md:1292 `conda create -y -n meep -c conda-forge pymeep`, stated 'for the record' in the crossed/1D generator section; not tied to these bridge goldens. Build string nompi_py312h46debac_101 at docs/guide/fdtd/fdtd.md:153 belongs to the 1D benchmark.",
+    "references[0].modified.description": "Searched tests/references/README.md, interface/README.md, docs/validation/fdtd/*.md and docs/development/third-party.md for unmodified/patched/build statements: none for these goldens. Docs say only 'separate/separately installed Meep' and 'public API only'.",
+    "references[0].modified.value": "Searched tests/references/README.md, interface/README.md, docs/validation/fdtd/*.md and docs/development/third-party.md for unmodified/patched/build statements: none for these goldens. Docs say only 'separate/separately installed Meep' and 'public API only'."
+  }
+}

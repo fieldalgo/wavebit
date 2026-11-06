@@ -103,8 +103,10 @@ worked (``tests/rcwa/test_conv_matrices_accessor.py``). The builders are what di
 ``tests/rcwa/test_slot_order.py`` pins the property directly, for every builder.
 """
 import math
+import warnings
 from typing import NamedTuple
 
+from wavebit._common.backend import SvdConvergenceWarning
 from wavebit._common.backend import _concrete
 from wavebit._common.backend import array_namespace
 from wavebit._common.backend import as_array
@@ -547,6 +549,26 @@ def _nested_rule(xp, grid, half_width_u, half_width_v, series_u, series_v, *, in
 
     out = xp.reshape(out, (n_v * n_u, n_v * n_u))
     return xp.linalg.inv(out) if invert_outer else out
+
+
+def line_inverse_rules(xp, grid, half_width):
+    """``[T(1/g)]^-1`` of every line of a raster: Li's inverse rule along the last axis.
+
+    ``grid`` is ``(n_lines, n)``, each line a permittivity staircase over ``n`` equal pixels of
+    the period; the result is ``(n_lines, 2*half_width+1, 2*half_width+1)``, line ``j``'s
+    operator taking the Fourier coefficients of ``E`` normal to that line's walls to those of
+    ``D``. These are the inner matrices :func:`_nested_rule` builds with ``inner='u'``, in the
+    same order-index convention, and with the same exact staircase coefficients
+    (:func:`_pixel_correction`) -- which are also what the integrated coefficients give for a
+    raster, since both are the exact transform of the same piecewise-constant line. The field
+    reconstruction's continuity rule applies them one sample line at a time
+    (:func:`wavebit.rcwa._engine.fields._continuity_2d`).
+    """
+    grid = xp.astype(grid, _complex_dtype(xp, grid))
+    n = 2 * half_width + 1
+    lines = _raster_series(xp, half_width, _pixel_correction)(1.0 / grid)    # [j, k]
+    at = _toeplitz_positions(xp, half_width, _device(xp, grid))
+    return xp.linalg.inv(xp.reshape(xp.take(lines, at, axis=1), (grid.shape[0], n, n)))
 
 
 def _nesting(nesting):
@@ -1791,6 +1813,50 @@ def _nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, dtype, de
 INVERSE_RULE_BOUND = 2.0
 
 
+def inverse_rule_bound(xp, values):
+    """The ``eps_bound`` an NVF layer of permittivities ``values`` hands :func:`_nvf_assemble`.
+
+    ``max |eps|`` over ``values`` (arrays or scalars of ``xp``), or ``None`` -- no floor at all --
+    where every value can be read and is a passive dielectric (``Re eps > 0``, ``Im eps >= 0``).
+    There the floor provably never binds (``INVERSE_RULE_BOUND``) and the unfloored closing is the
+    floored one bit for bit, so deciding from the materials spares the layer every singular value
+    of ``<1/eps>``: a values-only SVD of the full ``n x n`` matrix, against a check on a handful
+    of numbers. A metal, a gain medium, a value on the boundary of that set (``Re eps = 0``) or a
+    value that cannot be read (a ``jax.jit`` argument, a ``torch.func.vmap`` lane) keeps the
+    bound, and :func:`_floor_singular_values` decides from the matrix as before. Reading through a
+    ``jax.grad`` tracer or a grad-tracking tensor changes no derivative: where the floor does not
+    bind it is the identity, of every order.
+
+    **Read on the host.** The check runs in NumPy on each value's concrete copy, not in ``xp``:
+    inside a ``jax.jit`` trace every ``jnp`` operation is staged, so the same test written in
+    ``xp`` comes back abstract even for a material that is a constant of the trace -- the case of
+    every shape-parameter fit -- and the floor was taken there all the same. A value with no
+    concrete copy (a jit argument, a vmap lane) is what keeps the bound.
+    """
+    bound = None
+    if all(_host_passive(v) for v in values):
+        return None
+    for v in values:
+        m = xp.max(xp.abs(v))
+        bound = m if bound is None else xp.maximum(bound, m)
+    return bound
+
+
+def _host_passive(v):
+    """Whether ``v``'s concrete values are all passive dielectrics; ``False`` when there are none."""
+    import numpy as np
+    if hasattr(v, 'detach'):                    # torch: detach is eager, whatever the context
+        v = v.detach().cpu()
+    try:
+        a = np.asarray(v)                       # a constant of a jit trace reads here
+    except Exception:                           # noqa: BLE001 - a tracer of some kind
+        try:
+            a = np.asarray(_no_gradient(v))     # an eager jax.grad tracer reads through this
+        except Exception:                       # noqa: BLE001 - a jit argument or a vmap lane
+            return False
+    return bool(np.all((a.real > 0) & (a.imag >= 0)))
+
+
 def _floor_singular_values(xp, B, floor):
     """``B`` with every singular value below ``floor`` raised to it; left and right vectors kept.
 
@@ -1851,7 +1917,24 @@ def _floor_singular_values(xp, B, floor):
     magnitude floor on a real eigenvalue cannot be continuous through zero; any loss turns the
     jump into a steep but continuous turn.
     """
-    U, s, Vh = xp.linalg.svd(_no_gradient(B))
+    # Whether the floor binds needs the singular values alone, and wherever that can be read --
+    # everywhere but a `jax.jit` trace or a `torch.func.vmap` lane -- a layer where it does not
+    # is `B` itself, as both branches below return it. Every passive dielectric layer is one,
+    # and stopping here spares it the singular *vectors*: not only time, but a failure.
+    # PyTorch's vector-computing SVD failed to converge on the `<1/eps>` of one circle in air at
+    # 961 harmonics -- radius 161.48 nm in a 600 nm cell, eps 12.25, a Hermitian matrix of
+    # condition 12.25 whose singular values sit in two tight clusters -- where its values-only
+    # SVD and LAPACK's gesvd succeed. The cause is LAPACK's divide-and-conquer driver, not the
+    # matrix: see `_svd`, which is what a layer that does need the vectors goes through.
+    # The answer is read only where it can be; a one-element probe asks that first, so a jit
+    # trace, which could not use the values, does not pay for them.
+    detached = _no_gradient(B)
+    if _concrete(xp.all(xp.isfinite(detached[..., :1, :1]))) is not None:
+        values = xp.linalg.svdvals(detached)
+        if _concrete(xp.any(values < as_array(xp, _no_gradient(floor), dtype=values.dtype,
+                                               device=_device(xp, values)))) is False:
+            return B
+    U, s, Vh = _svd(xp, detached)
     floor = as_array(xp, floor, dtype=s.dtype, device=_device(xp, s))
     clip = s < _no_gradient(floor)
     lifted = (U * xp.astype(xp.maximum(s, _no_gradient(floor)), U.dtype)[..., None, :]) @ Vh
@@ -1872,6 +1955,98 @@ def _floor_singular_values(xp, B, floor):
         floored = _torch_floor()(B, floor, U, s, Vh, lifted, clip, dual)
         return floored if binds else xp.where(xp.any(clip), floored, B)
     return xp.where(xp.any(clip), _jax_floor()(B, floor, U, s, Vh, lifted, clip), B)
+
+
+#: Why a retried SVD warns: what happened, and what the caller can do about it.
+_SVD_CAUSE = ('One known cause is a LAPACK bug (DLASD2, Reference-LAPACK #1138) in MKL <= 2026.1, '
+              'OpenBLAS <= 0.3.30 and reference LAPACK <= 3.12.1; if the LAPACK {library} uses '
+              'is one of these, updating it avoids this. '
+              'See wavebit.rcwa.diagnostics.SvdConvergenceWarning.')
+_SVD_RETRIED = ('The divide-and-conquer SVD (LAPACK ?gesdd) of an NVF <1/eps> matrix did not '
+                'converge; its factors were recomputed with the QR-based ?gesvd. ' + _SVD_CAUSE)
+_SVD_UNRECOVERED = ('The divide-and-conquer SVD (LAPACK ?gesdd) of an NVF <1/eps> matrix did not '
+                    'converge {where}. Its factors are NaN, so the inverse-rule floor was not '
+                    'applied to this layer: harmless where the floor would not bind (a passive '
+                    'dielectric), but a layer where it would (a metal beside a dielectric) keeps '
+                    'the unfloored inverse rule the floor exists to correct. ' + _SVD_CAUSE)
+
+
+def _svd(xp, B):
+    """``xp.linalg.svd`` of a detached ``B``, recomputed with ``?gesvd`` where ``?gesdd`` fails.
+
+    The factors are constants to every derivative rule here (:func:`_floor_singular_values`
+    takes them from a detached matrix), so where they were computed changes no derivative.
+    Every backend's SVD is LAPACK's divide-and-conquer ``?gesdd``, and that driver can report
+    no convergence on a finite, well-conditioned matrix: measured, on the ``<1/eps>`` of one
+    circle in air, PyTorch's bundled MKL did, through a ``DLASD2`` bug that NumPy's OpenBLAS no
+    longer carries (``wavebit.rcwa.diagnostics.SvdConvergenceWarning`` has the versions).
+    So a failure on a finite matrix is retried with the QR-based ``?gesvd``, which that bug
+    does not reach, and announced; a non-finite matrix keeps its failure. PyTorch and NumPy
+    report the failure by raising; JAX returns NaN factors instead, so on JAX the factors are
+    checked. Under ``jax.jit`` nothing can be recomputed, and a ``jax.debug.callback`` warns
+    when the factors come back NaN from a finite matrix. NaN singular values are below no
+    floor, so :func:`_floor_singular_values` then hands back ``B`` unfloored: right on a
+    passive dielectric, wrong by the floor on a layer where it binds -- which is what the
+    warning says.
+    """
+    if 'jax' in xp.__name__:
+        return _jax_svd(xp, B)
+    import numpy as np
+    errors = (np.linalg.LinAlgError,)
+    if 'torch' in xp.__name__:
+        import torch
+        errors += (torch.linalg.LinAlgError,)
+    try:
+        return xp.linalg.svd(B)
+    except errors as failure:
+        try:
+            host = np.asarray(B.cpu()) if hasattr(B, 'cpu') else np.asarray(B)
+        except RuntimeError:          # a `torch.func.vmap` lane has no host values to take
+            raise failure from None
+        if not np.all(np.isfinite(host)):
+            raise
+        import scipy.linalg
+        try:
+            U, s, Vh = scipy.linalg.svd(host, lapack_driver='gesvd')
+        except np.linalg.LinAlgError as retry:
+            raise failure from retry
+        library = 'PyTorch' if 'torch' in xp.__name__ else 'NumPy'
+        warnings.warn(_SVD_RETRIED.format(library=library), SvdConvergenceWarning, stacklevel=2)
+        return tuple(as_array(xp, a, device=_device(xp, B)) for a in (U, s, Vh))
+
+
+def _jax_svd(xp, B):
+    """:func:`_svd` on JAX, whose ``?gesdd`` reports a failure as NaN factors, not an error."""
+    import jax
+    U, s, Vh = xp.linalg.svd(B)
+    converged = _concrete(xp.all(xp.isfinite(s)))
+    if converged is None:
+        jax.debug.callback(_warn_traced_svd, xp.all(xp.isfinite(s)), xp.all(xp.isfinite(B)))
+        return U, s, Vh
+    if converged or not _concrete(xp.all(xp.isfinite(B))):
+        return U, s, Vh
+    U, s, Vh = jax.lax.linalg.svd(B, full_matrices=True,
+                                  algorithm=jax.lax.linalg.SvdAlgorithm.QR)
+    if _concrete(xp.all(xp.isfinite(s))):
+        warnings.warn(_SVD_RETRIED.format(library='SciPy (and so JAX on CPU)'),
+                      SvdConvergenceWarning, stacklevel=3)
+    else:
+        warnings.warn(_SVD_UNRECOVERED.format(where='with ?gesdd or ?gesvd',
+                                              library='SciPy (and so JAX on CPU)'),
+                      SvdConvergenceWarning, stacklevel=3)
+    return U, s, Vh
+
+
+def _warn_traced_svd(converged, finite):
+    """Host side of :func:`_jax_svd` under a trace: warn when a finite matrix lost its factors.
+
+    Under ``jax.vmap`` both arguments arrive batched, one flag per lane.
+    """
+    import numpy as np
+    if np.any(~np.asarray(converged) & np.asarray(finite)):
+        warnings.warn(_SVD_UNRECOVERED.format(where='under jax.jit, where it cannot be recomputed',
+                                              library='SciPy (and so JAX on CPU)'),
+                      SvdConvergenceWarning, stacklevel=2)
 
 
 #: What a second derivative through a floored layer raises with.
@@ -2462,7 +2637,7 @@ def nvf_conv_matrices(xp, eps_matrix, normal_x, normal_y, half_width_u, half_wid
     return _nvf_assemble(xp, ep_dir, ep_inv,
                          *_nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, C, dev,
                                          magnitude=magnitude),
-                         eps_bound=xp.max(xp.abs(eps_matrix)))
+                         eps_bound=inverse_rule_bound(xp, [eps_matrix]))
 
 
 def nvf_conv_matrices_integrated(xp, eps_comp, x, y, normal_x, normal_y, half_width_u, half_width_v,
@@ -2484,7 +2659,7 @@ def nvf_conv_matrices_integrated(xp, eps_comp, x, y, normal_x, normal_y, half_wi
     return _nvf_assemble(xp, ep_dir, ep_inv,
                          *_nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, C, dev,
                                          magnitude=magnitude),
-                         eps_bound=xp.max(xp.abs(eps_comp)))
+                         eps_bound=inverse_rule_bound(xp, [eps_comp]))
 
 
 def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=None,

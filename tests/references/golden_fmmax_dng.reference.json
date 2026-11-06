@@ -1,0 +1,205 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_fmmax_dng",
+  "physics": "rcwa",
+  "comparison": "same-discretization",
+  "role": "the outside check on negative-index media (lossy double negatives)",
+  "references": [
+    {
+      "tool": "fmmax",
+      "version": "1.7.1",
+      "build": null,
+      "modified": {
+        "value": false,
+        "description": "pip-installed fmmax release, used as shipped ('stock' flavour)"
+      },
+      "spdx": "MIT",
+      "source": "https://github.com/facebookresearch/fmmax",
+      "install": {
+        "kind": "pip",
+        "command": "conda create -y -n fwref python=3.11 && conda run -n fwref pip install fmmax"
+      },
+      "settings": "lossy double-negative media: 1D/2D dielectric gratings on DNG substrates, DNG pixels inside a grating (patterned eps and mu), grating lit from a DNG; WL 500, thickness 120; eigensolve_isotropic_media / eigensolve_general_anisotropic_media, Formulation.FFT; unpolarized per-order efficiency trace(H_in^-1 H_out)/2; samples per pixel R = 16/32/64/128; generator refuses any fmmax other than 1.7.1; stock flavour",
+      "discretization": "explicit Expansion from each case's truncation_order ((4,0) for 1D, (2,2) for 2D) matching Wavebit's order set; Wavebit factorization='laurent'; quadrature extrapolated away",
+      "arrays": [
+        "__levels",
+        "*__orders",
+        "*__kxy",
+        "*__stock__*"
+      ],
+      "execution": "in-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    },
+    {
+      "tool": "fmmax",
+      "version": "1.7.1",
+      "build": null,
+      "modified": {
+        "value": true,
+        "description": "fmmax 1.7.1 unmodified on disk, but for this flavour the generator rebinds fmmax.fft's jnp to a proxy namespace whose fft.fftfreq ignores the float32 request and returns float64 (runtime override of the pixel-centring phase precision; 'nothing of fmmax's is rewritten or copied')"
+      },
+      "spdx": "MIT",
+      "source": "https://github.com/facebookresearch/fmmax",
+      "install": {
+        "kind": "pip",
+        "command": "conda create -y -n fwref python=3.11 && conda run -n fwref pip install fmmax"
+      },
+      "settings": "lossy double-negative media: 1D/2D dielectric gratings on DNG substrates, DNG pixels inside a grating (patterned eps and mu), grating lit from a DNG; WL 500, thickness 120; eigensolve_isotropic_media / eigensolve_general_anisotropic_media, Formulation.FFT; unpolarized per-order efficiency trace(H_in^-1 H_out)/2; samples per pixel R = 16/32/64/128; generator refuses any fmmax other than 1.7.1; phase64 flavour",
+      "discretization": "explicit Expansion from each case's truncation_order ((4,0) for 1D, (2,2) for 2D) matching Wavebit's order set; Wavebit factorization='laurent'; quadrature extrapolated away",
+      "arrays": [
+        "*__phase64__*"
+      ],
+      "execution": "in-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_fmmax_dng.py",
+    "sha256": null,
+    "command": "conda run -n fwref python tests/references/gen_goldens_fmmax_dng.py",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-10-04",
+  "environment": {
+    "python": "3.11",
+    "numpy": "2.4.6",
+    "other": "jax 0.10.2, jaxlib 0.10.2, conda env fwref; jax_enable_x64=True set by the generator"
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_fmmax_dng.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_fmmax_dng.npz",
+    "format": "npz",
+    "file_sha256": "94639445f7946d9282030da2104109ce55ef389086f296f9a0a396fa5883e99a",
+    "arrays": [
+      "__levels",
+      "dng_pattern_on_dng__kxy",
+      "dng_pattern_on_dng__orders",
+      "dng_pattern_on_dng__phase64__R128__per_order",
+      "dng_pattern_on_dng__phase64__R128__totals",
+      "dng_pattern_on_dng__phase64__R16__per_order",
+      "dng_pattern_on_dng__phase64__R16__totals",
+      "dng_pattern_on_dng__phase64__R32__per_order",
+      "dng_pattern_on_dng__phase64__R32__totals",
+      "dng_pattern_on_dng__phase64__R64__per_order",
+      "dng_pattern_on_dng__phase64__R64__totals",
+      "dng_pattern_on_dng__stock__R128__per_order",
+      "dng_pattern_on_dng__stock__R128__totals",
+      "dng_pattern_on_dng__stock__R16__per_order",
+      "dng_pattern_on_dng__stock__R16__totals",
+      "dng_pattern_on_dng__stock__R32__per_order",
+      "dng_pattern_on_dng__stock__R32__totals",
+      "dng_pattern_on_dng__stock__R64__per_order",
+      "dng_pattern_on_dng__stock__R64__totals",
+      "grating1d_on_dng__kxy",
+      "grating1d_on_dng__orders",
+      "grating1d_on_dng__phase64__R128__per_order",
+      "grating1d_on_dng__phase64__R128__totals",
+      "grating1d_on_dng__phase64__R16__per_order",
+      "grating1d_on_dng__phase64__R16__totals",
+      "grating1d_on_dng__phase64__R32__per_order",
+      "grating1d_on_dng__phase64__R32__totals",
+      "grating1d_on_dng__phase64__R64__per_order",
+      "grating1d_on_dng__phase64__R64__totals",
+      "grating1d_on_dng__stock__R128__per_order",
+      "grating1d_on_dng__stock__R128__totals",
+      "grating1d_on_dng__stock__R16__per_order",
+      "grating1d_on_dng__stock__R16__totals",
+      "grating1d_on_dng__stock__R32__per_order",
+      "grating1d_on_dng__stock__R32__totals",
+      "grating1d_on_dng__stock__R64__per_order",
+      "grating1d_on_dng__stock__R64__totals",
+      "grating2d_on_dng__kxy",
+      "grating2d_on_dng__orders",
+      "grating2d_on_dng__phase64__R128__per_order",
+      "grating2d_on_dng__phase64__R128__totals",
+      "grating2d_on_dng__phase64__R16__per_order",
+      "grating2d_on_dng__phase64__R16__totals",
+      "grating2d_on_dng__phase64__R32__per_order",
+      "grating2d_on_dng__phase64__R32__totals",
+      "grating2d_on_dng__phase64__R64__per_order",
+      "grating2d_on_dng__phase64__R64__totals",
+      "grating2d_on_dng__stock__R128__per_order",
+      "grating2d_on_dng__stock__R128__totals",
+      "grating2d_on_dng__stock__R16__per_order",
+      "grating2d_on_dng__stock__R16__totals",
+      "grating2d_on_dng__stock__R32__per_order",
+      "grating2d_on_dng__stock__R32__totals",
+      "grating2d_on_dng__stock__R64__per_order",
+      "grating2d_on_dng__stock__R64__totals",
+      "lit_from_dng_1d__kxy",
+      "lit_from_dng_1d__orders",
+      "lit_from_dng_1d__phase64__R128__per_order",
+      "lit_from_dng_1d__phase64__R128__totals",
+      "lit_from_dng_1d__phase64__R16__per_order",
+      "lit_from_dng_1d__phase64__R16__totals",
+      "lit_from_dng_1d__phase64__R32__per_order",
+      "lit_from_dng_1d__phase64__R32__totals",
+      "lit_from_dng_1d__phase64__R64__per_order",
+      "lit_from_dng_1d__phase64__R64__totals",
+      "lit_from_dng_1d__stock__R128__per_order",
+      "lit_from_dng_1d__stock__R128__totals",
+      "lit_from_dng_1d__stock__R16__per_order",
+      "lit_from_dng_1d__stock__R16__totals",
+      "lit_from_dng_1d__stock__R32__per_order",
+      "lit_from_dng_1d__stock__R32__totals",
+      "lit_from_dng_1d__stock__R64__per_order",
+      "lit_from_dng_1d__stock__R64__totals"
+    ]
+  },
+  "values_sha256": "918453ee4db2f36133c51f171060a95dcfd6160546ca2cec1595f2a0831adcf3",
+  "content_sha256": "a89493ea73bcbea49a0f089b98edd393c1227af07aab88c50d9b27cb67791c4e",
+  "consumers": [
+    "tests/api/test_study_bootstrap.py",
+    "tests/references/test_fmmax_dng_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[*].version": "tests/references/README.md:1384; gen_goldens_fmmax_dng.py:11-13, 51 FMMAX_VERSION='1.7.1' enforced at line 63",
+    "references[*].source": "tools/third_party_licenses.json external_tools.fmmax.url",
+    "references[*].install": "tests/references/README.md:1347-1350 (fwref env); gen_goldens_fmmax.py:13",
+    "environment": "tests/references/README.md:1377/1384; gen_goldens_fmmax_dng.py:11 ('fmmax 1.7.1 (MIT), jax 0.10.2, numpy 2.4.6, in the fwref env (2026-10-04)')",
+    "references[*].execution": "generator imports fmmax in its own process (main())",
+    "references[*].independence": "generator and its _fmmax_*_cases.py helpers import numpy/jax/fmmax/tools.repository_paths only; _fmmax_cases.py:4-7 and README.md:1352-1355 ('fwref has no wavebit')",
+    "references[*].modified": "README.md:1347-1350 plain 'pip install fmmax' in fwref; no patch mentioned",
+    "comparison": "tests/references/README.md:111 and 627-638 ('identity', 2.7e-14 to 6.2e-12)",
+    "role": "tests/references/README.md:619",
+    "references[*].settings": "gen_goldens_fmmax_dng.py:1-36, 79-170; _fmmax_dng_cases.py:46-80",
+    "references[1].modified": "gen_goldens_fmmax_dng.py:68-72 (reuses gen_goldens_fmmax_laurent._float64_frequencies)",
+    "consumers": "tests/api/test_study_bootstrap.py:138-142 np.load()s it inside a subprocess script it runs",
+    "arrays": "archive keys: <case>__{stock,phase64}__R<n>__{totals,per_order}, <case>__orders, <case>__kxy, __levels (73); __levels/__orders/__kxy are shared metadata, assigned to the stock reference",
+    "generator.command": "tests/references/gen_goldens_fmmax_dng.py:docstring (conda run -n fwref ...)",
+    "generated_date": "tests/references/README.md:1384; gen_goldens_fmmax_dng.py:11"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "README.md fwref section and 'What each golden was frozen with'; no wheel/build identifier beyond the version",
+    "references[1].build": "README.md fwref section and 'What each golden was frozen with'; no wheel/build identifier beyond the version"
+  }
+}

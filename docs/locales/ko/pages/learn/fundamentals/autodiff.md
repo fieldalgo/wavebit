@@ -43,14 +43,14 @@
 
 PyTorch로 같은 점의 기울기를 계산한 파일은 {download}`06_torch_gradient.py <../../../examples/rcwa/learning/learn/06_torch_gradient.py>`입니다. `.backward()` 뒤 `q.grad`를 읽으며, 반복 최적화에서는 기울기 누적을 의도에 맞게 초기화해야 합니다. 이 교재의 JAX 예제는 eager 실행이며 JIT 사용 예제로 오해하지 않습니다.
 
-## JIT에서 `freeze_geometry`가 필요한 이유
+## JIT에서 구체적인 값으로 준비한 계산이 필요한 이유
 
-일부 기하학 단계는 경계의 연결·포함 관계처럼 수치값을 보고 분기합니다. JIT 추적 중의 값만으로는 그 결정을 항상 할 수 없습니다. `freeze_geometry()`는 구체적인 장면에서 이 정보를 먼저 계산해 `StaticGeometry`로 전달합니다.
+일부 기하학 단계는 경계의 연결·포함 관계처럼 수치값을 보고 분기합니다. JIT 추적 중의 값만으로는 그 결정을 항상 할 수 없습니다. 추적 함수 바깥에서 구체적인 문제로 `rcwa.prepare(...)`를 호출하면 그 결정을 한 번 내리고, `prepared.run(problem)`이 추적 값을 그 결정에 따라 계산합니다.
 
 ```python
-# 패턴을 구체적인 값으로 정한 뒤, JIT 전용 단계의 개념 골격
-geometry = solver.freeze_geometry()
-# 이후 지원되는 solve 경로에 geometry=geometry를 전달한다.
+# JIT 준비의 개념 골격: 추적 바깥에서 구체적인 값으로 준비
+prepared = rcwa.prepare(problem, numerics=numerics, backend="jax")
+# JIT 함수 안에서는 갱신한 문제를 실행한다: prepared.run(updated_problem)
 ```
 
-이 코드는 완전한 JIT 최적화 예제가 아니라 준비 단계의 의미를 보여줍니다. 재료값만 바뀌는 고정 형상은 기록을 재사용할 수 있습니다. 형상·접촉·덮임 관계가 바뀌면 기록을 갱신해야 합니다. 도형 경로가 기록하는 조합 관계와 래스터 경로가 기록하는 정보가 다르므로 모든 움직임을 같은 기준으로 처리하지 않습니다. JIT 안에서는 유효성 비교가 수행되지 못할 수 있어, 조용히 낡은 기록을 쓰지 않도록 바깥에서 갱신하는 것이 중요합니다. 완전한 패턴 JIT 사용법은 [호환 인터페이스 자동미분 안내](../../migration/autodiff-v1.md)와 [NVF 교재](../nvf/index.md)를 참고합니다.
+이 코드는 완전한 JIT 최적화 예제가 아니라 준비 단계의 의미를 보여줍니다. 재료값만 바뀌는 고정 형상은 준비한 계산을 재사용할 수 있습니다. 형상·접촉·덮임 관계가 바뀌면 다시 준비해야 합니다. 도형 경로가 기록하는 조합 관계와 래스터 경로가 기록하는 정보가 다르므로 모든 움직임을 같은 기준으로 처리하지 않습니다. `jax.jit` 안에서 추적한 도형은 `rcwa.Numerics(topology_check=...)`가 검사할 수 있는 경우에만 받습니다. [검사하는 도형 JIT](../../guide/rcwa/guarded-shape-jit.md), [물리 문제 미분](../../guide/common/autodiff.md), [NVF 교재](../nvf/index.md)를 참고합니다.

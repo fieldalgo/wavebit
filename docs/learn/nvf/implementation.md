@@ -47,4 +47,4 @@ Internally, the following `ConvMatrices` slots are passed to the optical engine 
 
 Here `epz_i=A⁻¹` differs from the normal component's `B⁻¹`. Recall the geometry: boundaries change direction within the xy plane, while a layer retains the same cross section along z. The minus signs in the cross slots are also conventions of the engine's variables and equations, not additional negative material values.
 
-Ordinary users do not need to construct these matrices themselves. `wavebit.rcwa(..., factorization='nvf').solve()` connects their construction to the optical calculation. A research path with material matrices already assembled can pass them to `solve_conv()`, but changing the factorization setting in that case does not reassemble the supplied matrices.
+Ordinary users do not need to construct these matrices themselves. `rcwa.run(problem, numerics=rcwa.Numerics(factorization='nvf', ...))` connects their construction to the optical calculation. The current API takes no pre-assembled material matrices; the earlier interface's `solve_conv()` did, and changing the factorization setting there did not reassemble the supplied matrices.

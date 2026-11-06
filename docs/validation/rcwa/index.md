@@ -1,14 +1,8 @@
 # RCWA validation
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 Measured numerical studies and their limits. A small conservation residual alone does not establish optical convergence.
 
-Records written before 2026-10-13 use the solver interface of their day, kept since then as `wavebit.compat.legacy`; the names they take from the top-level `wavebit` namespace, such as `rcwa(...)`, `ConformingNVF`, `AffineProfileNVF`, `CartesianRectangleNVF`, `CartesianRectanglePairNVF`, `ConvMatrices` and `set_j1_implementation`, are exported from there.
+Records written before 2026-10-13 use the solver interface of their day, kept from then until its retirement on 2026-10-15 as `wavebit.compat.legacy`; the names they take from the top-level `wavebit` namespace, such as `rcwa(...)`, `ConformingNVF`, `AffineProfileNVF`, `CartesianRectangleNVF`, `CartesianRectanglePairNVF`, `ConvMatrices` and `set_j1_implementation`, were exported from there and are not in current installations (retired on 2026-10-15; the [pre-retirement revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a) has them).
 
 - [Backend choice for a differentiated run — measurements](backend-choice.md)
 - [The Bessel $J_1$ every backend uses, and why its two constants are what they are — measurements](bessel-j1.md)

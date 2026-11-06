@@ -1,13 +1,9 @@
 # 06. Beyond a square: lattices and two coordinate systems
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 :::{note}
-The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
+This page's text and code use the current `rcwa` API. Its figures may still show the earlier
+constructor's names (`bot`, `structure`, `lx` for a circle's diameter); see
+[conventions](conventions.md) for their current spellings.
 :::
 
 **A raster assigns material to lattice cells; a shape defines an object in physical space.** Below, both side lengths stay at 600 nm while only the angle `α` between the two lattice vectors changes from 90° to 60°. We are changing the angle between the sides, which is different from rotating the entire structure as one object.
@@ -15,8 +11,11 @@ The downloadable teaching scripts use the current physical Problem/Job API. Some
 `period=(600., 600.)` specifies an orthogonal cell. An oblique cell is represented by a `Lattice` with two primitive vectors. `period` and `lattice` are two representations of one cell, so do not supply both.
 
 ```python
-A90 = wavebit.Lattice.rectangular(600., 600.)
-A60 = wavebit.Lattice.oblique(600., 600., np.deg2rad(60.))
+import numpy as np
+from wavebit import Lattice
+
+A90 = Lattice.rectangular(600., 600.)
+A60 = Lattice.oblique(600., 600., np.deg2rad(60.))
 X, Y = A60.meshgrid_xy((64, 96))
 # X and Y: physical x, y coordinates of pixel centers in the 60° cell, in nm
 ```
@@ -42,22 +41,22 @@ The cylinder arrangement is identical in both diagrams. The left uses a **60° r
 | Cylinders per cell | 1 | 2 |
 | Cell area | `√3a²/2` | `√3a²` |
 
-The repeating cell and cylinder cross-section on the left are entered as follows. The angle is in radians, and the circle diameter is a physical xy length.
+The repeating cell and cylinder cross-section on the left are entered as follows. The angle is in radians, and the circle radius is a physical xy length.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Lattice, Material, rcwa
 
 a = 600.  # Nearest-neighbor center distance, nm
-lattice = wavebit.Lattice.oblique(a, a, np.deg2rad(60.))
-structure = [{
-    "background": 1.,
-    "shapes": [{
-        "type": "circle", "cx": 0., "cy": 0.,
-        "lx": 240., "material": 4.,  # Diameter 240 nm, relative permittivity 4
-    }],
-}]
-# Pass to rcwa(lattice=lattice, structure=structure, thickness=[...], ...)
+lattice = Lattice.oblique(a, a, np.deg2rad(60.))
+layer = rcwa.Layer(
+    thickness=180.,
+    background=Material(epsilon=1.),
+    regions=(rcwa.Region(
+        geometry=rcwa.Circle(radius=120.),   # Radius 120 nm (diameter 240 nm)
+        material=Material(epsilon=4.)),),    # Relative permittivity 4
+)
+stack = rcwa.Stack(lattice=lattice, layers=(layer,))   # use it in rcwa.Problem(stack=...)
 ```
 
 `Lattice.hexagonal(a, np.deg2rad(60.))` creates the same cell. The default angle of `Lattice.hexagonal(a)` is 120°, so specify 60° to obtain the two vectors shown above. The 60° and 120° bases generate the same triangular lattice, but truncation at the same order indices does not retain the same set of Fourier wavevectors.
@@ -87,7 +86,7 @@ On the left, `a₂` points upward; on the right, it tilts upward and to the righ
 
 The blue pattern at the top approximates a circle with a 24×24 raster. **Exactly the same array elements contain material in both diagrams.** However, the cells change from squares to parallelograms, deforming the pattern in physical space. Applying this transformation to an ideal smooth circle produces an ellipse; the diagram shows its stepped approximation.
 
-The green circle below is a shape with `cx=0, cy=0, lx=240`. Its diameter of 240 nm is a physical xy length, so it remains circular when the cell tilts.
+The green circle below is `rcwa.Circle(radius=120.)` at the cell centre. Its diameter of 240 nm is a physical xy length, so it remains circular when the cell tilts.
 
 ```{figure} ../../figures/learn/learn/06b-lattice-shapes.svg
 :alt: Top: fixing the same raster array deforms both its cells and the circle pattern. Bottom: fixing a shape with physical diameter 240 nm preserves the circle while changing its repetition lattice. All four scenes use the same xy scale.

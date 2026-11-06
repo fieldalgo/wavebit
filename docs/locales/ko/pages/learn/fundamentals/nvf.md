@@ -1,12 +1,8 @@
 # 11. NVF는 전체 계산의 어디에 들어갈까
 
-> **과거 API 재현:** 이 페이지에서 `wavebit.compat`를 쓰는 코드·설명은 현재 설치의 API가 아닙니다.
-> 해당 이름은 [퇴역 전 소스 `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a)에 있습니다.
-> 측정 재현에는 본문에 적힌 원래 커밋·환경을 우선 사용하세요. 원본 측정값은 갱신하지 않았습니다.
-
-
 :::{note}
-다운로드 가능한 교육 스크립트는 현재 물리 Problem/Job API를 사용합니다. 일부 설명 코드와 그림에는 이전 API 표기가 남아 있으므로 [현재 시작 안내](../../getting-started/index.md)와 [API 이행 안내](../../migration/index.md)를 함께 참고하세요. 과거 측정 파일과 원본 출처는 보존하며, 이전한 스크립트의 검증과 구분합니다.
+이 페이지의 본문과 코드는 현재 `rcwa` API를 씁니다. 그림에는 이전 생성자의 이름(`bot`, `structure`,
+원의 지름 `lx`)이 남아 있을 수 있습니다. 현재 표기는 [기본 약속](conventions.md)을 참고하세요.
 :::
 
 NVF는 **재료 경계조건을 반영해 재료와 장의 곱을 Fourier 행렬로 구성하는 방법**입니다. 이렇게 만든 행렬로 각 층의 고유모드를 구하고, 층 사이의 경계조건을 연결해 반사·투과와 전기장·자기장을 계산합니다. 이 장에서는 NVF가 필요한 이유부터 방향 정보의 표현, 옵션 설정, 계산 순서까지 살펴봅니다.
@@ -51,27 +47,32 @@ NVF는 경계의 법선 방향을 이용해 접선·법선 성분을 구분하�
 
 ## NVF를 선택하고 계산하기
 
-`wavebit.rcwa()`에 구조와 입사 조건을 넣고 `factorization="nvf"`를 지정합니다. 반환된 객체의 `solve()`를 호출하면 NVF 행렬 구성부터 반사·투과 계산까지 실행합니다.
+`rcwa.Problem`에 구조와 빛을 적고 `rcwa.Numerics`에서 `factorization="nvf"`를 지정합니다. `rcwa.run(problem, numerics=numerics)`이 NVF 행렬 구성부터 반사·투과 계산까지 실행합니다.
 
-다음은 지름 320 nm인 원형 도형을 포함한 두께 180 nm의 층을 계산하는 예입니다. 길이 단위는 nm이며, `material=4.`와 `bot=2.25`는 각각 도형과 아래 매질의 상대유전율입니다.
+다음은 반지름 160 nm(지름 320 nm)인 원을 포함한 두께 180 nm의 층을 계산하는 예입니다. 길이 단위는 nm이며, `Material(epsilon=4.)`와 `bottom=Material(epsilon=2.25)`는 각각 도형과 아래 매질의 상대유전율입니다.
 
 ```python
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-solver = wavebit.rcwa(
-    wavelength=900., period=(700., 700.), thickness=[180.],
-    top=1., bot=2.25,
-    theta=0.2, phi=0.3, polarization=(0., 1.),
-    structure=[{"background": 1., "shapes": [
-        {"type": "circle", "cx": 0., "cy": 0., "lx": 320., "material": 4.},
-    ]}],
-    truncation_order=dict(x=2, y=2),
+problem = rcwa.Problem(
+    units=Units(length="nm"),
+    stack=rcwa.Stack(
+        period=(700., 700.),
+        top=Material(epsilon=1.), bottom=Material(epsilon=2.25),
+        layers=(rcwa.Layer(
+            thickness=180., background=Material(epsilon=1.),
+            regions=(rcwa.Region(geometry=rcwa.Circle(radius=160.),
+                                 material=Material(epsilon=4.)),)),)),
+    excitation=rcwa.Excitation(wavelength=900., sources=(
+        rcwa.PlaneWave(side="top", theta=0.2, phi=0.3, polarization=(0., 1.)),)))
+numerics = rcwa.Numerics(
+    orders=(2, 2),
     fourier_coefficients="integrated",
     factorization="nvf",
     nvf_projector="linear",
     shape_nvf_grid_size=128,
 )
-result = solver.solve()
+result = rcwa.run(problem, numerics=numerics)
 print("전체 반사율:", result.R.sum())
 print("전체 투과율:", result.T.sum())
 ```
@@ -82,8 +83,8 @@ print("전체 투과율:", result.T.sum())
 
 수렴 확인은 **계산 설정을 더 정밀하게 바꾸어도 관심 결과가 충분히 안정적인지 확인하는 과정**입니다. 위 예제의 Fourier 차수와 NVF 격자 크기는 실행을 위한 시작값입니다. 필요한 정확도에 따라 다음 순서로 비교합니다.
 
-1. `truncation_order`를 고정하고 `shape_nvf_grid_size`를 128, 256, 512처럼 늘려 관심 반사율·투과율의 변화를 확인합니다.
-2. NVF 격자 크기를 고정하고 `truncation_order`를 `dict(x=2, y=2)`, `dict(x=3, y=3)`, `dict(x=4, y=4)`처럼 늘려 비교합니다.
+1. `orders`를 고정하고 `shape_nvf_grid_size`를 128, 256, 512처럼 늘려 관심 반사율·투과율의 변화를 확인합니다.
+2. NVF 격자 크기를 고정하고 `orders`를 `(2, 2)`, `(3, 3)`, `(4, 4)`처럼 늘려 비교합니다.
 3. 두 설정을 함께 더 높여도 결과가 필요한 허용 오차 안에 있는지 확인합니다. 미분값을 사용하는 최적화라면 미분값도 함께 비교합니다.
 
 위 예제는 모든 재료가 무손실이므로 전체 반사율과 투과율의 합이 1에 가까운지도 확인할 수 있습니다. 다만 에너지 보존을 만족해도 차수나 격자 크기에 따라 개별 반사율·투과율은 달라질 수 있으므로, 수렴 비교도 필요합니다.

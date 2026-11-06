@@ -795,6 +795,10 @@ class SolverJax(RCWAJax, OptimizerJax):
             # Not the pair itself (that is a child now) but the fact that `psi` was given
             # explicitly, which the always-present psi child would otherwise overwrite.
             'psi_given': self._psi_given,
+            # The word a pair was written as, `'s'` / `'p'` or `None`. A declaration, so static:
+            # the routing branches on it (`_polarization_word_holds`), and the pair child alone
+            # would come back a value, whose solve takes the conical path.
+            'polarization_word': self._polarization_word,
             # `normal_grid` was missing beside the cell basis, and both were silent when they
             # were: the compiled `solve_field` flattens `self` on every call, so the solve ran
             # on whatever the *rebuilt* solver carries, not on what the caller configured.
@@ -825,6 +829,8 @@ class SolverJax(RCWAJax, OptimizerJax):
         # legal when it was flattened. Rebuild without it, then restore the slot directly.
         aux_data = dict(aux_data)
         psi_given = aux_data.pop('psi_given')
+        # Restored beside the pair it names, which does not ride through `__init__` either.
+        polarization_word = aux_data.pop('polarization_word')
         # `formulation` is settable on the instance and on `solve()`, but not on `rcwa()`,
         # so it cannot go through the constructor either. Same treatment as `polarization`.
         formulation = aux_data.pop('formulation')
@@ -862,6 +868,7 @@ class SolverJax(RCWAJax, OptimizerJax):
         # guards that with a try/except, but there is nothing left to validate here anyway --
         # this pair was validated when the solver it came from was built.
         solver._polarization = polarization
+        solver._polarization_word = polarization_word
         solver._psi = psi
         solver._psi_given = psi_given
         solver._structure_drawn_on = drawn_on

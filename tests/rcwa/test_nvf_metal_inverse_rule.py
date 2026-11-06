@@ -43,6 +43,7 @@ import pytest
 from wavebit.rcwa._engine import factorization as F
 from wavebit.rcwa._engine import parametric as P
 from wavebit._common.backend import array_namespace
+from wavebit.rcwa import diagnostics
 from wavebit.rcwa._engine.factorization import INVERSE_RULE_BOUND, _floor_singular_values, _nvf_assemble
 from wavebit.lattice import Lattice
 
@@ -155,6 +156,248 @@ def test_the_floor_binds_on_gold_and_on_a_few_modes_only():
     lifted = _floor_singular_values(np, B, floor)
     assert np.linalg.svd(lifted, compute_uv=False).min() == pytest.approx(floor)
     assert not np.array_equal(lifted, B)
+
+
+def _failing_torch_svd(monkeypatch):
+    """Make ``torch.linalg.svd`` raise as MKL's did, and count the calls."""
+    torch = pytest.importorskip('torch')
+    calls = []
+
+    def svd(*args, **kwargs):
+        calls.append(1)
+        raise torch.linalg.LinAlgError('linalg.svd: The algorithm failed to converge')
+
+    # The array namespace holds its own reference to the builtin, so that is the one to replace.
+    monkeypatch.setattr(array_namespace(torch.zeros(1)).linalg, 'svd', svd)
+    return torch, calls
+
+
+@pytest.mark.parametrize('differentiated', [False, True], ids=['value', 'autograd'])
+def test_a_layer_where_the_floor_does_not_bind_never_takes_singular_vectors(monkeypatch,
+                                                                             differentiated):
+    """Whether the floor binds needs the singular values only, so a passive dielectric layer --
+    where it never binds -- is handed back without a full SVD. Not a speed detail: PyTorch's
+    (MKL's) vector-computing SVD failed to converge on the ``<1/eps>`` of a circle in air at 961
+    harmonics (radius 161.48 nm, 600 nm cell, eps 12.25; condition 12.25, two tight clusters of
+    singular values), which made an ordinary design point of an optimization raise, where the
+    values-only SVD and NumPy's succeed. That scene takes minutes; a failing SVD stands in."""
+    par, cfg = disks(4.0 + 0.3j, 852.0)
+    _, B, _ = matrices(par, cfg, 4)
+    torch, calls = _failing_torch_svd(monkeypatch)
+    Bt = torch.tensor(B, requires_grad=differentiated)
+    out = _floor_singular_values(array_namespace(Bt), Bt, 1.0 / (INVERSE_RULE_BOUND * largest_eps(par)))
+    assert out is Bt
+    assert not calls
+
+
+@pytest.mark.parametrize('values, passive', [
+    pytest.param([12.25, 1.0], True, id='silicon-like rod in air'),
+    pytest.param([4.0 + 0.3j, 2.25], True, id='absorbing disk in glass'),
+    pytest.param([AU_807, 1.0], False, id='gold beside air'),
+    pytest.param([0.2 + 2.0j, 0.2 - 2.0j], False, id='gain beside loss'),
+    pytest.param([1j, 2.25], False, id='Re eps = 0 is outside the proof'),
+])
+def test_the_floor_is_decided_from_the_materials_where_the_proof_covers_them(values, passive):
+    """A layer of passive dielectrics gets no floor at all -- ``None``, which is the floored
+    closing bit for bit there -- so no singular value of ``<1/eps>`` is computed; anything the
+    proof under ``INVERSE_RULE_BOUND`` does not cover keeps the bound, ``max |eps|``."""
+    bound = F.inverse_rule_bound(np, [np.asarray(v, dtype=np.complex128) for v in values])
+    if passive:
+        assert bound is None
+    else:
+        assert bound == pytest.approx(max(abs(v) for v in values))
+
+
+def test_an_unreadable_permittivity_keeps_the_bound():
+    """A permittivity that is an argument of a ``jax.jit`` function has no value to read, so the
+    floor is decided from the matrix as before rather than assumed away. A constant of the same
+    trace is read: it is a passive dielectric here, and alone it would need no floor."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    out = jax.jit(lambda e: F.inverse_rule_bound(jnp, [e, jnp.asarray(1.0 + 0j)]))(jnp.asarray(12.25 + 0j))
+    assert float(out) == pytest.approx(12.25)
+    constant, seen = jnp.asarray(12.25 + 0j), []      # closed over, as a solve's material is
+    jax.jit(lambda e: seen.append(F.inverse_rule_bound(jnp, [constant])) or e)(1.0)
+    assert seen == [None]
+
+
+def test_a_jitted_shape_derivative_on_a_dielectric_takes_no_singular_values(monkeypatch):
+    """The case the materials-first decision exists for: a shape parameter differentiated under
+    ``jax.jit`` with constant materials. The check is read on the host because inside the trace
+    every ``jnp`` operation is staged; written in ``jnp`` it came back abstract and the floor's
+    SVD was compiled into every NVF layer of every shape fit. A gold disk still takes it."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    jax.config.update('jax_enable_x64', True)
+    from wavebit import Material, Units, rcwa
+
+    def problem(r, eps):
+        return rcwa.Problem(units=Units(length='nm'), stack=rcwa.Stack(
+            period=(600., 600.), bottom=Material(2.25), layers=(rcwa.Layer(
+                thickness=200., background=Material(1.), regions=(rcwa.Region(
+                    geometry=rcwa.Circle(radius=r), material=Material(eps)),)),)),
+            excitation=rcwa.Excitation(wavelength=850., sources=(rcwa.PlaneWave(polarization='s'),)))
+
+    calls = []
+    real = F._floor_singular_values
+    monkeypatch.setattr(F, '_floor_singular_values', lambda *a: calls.append(1) or real(*a))
+    numerics = rcwa.Numerics(orders=(2, 2), topology_check='host')
+    for eps, floored in ((12.25, False), (AU_807, True)):
+        prepared = rcwa.prepare(problem(160., eps), numerics=numerics, backend='jax')
+        calls.clear()
+        step = jax.jit(jax.value_and_grad(lambda r: prepared.run(problem(r, eps)).T[0, 2, 2].real))
+        value, grad = step(jnp.asarray(160.))
+        assert np.isfinite(float(value)) and np.isfinite(float(grad))
+        assert bool(calls) is floored
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'torch'])
+def test_a_passive_dielectric_solve_takes_no_singular_values(monkeypatch, backend):
+    """End to end, on the shape path: a dielectric disk solves without ``svdvals`` or ``svd``
+    of ``<1/eps>``. That those are the floored closing's numbers bit for bit is
+    :func:`test_the_floor_never_binds_on_a_passive_dielectric_and_the_tensor_is_bit_identical`."""
+    if backend == 'torch':
+        pytest.importorskip('torch')
+    par, cfg = disks(4.0 + 0.3j, 852.0)
+
+    def T():
+        s = _legacy_wavebit_rcwa(backend=backend, structure=par, truncation_order=(3, 3), **cfg)
+        return np.asarray(s.solve().T)
+
+    reference = T()
+    calls = []
+
+    def refuse(*args, **kwargs):
+        calls.append(1)
+        raise AssertionError('a passive dielectric layer took singular values')
+
+    monkeypatch.setattr(F, '_floor_singular_values', refuse)
+    assert np.array_equal(T(), reference)
+    assert not calls
+
+
+def test_where_the_floor_binds_a_failing_torch_svd_is_recomputed_with_gesvd(monkeypatch):
+    """Where the floor binds the factors are needed, and they are constants to the derivative
+    rule (taken from a detached matrix), so SciPy's QR-based ``gesvd`` on the host is an exact
+    substitute for a PyTorch SVD that raises: same floored matrix, same gradient, and a
+    :class:`SvdConvergenceWarning` saying so. Not NumPy's SVD: that is the same
+    divide-and-conquer ``gesdd``, and in an MKL build it carries the same bug."""
+    torch = pytest.importorskip('torch')
+    par, cfg = holes(AU_807, 807.0)
+    _, B, _ = matrices(par, cfg, 6)
+    floor = 1.0 / (INVERSE_RULE_BOUND * largest_eps(par))
+
+    def floored():
+        Bt = torch.tensor(B, requires_grad=True)
+        out = _floor_singular_values(array_namespace(Bt), Bt, floor)
+        out.real.sum().backward()
+        return out.detach().numpy(), Bt.grad.numpy()
+
+    expected, expected_grad = floored()
+    _, calls = _failing_torch_svd(monkeypatch)
+    numpy_svd = []
+    monkeypatch.setattr(np.linalg, 'svd', lambda *a, **k: numpy_svd.append(1))
+    with pytest.warns(diagnostics.SvdConvergenceWarning, match=r'recomputed with the QR-based \?gesvd'):
+        value, grad = floored()
+    assert calls
+    assert not numpy_svd
+    assert np.allclose(value, expected, rtol=0, atol=1e-12)
+    assert np.allclose(grad, expected_grad, rtol=0, atol=1e-10)
+
+
+def test_a_failing_numpy_svd_is_recomputed_with_gesvd(monkeypatch):
+    """NumPy's ``gesdd`` raises on the same bug wherever NumPy links an affected LAPACK (the MKL
+    build on Anaconda's ``defaults`` channel), so the NumPy backend takes the same retry."""
+    par, cfg = holes(AU_807, 807.0)
+    _, B, _ = matrices(par, cfg, 6)
+    floor = 1.0 / (INVERSE_RULE_BOUND * largest_eps(par))
+    expected = _floor_singular_values(np, B, floor)
+    xp = array_namespace(B)
+
+    def svd(*args, **kwargs):
+        raise np.linalg.LinAlgError('SVD did not converge')
+
+    monkeypatch.setattr(xp.linalg, 'svd', svd)
+    with pytest.warns(diagnostics.SvdConvergenceWarning, match='LAPACK NumPy uses'):
+        value = _floor_singular_values(xp, B, floor)
+    assert np.allclose(value, expected, rtol=0, atol=1e-12)
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'torch'])
+def test_a_non_finite_matrix_keeps_its_failure(monkeypatch, backend):
+    """A NaN fails every SVD driver, so a retry could only hide it: the original error is raised
+    and nothing is announced."""
+    B = np.eye(4, dtype=np.complex128)
+    B[0, 1] = np.nan
+    if backend == 'torch':
+        torch, _ = _failing_torch_svd(monkeypatch)
+        B, error = torch.tensor(B), torch.linalg.LinAlgError
+    else:
+        def svd(*args, **kwargs):
+            raise np.linalg.LinAlgError('SVD did not converge')
+        monkeypatch.setattr(array_namespace(B).linalg, 'svd', svd)
+        error = np.linalg.LinAlgError
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', diagnostics.SvdConvergenceWarning)
+        with pytest.raises(error, match='converge'):
+            F._svd(array_namespace(B), B)
+
+
+def _nan_jax_svd(monkeypatch):
+    """Make ``jnp.linalg.svd`` return NaN factors, as JAX does when ``gesdd`` reports a failure."""
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    svd = jnp.linalg.svd
+
+    def failing(a, *args, **kwargs):
+        return tuple(x * jnp.nan for x in svd(a, *args, **kwargs))
+
+    monkeypatch.setattr(jnp.linalg, 'svd', failing)
+    return jax, jnp
+
+
+def test_an_eager_jax_svd_that_returns_nan_is_recomputed_with_gesvd(monkeypatch):
+    """JAX reports a ``gesdd`` failure as NaN factors rather than an error (its CPU LAPACK is
+    SciPy's), so the eager JAX path checks the factors and recomputes them with
+    ``SvdAlgorithm.QR`` -- the same floored matrix as an SVD that converged."""
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    par, cfg = holes(AU_807, 807.0)
+    _, B, _ = matrices(par, cfg, 6)
+    floor = 1.0 / (INVERSE_RULE_BOUND * largest_eps(par))
+    expected = np.asarray(_floor_singular_values(jnp, jnp.asarray(B), floor))
+    _nan_jax_svd(monkeypatch)
+    with pytest.warns(diagnostics.SvdConvergenceWarning, match=r'recomputed with the QR-based \?gesvd'):
+        value = np.asarray(_floor_singular_values(jnp, jnp.asarray(B), floor))
+    assert np.allclose(value, expected, rtol=0, atol=1e-12)
+
+
+def test_under_jax_jit_a_lost_svd_is_announced(monkeypatch):
+    """Under ``jax.jit`` the factors cannot be recomputed. NaN singular values are below no
+    floor, so the layer is handed back unfloored -- here a gold layer the floor should have
+    lifted, a wrong result with no other sign -- and a host callback says so."""
+    jax, jnp = _nan_jax_svd(monkeypatch)
+    par, cfg = holes(AU_807, 807.0)
+    _, B, _ = matrices(par, cfg, 6)
+    floor = 1.0 / (INVERSE_RULE_BOUND * largest_eps(par))
+    with pytest.warns(diagnostics.SvdConvergenceWarning, match='under jax.jit'):
+        value = jax.jit(lambda b: _floor_singular_values(jnp, b, floor))(jnp.asarray(B))
+        jax.effects_barrier()
+    assert np.array_equal(np.asarray(value), B)
+    assert not np.array_equal(np.asarray(_floor_singular_values(np, B, floor)), B)
+
+
+def test_the_traced_announcement_reads_each_lane():
+    """Under ``jax.vmap`` the callback gets one flag per lane: it warns when a finite lane lost its
+    factors, and not when the only lane without factors was not finite to begin with."""
+    with pytest.warns(diagnostics.SvdConvergenceWarning):
+        F._warn_traced_svd(np.array([True, False]), np.array([True, True]))
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', diagnostics.SvdConvergenceWarning)
+        F._warn_traced_svd(np.array([True, False]), np.array([True, False]))
+        F._warn_traced_svd(np.asarray(True), np.asarray(True))
 
 
 # --------------------------------------------------------------- what it does to the solve

@@ -1,18 +1,15 @@
 # 07. Materials: permittivity, absorption and wavelength dependence
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 :::{note}
-The downloadable teaching scripts use the current physical Problem/Job API. Some explanatory snippets and figures retain earlier API spellings; compare the [current getting-started guide](../../getting-started/index.md) and [migration guide](../../migration/index.md). Historical measurement files and their source provenance remain unchanged; they are distinct from validation of the migrated scripts.
+Figure 7-1 still labels step ② with the earlier constructor's `solve(wavelength=λ)` and names
+`solve_conv` matrices. In the current API the wavelength is `rcwa.Excitation(wavelength=...)`,
+and operator matrices you supply yourself go through `rcwa.operators`. The text and code use the
+current names.
 :::
 
 **The material value supplied to the calculation is relative permittivity εᵣ.** The subscript r means relative: εᵣ = ε/ε<sub>0</sub>, the ratio to vacuum permittivity ε<sub>0</sub>.
 
-Enter a constant material directly as a number such as `12.25`. For a wavelength-dependent material, assign an object containing its dispersion data once. The solver evaluates its value at the current wavelength. There is no need to manage refractive index as a separate calculation input.
+Enter a constant material as `Material(epsilon=12.25)`; a bare number such as `12.25` is refused in a material slot (code `material.type`). For a wavelength-dependent material, assign an object containing its dispersion data once. The solver evaluates its value at the current wavelength. There is no need to manage refractive index as a separate calculation input.
 
 ```{figure} ../../figures/learn/learn/07-material.svg
 :alt: Assign a material once; evaluate its relative permittivity at each wavelength and pass the result to the RCWA calculation.
@@ -28,24 +25,26 @@ Consider two independent questions: **does the material depend on direction (iso
 
 | Available information | Example input | Value used in the calculation |
 | --- | --- | --- |
-| Constant isotropic permittivity | `12.25` | The same εᵣ in every direction |
-| Constant permittivity including absorption | `4. + 0.1j` | Complex εᵣ |
-| Constant ε and μ | `wavebit.Material(epsilon=4., mu=1.2)` | εᵣ and μᵣ supplied together |
-| Bundled material table | `wavebit.materials.load('Si')` | εᵣ evaluated automatically at the calculation wavelength |
-| Your wavelength-dependent ε and μ data | `wavebit.TabulatedMaterial(...)` | Scalar or tensor εᵣ and μᵣ interpolated from your table |
-| External n+ik table | `wavebit.TabulatedMaterial.from_refractive_index(..., mu=...)` | Permittivity calculated from index and optional permeability; nonmagnetic if mu is omitted |
+| Constant isotropic permittivity | `Material(epsilon=12.25)` | The same εᵣ in every direction |
+| Constant permittivity including absorption | `Material(epsilon=4. + 0.1j)` | Complex εᵣ |
+| Constant ε and μ | `Material(epsilon=4., mu=1.2)` | εᵣ and μᵣ supplied together |
+| Bundled material table | `materials.load('Si')` | εᵣ evaluated automatically at the calculation wavelength |
+| Your wavelength-dependent ε and μ data | `TabulatedMaterial(..., wavelength_unit="nm")` | Scalar or tensor εᵣ and μᵣ interpolated from your table |
+| External n+ik table | `TabulatedMaterial.from_refractive_index(..., wavelength_unit="nm", mu=...)` | Permittivity calculated from index and optional permeability; nonmagnetic if mu is omitted |
 | Anisotropic permittivity tensor | `Material(epsilon=[2.25, 4., 2.25])` or a 3×3 array | Directional response and coupling between components; see the examples below |
 
-Constants and user tables can represent both isotropic and anisotropic materials. Bundled n·k data are evaluated as nonmagnetic isotropic materials. `from_refractive_index` applies to isotropic materials and also converts magnetic materials when `mu` is supplied. A raster contains evaluated numerical arrays. Assign a scalar, supported tensor material or dispersive object to a shape’s `material` or a layer’s `background`. The `top` and `bot` half-spaces accept only scalar materials, with real or complex values. See the {ref}`half-space discussion <material-half-spaces>` below for the input details.
+All of these are imported from `wavebit` (`from wavebit import Material, TabulatedMaterial, materials`). Constants and user tables can represent both isotropic and anisotropic materials. Bundled n·k data are evaluated as nonmagnetic isotropic materials. `from_refractive_index` applies to isotropic materials and also converts magnetic materials when `mu` is supplied. A raster, `rcwa.Layer(epsilon=array)`, contains evaluated numerical arrays. Assign a scalar or supported tensor `Material`, or a dispersive object, to a region’s `material` or a layer’s `background`. The `top` and `bottom` half-spaces of `rcwa.Stack` accept only isotropic materials, with real or complex values. See the {ref}`half-space discussion <material-half-spaces>` below for the input details.
 
 ## Assign silicon once and change only the wavelength
 
 ```python
-silicon = wavebit.materials.load('Si')
+from wavebit import materials
+
+silicon = materials.load('Si')
 # Do not fix the wavelength here. silicon retains its dispersion table.
 ```
 
-Assign this object to a shape’s `material`, a layer’s `background`, or the upper and lower media `top` and `bot`. The following example **keeps the same silicon object on the same circle and changes only the wavelength.** It does not recreate the shape or manually replace its permittivity at each wavelength.
+Assign this object to a region’s `material`, a layer’s `background`, or the upper and lower media `top` and `bottom`. The following example **keeps the same silicon object on the same circle and changes only the wavelength.** It does not recreate the shape or manually replace its permittivity at each wavelength.
 
 Runnable file: {download}`09_material_sweep.py <../../../examples/rcwa/learning/learn/09_material_sweep.py>`
 
@@ -70,28 +69,31 @@ The table shows that the permittivity inside the circle changes along with wavel
 
 | Specification | Value type | After changing wavelength |
 | --- | --- | --- |
-| Number `12.25` | Number | Permittivity stays at 12.25; no object construction required |
-| `wavebit.Material(epsilon=4., mu=1.2)` | `Material` | Permittivity 4 and permeability 1.2 remain fixed |
-| `wavebit.materials.load('Si')` | `TabulatedMaterial` | Evaluates the silicon table at the new wavelength |
-| `silicon.at(900.)` | `MaterialResponse` | Keeps the permittivity and permeability evaluated at 900 nm |
+| `Material(epsilon=12.25)` | `Material` | Permittivity 12.25 remains fixed |
+| `Material(epsilon=4., mu=1.2)` | `Material` | Permittivity 4 and permeability 1.2 remain fixed |
+| `materials.load('Si')` | `TabulatedMaterial` | Evaluates the silicon table at the new wavelength |
+| `silicon.at(900.)` | `MaterialResponse` | The permittivity and permeability evaluated at 900 nm, for inspection |
 
-`materials.load('Si')` loads silicon’s **wavelength-dependent material data**. Assigning it to a shape or layer automatically uses values appropriate to the calculation wavelength.
+`materials.load('Si')` loads silicon’s **wavelength-dependent material data**. Assigning it to a region or layer automatically uses values appropriate to the calculation wavelength.
 
-`silicon.at(900.)` **evaluates permittivity and permeability at 900 nm and places them in a `MaterialResponse` object**, which is assigned like a `Material`. Assign that result to a shape or layer and it keeps those 900 nm values even if the calculation wavelength changes.
+`silicon.at(900.)` **evaluates permittivity and permeability at 900 nm and places them in a `MaterialResponse` object.** A `MaterialResponse` is a set of evaluated values, not a material model, so a material slot refuses it. To keep those 900 nm values in a calculation, put them in a `Material`: `Material(epsilon=response.epsilon, mu=response.mu)`. Assigned to a region or layer, that material keeps the 900 nm values even if the calculation wavelength changes.
 
 ### Both objects can be assigned to the same material positions
 
-Both object types can be used for a shape’s `material`, a layer’s `background`, and the upper and lower media `top` and `bot`. This example assigns silicon to a layer while choosing whether its values should follow wavelength or stay fixed.
+`TabulatedMaterial` and `Material` can both be used for a region’s `material`, a layer’s `background`, and the upper and lower media `top` and `bottom`. This example assigns silicon to a layer while choosing whether its values should follow wavelength or stay fixed.
 
 ```python
-silicon = wavebit.materials.load('Si')       # TabulatedMaterial: wavelength-dependent data
-silicon_900 = silicon.at(900.)              # MaterialResponse: ε and μ at 900 nm
+from wavebit import Material, materials, rcwa
+
+silicon = materials.load('Si')               # TabulatedMaterial: wavelength-dependent data
+response = silicon.at(900.)                  # MaterialResponse: ε and μ at 900 nm
+silicon_900 = Material(epsilon=response.epsilon, mu=response.mu)   # Material: fixed at those values
 
 # A layer whose silicon values follow the calculation wavelength
-layer = dict(background=silicon, shapes=[])
+layer = rcwa.Layer(thickness=120., background=silicon)
 
 # A layer that retains the 900 nm values even when calculation wavelength changes
-fixed_layer = dict(background=silicon_900, shapes=[])
+fixed_layer = rcwa.Layer(thickness=120., background=silicon_900)
 ```
 
 At a calculation wavelength of 1,000 nm, `layer` uses silicon’s values at 1,000 nm, while `fixed_layer` uses its values at 900 nm. **To include silicon’s dispersion in a wavelength sweep, assign `silicon` directly.** The solver evaluates the appropriate values, so there is no need to call `.at()` yourself.
@@ -101,40 +103,48 @@ Calling `.at(900.)` leaves the original `silicon` wavelength data intact. `silic
 ## Available materials and length units
 
 ```python
-wavebit.materials.available()
+from wavebit import materials
+
+materials.available()
 # ('Green2008-Li1980/Si', 'Luke2015/Si3N4', 'Malitson1962/Al2O3', 'Malitson1965/SiO2')
-silicon = wavebit.materials.load('Green2008-Li1980/Si')  # Specify the source as well
+silicon = materials.load('Green2008-Li1980/Si')  # Specify the source as well
 print(silicon.wavelength_range)                  # (250.0, 14000.0), nm by default
-silicon_um = wavebit.materials.load('Si', wavelength_unit='um')
+silicon_um = materials.load('Si', wavelength_unit='um')
 value = silicon_um.at(0.9)                       # 0.9 μm = 900 nm
 ```
 
 Short names such as `Si` are case-insensitive. If several sources make a name ambiguous, one is not chosen arbitrarily: include the source, as in `Green2008-Li1980/Si`. **The same chemical formula can have different optical properties under different fabrication conditions, so choosing data is part of defining the physical model.** Only the requested file is read, and its immutable object is reused; you do not need to preload the entire material library.
 
-The default length unit is `nm`. Setting `wavelength_unit='um'` converts the table’s wavelength axis to μm. Supply the calculation wavelength, period, shape dimensions and layer thicknesses in μm as well. Supported units are `nm`, `um`, `mm` and `m`; existing geometry is not silently rescaled. An earlier bundled asset, `p_Si.mat`, lacked unit and original-source metadata; it was never part of this catalog and was removed from the package on 2026-10-14.
+A table carries its own wavelength unit; `nm` is the default for `materials.load`. Setting `wavelength_unit='um'` reads the table’s wavelength axis, and the wavelengths you pass to its `.at()`, in μm. The problem declares its own length unit with `rcwa.Problem(units=Units(length=...))`, and the solver converts between the two when it evaluates the table: the same silicon table works in a problem written in nm or in μm. Do not reinterpret a table by changing the geometry values alone. Supported units are `nm`, `um`, `mm` and `m`. An earlier bundled asset, `p_Si.mat`, lacked unit and original-source metadata; it was never part of this catalog and was removed from the package on 2026-10-14.
 
-Material values read from `solver.structure`, `solver.top` and `solver.bot` are evaluated at the current wavelength. Reassign `structure`, `top` or `bot` when supplying a new material or shape. Avoid directly editing part of a retrieved evaluation dictionary: doing so does not change the original dispersion definition.
+A `Problem` keeps the material objects you assigned, not values evaluated at one wavelength. To supply a new material or shape, build a new problem, for example `problem.replace(stack=problem.stack.replace(top=...))`. To see the values the solver will use, evaluate a material with `material.at(wavelength, units=problem.units)`, or sample a layer’s permittivity with `rcwa.sample_structure(problem, layer=0)`. Both return evaluated values; editing them does not change the original dispersion definition.
 
 ## Using your own permittivity table
 
 ```python
-material = wavebit.TabulatedMaterial(
+from wavebit import TabulatedMaterial
+
+material = TabulatedMaterial(
     wavelengths=[800., 900., 1000.],
     epsilon=[4.+0.1j, 4.2+0.12j, 4.5+0.15j],
+    wavelength_unit="nm",
 )
 value = material.at(850.)
 # value.epsilon = 4.1 + 0.11j
 ```
 
-Supply positive, increasing sample wavelengths and one complex permittivity per wavelength. At least two samples are required; complex permittivity is interpolated linearly between them. An optional `mu` table can have the same length. The data are copied, so later edits to the original array do not silently change the material definition. At each wavelength, supply a scalar, three diagonal components or a 3×3 tensor. All samples for one physical quantity must have the same shape; tensors are interpolated component by component.
+Supply positive, increasing sample wavelengths, their unit (`wavelength_unit` is required) and one complex permittivity per wavelength. At least two samples are required; complex permittivity is interpolated linearly between them. An optional `mu` table can have the same length. The data are copied, so later edits to the original array do not silently change the material definition. At each wavelength, supply a scalar, three diagonal components or a 3×3 tensor. All samples for one physical quantity must have the same shape; tensors are interpolated component by component.
 
 ## Sample wavelengths and calculation wavelengths are different
 
 `wavelengths=[800., 900., 1000.]` lists **the sample points at which material data are available**. A calculation can use any wavelength within that interval.
 
 ```python
+from wavebit import rcwa
+
 value = material.at(850.)              # Linearly interpolate ε between 800 and 900
-result = solver.solve(wavelength=873.2) # Evaluate assigned dispersive materials here too
+excitation = rcwa.Excitation(          # Assigned dispersive materials are evaluated here too
+    wavelength=873.2, sources=(rcwa.PlaneWave(polarization="s"),))
 ```
 
 When both ε and μ tables are supplied, both are interpolated. The magnetic example below gives ε=4.1 and μ=1.15 at 850 nm, without adding a new sample wavelength. However, a table spanning 800–1000 nm raises an error at 1100 nm; broader data are required. The default `materials.load('Si')` data cover 250–14000 nm. Being able to interpolate within a range does not establish that the table represents the actual material accurately enough. Check sample spacing and the original data where dispersion changes rapidly.
@@ -142,10 +152,13 @@ When both ε and μ tables are supplied, both are interpolated. The magnetic exa
 ## Supply permeability μ data together with permittivity
 
 ```python
-magnetic = wavebit.TabulatedMaterial(
+from wavebit import TabulatedMaterial
+
+magnetic = TabulatedMaterial(
     wavelengths=[800., 900., 1000.],
     epsilon=[4., 4.2, 4.5],
     mu=[1.1, 1.2, 1.3],
+    wavelength_unit="nm",
 )
 value = magnetic.at(850.)
 # value.epsilon = 4.1, value.mu = 1.15
@@ -157,7 +170,7 @@ Assigning this object as a material makes ε and μ change together with wavelen
 
 External optical data are often provided as `n, k` tables. For a material selected with `materials.load`, n and k are interpolated first, then converted to permittivity using `(n+ik)²` under the nonmagnetic assumption μᵣ=1. This conversion is internal. It is unnecessary when using a permittivity table directly. The two workflows also interpolate different quantities: interpolating index and then squaring it need not equal direct permittivity interpolation between samples.
 
-Import your own n+ik data explicitly with `TabulatedMaterial.from_refractive_index(wavelengths, index)`. To plot index from permittivity under the nonmagnetic assumption, use `wavebit.refractive_index_from_eps(silicon.at(wavelengths).epsilon)`. `.at` also accepts a wavelength array and returns a permittivity array with the corresponding shape. There is no separate index lookup function or hidden suffix on material names. Wavebit uses the `exp(−iωt)` time convention; ordinary passive media express loss through a positive imaginary part of scalar permittivity.
+Import your own n+ik data explicitly with `TabulatedMaterial.from_refractive_index(wavelengths, index, wavelength_unit="nm")`. To plot index from permittivity under the nonmagnetic assumption, use `wavebit.refractive_index_from_eps(silicon.at(wavelengths).epsilon)`. `.at` also accepts a wavelength array and returns a permittivity array with the corresponding shape. There is no separate index lookup function or hidden suffix on material names. Wavebit uses the `exp(−iωt)` time convention; ordinary passive media express loss through a positive imaginary part of scalar permittivity.
 
 
 ## Converting a magnetic material’s refractive index to permittivity
@@ -171,10 +184,12 @@ For an isotropic material with complex index `n_complex`, `n_complex² = εᵣ �
 Passing `mu` to `eps_from_refractive_index` performs this conversion. For example, index 2 and relative permeability 1.25 give relative permittivity 3.2. Include the same permeability in the resulting `Material`.
 
 ```python
+from wavebit import Material, eps_from_refractive_index
+
 n_complex = 2.0
 mu_r = 1.25
-magnetic = wavebit.Material(
-    epsilon=wavebit.eps_from_refractive_index(n_complex, mu=mu_r),
+magnetic = Material(
+    epsilon=eps_from_refractive_index(n_complex, mu=mu_r),
     mu=mu_r,
 )
 # magnetic.epsilon = 3.2, magnetic.mu = 1.25
@@ -183,10 +198,13 @@ magnetic = wavebit.Material(
 Permeability can also accompany a wavelength-dependent index table.
 
 ```python
-magnetic = wavebit.TabulatedMaterial.from_refractive_index(
+from wavebit import TabulatedMaterial
+
+magnetic = TabulatedMaterial.from_refractive_index(
     wavelengths=[800., 1000.],
     index=[2., 3.],
     mu=[1., 2.],
+    wavelength_unit="nm",
 )
 value = magnetic.at(900.)
 # Interpolate to index 2.5 and relative permeability 1.5
@@ -203,30 +221,32 @@ Index alone cannot determine permittivity and permeability separately; permeabil
 
 Use the same length unit for the table and all geometry. Every dispersive object rejects out-of-range wavelengths with an error in ordinary execution. Inside JAX JIT, out-of-range elements become NaN. Values are not silently clamped to endpoints or extrapolated, so keep a sweep inside `wavelength_range`.
 
-When a `TabulatedMaterial` is assigned to a shape, layer background or surrounding medium, changing wavelength through `solver.solve(wavelength=...)` automatically evaluates its values at that wavelength.
+When a `TabulatedMaterial` is assigned to a region, layer background or surrounding medium, every wavelength in `rcwa.Excitation(wavelength=...)` automatically evaluates its values at that wavelength: a spectrum `wavelength=(800., 900., 1000.)`, or a new wavelength passed to a prepared problem with `prepared.run(problem.replace(excitation=problem.excitation.replace(wavelength=...)))`, as in the sweep example above.
 
-**A numerical raster is an already evaluated permittivity distribution.** It does not retain per-pixel material names or dispersion definitions. For raster sweeps, evaluate materials with `.at(wavelength)` and update the array. Likewise, matrices passed directly to `solve_conv` must be rebuilt for each wavelength by the caller.
+**A numerical raster is an already evaluated permittivity distribution.** It does not retain per-pixel material names or dispersion definitions. For raster sweeps, evaluate materials with `.at(wavelength)` and update the array. Likewise, operator matrices you substitute into an `rcwa.operators` assembly must be rebuilt for each wavelength by the caller.
 
 In JAX and PyTorch, wavelength derivatives include the change in material values. This differentiates the table’s piecewise-linear interpolation; it does not imply that a physical dispersion model has been fitted. At sample points, derivatives use the interval to the right, except at the final sample, which uses the left interval. Sample values themselves are fixed data, not differentiable design variables. An RCWA dispersion table is also not automatically an FDTD time-domain material model.
 
 (material-half-spaces)=
-## top and bot: the half-spaces outside the stack
+## top and bottom: the half-spaces outside the stack
 
-Relative to the finite-thickness layers, `top` fills the region above the uppermost layer and `bot` fills the region below the lowest layer. For a film on a glass substrate in air, for example, set `top` to air and `bot` to glass.
+Relative to the finite-thickness layers, `rcwa.Stack(top=...)` fills the region above the uppermost layer and `rcwa.Stack(bottom=...)` fills the region below the lowest layer. For a film on a glass substrate in air, for example, set `top` to air and `bottom` to glass.
 
-`top` extends infinitely upward and `bot` infinitely downward. These regions are **half-spaces**, and they have no `thickness` input.
+`top` extends infinitely upward and `bottom` infinitely downward. These regions are **half-spaces**, and they have no `thickness` input.
 
-Wavebit’s `top` and `bot` take isotropic materials: scalar permittivity, a `Material` with scalar ε and μ, or a dispersive material object. Anisotropic half-spaces are unsupported. Anisotropic materials can instead be assigned to the `background` of a finite layer or a shape’s `material`.
+Wavebit’s `top` and `bottom` take isotropic materials: a `Material` with scalar ε and optional scalar μ, or a dispersive material object. Anisotropic half-spaces are unsupported. Anisotropic materials can instead be assigned to the `background` of a finite layer or a region’s `material`.
 
 ```python
-top = 1.                                           # Nonmagnetic air
-bot = 4. + 0.3j                                    # Absorbing nonmagnetic medium
-magnetic = wavebit.Material(epsilon=4.+0.3j, mu=1.2) # Supply ε and μ together
+from wavebit import Material
+
+top = Material(epsilon=1.)                       # Nonmagnetic air
+bottom = Material(epsilon=4. + 0.3j)             # Absorbing nonmagnetic medium
+magnetic = Material(epsilon=4. + 0.3j, mu=1.2)   # Supply ε and μ together
 ```
 
-`incidence_side` selects the illuminated side. With the default `"top"`, `top` is the incident medium; with `"bottom"`, `bot` is the incident medium. **Real `theta` and `phi` specify the direction of phase propagation inside that selected incident medium.** `theta` is measured from the inward normal and `phi` is the azimuth in the fixed xy coordinates, both in radians.
+`rcwa.PlaneWave(side=...)` selects the illuminated side. With the default `side="top"`, `top` is the incident medium; with `side="bottom"`, `bottom` is the incident medium. **Real `theta` and `phi` specify the direction of phase propagation inside that selected incident medium.** `theta` is measured from the inward normal and `phi` is the azimuth in the fixed xy coordinates, both in radians.
 
-Direct direction input using wavevectors `kx` and `ky` is explained in {ref}`Chapter 8’s two input forms <incident-direction-inputs>`. ε and μ of `top` and `bot` remain necessary. See {ref}`Chapter 8 <absorbing-incidence>` for wavevectors and examples with lossy incident or transmitted media, and {ref}`Chapter 13 <half-space-power>` for the reference planes of reflectance and transmittance and absorption in finite layers.
+Direct direction input using wavevectors `kx` and `ky` is explained in {ref}`Chapter 8’s two input forms <incident-direction-inputs>`. ε and μ of `top` and `bottom` remain necessary. See {ref}`Chapter 8 <absorbing-incidence>` for wavevectors and examples with lossy incident or transmitted media, and {ref}`Chapter 13 <half-space-power>` for the reference planes of reflectance and transmittance and absorption in finite layers.
 
 (material-anisotropy)=
 ## Isotropy and anisotropy: direction-dependent material response
@@ -238,10 +258,10 @@ Imagine changing the electric-field direction at one point in a material. **A ma
 An isotropic material uses one relative permittivity. If the reference directions of an anisotropic material align with the x, y and z axes, specify the three directional values.
 
 ```python
-from wavebit.compat import legacy as wavebit
+from wavebit import Material
 
-isotropic = 2.25
-crystal = wavebit.Material(epsilon=[2.25, 4., 2.25])
+isotropic = Material(epsilon=2.25)
+crystal = Material(epsilon=[2.25, 4., 2.25])
 ```
 
 | Material | x-direction value | y-direction value | z-direction value |
@@ -292,7 +312,9 @@ For an isotropic material, εᵣ is a scalar. For a general anisotropic material
 If the full matrix is known, enter its rows and columns in x, y, z order. Express all components in Wavebit’s x, y and z coordinates.
 
 ```python
-material = wavebit.Material(epsilon=[
+from wavebit import Material
+
+material = Material(epsilon=[
     [3.0, 0.2, 0.0],   # Row contributing to the x component of D
     [0.2, 4.0, 0.0],   # Row contributing to the y component of D
     [0.0, 0.0, 2.5],   # Row contributing to the z component of D
@@ -304,7 +326,7 @@ This material has ε<sub>xy</sub> = ε<sub>yx</sub> = 0.2. Wavebit uses the inpu
 Relative permeability μᵣ uses the same formats. Omitting `mu` selects the nonmagnetic condition μᵣ = 1.
 
 ```python
-magnetic = wavebit.Material(
+magnetic = Material(
     epsilon=[2., 3., 4.],
     mu=[1.1, 1.2, 1.3],
 )
@@ -345,9 +367,9 @@ Consider rotating a material with relative permittivity `[2.25, 4., 2.25]`.
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material
 
-crystal = wavebit.Material(epsilon=[2.25, 4., 2.25])
+crystal = Material(epsilon=[2.25, 4., 2.25])
 rotated = crystal.rotated(np.deg2rad(45.), axis="z")
 ```
 
@@ -458,24 +480,28 @@ Tilting a material about x or y can introduce ε<sub>xz</sub>, ε<sub>yz</sub>, 
 
 ### Filling a whole layer with an anisotropic material
 
-Anisotropic materials also go in a layer’s `background` or a shape’s `material`. To fill the entire layer with one material, specify `background` and use `shapes=[]`.
+Anisotropic materials also go in a layer’s `background` or a region’s `material`. To fill the entire layer with one material, give the layer a `background` and no `regions`.
 
-Here, an anisotropic film 220 nm thick lies between air half-spaces and is illuminated normally from above. All lengths are in nm.
+Here, an anisotropic film 220 nm thick lies between air half-spaces and is illuminated normally from above. All lengths are in nm. The loop runs the s and p polarizations as two problems.
 
 <!-- uniform-anisotropic-example:start -->
 ```python
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-crystal = wavebit.Material(epsilon=[2.25, 4., 2.25])
-solver = wavebit.rcwa(
-    wavelength=600., thickness=[220.],
-    period=(600., 600.), top=1., bot=1.,
-    structure=[{"background": crystal, "shapes": []}],
-    theta=0., phi=0., truncation_order=(0, 0),
-)
-result = solver.solve()
-print("y-polarized reflectance:", float(result.s_inc.R.sum()))
-print("x-polarized reflectance:", float(result.p_inc.R.sum()))
+crystal = Material(epsilon=[2.25, 4., 2.25])
+air = Material(epsilon=1.)
+for polarization, label in (("s", "y-polarized"), ("p", "x-polarized")):
+    problem = rcwa.Problem(
+        units=Units(length="nm"),
+        stack=rcwa.Stack(
+            period=(600., 600.), top=air, bottom=air,
+            layers=(rcwa.Layer(thickness=220., background=crystal),)),
+        excitation=rcwa.Excitation(
+            wavelength=600.,
+            sources=(rcwa.PlaneWave(theta=0., phi=0., polarization=polarization),)),
+    )
+    result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(0, 0)))
+    print(f"{label} reflectance: {float(result.R.sum()):.6f}")
 ```
 <!-- uniform-anisotropic-example:end -->
 
@@ -492,23 +518,25 @@ The following example assigns a rotated anisotropic material to a cylinder in ai
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import Material, Units, rcwa
 
-crystal = wavebit.Material(epsilon=[2.25, 4., 2.25])
+crystal = Material(epsilon=[2.25, 4., 2.25])
 rotated = crystal.rotated(np.deg2rad(45.), axis="z")
-solver = wavebit.rcwa(
-    wavelength=700., period=(600., 600.), thickness=[170.],
-    top=1., bot=1.,
-    structure=[{"background": 1., "shapes": [
-        {"type": "circle", "lx": 270., "material": rotated},
-    ]}],
-    truncation_order=(3, 3), shape_nvf_grid_size=128,
+air = Material(epsilon=1.)
+problem = rcwa.Problem(
+    units=Units(length="nm"),
+    stack=rcwa.Stack(
+        period=(600., 600.), top=air, bottom=air,
+        layers=(rcwa.Layer(
+            thickness=170., background=air,
+            regions=(rcwa.Region(geometry=rcwa.Circle(radius=135.), material=rotated),)),)),
+    excitation=rcwa.Excitation(wavelength=700., sources=(rcwa.PlaneWave(polarization="s"),)),
 )
-result = solver.solve()
-solver.plot_structure(component="xx")
+result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(3, 3), shape_nvf_grid_size=128))
+eps_xx = rcwa.sample_structure(problem, component="xx")   # (y, x) array of ε_xx in layer 0
 ```
 
-Its diameter is 270 nm and its height equals the layer thickness, 170 nm. `plot_structure(component="xx")` displays the spatial ε<sub>xx</sub> distribution; use `component="xy"` for ε<sub>xy</sub>. The Fourier order and NVF sample count above are example settings. Assess the required accuracy using [Chapter 19’s convergence checks](convergence.md).
+Its radius is 135 nm (diameter 270 nm) and its height equals the layer thickness, 170 nm. `rcwa.sample_structure(problem, component="xx")` samples the spatial ε<sub>xx</sub> distribution of layer 0 without solving and returns it as a `(y, x)` array to plot; use `component="xy"` for ε<sub>xy</sub>. The Fourier order and NVF sample count above are example settings. Assess the required accuracy using [Chapter 19’s convergence checks](convergence.md).
 
 **Anisotropy describes directional properties at one position; a material distribution describes differences between positions.** Specify the two independently.
 
@@ -520,18 +548,20 @@ Its diameter is 270 nm and its height equals the layer thickness, 170 nm. `plot_
 
 ### Supplying a raster array
 
-A raster stores material values in spatial cells. When storing the full permittivity matrix, `structure` has shape `(layers, rows, columns, 3, 3)`. Its final two axes are **the row and column of the permittivity matrix in each cell**. Supply permeability in a separate `mu` array.
+A raster stores material values in spatial cells, one array per layer: `rcwa.Layer(epsilon=...)`. When storing the full permittivity matrix, the array has shape `(rows, columns, 3, 3)`. Its final two axes are **the row and column of the permittivity matrix in each cell**. Supply permeability in a separate array, `rcwa.Layer(mu=...)`.
 
 This array fills all 2×4 cells in one layer with the same material.
 
 ```python
 import numpy as np
+from wavebit import rcwa
 
 cell_tensor = np.diag([2.25, 4., 2.25])
-structure = np.broadcast_to(cell_tensor, (1, 2, 4, 3, 3)).copy()
+epsilon = np.broadcast_to(cell_tensor, (2, 4, 3, 3)).copy()
+layer = rcwa.Layer(thickness=220., epsilon=epsilon)
 ```
 
-Using this array as `structure` in the film example represents the same uniform layer. Change individual cell matrices to assign different materials. For example, `structure[0, 0, 0] = np.eye(3)` changes row 0, column 0 of the first layer to an isotropic material of relative permittivity 1. The permeability array uses the same spatial grid; each cell can store a scalar or a 3×3 matrix.
+Using this layer in place of the film example's layer represents the same uniform layer. Change individual cell matrices to assign different materials. For example, `epsilon[0, 0] = np.eye(3)` changes row 0, column 0 to an isotropic material of relative permittivity 1. The permeability array uses the same spatial grid; each cell can store a scalar or a 3×3 matrix.
 
 ### Wavelength-dependent anisotropic materials
 
@@ -539,12 +569,13 @@ Supplying three diagonal components or a 3×3 matrix at each wavelength to `Tabu
 
 ```python
 import numpy as np
-from wavebit.compat import legacy as wavebit
+from wavebit import TabulatedMaterial
 
-crystal_table = wavebit.TabulatedMaterial(
+crystal_table = TabulatedMaterial(
     wavelengths=[500., 700.],
     epsilon=[[2., 3., 2.5], [3., 4., 2.9]],
     mu=[[1.1, 1.2, 1.3], [1.2, 1.3, 1.4]],
+    wavelength_unit="nm",
 )
 value = crystal_table.at(600.)
 # Diagonal epsilon components: [2.5, 3.5, 2.7]
@@ -553,11 +584,11 @@ value = crystal_table.at(600.)
 rotated_table = crystal_table.rotated(np.deg2rad(30.), axis="z")
 ```
 
-Assign `rotated_table` to a shape or layer background once; each wavelength then uses the corresponding rotated material values. With a numerical raster, evaluate materials and update the array at each wavelength.
+Assign `rotated_table` to a region or layer background once; each wavelength then uses the corresponding rotated material values. With a numerical raster, evaluate materials and update the array at each wavelength.
 
 ### Calculation options and supported scope
 
-After assigning materials as above, call `solve()` and Wavebit constructs the required matrices. The available approaches depend on the structure representation.
+After assigning materials as above, call `rcwa.run` and Wavebit constructs the required matrices. The available approaches depend on the structure representation.
 
 | Structure | Calculation approach |
 | --- | --- |
@@ -565,22 +596,22 @@ After assigning materials as above, call `solve()` and Wavebit constructs the re
 | Raster in an orthogonal cell aligned with x and y | NVF or Li |
 | Rectangular shapes with x- and y-aligned edges in the same orthogonal cell | NVF or Li |
 | Circles, ellipses, rotated shapes or an oblique lattice | NVF |
-| Upper and lower half-spaces `top` and `bot` | Isotropic scalar ε and μ supported; anisotropic tensors unsupported |
+| Upper and lower half-spaces `top` and `bottom` | Isotropic scalar ε and μ supported; anisotropic tensors unsupported |
 
-The defaults for patterns containing anisotropic materials are `factorization="nvf"` and `nvf_projector="linear"`. `linear` selects how the NVF projector is constructed; incident polarization is a separate input described in [Chapter 8](light.md). To select Li, set `factorization="li"` for a structure satisfying the conditions in the table.
+The defaults for patterns containing anisotropic materials are `Numerics(factorization="nvf", nvf_projector="linear")`. `linear` selects how the NVF projector is constructed; incident polarization is a separate input described in [Chapter 8](light.md). To select Li, set `Numerics(factorization="li")` for a structure satisfying the conditions in the table.
 
-If ε or μ contains xz, yz, zx or zy components, the first-order formulation (`first_order`, formerly 4ff), which handles those components together, is selected automatically. Both the default `layer_algorithm="ETM"` and `layer_algorithm="SMM"` can connect layers. Both calculate reflection, transmission, and electric and magnetic fields within the structure. [Chapter 15](layer-algorithms.md) explains the connection algorithms and scattering-matrix use. The [full-tensor example](../../guide/rcwa/full-tensor-patterns.md) gives runnable code assigning a tilted material to a rectangular shape.
+If ε or μ contains xz, yz, zx or zy components, the default `Numerics(formulation="auto")` selects the first-order formulation (`"first_order"`, formerly 4ff), which handles those components together. Both the default `Numerics(algorithm="smm")` and `algorithm="etm"` can connect layers. Both calculate reflection, transmission, and electric and magnetic fields within the structure. [Chapter 15](layer-algorithms.md) explains the connection algorithms and scattering-matrix use. The [full-tensor example](../../guide/rcwa/full-tensor-patterns.md) gives runnable code assigning a tilted material to a rectangular shape.
 
-[Chapter 10](fourier-orders.md) explains Li, NVF and Fourier-coefficient calculation, while [Chapter 11](nvf.md) covers NVF normal fields and projectors. Use `fourier_coefficients="sampled"` when periodic replicas of anisotropic NVF shapes overlap or shapes cover one another across a cell boundary. The geometry conditions for `"integrated"` are listed in the [shape-integration guide](../../guide/rcwa/tensor-shape-integration.md).
+[Chapter 10](fourier-orders.md) explains Li, NVF and Fourier-coefficient calculation, while [Chapter 11](nvf.md) covers NVF normal fields and projectors. Use `Numerics(fourier_coefficients="sampled")` when periodic replicas of anisotropic NVF shapes overlap or shapes cover one another across a cell boundary. The geometry conditions for `"integrated"` are listed in the [shape-integration guide](../../guide/rcwa/tensor-shape-integration.md).
 
 At finite NVF order, R+T may differ from exactly 1 even for lossless materials. Assess accuracy by checking convergence of the quantity of interest as in [Chapter 19](convergence.md).
 
 ```{dropdown} Conditions for automatic differentiation
 NumPy, JAX and PyTorch accept the same material inputs. See [Chapter 17](autodiff.md) for the basic differentiation workflow.
 
-- The integrated NVF shape path supports derivatives of material values, shape position, dimensions, rotation angle and lattice. Before JAX tracing, record shape intersection and contact relationships with `freeze_geometry()` and pass them to `solve(geometry=...)`. If overlap or periodic-contact relationships change, record them again outside tracing. Also check grid convergence of derivatives near points where the normal field is equidistant from several boundaries.
+- The integrated NVF shape path supports derivatives of material values, shape position, dimensions, rotation angle and lattice. PyTorch and eager `jax.grad` check shape intersection and contact relationships on the concrete values at every run; a step that changes them raises `prepared.topology`. Under `jax.jit` or `jax.vmap`, region geometry needs explicit `Numerics(topology_check="host")`, and the default device policy refuses it with `prepared.host_topology`. Also check grid convergence of derivatives near points where the normal field is equidistant from several boundaries.
 - NVF `"sampled"` shapes and tensor rasters support material-value derivatives with fixed boundaries. Shape and lattice derivatives are unsupported on these paths.
-- Li tensor rasters support material-value and orthogonal-period derivatives. Li rectangular shapes support material, position, size and period derivatives while boundary ordering is preserved. Changing order, normal-field grid or coefficient method requires refreshing the stored preparation information.
-- Dispersion-table samples and angles rotating an entire table are fixed data. To differentiate a material rotation angle as a design variable, evaluate at the current wavelength before rotating, as in `crystal_table.at(wavelength).rotated(angle)`. Values returned by `.at()` for a wavelength array are for inspecting a spectrum; assign a material object or a value at one wavelength to an individual material region.
+- Li tensor rasters support material-value and orthogonal-period derivatives. Li rectangular shapes support material, position, size and period derivatives while boundary ordering is preserved. Changing order, normal-field grid or coefficient method requires a new `rcwa.prepare`.
+- Dispersion-table samples and angles rotating an entire table are fixed data. To differentiate a material rotation angle as a design variable, evaluate at the current wavelength before rotating: with `value = crystal_table.at(wavelength)`, assign `Material(epsilon=value.epsilon, mu=value.mu).rotated(angle)`. Values returned by `.at()` for a wavelength array are for inspecting a spectrum; assign a material object, or a `Material` built from the values at one wavelength, to an individual material region.
 - During differentiation or JAX tracing, off-diagonal components that currently equal zero are retained. A first-order path may therefore be used even when xz, yz, zx and zy happen to be zero at the current values.
 ```

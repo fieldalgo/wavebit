@@ -65,6 +65,29 @@ rule: their exact original bytes are retained with hashes in the
 gate verifies those hashes. Those seventeen files are evidence rather than current navigation;
 new prose links to their portable repository locations and does not repeat host paths.
 
+### Earlier-interface material
+
+`wavebit.compat` was retired on 2026-10-15. A page that teaches current usage names current
+spellings (`rcwa.Numerics(orders=...)`, not `truncation_order`). Where such a page still needs a
+snippet or a measurement taken through the earlier interface, that block sits inside one
+admonition, so a reader -- or a script reading the Markdown -- can tell it from the current text:
+
+````markdown
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Measured through the earlier `wavebit.compat.legacy` interface, ...
+
+```python
+from wavebit.compat import legacy as wavebit
+```
+:::
+````
+
+Values and cited commits inside the block stay as recorded. A page whose whole body is
+earlier-interface material (a migration page, or a record measured through it) instead keeps the
+**Historical API** notice at its top, and needs no per-block marks.
+
 Raw research notes, session transcripts, draft designs, private artifact links and
 unreviewed notebook or prototype bundles stay in the separate private lab repository.
 They are not published as downloads or copied into this repository's history.

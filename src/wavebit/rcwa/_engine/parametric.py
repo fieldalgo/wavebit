@@ -180,6 +180,7 @@ from wavebit.materials.response import as_material
 from wavebit.rcwa._engine.factorization import ConvMatrices
 from wavebit.rcwa._engine.factorization import check_normal_grid
 from wavebit.rcwa._engine.factorization import _nvf_assemble
+from wavebit.rcwa._engine.factorization import inverse_rule_bound
 from wavebit.lattice import periods_of
 from wavebit.lattice import is_axis_aligned
 from wavebit.lattice import reduced_basis
@@ -2613,24 +2614,19 @@ def to_conv_mat_parametric_nvf(xp, shapes, background, half_width_u, half_width_
         plan=plan, **({} if nvf_projector is None else {'nvf_projector': nvf_projector}))
     return nvf_from_coeffs(xp, eps_c, inv_eps_c, *coeffs[:3], half_width_u, half_width_v,
                            c_yx=coeffs[3] if len(coeffs) == 4 else None,
-                           eps_bound=largest_eps(xp, [background] + [s['material'] for s in shapes],
-                                                 dtype))
+                           eps_bound=inverse_rule_bound(xp, layer_epsilons(
+                               xp, [background] + [s['material'] for s in shapes], dtype)))
 
 
-def largest_eps(xp, materials, dtype):
-    """``max |eps|`` over ``materials`` (numbers or :class:`Material`), as an ``xp`` scalar.
+def layer_epsilons(xp, materials, dtype):
+    """The permittivities of ``materials`` (numbers or :class:`Material`), as ``xp`` scalars.
 
-    The bound :func:`~wavebit.rcwa._engine.factorization._nvf_assemble` keeps the inverse rule under.
-    Read through :func:`~wavebit._common.periodic.as_material` like every other material here, so
-    a bare number and a ``Material`` agree, and through :func:`as_array` so a traced or
-    grad-tracking permittivity keeps its graph.
+    What :func:`~wavebit.rcwa._engine.factorization.inverse_rule_bound` decides the layer's
+    inverse-rule floor from. Read through :func:`~wavebit._common.periodic.as_material` like every
+    other material here, so a bare number and a ``Material`` agree, and through :func:`as_array`
+    so a traced or grad-tracking permittivity keeps its graph.
     """
-    mags = [xp.abs(as_array(xp, as_material(m, 'layer material').epsilon, dtype=dtype))
-            for m in materials]
-    out = mags[0]
-    for m in mags[1:]:
-        out = xp.maximum(out, m)
-    return out
+    return [as_array(xp, as_material(m, 'layer material').epsilon, dtype=dtype) for m in materials]
 
 
 def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_u, half_width_v,
@@ -2647,7 +2643,7 @@ def nvf_from_coeffs(xp, eps_c, inv_eps_c, c_xx, c_xy, c_yy, half_width_u, half_w
 
     ``eps_c`` / ``inv_eps_c`` are the ``eps`` and ``1/eps`` coefficients on the doubled
     reciprocal grid; ``c_xx`` / ``c_xy`` / ``c_yy`` those of ``normal_x**2``, ``normal_x*normal_y``, ``normal_y**2``.
-    ``eps_bound`` is the layer's largest ``|eps|`` (see :func:`largest_eps`); ``None`` leaves the
+    ``eps_bound`` is the layer's largest ``|eps|`` (see :func:`inverse_rule_bound`); ``None`` leaves the
     inverse rule unfloored, which is the floored closing bit for bit only on a layer of passive
     materials with every ``Re eps > 0`` (see ``INVERSE_RULE_BOUND``).
     Returns ``(eps_xx, eps_yy, epz_i, eps_xy, eps_yx)`` — ``solve_conv``'s parameter order,

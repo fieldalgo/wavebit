@@ -1,16 +1,11 @@
 # RCWA theory
 
-> **Historical API:** snippets and descriptions using `wavebit.compat` on this page require a historical checkout.
-> The namespace is absent from current installations; the pre-retirement baseline is
-> [revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a).
-> Reproduce recorded experiments with their own cited commit and environment; their measurements have not been rerun.
-
-
 Derivations and mathematical conventions underlying the Fourier-domain solver.
 
 These pages are dated records, written against the solver interface of their date. Their code
-snippets use the earlier interface, which since 2026-10-13 is `wavebit.compat.legacy`: where a
+snippets use the earlier interface, which from 2026-10-13 was `wavebit.compat.legacy`: where a
 snippet calls `wavebit.rcwa(...)`, `wavebit` means `from wavebit.compat import legacy as wavebit`.
+That namespace was retired on 2026-10-15; the [pre-retirement revision `3c8a50f8`](https://github.com/fieldalgo/wavebit/tree/3c8a50f8a6506240169538957e99648a4b18ca3a) runs them.
 The public `wavebit.rcwa` module is introduced in the [RCWA guide](../../guide/rcwa/index.md).
 
 - [The per-order s/p frame the complex amplitudes are quoted in](amplitude-sp-frame.md)

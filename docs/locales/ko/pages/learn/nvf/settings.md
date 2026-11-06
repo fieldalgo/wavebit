@@ -33,7 +33,7 @@ Wavebit는 재료 구조를 크게 두 방식으로 받습니다. **raster·shap
 | 래스터 방향장 생성법 | `raster_normal_method` | 픽셀에서 방향을 어떻게 추정하고 연장할까? | raster NVF |
 | 쉐입 투영장 샘플 수 | `shape_nvf_grid_size` | 보조벡터·P를 몇 개 점에서 평가할까? | shape NVF |
 | NVF 투영 방식 | `nvf_projector` | 어떤 구성으로 성분 분해 기준 P를 만들까? | raster / shape NVF |
-| 유지할 Fourier 차수 | `truncation_order` | 광학 계산에서 몇 개 Fourier 모드를 남길까? | 두 입력 모두 |
+| 유지할 Fourier 차수 | `orders` | 광학 계산에서 몇 개 Fourier 모드를 남길까? | 두 입력 모두 |
 
 **현재 API는 새 이름을 사용합니다.** 예전 `normal_method` → `raster_normal_method`, `normal_grid` → `shape_nvf_grid_size`, `projector` → `nvf_projector`로 바뀌었습니다. 이전 이름은 별칭으로 받지 않습니다. `shape_nvf_grid`는 검토했던 후보일 뿐 실제 키워드가 아닙니다. 옵션 값과 수치 알고리즘은 같습니다. 현재 JobSpec 스키마 버전은 **10**입니다. Python 생성자는 현재 버전을 넣습니다. 이전 저장 파일은 층 목록과 대응하는 두께·재료 배열을 함께 역순으로 옮겨야 합니다. 장 표본의 깊이 `d`는 높이 `h_total − d`로 바꾸고, 기존 z 결합 텐서는 해당 좌표 변환도 적용합니다. 여기서 `h_total = sum(thickness)`는 전체 구조 높이입니다. 버전 숫자만 바꾸면 같은 시료를 보존할 수 없습니다. [좌표 이전 규칙](../../reference/common/conventions.md)을 확인하세요.
 
@@ -80,6 +80,6 @@ shape는 도형의 경계 기하로 보조장과 투영장을 구성할 수 있�
 
 raster에서는 원래 이미지 해상도를 사용하고 필요한 경우 aliasing 하한까지 올립니다. 사용자가 넣은 shape_nvf_grid_size는 그 경로를 조절하지 않으므로 현재 API는 명시적인 지정을 거부합니다. raster의 기하 정밀도를 높이려면 원본 도형을 더 정밀한 픽셀로 다시 표현해야 하며, 단순 픽셀 복제로 잃어버린 경계 정보가 복원되지는 않습니다.
 
-**shape_nvf_grid_size는 “몇 개 점에서 읽느냐”, truncation_order는 “몇 개 Fourier 성분을 남기느냐”입니다.** 하나를 높인다고 다른 하나의 부족함까지 해결되지는 않습니다. 9장에서 두 설정을 따로 바꾸며 수렴을 비교합니다.
+**shape_nvf_grid_size는 “몇 개 점에서 읽느냐”, `orders`는 “몇 개 Fourier 성분을 남기느냐”입니다.** 하나를 높인다고 다른 하나의 부족함까지 해결되지는 않습니다. 9장에서 두 설정을 따로 바꾸며 수렴을 비교합니다.
 
 이 책의 shape 예제는 빠른 학습을 위해 `shape_nvf_grid_size=128`을 명시합니다. **기본값을 128로 낮추라는 권장이 아닙니다.** 실제 사용에서는 아래의 수렴 절차로 선택하세요.

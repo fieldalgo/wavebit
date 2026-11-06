@@ -1,0 +1,159 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_s4_polygon",
+  "physics": "rcwa",
+  "comparison": "same-discretization",
+  "role": "external oracle (identity on a matched order set)",
+  "references": [
+    {
+      "tool": "S4",
+      "version": "0.1.0+b98c80e",
+      "build": "s4-fieldalgo 0.1.0+b98c80e: FieldAlgo's fork of S4 1.1 (victorliu/S4), built against Accelerate for Python 3.12; b98c80e is a commit of the fork's unpublished history; release tag v0.1.0 (3940533) on fieldalgo/S4 has a byte-identical S4/ source tree",
+      "modified": {
+        "value": true,
+        "description": "FieldAlgo fork of S4 1.1 (not upstream victorliu/S4); what the fork changes is not described in the repository"
+      },
+      "spdx": "GPL-2.0-or-later",
+      "source": "https://github.com/fieldalgo/S4",
+      "install": {
+        "kind": "fork build",
+        "command": null
+      },
+      "settings": "SetRegionPolygon regions (triangle, L, L across the cell edge, Z wider than the period, L with hole/inclusion, L on a sheared cell), counter-clockwise outlines only; direct rule (no PolarizationDecomposition); WL 1.3, thickness 0.4, eps 6.25 inclusion / 2.25 substrate, theta 0.35 rad, phi 0.6 rad; per-order R and T, s and p",
+      "discretization": "LatticeTruncation='Parallelogramic', NumBasis=(2N+1)**2 for N = 3 and 6, checked to be the square |m|,|n|<=N window; matched to Wavebit factorization='laurent' on the same order set",
+      "arrays": [
+        "*"
+      ],
+      "execution": "in-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_s4_polygon.py",
+    "sha256": null,
+    "command": "python tests/references/gen_goldens_s4_polygon.py",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-10-15",
+  "environment": {
+    "python": "3.12",
+    "numpy": null,
+    "other": "S4 extension s4-fieldalgo 0.1.0+b98c80e (Accelerate) in the project env"
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_s4_polygon.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_s4_polygon.npz",
+    "format": "npz",
+    "file_sha256": "4647adbed67706473365a35957e06eac7ca1a5a0a734ef9033d1598e2fcf117f",
+    "arrays": [
+      "l_across_the_cell_edge__3__p__R",
+      "l_across_the_cell_edge__3__p__T",
+      "l_across_the_cell_edge__3__s__R",
+      "l_across_the_cell_edge__3__s__T",
+      "l_across_the_cell_edge__6__p__R",
+      "l_across_the_cell_edge__6__p__T",
+      "l_across_the_cell_edge__6__s__R",
+      "l_across_the_cell_edge__6__s__T",
+      "l_on_a_sheared_cell__3__p__R",
+      "l_on_a_sheared_cell__3__p__T",
+      "l_on_a_sheared_cell__3__s__R",
+      "l_on_a_sheared_cell__3__s__T",
+      "l_on_a_sheared_cell__6__p__R",
+      "l_on_a_sheared_cell__6__p__T",
+      "l_on_a_sheared_cell__6__s__R",
+      "l_on_a_sheared_cell__6__s__T",
+      "l_shape__3__p__R",
+      "l_shape__3__p__T",
+      "l_shape__3__s__R",
+      "l_shape__3__s__T",
+      "l_shape__6__p__R",
+      "l_shape__6__p__T",
+      "l_shape__6__s__R",
+      "l_shape__6__s__T",
+      "l_with_a_hole__3__p__R",
+      "l_with_a_hole__3__p__T",
+      "l_with_a_hole__3__s__R",
+      "l_with_a_hole__3__s__T",
+      "l_with_a_hole__6__p__R",
+      "l_with_a_hole__6__p__T",
+      "l_with_a_hole__6__s__R",
+      "l_with_a_hole__6__s__T",
+      "l_with_an_inclusion__3__p__R",
+      "l_with_an_inclusion__3__p__T",
+      "l_with_an_inclusion__3__s__R",
+      "l_with_an_inclusion__3__s__T",
+      "l_with_an_inclusion__6__p__R",
+      "l_with_an_inclusion__6__p__T",
+      "l_with_an_inclusion__6__s__R",
+      "l_with_an_inclusion__6__s__T",
+      "triangle__3__p__R",
+      "triangle__3__p__T",
+      "triangle__3__s__R",
+      "triangle__3__s__T",
+      "triangle__6__p__R",
+      "triangle__6__p__T",
+      "triangle__6__s__R",
+      "triangle__6__s__T",
+      "z_wider_than_the_period__3__p__R",
+      "z_wider_than_the_period__3__p__T",
+      "z_wider_than_the_period__3__s__R",
+      "z_wider_than_the_period__3__s__T",
+      "z_wider_than_the_period__6__p__R",
+      "z_wider_than_the_period__6__p__T",
+      "z_wider_than_the_period__6__s__R",
+      "z_wider_than_the_period__6__s__T"
+    ]
+  },
+  "values_sha256": "9cc1ef033be45c8bffb72596091f06f9bdd16d5772a8fef09dc4123879f1bec9",
+  "content_sha256": "6a4518e3df0b367ef9eb3ce77bfa900beabc99b1992e0f70796fc134bce5dfb1",
+  "consumers": [
+    "tests/references/test_s4_polygon_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[0].version": "tests/references/README.md:1374 and 1376 ('the same build')",
+    "references[0].build": "tests/references/README.md:1374",
+    "references[0].source": "tests/references/README.md:1374 (tag v0.1.0 on fieldalgo/S4); upstream victorliu/S4 also in tools/third_party_licenses.json external_tools.S4.url",
+    "references[0].modified": "tests/references/README.md:1374 ('FieldAlgo's fork of S4 1.1')",
+    "references[0].install": "tests/references/README.md:1374 ('build that tag to reproduce these goldens')",
+    "environment": "tests/references/README.md:1374",
+    "comparison": "tests/references/README.md:106 ('identity to 5.8e-13'); gen_goldens_s4_polygon.py:8-16",
+    "role": "tests/references/README.md:106",
+    "references[0].settings": "tests/references/gen_goldens_s4_polygon.py:41-118",
+    "references[0].discretization": "gen_goldens_s4_polygon.py:12-14, 85-86, 102-104",
+    "references[0].execution": "gen_goldens_s4_polygon.py:82 'import S4' in the generator process",
+    "references[0].independence": "gen_goldens_s4_polygon.py imports only sys, pathlib, tools.repository_paths, numpy, S4; vertices are literal tuples",
+    "generator.command": "tests/references/gen_goldens_s4_polygon.py:6 (docstring: 'in the project env with the S4 extension built')",
+    "generated_date": "tests/references/README.md:1376",
+    "arrays": "archive keys: <case>__<order>__<pol>__R / __T (56 arrays)"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "README.md 'What each golden was frozen with' and the generator docstring; no numpy version recorded",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].install.command": "README.md:1374 says only 'build that tag'; no build/install command in README.md, the generators or docs/development/third-party.md"
+  }
+}

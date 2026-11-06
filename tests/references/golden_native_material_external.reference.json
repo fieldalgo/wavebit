@@ -1,0 +1,167 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_native_material_external",
+  "physics": "fdtd",
+  "comparison": "same-discretization",
+  "role": "Meep + FDTDX CPML and electric ADE: four dispersive slab models at two resolutions, FDTDX two-pole updates and oscillator-strength derivative",
+  "references": [
+    {
+      "tool": "Meep",
+      "version": "1.34.0",
+      "build": null,
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "GPL-2.0-or-later",
+      "source": "https://github.com/NanoComp/meep",
+      "install": {
+        "kind": null,
+        "command": null
+      },
+      "settings": "worker tests/references/interface/validate_grid_dispersive.py --backend meep (models dielectric/lorentz/drude/mixed); cell 12, PML width 1, Courant 0.4, duration 24, point-sampled dispersive term, eps_averaging=True",
+      "discretization": "Meep 1D Yee grid at resolutions 40/80",
+      "arrays": [
+        "meep-*",
+        "metadata"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": true,
+        "reference_inputs_built_from_product_objects": false
+      }
+    },
+    {
+      "tool": "FDTDX",
+      "version": "0.6.2",
+      "build": null,
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "MIT",
+      "source": "https://github.com/ymahlau/fdtdx",
+      "install": {
+        "kind": null,
+        "command": null
+      },
+      "settings": "worker tests/references/interface/validate_grid_fdtdx_ade.py --backend fdtdx; FDTDX coefficient factory for one Drude and one Lorentz pole, native H/E updates for 53 steps",
+      "discretization": "FDTDX 9x7x5 periodic grid, nonuniform diagonal eps/mu",
+      "arrays": [
+        "fdtdx_*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": true,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/interface/freeze_grid_material_references.py",
+    "sha256": null,
+    "command": "tests/references/interface/freeze_grid_material_references.py --input DIR --output NEW.npz",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-09-08",
+  "environment": {
+    "python": null,
+    "numpy": null
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/interface/freeze_grid_material_references.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_native_material_external.npz",
+    "format": "npz",
+    "file_sha256": "0042ae6c08704076a233280f6edc2cb371bac28edb595a4d6f5aa1732c23d1e5",
+    "arrays": [
+      "fdtdx_E",
+      "fdtdx_H",
+      "fdtdx_finite_difference",
+      "fdtdx_gradient",
+      "fdtdx_value",
+      "meep-dielectric-40-band_airy",
+      "meep-dielectric-40-band_fields",
+      "meep-dielectric-40-band_power",
+      "meep-dielectric-80-band_airy",
+      "meep-dielectric-80-band_fields",
+      "meep-dielectric-80-band_power",
+      "meep-drude-40-band_airy",
+      "meep-drude-40-band_fields",
+      "meep-drude-40-band_power",
+      "meep-drude-80-band_airy",
+      "meep-drude-80-band_fields",
+      "meep-drude-80-band_power",
+      "meep-lorentz-40-band_airy",
+      "meep-lorentz-40-band_fields",
+      "meep-lorentz-40-band_power",
+      "meep-lorentz-80-band_airy",
+      "meep-lorentz-80-band_fields",
+      "meep-lorentz-80-band_power",
+      "meep-mixed-40-band_airy",
+      "meep-mixed-40-band_fields",
+      "meep-mixed-40-band_power",
+      "meep-mixed-80-band_airy",
+      "meep-mixed-80-band_fields",
+      "meep-mixed-80-band_power",
+      "metadata"
+    ]
+  },
+  "values_sha256": "1f09d537473eee255aa30da84a63d5b09c1c3bbd894b7193cde1ab1e2d3386c1",
+  "content_sha256": "a23b4bac4761b313675987a02783b47321db2efb54e9c846ec39c873e5d4c3b0",
+  "consumers": [
+    "tests/references/test_native_material_external.py",
+    "tests/references/test_native_torch_external.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[].source": "tools/third_party_licenses.json external_tools.<tool>.url",
+    "references[].execution": "tests/references/README.md:1277-1285 (Meep run by hand in its own environment) / README row 'separate Meep and FDTDX interpreters'",
+    "comparison": "README.md:1571-1576 ('an actual direct comparison, not a loose allowance for different interface discretizations', 3e-6), 1604-1607",
+    "role": "README.md:122",
+    "references[0].version": "metadata key JSON: meep-*-band.version",
+    "references[1].version": "metadata key JSON: fdtdx-ade.version",
+    "references[*].arrays": "archive keys; freeze_grid_material_references.py:16-30 (metadata assigned to Meep here)",
+    "references[0].settings": "README.md:1557-1567; validate_grid_dispersive.py:19-58",
+    "references[1].settings": "README.md:1604-1607; validate_grid_fdtdx_ade.py:26-45",
+    "references[0].independence": "validate_grid_dispersive.py:10 (module-level wavebit import); listed in tools/third_party_licenses.json Meep.reference.imported_by",
+    "references[1].independence": "validate_grid_fdtdx_ade.py:7 (module-level wavebit import); inputs from numpy rng :26-29",
+    "generator": "README.md:1622-1624",
+    "generated_date": "README.md:1510 section heading '(2026-09-08)'"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "not recorded",
+    "environment.python": "not recorded",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "not recorded",
+    "references[0].install.command": "only '$MEEP_PYTHON'/'$FDTDX_PYTHON' interpreters named",
+    "references[0].install.kind": "only '$MEEP_PYTHON'/'$FDTDX_PYTHON' interpreters named",
+    "references[0].modified.description": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified",
+    "references[0].modified.value": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified",
+    "references[1].build": "not recorded",
+    "references[1].install.command": "only '$MEEP_PYTHON'/'$FDTDX_PYTHON' interpreters named",
+    "references[1].install.kind": "only '$MEEP_PYTHON'/'$FDTDX_PYTHON' interpreters named",
+    "references[1].modified.description": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified",
+    "references[1].modified.value": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified"
+  }
+}

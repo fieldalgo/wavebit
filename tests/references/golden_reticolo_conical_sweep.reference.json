@@ -1,0 +1,115 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_reticolo_conical_sweep",
+  "physics": "rcwa",
+  "comparison": "same-discretization",
+  "role": "external oracle (conical (kx, ky) sweep incl. complex angles), frozen from a 2024-09-09 study",
+  "references": [
+    {
+      "tool": "RETICOLO",
+      "version": null,
+      "build": "out-of-repo 2024-09-09 study directory: run_reti.m, Reticolo_RCWA_1D.m, reti_res_80.mat, reti_res_200.mat (reti_res2.mat a second run)",
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "CC-BY-4.0",
+      "source": "https://doi.org/10.5281/zenodo.14631951",
+      "install": {
+        "kind": null,
+        "command": null
+      },
+      "settings": "out-of-repo study (run_reti.m sweep driver, Reticolo_RCWA_1D.m per-point wrapper) run 2024-09-09; 21x21 (kx, ky) grid on [-2, 2]; 1D grating, period 2000 nm, WL 900 nm, thickness 100 nm, n_top 1, n_bot 5; zeroth-order reflected TE amplitude dc_ri_TETE_Reticolo_arr; scene arrays stored as permittivity (squared at the write)",
+      "discretization": "truncation_order 80 (amp_fto80) and 200 (amp_fto200); the test solves at MAX_ORDER 80",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": null
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_reticolo_conical_sweep.py",
+    "sha256": null,
+    "command": null,
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-10-15",
+  "environment": {
+    "python": null,
+    "numpy": null,
+    "other": "generator needs only Python with numpy and scipy (scipy.io.loadmat); RETICOLO host for the 2024 study not recorded"
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_reticolo_conical_sweep.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_reticolo_conical_sweep.npz",
+    "format": "npz",
+    "file_sha256": "0a44b40c9e051e499ad6353071158d036a7290c9a39ee568fec3f0efbd0a499e",
+    "arrays": [
+      "amp_fto200",
+      "amp_fto80",
+      "bot",
+      "kx",
+      "ky",
+      "period",
+      "structure",
+      "thickness",
+      "top",
+      "wavelength"
+    ]
+  },
+  "values_sha256": "8847cc18901eea0ad2d57d83b2e0c1369f83dd8bc0986c7a5aadd4004fc5f137",
+  "content_sha256": "3337e345ad2350e1395d75ecd2819c20d307bdb3ec6c81f81b9f962596d7f99d",
+  "consumers": [
+    "tests/references/test_reticolo_conical_sweep.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[0].build": "gen_goldens_reticolo_conical_sweep.py:8-15",
+    "references[0].source": "tools/third_party_licenses.json external_tools.RETICOLO.url (the generic RETICOLO record; which release the 2024 study used is not recorded)",
+    "references[0].execution": "gen_goldens_reticolo_conical_sweep.py:3-6 (does not run Octave; reads .mat output of a study run outside this repository by an .m driver)",
+    "references[0].independence.product_loaded_in_reference_process": "the 2024 sweep ran from .m files (run_reti.m, Reticolo_RCWA_1D.m; gen_goldens_reticolo_conical_sweep.py:10-15); the generator itself imports numpy, scipy.io, tools.repository_paths only",
+    "comparison": "test_reticolo_conical_sweep.py:16-17 (1e-14 over the propagating points); MAX_ORDER 80 at test line 54",
+    "role": "tests/references/README.md:101",
+    "references[0].settings": "gen_goldens_reticolo_conical_sweep.py:1-17, 46-66",
+    "generator.command": "gen_goldens_reticolo_conical_sweep.py:14-17 and usage message line 42: '<study-directory>' argument, no literal command",
+    "generated_date": "README.md:33-35 and gen_goldens_reticolo_conical_sweep.py:24-27: RETICOLO run 2024-09-09; the .npz regenerated from the study directory 2026-10-15 (every amplitude and grid array bit for bit; scene arrays now permittivity)",
+    "arrays": "archive keys: amp_fto80, amp_fto200, kx, ky, structure, period, wavelength, thickness, top, bot (10)"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "not in tests/references/README.md, the golden itself or its generator (record reconstructed 2026-10-28)",
+    "environment.python": "not recorded in README.md or the generators",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.command": "only a usage string with <study-directory>; the study path is machine-specific",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].independence.reference_inputs_built_from_product_objects": "run_reti.m is not in the repository; the generator lists its constants (ucell_1d_s, n_I, n_II) but not how they were produced",
+    "references[0].install.command": "no install recorded for the 2024 study",
+    "references[0].install.kind": "no install recorded for the 2024 study",
+    "references[0].modified.description": "README.md and generator docstrings say 'version-pinned V10 tree' but not whether it is pristine (gen_goldens_reticolo.py:24-28 mentions an earlier modified V9 and a V9_pristine tree, both no longer used)",
+    "references[0].modified.value": "README.md and generator docstrings say 'version-pinned V10 tree' but not whether it is pristine (gen_goldens_reticolo.py:24-28 mentions an earlier modified V9 and a V9_pristine tree, both no longer used)",
+    "references[0].version": "README.md:1369-1370 says RETICOLO rows name V10, but README.md:1316-1317 says V10 was created 2025-01-11 / launched 01/2025, after the 2024-09-09 run; no version recorded for the study"
+  }
+}

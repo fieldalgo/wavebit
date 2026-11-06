@@ -56,6 +56,16 @@ from wavebit._common.geometry.polygon import polygon_ft, polygon_area, rect_vert
 # CI may run each test of this file in a different shard (tools/run_verification.py --shard).
 pytestmark = pytest.mark.shard_unit(per='test')
 
+# Double precision for the engine's JAX solves below, asked for here rather than left to whichever
+# test reached the JAX backend first. Importing that backend lifts JAX's 32-bit cap, but not inside
+# a public run's `Execution` scope, so a pytest-xdist worker whose first JAX test was a public
+# single-precision run solved every legacy JAX case in this file in float32: 11 failures on
+# 2026-11-04, and the file passed alone.
+try:
+    _legacy_wavebit_enable_x64()
+except ImportError:
+    pass
+
 PERIOD = (1.0, 1.0)
 CELL = as_lattice(period=PERIOD)      # the same cell, as the basis every builder now takes
 

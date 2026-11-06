@@ -1,0 +1,116 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_pymoosh_dng",
+  "physics": "multilayer",
+  "comparison": "same-discretization",
+  "role": "the outside check for lossless double negatives in flat stacks",
+  "references": [
+    {
+      "tool": "PyMoosh",
+      "version": "4.0.1",
+      "build": null,
+      "modified": {
+        "value": false,
+        "description": "PyPI release PyMoosh==4.0.1, nothing vendored; generator refuses any other version"
+      },
+      "spdx": "MIT",
+      "source": "https://github.com/AnMoreau/PyMoosh",
+      "install": {
+        "kind": "pip",
+        "command": "python -m venv pymoosh-ref && pymoosh-ref/bin/pip install PyMoosh==4.0.1"
+      },
+      "settings": "PyMoosh.coefficient_S (scattering-matrix method with the double-negative switch); WL 500; 4 flat stacks with lossless DNG as substrate / lit superstrate / inner layer / everywhere; half-spaces at zero thickness; 4 angles each; rows (r, t, R, T) for pol 0 (TE) and 1 (TM); __kx = PyMoosh alpha/k0; refuses |R+T-1| > 1e-12",
+      "discretization": "none on the reference side (2x2 scalar scattering matrices); Wavebit compared at truncation_order = 0",
+      "arrays": [
+        "*"
+      ],
+      "execution": "in-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_pymoosh_dng.py",
+    "sha256": null,
+    "command": "pymoosh-ref/bin/python tests/references/gen_goldens_pymoosh_dng.py",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-10-04",
+  "environment": {
+    "python": "3.12",
+    "numpy": "2.5.3",
+    "other": "throwaway venv pymoosh-ref with PyMoosh 4.0.1 (pulls matplotlib, scipy, refractiveindex)"
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_pymoosh_dng.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_pymoosh_dng.npz",
+    "format": "npz",
+    "file_sha256": "34f92651d039a418024a344ee9edfbd96f6573def182859f48f504bc8bd4d38b",
+    "arrays": [
+      "__numpy_version",
+      "__pymoosh_version",
+      "dng_everywhere__kx",
+      "dng_everywhere__pol0",
+      "dng_everywhere__pol1",
+      "dng_inner_layer__kx",
+      "dng_inner_layer__pol0",
+      "dng_inner_layer__pol1",
+      "dng_substrate__kx",
+      "dng_substrate__pol0",
+      "dng_substrate__pol1",
+      "dng_superstrate__kx",
+      "dng_superstrate__pol0",
+      "dng_superstrate__pol1"
+    ]
+  },
+  "values_sha256": "2e0fea2c082106b77f431284c3a0ff7c30f484432bb57844525b4843debe7227",
+  "content_sha256": "a0449b52e778bd96412f475865efd1330b4cd0f26bd689fcb2c654d3ee8bb0ff",
+  "consumers": [
+    "tests/api/test_study_bootstrap.py",
+    "tests/references/test_pymoosh_dng_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[0].version": "archive key __pymoosh_version = '4.0.1'; gen_goldens_pymoosh_dng.py:14, 47-49; _pymoosh_dng_cases.py:47; README.md:112",
+    "references[0].source": "tools/third_party_licenses.json external_tools.PyMoosh.url",
+    "references[0].install": "gen_goldens_pymoosh_dng.py:6-7",
+    "references[0].modified": "gen_goldens_pymoosh_dng.py:7, 10-12 ('Nothing of it is vendored here'), 15-18",
+    "references[0].settings": "gen_goldens_pymoosh_dng.py:20-25, 42-67; _pymoosh_dng_cases.py:46-90",
+    "references[0].execution": "gen_goldens_pymoosh_dng.py:44 'import PyMoosh' in the generator process",
+    "references[0].independence": "_pymoosh_dng_cases.py:3-4 ('throwaway environment holding PyMoosh and no wavebit'); generator imports numpy, PyMoosh, tools.repository_paths, _pymoosh_dng_cases (numpy only)",
+    "comparison": "tests/references/README.md:112 and 665-666 (8.8e-15; neither side truncates)",
+    "role": "tests/references/README.md:649",
+    "generator.command": "tests/references/gen_goldens_pymoosh_dng.py:8",
+    "generated_date": "gen_goldens_pymoosh_dng.py:14; README.md:647 heading (2026-10-04)",
+    "environment": "archive key __numpy_version = '2.5.3'; gen_goldens_pymoosh_dng.py:3-8, 14 (Python 3.12); README.md:665-666",
+    "consumers": "tests/api/test_study_bootstrap.py:138-142 np.load()s it inside a subprocess script it runs",
+    "arrays": "archive keys: <case>__kx, <case>__pol0, <case>__pol1, __pymoosh_version, __numpy_version (14)"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "no wheel/build identifier recorded beyond the version"
+  }
+}

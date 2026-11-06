@@ -1,0 +1,118 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_reticolo_anisotropic",
+  "physics": "rcwa",
+  "comparison": "same-discretization",
+  "role": "external oracle (uniform anisotropic stacks)",
+  "references": [
+    {
+      "tool": "RETICOLO",
+      "version": "V10",
+      "build": "reticolo_allege_v10 tree given by RETICOLO_PATH (outside the repository)",
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "CC-BY-4.0",
+      "source": "https://doi.org/10.5281/zenodo.14631951",
+      "install": {
+        "kind": "manual",
+        "command": null
+      },
+      "settings": "Octave host via oct2py; interface/reti_aniso.m (after RETICOLO's exemple_V9_0D_anisotrope.m): uniform slab holding a full complex 3x3 permittivity tensor between vacuum, delta0 = 0, eps passed as real and imaginary parts; returns [R_TE, T_TE, R_TM, T_TM]; includes a Z_COUPLED_CASES block",
+      "discretization": "nn = 0 (zeroth order only; uniform slab, no truncation)",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_reticolo_anisotropic.py",
+    "sha256": null,
+    "command": "conda run -n wavebit python tests/references/gen_goldens_reticolo_anisotropic.py",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": null,
+  "environment": {
+    "python": null,
+    "numpy": null,
+    "other": "Octave (via oct2py), conda env 'wavebit' per the docstring command; RETICOLO_PATH"
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_reticolo_anisotropic.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_reticolo_anisotropic.npz",
+    "format": "npz",
+    "file_sha256": "ab43165e9c44b365117d27dc8c3cfbe36d41c1b04f99aa39f0b8ff8061043b44",
+    "arrays": [
+      "diagonal_biaxial_35deg",
+      "gyrotropic_45deg",
+      "gyrotropic_normal",
+      "isotropic_35deg",
+      "isotropic_normal",
+      "real_antisymmetric_35deg",
+      "real_antisymmetric_normal",
+      "symmetric_offdiag_35deg",
+      "symmetric_offdiag_normal",
+      "voigt_x_35deg",
+      "voigt_x_normal",
+      "voigt_y_35deg"
+    ]
+  },
+  "values_sha256": "1ef05d11b7b40bbfdeccf5a9efa9b07ac48a05eb3c8e2c1d61fc015faa142e59",
+  "content_sha256": "2a2723d1ad4215832bba8bc18658197862d759c542060995b331295cf6e1863a",
+  "consumers": [
+    "tests/references/test_first_order_external_goldens.py",
+    "tests/references/test_reticolo_anisotropic_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[0].version": "gen_goldens_reticolo_anisotropic.py:3, 14-16 ('V10_2025 is what both were verified against'); README.md:86",
+    "references[0].build": "generator RETICOLO_PATH check ('set RETICOLO_PATH to a reticolo_allege_v10 directory')",
+    "references[0].source": "tools/third_party_licenses.json external_tools.RETICOLO.url; README.md:1310 (Zenodo V10 record 14631951)",
+    "references[0].install": "README.md:86 ('Octave + a RETICOLO V10 tree from its Zenodo record ... (RETICOLO_PATH)'); README.md:1336-1338 (kept outside the repository, pinned by RETICOLO_PATH)",
+    "references[0].execution": "tools/third_party_licenses.json external_tools.Octave.use ('runs RETICOLO as a separate process driven by oct2py'); docs/development/third-party.md:191",
+    "references[0].independence.product_loaded_in_reference_process": "docs/development/third-party.md:191 ('Our .m wrappers run inside Octave and never call Wavebit'). The Python driver process (oct2py) does import wavebit",
+    "comparison": "README.md:7-9; reti_aniso.m nn = 0; test_reticolo_anisotropic_golden.py:14-17 (~1e-15)",
+    "role": "test_reticolo_anisotropic_golden.py:1-7",
+    "references[0].settings": "interface/reti_aniso.m:1-33; gen_goldens_reticolo_anisotropic.py:86-115",
+    "references[0].independence.reference_inputs_built_from_product_objects": "gen_goldens_reticolo_anisotropic.py:98-100 passes the case's numpy tensor straight to octave.reti_aniso (no interface/Reticolo.py, no wavebit conversion)",
+    "generator imports": "gen_goldens_reticolo_anisotropic.py:89 imports test_reticolo_anisotropic_golden, which imports tests.rcwa.test_anisotropic_berreman (line 49), which imports wavebit (test_anisotropic_berreman.py:71): wavebit is loaded in the Python driver process",
+    "generator.command": "tests/references/gen_goldens_reticolo_anisotropic.py:7",
+    "arrays": "archive keys: 12 case names"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "not in tests/references/README.md, the golden itself or its generator (record reconstructed 2026-10-28)",
+    "environment.python": "not recorded in README.md or the generators",
+    "generated_utc": "not in tests/references/README.md, the golden itself or its generator (record reconstructed 2026-10-28)",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].install.command": "README.md:86/100 and generators: download from Zenodo and set RETICOLO_PATH; no command; Octave and oct2py install steps not documented",
+    "references[0].modified.description": "README.md and generator docstrings say 'version-pinned V10 tree' but not whether it is pristine (gen_goldens_reticolo.py:24-28 mentions an earlier modified V9 and a V9_pristine tree, both no longer used)",
+    "references[0].modified.value": "README.md and generator docstrings say 'version-pinned V10 tree' but not whether it is pristine (gen_goldens_reticolo.py:24-28 mentions an earlier modified V9 and a V9_pristine tree, both no longer used)"
+  }
+}

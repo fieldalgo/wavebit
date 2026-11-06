@@ -1,0 +1,114 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_fmmax_magnetic",
+  "physics": "rcwa",
+  "comparison": "same-discretization",
+  "role": "golden frozen ahead of its consumer (mu = 1 half checked today)",
+  "references": [
+    {
+      "tool": "fmmax",
+      "version": "1.7.1",
+      "build": null,
+      "modified": {
+        "value": false,
+        "description": "pip-installed fmmax release, used as shipped"
+      },
+      "spdx": "MIT",
+      "source": "https://github.com/facebookresearch/fmmax",
+      "install": {
+        "kind": "pip",
+        "command": "conda create -y -n fwref python=3.11 && conda run -n fwref pip install fmmax"
+      },
+      "settings": "uniform magnetic slab, eigensolve_general_anisotropic_media with eps and mu (xx/xy/yx/yy/zz each), Formulation.FFT; WL 700, period 400, thickness 210; every case also run at mu = 1 (keys *__mu1); [R_s, T_s, R_p, T_p]",
+      "discretization": "generate_expansion approximate_num_terms=1, Truncation.CIRCULAR (zeroth order only; uniform)",
+      "arrays": [
+        "*"
+      ],
+      "execution": "in-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_fmmax_magnetic.py",
+    "sha256": null,
+    "command": "conda run -n fwref python tests/references/gen_goldens_fmmax_magnetic.py",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-08-10",
+  "environment": {
+    "python": "3.11",
+    "numpy": "2.4.6",
+    "other": "jax 0.10.2, jaxlib 0.10.2, conda env fwref; jax_enable_x64=True set by the generator"
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_fmmax_magnetic.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_fmmax_magnetic.npz",
+    "format": "npz",
+    "file_sha256": "5e025ba9e6a0cc74aa4b4781e39c8c90e2efd586c8edf213c25dc5e04c4f76d4",
+    "arrays": [
+      "biaxial_eps_biaxial_mu_21deg",
+      "biaxial_eps_biaxial_mu_21deg__mu1",
+      "gyroelectric_46deg",
+      "gyroelectric_46deg__mu1",
+      "gyroelectric_and_gyromagnetic_46deg",
+      "gyroelectric_and_gyromagnetic_46deg__mu1",
+      "gyromagnetic_46deg",
+      "gyromagnetic_46deg__mu1",
+      "iso_eps_scalar_mu",
+      "iso_eps_scalar_mu_39deg",
+      "iso_eps_scalar_mu_39deg__mu1",
+      "iso_eps_scalar_mu__mu1",
+      "iso_eps_uniaxial_mu_39deg",
+      "iso_eps_uniaxial_mu_39deg__mu1"
+    ]
+  },
+  "values_sha256": "ef4f0d355097ec85f7cb16df5efb316483e79a591c1ffcb413d03aa27d88673d",
+  "content_sha256": "cca44af06cb148f866bd36491943ccc5f6d141daebb1c4402c011fb8a12cd429",
+  "consumers": [
+    "tests/references/test_fmmax_magnetic_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[*].version": "tests/references/README.md:1377-1384",
+    "references[*].source": "tools/third_party_licenses.json external_tools.fmmax.url",
+    "references[*].install": "tests/references/README.md:1347-1350 (fwref env); gen_goldens_fmmax.py:13",
+    "environment": "tests/references/README.md:1377 ('fmmax 1.7.1, jax and jaxlib 0.10.2, numpy 2.4.6, Python 3.11, in fwref'); README.md:1387 (fwref held exactly those versions since 2026-08-10)",
+    "references[*].execution": "generator imports fmmax in its own process (main())",
+    "references[*].independence": "generator and its _fmmax_*_cases.py helpers import numpy/jax/fmmax/tools.repository_paths only; _fmmax_cases.py:4-7 and README.md:1352-1355 ('fwref has no wavebit')",
+    "references[*].modified": "README.md:1347-1350 plain 'pip install fmmax' in fwref; no patch mentioned",
+    "comparison": "README.md:7-9; uniform slab with 1 term (gen_goldens_fmmax_magnetic.py:74-75)",
+    "role": "tests/references/README.md:1410-1420 ('A golden frozen ahead of its consumer')",
+    "references[*].settings": "gen_goldens_fmmax_magnetic.py:41-125",
+    "arrays": "archive keys: 7 cases x {'' , '__mu1'}",
+    "generator.command": "tests/references/gen_goldens_fmmax_magnetic.py:docstring (conda run -n fwref ...)",
+    "generated_date": "tests/references/README.md:1378"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "README.md fwref section and 'What each golden was frozen with'; no wheel/build identifier beyond the version"
+  }
+}

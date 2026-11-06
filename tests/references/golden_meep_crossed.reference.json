@@ -1,0 +1,170 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_meep_crossed",
+  "physics": "fdtd",
+  "comparison": "structure-oracle",
+  "role": "oracle for structure: a crossed grating in the time domain (per-order complex amplitudes, conical mount)",
+  "references": [
+    {
+      "tool": "Meep",
+      "version": null,
+      "build": null,
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "GPL-2.0-or-later",
+      "source": "https://github.com/NanoComp/meep",
+      "install": {
+        "kind": "conda",
+        "command": "conda create -y -n meep -c conda-forge pymeep"
+      },
+      "settings": "public API only; fixed run until_after_sources=200, dpml 0.6, pad 0.7, monitor gap 0.10, df_frac 0.2, force_complex_fields; other settings Meep defaults",
+      "discretization": "Meep 3D Yee cell, PML along z only; fine/coarse tiers: square_18deg 50/25, rect_28deg 60/30 px/um; raster as mp.Block per cell",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_meep_crossed.py",
+    "sha256": null,
+    "command": "conda run -n meep python tests/references/gen_goldens_meep_crossed.py",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-09-06",
+  "environment": {
+    "python": null,
+    "numpy": null
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_meep_crossed.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_meep_crossed.npz",
+    "format": "npz",
+    "file_sha256": "60d9e6000ef79dc65f6c12fc90330bd21bb246388653cc1dd07c3f2be2581065",
+    "arrays": [
+      "rect_28deg__orders_u",
+      "rect_28deg__orders_v",
+      "rect_28deg__p__coarse__R",
+      "rect_28deg__p__coarse__T",
+      "rect_28deg__p__coarse__leak",
+      "rect_28deg__p__coarse__purity",
+      "rect_28deg__p__coarse__r_p",
+      "rect_28deg__p__coarse__r_s",
+      "rect_28deg__p__coarse__t_p",
+      "rect_28deg__p__coarse__t_s",
+      "rect_28deg__p__fine__R",
+      "rect_28deg__p__fine__T",
+      "rect_28deg__p__fine__leak",
+      "rect_28deg__p__fine__purity",
+      "rect_28deg__p__fine__r_p",
+      "rect_28deg__p__fine__r_s",
+      "rect_28deg__p__fine__t_p",
+      "rect_28deg__p__fine__t_s",
+      "rect_28deg__s__coarse__R",
+      "rect_28deg__s__coarse__T",
+      "rect_28deg__s__coarse__leak",
+      "rect_28deg__s__coarse__purity",
+      "rect_28deg__s__coarse__r_p",
+      "rect_28deg__s__coarse__r_s",
+      "rect_28deg__s__coarse__t_p",
+      "rect_28deg__s__coarse__t_s",
+      "rect_28deg__s__fine__R",
+      "rect_28deg__s__fine__T",
+      "rect_28deg__s__fine__leak",
+      "rect_28deg__s__fine__purity",
+      "rect_28deg__s__fine__r_p",
+      "rect_28deg__s__fine__r_s",
+      "rect_28deg__s__fine__t_p",
+      "rect_28deg__s__fine__t_s",
+      "square_18deg__orders_u",
+      "square_18deg__orders_v",
+      "square_18deg__p__coarse__R",
+      "square_18deg__p__coarse__T",
+      "square_18deg__p__coarse__leak",
+      "square_18deg__p__coarse__purity",
+      "square_18deg__p__coarse__r_p",
+      "square_18deg__p__coarse__r_s",
+      "square_18deg__p__coarse__t_p",
+      "square_18deg__p__coarse__t_s",
+      "square_18deg__p__fine__R",
+      "square_18deg__p__fine__T",
+      "square_18deg__p__fine__leak",
+      "square_18deg__p__fine__purity",
+      "square_18deg__p__fine__r_p",
+      "square_18deg__p__fine__r_s",
+      "square_18deg__p__fine__t_p",
+      "square_18deg__p__fine__t_s",
+      "square_18deg__s__coarse__R",
+      "square_18deg__s__coarse__T",
+      "square_18deg__s__coarse__leak",
+      "square_18deg__s__coarse__purity",
+      "square_18deg__s__coarse__r_p",
+      "square_18deg__s__coarse__r_s",
+      "square_18deg__s__coarse__t_p",
+      "square_18deg__s__coarse__t_s",
+      "square_18deg__s__fine__R",
+      "square_18deg__s__fine__T",
+      "square_18deg__s__fine__leak",
+      "square_18deg__s__fine__purity",
+      "square_18deg__s__fine__r_p",
+      "square_18deg__s__fine__r_s",
+      "square_18deg__s__fine__t_p",
+      "square_18deg__s__fine__t_s"
+    ]
+  },
+  "values_sha256": "976ea21c1ac3075f21e1548bfaf9b7a955d490d4073e6cfef41cd1be2bb3891e",
+  "content_sha256": "68eb424c44ce6531866b6c543322641e57e37fd9f2a25c828df0fb9fffe44a8d",
+  "consumers": [
+    "tests/references/test_meep_crossed_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[].source": "tools/third_party_licenses.json external_tools.<tool>.url",
+    "references[].execution": "tests/references/README.md:1277-1285 (Meep run by hand in its own environment) / README row 'separate Meep and FDTDX interpreters'",
+    "comparison": "tests/references/README.md:7-14 (Meep rows are oracles for structure); README.md:819 ('an oracle for structure')",
+    "role": "tests/references/README.md:115",
+    "references[0].arrays": "archive keys (68, no metadata key)",
+    "references[0].settings": "tests/references/_meep_crossed_cases.py:61-82; gen_goldens_meep_crossed.py:126,196-215",
+    "references[0].discretization": "_meep_crossed_cases.py:69,82 (meep_resolution 50/60); gen_goldens_meep_crossed.py:90-99 (COARSE_RATIO=2),201",
+    "references[0].install": "tests/references/README.md:1289-1293",
+    "references[0].independence": "gen_goldens_meep_crossed.py imports only numpy/tools.repository_paths/_meep_crossed_cases (lines 74-83,329); _meep_crossed_cases.py:5-8,34 ('meep env that has no wavebit in it', imports numpy only)",
+    "generator": "gen_goldens_meep_crossed.py:1-7,376",
+    "generated_date": "tests/references/README.md:683 ('Added 2026-09-06', the row's addition date)"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "nothing recorded in archive or docs",
+    "environment.python": "nothing recorded in archive or docs",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "no build string in archive, generator or README for this golden",
+    "references[0].modified.description": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified",
+    "references[0].modified.value": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified",
+    "references[0].version": "generator captures mp.__version__ into the per-run dict (gen_goldens_meep_crossed.py:226) but _amplitudes output only is saved (:376); archive has no version key; README crossed section names no version"
+  }
+}

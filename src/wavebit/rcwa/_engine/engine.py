@@ -336,6 +336,26 @@ def _holds_autodiff(value):
     return False
 
 
+def _absent_or_fixed_zero(value, eager):
+    """Whether an incidence component is absent, or a zero that nothing traces or differentiates.
+
+    What a polarization word reads ``phi`` and ``ky`` with before it takes the pure 1D path
+    (:meth:`CoreSolveMixin._polarization_word_holds`). The test is structural before it is a
+    read: a JAX tracer -- ``jax.jit``, ``vmap`` and an eager ``jax.grad`` alike -- and a PyTorch
+    tensor under autodiff are an azimuth being swept or differentiated, which only the conical
+    path carries, so neither is read at all. A value with nothing attached is compared with zero
+    under ``eager`` (the solver's :meth:`~CoreSolveMixin._eager`), since inside ``jax.jit`` the
+    comparison of a concrete value is otherwise staged and has no truth value; one that cannot
+    be read (a ``torch.func.vmap`` batch) is not a fixed zero either.
+    """
+    if value is None:
+        return True
+    if _holds_autodiff(value):
+        return False
+    with eager():
+        return _concrete(value == 0) is True
+
+
 
 
 #: The text of :class:`~wavebit._common.backend.GainCutoffWarning`, constant apart from the side
@@ -1330,6 +1350,9 @@ class CoreSolveMixin:
     _frozen_geometry = None
     _lattice_basis = None
     _polarization = None
+    #: ``'s'`` / ``'p'`` when :attr:`polarization` was written as that word, else ``None``. The
+    #: pair it names is in ``_polarization`` either way; this is the declaration beside it.
+    _polarization_word = None
     _tetm = None
     _chi = None
     #: ``None`` is a real state now, not an uninitialised one: it is what a solver whose
@@ -1492,8 +1515,16 @@ class CoreSolveMixin:
 
         The core takes the index rather than the word because it indexes into the two
         formulations rather than naming them; the word is the user's spelling.
+
+        Declared by :attr:`tetm`, or by a polarization word whose solve the routing put on the
+        pure path: ``'s'`` is TE and ``'p'`` TM, the same light (:attr:`polarization`). A word
+        routed elsewhere answers ``None``, as a pair does, since its solve carries both.
         """
-        return None if self._tetm is None else int(self._tetm == 'tm')
+        if self._tetm is not None:
+            return int(self._tetm == 'tm')
+        if self._grating_type == 0 and self._polarization_word is not None:
+            return int(self._polarization_word == 'p')
+        return None
 
     def _refuse_y_orders_on_a_y_invariant_cell(self, one_dimensional):
         """A one-row raster cannot diffract out of plane, so it cannot keep ``y`` orders.
@@ -1668,6 +1699,22 @@ class CoreSolveMixin:
         error, not an override. A 1D structure given a pair is solved on the conical path,
         which carries both polarizations; the pure 1D TE/TM path is single-polarization by
         construction.
+
+        **The words ``'s'`` and ``'p'`` are a declaration, and a pair is a value** (since
+        2026-11-03). A word reads back as the pair it names, ``(1, 0)`` or ``(0, 1)``, and says
+        beside it that the polarization is fixed: not a parameter anyone sweeps or
+        differentiates. That is what the pure 1D TE/TM path needs, so a word takes it wherever it
+        answers the same light -- a one-row raster on an axis-aligned cell, ``phi`` and ``ky``
+        absent or a zero nothing traces (:meth:`_polarization_word_holds`) -- and everywhere else
+        solves exactly as the pair it names. Unlike :attr:`tetm` it refuses nothing: it states
+        the light, not the path. The two paths agree to round-off (2e-13 relative over
+        ``tests/api/test_unified_rcwa_pure_1d.py``), and through the public ``rcwa.run`` the pure
+        one was 2.7, 4.1 and 5.3 times faster at ``truncation_order`` ``(50, 0)``, ``(200, 0)``
+        and ``(800, 0)``, at a peak of 0.39 GB against 5.9 GB at the last (measured 2026-11-03,
+        ``docs/guide/rcwa/light.md``). The public ``rcwa.PlaneWave`` hands
+        its own ``'s'`` / ``'p'`` here, unless a scattering matrix is asked for: the pure path's
+        is one polarization's, ``N x N`` with channel ``'te'`` / ``'tm'``, and the public one
+        keeps both, ``2N x 2N`` with channel ``'sp'``.
         """
         return self._polarization
 
@@ -1675,6 +1722,7 @@ class CoreSolveMixin:
     def polarization(self, polarization):
         if polarization is None:
             self._polarization = None
+            self._polarization_word = None
             return
         if self._psi_given:
             raise ValueError(_PSI_POLARIZATION_CLASH)
@@ -1682,6 +1730,16 @@ class CoreSolveMixin:
             raise ValueError(_CHI_POLARIZATION_CLASH)
         if self._tetm is not None:
             raise ValueError(_TETM_INCIDENCE_CLASH)
+        word = None
+        if isinstance(polarization, str):
+            if polarization not in ('s', 'p'):
+                raise ValueError(
+                    f"polarization must be 's', 'p' or a pair (a_s, a_p) of complex amplitudes, "
+                    f'got {polarization!r}')
+            word = polarization
+            # The pair the word names, written as a caller writes it, so the conical and 2D
+            # paths are handed what `polarization=(1, 0)` / `(0, 1)` would hand them.
+            polarization = (1., 0.) if word == 's' else (0., 1.)
         pair = tuple(polarization)
         if len(pair) != 2:
             raise ValueError(
@@ -1701,6 +1759,7 @@ class CoreSolveMixin:
         # inputs` while `(1.0+0j, -1j)` worked. A dtype is not something the caller should
         # have to know to get a gradient.
         self._polarization = tuple(self._as_complex(v) for v in pair)
+        self._polarization_word = word
 
     @property
     def lattice(self):
@@ -2010,7 +2069,12 @@ class CoreSolveMixin:
             self._phi = None
         else:
             check_input_precision('phi', phi, self.complex_dtype)
-            self._phi = self._as_complex(phi)
+            # Under `_eager`, as the material setters are: whether the azimuth is a fixed zero
+            # decides a branch (`_polarization_word_holds`), and inside `jax.jit` a stated
+            # `phi=0.` was otherwise staged into a tracer that branch cannot tell from a swept
+            # one. A traced azimuth still stages.
+            with self._eager():
+                self._phi = self._as_complex(phi)
 
     _kx = None
     _ky = None
@@ -2026,11 +2090,14 @@ class CoreSolveMixin:
             raise ValueError(problem)
         check_input_precision(name, value, self.complex_dtype)
         xp = self.xp
-        candidate = self._as_complex(value)
-        valid = xp.isfinite(candidate) & (xp.imag(candidate) == 0)
-        real = xp.real(candidate)
-        # Invalid traced values must not silently become a different real wave.
-        setattr(self, '_' + name, xp.where(valid, real, xp.full_like(real, float('nan'))))
+        # Under `_eager` for the reason `phi`'s setter gives: a stated `ky=0.` decides the
+        # polarization word's branch, and staged inside `jax.jit` it read as a traced one.
+        with self._eager():
+            candidate = self._as_complex(value)
+            valid = xp.isfinite(candidate) & (xp.imag(candidate) == 0)
+            real = xp.real(candidate)
+            # Invalid traced values must not silently become a different real wave.
+            setattr(self, '_' + name, xp.where(valid, real, xp.full_like(real, float('nan'))))
 
     @property
     def kx(self):
@@ -2971,12 +3038,17 @@ class CoreSolveMixin:
         `3c7d166` fixed existed three times and had to be fixed three times. Same argument as
         the one that put the solve methods here (see this class's docstring).
 
-        * ``0`` -- pure 1D TE/TM: one grating vector, no azimuth, and a ``tetm`` declaration
-          that says the other polarization is not a degree of freedom of this problem.
+        * ``0`` -- pure 1D TE/TM: one grating vector, no azimuth, and a declaration that the
+          other polarization is not a degree of freedom of this problem -- ``tetm``, or a
+          polarization word ``'s'`` / ``'p'`` with no azimuth or ``ky`` left free
+          (:meth:`_polarization_word_holds`).
         * ``1`` -- 1D conical: the same one grating vector with the azimuth and the
           polarization both live. ``phi=None`` is what distinguishes it from ``phi=0``; a
           stated zero azimuth is still a stated one.
         * ``2`` -- 2D: everything else, and every scene whose k layout is not separable.
+
+        The choice itself is :meth:`_routed_grating_type`, which refuses and warns nothing; this
+        puts the refusals and the warning a solve has to meet first in front of it, and assigns.
         """
         self._refuse_a_structure_with_no_cell()
         self._refuse_a_raster_drawn_on_another_cell()
@@ -2993,8 +3065,9 @@ class CoreSolveMixin:
                 one_dimensional = self.lattice_is_axis_aligned
                 self._refuse_y_orders_on_a_y_invariant_cell(True)
                 self._refuse_illegal_tetm(one_dimensional, one_row=True)
-                if self._tetm is None:
-                    # Withdrawn since: the pure kernel cannot run undeclared (it raised
+                if not (one_dimensional and self._pure_path_declared()):
+                    # Withdrawn since -- `tetm` cleared, or a polarization word whose phi, ky
+                    # or cell has moved: the pure kernel cannot run undeclared (it raised
                     # "tetm_index must be 0 (TE) or 1 (TM), got None"), so route as the raster
                     # branch routes that raster undeclared -- conical on an axis-aligned cell,
                     # the solve a never-declared solver gives bit for bit, and 2D on a skewed
@@ -3002,13 +3075,30 @@ class CoreSolveMixin:
                     self._grating_type = 1 if one_dimensional else 2
             return
 
-        if self._has_tensor_materials():
-            self._grating_type = 2
-            return
-
-        if self.modeling_path == ModelingPath.RASTER:
+        if self.modeling_path == ModelingPath.RASTER and not self._has_tensor_materials():
             one_row = self.structure.shape[1] == 1
             self._refuse_y_orders_on_a_y_invariant_cell(one_row)
+            warn_if_xy_on_a_skewed_cell(
+                getattr(self, '_truncation_spelling', None), self.lattice_is_axis_aligned)
+            self._refuse_illegal_tetm(one_row and self.lattice_is_axis_aligned, one_row=one_row)
+        routed = self._routed_grating_type()
+        if routed is not None:
+            self._grating_type = routed
+
+    def _routed_grating_type(self):
+        """The layout the structure and the declaration select -- ``0``, ``1`` or ``2``.
+
+        :meth:`_assign_grating_type` assigns it once its refusals have passed, and a report
+        reads it before any solve (:meth:`_solve_path`). It refuses and warns nothing, so the
+        report cannot refuse a scene one call before the run would. ``None`` with no structure,
+        whose layout is kept from the last solve rather than chosen, and for a modeling path
+        neither branch knows.
+        """
+        if self.structure is None:
+            return None
+        if self._has_tensor_materials():
+            return 2
+        if self.modeling_path == ModelingPath.RASTER:
             # One raster row means invariant along `a2`, which is a 1D grating -- but only on
             # an axis-aligned cell is it one the 1D operators can express. A skewed cell's
             # `b1` is perpendicular to `a2` rather than parallel to `a1`, so order `m` carries
@@ -3017,21 +3107,65 @@ class CoreSolveMixin:
             # problem: measured on a 50% binary grating, R out by 0.132 and T by 0.090 at a
             # 60-degree skew, energy conserving to 1e-15 throughout. See
             # `tests/rcwa/test_oblique_lattice.py::test_a_one_row_skewed_cell_is_the_grating_it_draws`.
-            one_dimensional = one_row and self.lattice_is_axis_aligned
-            warn_if_xy_on_a_skewed_cell(
-                getattr(self, '_truncation_spelling', None), self.lattice_is_axis_aligned)
-            self._refuse_illegal_tetm(one_dimensional, one_row=one_row)
-            if one_dimensional:
-                # The declaration selects the path, and nothing else does. A named incidence
-                # -- psi, or a pair, which mixes s and p the pure path cannot carry -- leaves
-                # the polarization a live parameter, and the conical formulation is the 1D
-                # one that carries it.
-                self._grating_type = 0 if self._tetm is not None else 1
-            else:
-                self._grating_type = 2
+            if not (self.structure.shape[1] == 1 and self.lattice_is_axis_aligned):
+                return 2
+            # The declaration selects the path, and nothing else does. `tetm` declares the
+            # polarization and the azimuth away, and a polarization word declares the
+            # polarization fixed. A named incidence -- psi, chi, or a pair, which may mix s
+            # and p the pure path cannot carry, and whose value may be swept or
+            # differentiated -- leaves the polarization a live parameter, and the conical
+            # formulation is the 1D one that carries it.
+            return 0 if self._pure_path_declared() else 1
+        if self.modeling_path == ModelingPath.PARAMETRIC:   # staircase-free
+            return 2
+        return None
 
-        elif self.modeling_path == ModelingPath.PARAMETRIC:   # staircase-free
-            self._grating_type = 2
+    def _pure_path_declared(self):
+        """Whether the incidence is declared to be one fixed polarization in the grating's plane.
+
+        What the pure 1D TE/TM path needs beside a 1D structure: :attr:`tetm`, which declares
+        the polarization and the azimuth away and is refused where it cannot hold
+        (:meth:`_refuse_illegal_tetm`), or a polarization word that holds here.
+        """
+        return self._tetm is not None or self._polarization_word_holds()
+
+    def _polarization_word_holds(self):
+        """Whether ``polarization='s'`` / ``'p'`` takes the pure path on a 1D structure.
+
+        The word fixes the polarization, and the pure path also needs the plane of incidence to
+        be the grating's own: ``phi`` and ``ky`` absent, or a zero that nothing traces or
+        differentiates (:func:`_absent_or_fixed_zero`). A nonzero one is off that plane, and a
+        swept or differentiated one is a degree of freedom whose derivative at zero only the
+        conical path has, so either keeps the conical path, silently -- the word states the
+        light, not the path. Every test is structural, so the answer is the same under
+        ``jax.jit`` and ``vmap`` as eagerly. The word against a pair: :attr:`polarization`.
+        """
+        return (self._polarization_word is not None
+                and _absent_or_fixed_zero(self.phi, self._eager)
+                and _absent_or_fixed_zero(self.ky, self._eager))
+
+    #: :attr:`grating_type` by name, the pure layout split by its polarization (``tetm_index``):
+    #: what ``rcwa.CheckReport.resolved['solve_path']`` and ``rcwa.Result.diagnostics`` report.
+    _SOLVE_PATHS = {(0, 0): '1d_te', (0, 1): '1d_tm', (1, None): '1d_conical', (2, None): '2d'}
+
+    def _solve_path(self, planned=False):
+        """The layout by name: the last solve's, or with ``planned`` the one a solve would take.
+
+        ``'1d_te'`` / ``'1d_tm'`` (the pure path), ``'1d_conical'`` or ``'2d'``; ``None`` before
+        the first solve. ``planned`` reads the scene as it stands without solving or refusing:
+        :meth:`_routed_grating_type`, with ``formulation='first_order'`` on the 2D layout, as
+        :meth:`_solve_conv_signed` puts it (a z row is a tensor material's, already routed there).
+        """
+        if not planned:
+            grating, index = self._grating_type, self.tetm_index
+        else:
+            grating = (2 if self._formulation == Formulation.FIRST_ORDER
+                       else self._routed_grating_type())
+            index = None
+            if grating == 0:
+                index = (int(self._tetm == 'tm') if self._tetm is not None
+                         else int(self._polarization_word == 'p'))
+        return self._SOLVE_PATHS.get((grating, index if grating == 0 else None))
 
     @property
     def grating_type(self):
@@ -3088,10 +3222,11 @@ class CoreSolveMixin:
 
     def _solve_1d(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
                   mu=None, mu_top=None, mu_bot=None, eps_top=None, eps_bot=None, dng=None):
-        if self._polarization is not None:
+        if self._polarization is not None and self.tetm_index is None:
             # Unreachable through solve — `_assign_grating_type` sends a structure with a
-            # pair to the conical path, which carries both polarizations — so this only
-            # answers a direct call.
+            # pair, or with a word it did not route here, to the conical path, which carries
+            # both polarizations — so this only answers a direct call. A word routed here is
+            # read through `tetm_index`, and its pair is never used.
             raise ValueError(
                 'the pure 1D TE/TM path is single-polarization by construction and cannot '
                 'take a polarization pair; use _solve_1d_conical, which solve() selects on '
@@ -3304,6 +3439,8 @@ class CoreFactorizationMixin:
                  # end, for the reason above.
                  polarization=None,          # complex incident amplitude pair (a_s, a_p);
                  # supersedes psi (naming both raises). See docs/reference/common/conventions.md.
+                 # Or the word 's' / 'p': that pair, declared fixed, which takes the pure 1D
+                 # path where it answers (see CoreSolveMixin.polarization).
                  raster_normal_method=None,  # raster NVF normal-field construction:
                  # 'distance' (default) | 'contour' | 'spectral' | 'smooth'. Read only
                  # where a raster normal field is built (factorization='nvf' on a raster);
@@ -4782,10 +4919,14 @@ class CoreFactorizationMixin:
     @device_scoped
     def _refuse_continuity(self):
         """Refuse ``discontinuous='continuity'`` where it is not built yet, by name."""
-        if self._grating_type not in (0, 1):
+        if self._grating_type == 2 and self._formulation_assigned == Formulation.FIRST_ORDER:
             raise NotImplementedError(
-                "discontinuous='continuity' is built for 1D gratings (the TE/TM and conical "
-                'paths) so far; a 2D cell still takes the Fourier sum.')
+                "discontinuous='continuity' is built on the second-order 2D reconstruction; the "
+                'first-order formulation still takes the Fourier sum.')
+        if self._grating_type == 2 and _np.ndim(self.order_kxy()[0]) != 1:
+            raise NotImplementedError(
+                "discontinuous='continuity' applies its rule along the cell's x and y lines; a "
+                'skewed lattice has no such lines and is refused.')
         if self.modeling_path != ModelingPath.RASTER:
             raise NotImplementedError(
                 "discontinuous='continuity' reads eps at the sample points from a raster "
@@ -4799,41 +4940,69 @@ class CoreFactorizationMixin:
                 "discontinuous='continuity' is not available after a solve that merged layers "
                 'into its half-spaces.')
 
-    def _continuity_rows(self, sample_x, backside):
-        """``eps`` of each kernel layer record at the x samples, for the continuity rule.
+    @staticmethod
+    def _sample_pixels(spec, period, n_pixels, axis):
+        """The raster pixel under each sample along one axis, for the continuity rule.
 
-        One entry per ``layer_info_list`` record, in its order: a ``(n_x,)`` array where the
-        layer varies along x, ``None`` where it does not -- a uniform layer keeps the Fourier
-        sum, bit for bit, since there is nothing for the rule to change there. The raster's
-        column ``j`` covers ``[j, j+1) * period / n_columns`` from the cell's negative-x edge, so
-        a sample is read from the column it falls in, periodically. A sample exactly on a wall
-        between two permittivities belongs to the column on its positive side.
+        Pixel ``j`` covers ``[j, j+1) * period / n_pixels`` from the cell's negative edge, so a
+        sample is read from the pixel it falls in, periodically. A sample exactly on a wall
+        between two permittivities belongs to the pixel on its positive side.
         """
+        from wavebit.rcwa._engine.field_result import _host_value
+        if is_count(spec):
+            corner = _np.linspace(0., 1., int(spec))
+        else:
+            points = _host_value(spec)
+            if points is None or period is None:
+                raise ValueError(f"discontinuous='continuity' needs concrete {axis} and period "
+                                 'to choose the raster pixel under each sample.')
+            corner = _np.asarray(points, dtype=float) / float(period) + 0.5
+        # Half a part in 1e9 lifts a sample that rounding put just below a pixel edge it sits on.
+        return _np.floor(corner * n_pixels + 1e-9).astype(int) % n_pixels
+
+    def _continuity_rows(self, sample_x, sample_y, backside):
+        """What the continuity rule reads off each kernel layer record, in its order.
+
+        ``None`` where the layer is uniform -- it keeps the Fourier sum, bit for bit, since there
+        is nothing for the rule to change there. Otherwise, on the 1D paths, ``eps`` at the x
+        samples ``(n_x,)``; on the 2D path a triple ``(ops_x, ops_y, eps)``: ``ops_x[j]`` is Li's
+        inverse rule ``[[1/eps]]_x^-1`` along the raster row under the ``j``-th y sample,
+        ``ops_y[i]`` the same along the column under the ``i``-th x sample, and ``eps`` the
+        ``(n_y, n_x)`` permittivity at the samples
+        (:func:`wavebit.rcwa._engine.fields._continuity_2d`).
+        """
+        from wavebit.rcwa._engine.factorization import line_inverse_rules
         from wavebit.rcwa._engine.field_result import _host_value
         xp = self.xp
         structure = self.structure
-        n_columns = structure.shape[-1]
-        period = _host_value(_lattice.periods_of(self.lattice)[0])
-        if is_count(sample_x):
-            corner = _np.linspace(0., 1., int(sample_x))
-        else:
-            points = _host_value(sample_x)
-            if points is None or period is None:
-                raise ValueError("discontinuous='continuity' needs concrete sample_x and period "
-                                 'to choose the raster column under each sample.')
-            corner = _np.asarray(points, dtype=float) / float(period) + 0.5
-        # Half a part in 1e9 lifts a sample that rounding put just below a column edge it sits on.
-        columns = _np.floor(corner * n_columns + 1e-9).astype(int) % n_columns
+        periods = _lattice.periods_of(self.lattice)
+        columns = self._sample_pixels(sample_x, _host_value(periods[0]), structure.shape[-1],
+                                      'sample_x')
+        two_d = self._grating_type == 2
+        if two_d:
+            lines = self._sample_pixels(sample_y, _host_value(periods[1]), structure.shape[-2],
+                                        'sample_y')
+            kx, ky = self.order_kxy()
+            half_u, half_v = (kx.shape[0] - 1) // 2, (ky.shape[0] - 1) // 2
         rows = []
         for layer in range(structure.shape[0]):
-            row = structure[layer, 0]
-            values = _host_value(row)
+            grid = structure[layer] if two_d else structure[layer, 0]
+            values = _host_value(grid)
             if values is not None and _np.all(values == values.flat[0]):
                 rows.append(None)
-            else:
-                index = as_array(xp, columns, device=_device_of(row))
-                rows.append(xp.take(row, index, axis=0))
-        # The 1D kernels append records from the top public layer down; a backside (public
+                continue
+            dev = _device_of(grid)
+            at_x = as_array(xp, columns, device=dev)
+            if not two_d:
+                rows.append(xp.take(grid, at_x, axis=0))
+                continue
+            at_y = as_array(xp, lines, device=dev)
+            ops_x = xp.take(line_inverse_rules(xp, grid, half_u), at_y, axis=0)
+            ops_y = xp.take(line_inverse_rules(xp, xp.permute_dims(grid, (1, 0)), half_v),
+                            at_x, axis=0)
+            eps = xp.take(xp.take(grid, at_y, axis=0), at_x, axis=1)
+            rows.append((ops_x, ops_y, eps))
+        # The kernels append records from the top public layer down; a backside (public
         # top) incidence solves the mirrored scene, which reverses that.
         return rows if backside else rows[::-1]
 
@@ -4860,8 +5029,10 @@ class CoreFactorizationMixin:
         rebuilt: ``'fourier'`` (the default) sums its own coefficients, which ring at every wall;
         ``'continuity'`` sums the continuous ``D_x`` series and divides by ``eps`` at each sample
         (P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357 (1998); RETICOLO's ``champ=1``). It
-        changes ``E_x`` in patterned layers only, on the 1D TM and conical paths of a raster
-        structure, and is refused elsewhere (:meth:`_refuse_continuity`).
+        changes ``E_x`` in patterned layers only on the 1D TM and conical paths, and ``E_x`` and
+        ``E_y`` on the 2D path, each summed line by line (``E_x`` along the row under the sample,
+        ``E_y`` along the column); it needs a raster structure and is refused elsewhere
+        (:meth:`_refuse_continuity`).
 
         ``incidences`` names which of the incidences the solve carries to reconstruct, one
         leading axis entry each, **in the order asked for**: ``'incident'`` is the incidence the
@@ -4916,7 +5087,7 @@ class CoreFactorizationMixin:
             sample_z = to_mirrored_z(sample_z, self.thickness)
         kx, ky = self.order_kxy()
 
-        eps_rows = self._continuity_rows(sample_x, backside) if continuity else None
+        eps_rows = self._continuity_rows(sample_x, sample_y, backside) if continuity else None
         if self._grating_type == 0:
             sample_y = 1
             field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list,
@@ -4948,7 +5119,8 @@ class CoreFactorizationMixin:
                                   self.layer_info_list, self.lattice,
                                   sample_x=sample_x, sample_y=sample_y,
                                   sample_z=sample_z, incidences=incidences,
-                                  interface_side='left' if backside else 'right')
+                                  interface_side='left' if backside else 'right',
+                                  eps_rows=eps_rows)
 
         # The kernels' state describes the field of their corner column (`_kernel_lit`), whose
         # incident wave is unit at the cell corner; the public incidence is unit at the centre.

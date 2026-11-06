@@ -217,6 +217,7 @@ def pack(problem, numerics, execution, solves, checks, report):
     records, amplitudes, scattering = [], [], []
     actual_wavelengths = []
     actual_directions = []
+    solve_paths = []
     power_defined, efficiency_defined = [], []
     merges = []
     if single_plane(problem):
@@ -228,6 +229,7 @@ def pack(problem, numerics, execution, solves, checks, report):
         for solver, result in solves:
             actual_wavelengths.append(_array(xp, solver.wavelength, execution))
             actual_directions.append(solver.theta)
+            solve_paths.append(solver._solve_path())
             # Which layers this wavelength's solve merged into a half-space, and which of them
             # a tolerance snapped: a snapped scene is a changed problem, recorded as detuning is.
             plan = solver._half_space_merged
@@ -323,6 +325,7 @@ def pack(problem, numerics, execution, solves, checks, report):
             scene = solver._scene
             actual_wavelengths.append(_array(xp, scene.wavelength, execution))
             actual_directions.append(None)
+            solve_paths.append(solver._solve_path())
             region = result.power.region
             area = None
             if region == 'cell' if isinstance(region, str) else False:
@@ -374,6 +377,9 @@ def pack(problem, numerics, execution, solves, checks, report):
                   diagnostics={'report': report, 'effective_wavelengths': tuple(actual_wavelengths),
                                'source_group_counts': tuple(getattr(r, 'group_count', 1) for _, r in solves),
                                'effective_theta': tuple(actual_directions),
+                               # The layout each wavelength's solve took: '1d_te' / '1d_tm' (the
+                               # pure path), '1d_conical' or '2d'. report.resolved has the plan.
+                               'solve_path': tuple(solve_paths),
                                'port_power_defined': xp.stack(power_defined) if power_defined else None,
                                # Says why power_entering and absorption are NaN when no
                                # diffraction output carries the metadata flag.

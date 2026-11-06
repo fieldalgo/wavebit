@@ -1,0 +1,168 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_meep_crossed_metal",
+  "physics": "fdtd",
+  "comparison": "structure-oracle",
+  "role": "Meep damped negative-epsilon metal: preserved grids 30/60 with a runtime control at 60 (coarse-reference discrepancy documented)",
+  "references": [
+    {
+      "tool": "Meep",
+      "version": "1.34.0",
+      "build": null,
+      "modified": {
+        "value": null,
+        "description": null
+      },
+      "spdx": "GPL-2.0-or-later",
+      "source": "https://github.com/NanoComp/meep",
+      "install": {
+        "kind": "conda",
+        "command": "conda create -y -n meep -c conda-forge pymeep"
+      },
+      "settings": "public API only; PML 0.5, pad 0.6, gap 0.1, df_frac 0.2, until_after_sources 120, plus resolution 60 at 240 as runtime control",
+      "discretization": "Meep 3D Yee cell at resolutions 30 and 60; Drude mp.DrudeSusceptibility per raster block",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_meep_crossed_metal.py",
+    "sha256": null,
+    "command": "conda run -n meep python tests/references/gen_goldens_meep_crossed_metal.py --output artifacts/metal.npz",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-10-20",
+  "environment": {
+    "python": null,
+    "numpy": null
+  },
+  "cost": {
+    "not_measured": true
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_meep_crossed_metal.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_meep_crossed_metal.npz",
+    "format": "npz",
+    "file_sha256": "bd67aca5f0b3e5ea4e48b4105f3774def41252126c3ef085f464a7a065485ecb",
+    "arrays": [
+      "complete",
+      "df_frac",
+      "gap",
+      "generator_sha256",
+      "meep_version",
+      "metal__30__p__R",
+      "metal__30__p__T",
+      "metal__30__p__absorbed",
+      "metal__30__p__leak",
+      "metal__30__p__purity",
+      "metal__30__p__r_p",
+      "metal__30__p__r_s",
+      "metal__30__p__seconds",
+      "metal__30__p__t_p",
+      "metal__30__p__t_s",
+      "metal__30__s__R",
+      "metal__30__s__T",
+      "metal__30__s__absorbed",
+      "metal__30__s__leak",
+      "metal__30__s__purity",
+      "metal__30__s__r_p",
+      "metal__30__s__r_s",
+      "metal__30__s__seconds",
+      "metal__30__s__t_p",
+      "metal__30__s__t_s",
+      "metal__60__p__R",
+      "metal__60__p__T",
+      "metal__60__p__absorbed",
+      "metal__60__p__leak",
+      "metal__60__p__purity",
+      "metal__60__p__r_p",
+      "metal__60__p__r_s",
+      "metal__60__p__seconds",
+      "metal__60__p__t_p",
+      "metal__60__p__t_s",
+      "metal__60__s__R",
+      "metal__60__s__T",
+      "metal__60__s__absorbed",
+      "metal__60__s__leak",
+      "metal__60__s__purity",
+      "metal__60__s__r_p",
+      "metal__60__s__r_s",
+      "metal__60__s__seconds",
+      "metal__60__s__t_p",
+      "metal__60__s__t_s",
+      "metal__60_time240__p__R",
+      "metal__60_time240__p__T",
+      "metal__60_time240__p__absorbed",
+      "metal__60_time240__p__leak",
+      "metal__60_time240__p__purity",
+      "metal__60_time240__p__r_p",
+      "metal__60_time240__p__r_s",
+      "metal__60_time240__p__runtime_change",
+      "metal__60_time240__p__seconds",
+      "metal__60_time240__p__t_p",
+      "metal__60_time240__p__t_s",
+      "metal__60_time240__s__R",
+      "metal__60_time240__s__T",
+      "metal__60_time240__s__absorbed",
+      "metal__60_time240__s__leak",
+      "metal__60_time240__s__purity",
+      "metal__60_time240__s__r_p",
+      "metal__60_time240__s__r_s",
+      "metal__60_time240__s__runtime_change",
+      "metal__60_time240__s__seconds",
+      "metal__60_time240__s__t_p",
+      "metal__60_time240__s__t_s",
+      "resolutions"
+    ]
+  },
+  "values_sha256": "408eff041c561844093cf775e297747d1d98fed422939b946e8497fde64e95ff",
+  "content_sha256": "f3b28fc52917e6c474784f06982870816a106b15b370c3df1858c6588dc36a72",
+  "consumers": [
+    "tests/references/test_meep_crossed_metal_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[].source": "tools/third_party_licenses.json external_tools.<tool>.url",
+    "references[].execution": "tests/references/README.md:1277-1285 (Meep run by hand in its own environment) / README row 'separate Meep and FDTDX interpreters'",
+    "comparison": "README.md:7-14; docs/guide/fdtd/fdtd-alpha.md ('structural regression check at modest accuracy')",
+    "role": "README.md:117,1434-1438",
+    "references[0].version": "archive key meep_version",
+    "references[0].arrays": "archive keys incl. meep_version, generator_sha256, complete, resolutions, gap, df_frac",
+    "references[0].settings": "_meep_crossed_metal_case.py:9-15; gen_goldens_meep_crossed_metal.py:42-45",
+    "references[0].independence": "gen_goldens_meep_crossed_metal.py:4-5 ('never imports Wavebit'), imports :9-24",
+    "generator": "gen_goldens_meep_crossed_metal.py:3",
+    "generated_date": "git log --format=%ad --date=short (shallow clone: git rev-parse --is-shallow-repository = true, 52 commits; every file's only visible commit is the boundary 980843c dated 2026-10-20, so this is the earliest visible commit date, not a generation date)"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "environment.numpy": "not recorded",
+    "environment.python": "not recorded",
+    "generator.clean_tree": "not recorded when the golden was frozen",
+    "generator.product_commit": "not recorded when the golden was frozen",
+    "generator.sha256": "the generator was not hashed when the golden was frozen; a hash of today's file would not describe that run",
+    "outcomes.failed_or_discarded": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_matched": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.not_run": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "outcomes.reference_self_check": "a reconstructed record; what the comparison found is in the consumer tests and tests/references/README.md",
+    "references[0].build": "only meep_version recorded",
+    "references[0].modified.description": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified",
+    "references[0].modified.value": "README.md, interface/README.md, generator docstrings and tools/third_party_licenses.json state public-API-only use / 'installed external package' but never say whether the tool build was modified or unmodified"
+  }
+}
