@@ -210,7 +210,11 @@ def adapt_result(problem,numerics,execution,raw,metadata):
             efficiency=getattr(order,'R' if reflected else 'T')
             source=raw.sources[m.source]
             rt=source.context.rt;xp=rt.xp
-            incident=source.incident_amplitude(value.wavelengths,plane=value.incident_plane)*ts
+            # Referred to ``lateral_origin`` (the cell centre), as the raw amplitudes are: the
+            # engine's incident reference sits at the cell's low corner. The usable band is
+            # judged on the engine's value, so the unit-modulus carrier cannot move it.
+            engine_incident=source.incident_amplitude(value.wavelengths,plane=value.incident_plane)*ts
+            incident=engine_incident*value.raw['incident_carrier']
             declaration=next(s for s in problem.sources if s.name==m.source)
             frequency=rt.array([C0/(w*units.length_unit_meters) for w in value.wavelengths],'float64')
             nominal=xp.exp(-.5*((frequency-C0/(declaration.pulse.wavelength*units.length_unit_meters))/
@@ -218,7 +222,7 @@ def adapt_result(problem,numerics,execution,raw,metadata):
             # Both a nominal source-band condition and a measured signal floor are
             # required. A zero-amplitude pulse cannot define scattering ratios.
             floor=100*np.finfo(float).eps*xp.max(xp.abs(source.incident))*transform['duration_seconds']
-            usable=(nominal>=declaration.pulse.cutoff)&xp.isfinite(incident)&(xp.abs(incident)>floor)
+            usable=(nominal>=declaration.pulse.cutoff)&xp.isfinite(engine_incident)&(xp.abs(engine_incident)>floor)
             source_usable[name]=usable
             reference=dict(port=_port(value.raw['outward_normal']),wave=m.wave,
                 plane=value.reference_plane,incident_plane=value.incident_plane,length_units=units.length,
