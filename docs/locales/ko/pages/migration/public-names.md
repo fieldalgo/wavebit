@@ -396,7 +396,11 @@ periodic의 `coordinate_convention`은 `coordinate_frame`입니다. rcwa의 `cod
 | `cell_measure`, `cell_measure_units` | 주기 셀의 측도: `'m^2'`, 또는 불변 축마다 단위 길이당 `'m'`/`'1'` | `cell_area_m2`; 숫자 `integration_measure(_units)` |
 | `invariant_axes` | 축 이름 | 개수 |
 
-rcwa에는 `incident_power`와 `incident_power_units`도 있습니다(전에는 `incident_power_w`). 기준 값의
+rcwa와 `fdtd.periodic`에는 `incident_power`와 `incident_power_units`도 있습니다(rcwa는 전에
+`incident_power_w`였고, periodic은 차수별 `power`와 함께 새로 생겼습니다). `fdtd.periodic`의
+`amplitude_s`/`amplitude_p`는 입사 전기장에 대한 비율에 광원 진폭을 곱한 값이었고 라벨이 `'V/m'`였습니다.
+이제는 rcwa, `fdtd`처럼 비율 자체이고 라벨은 `'1'`입니다. 그래서 광원 진폭을 바꿔도 변하지 않고,
+`power`, `incident_power`, 평면 값, 스냅숏이 변합니다(fieldalgo/wavebit#54). 기준 값의
 단위 라벨(`amplitude_units`, 전력이 있으면 `power_units`, 파수가 있으면 `wavevector_units`)은 모든
 생산자에서 `reference`에 있습니다. 무차원 진폭의 라벨은 `'1'`입니다. rcwa metadata의 문자열 `integration_measure`
 (`'periodic cell'`)는 없어졌습니다.

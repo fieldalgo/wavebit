@@ -411,7 +411,12 @@ from every producer:
 | `cell_measure`, `cell_measure_units` | the periodic cell's measure: `'m^2'`, or `'m'`/`'1'` per unit length of each invariant axis | `cell_area_m2`; numeric `integration_measure(_units)` |
 | `invariant_axes` | axis names | a count |
 
-rcwa also has `incident_power` and `incident_power_units` (was `incident_power_w`). The unit
+rcwa and `fdtd.periodic` also have `incident_power` and `incident_power_units` (rcwa's was
+`incident_power_w`; periodic's is new, with its orders' `power`). `fdtd.periodic`'s
+`amplitude_s`/`amplitude_p` were the ratio to the incident field times the source amplitude,
+labelled `'V/m'`. They are the ratio itself now, labelled `'1'`, as in rcwa and `fdtd`, so they
+no longer change with the source amplitude; `power`, `incident_power`, the planes and the
+snapshots do (fieldalgo/wavebit#54). The unit
 labels of a reference (`amplitude_units`, `power_units` where there is a power,
 `wavevector_units` where there are wavevectors) are in `reference` for every producer. A dimensionless amplitude is labeled `'1'`. rcwa's metadata string
 `integration_measure` (`'periodic cell'`) is gone.

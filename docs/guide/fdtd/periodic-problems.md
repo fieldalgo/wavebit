@@ -67,9 +67,23 @@ Lorentz(...))})` supplies physical electric poles. Label zero is nondispersive.
 Unsupported causal models or region-dispersion requests are refused.
 
 Reflected/transmitted `DiffractionOrders` always include a leading wavelength
-axis. Efficiencies are normalized by incident-only power; complex amplitudes
-are in V/m, referenced at the physical interface and cell center in each order's
-s/p frame. Each `reference` names its `port` ('top' or 'bottom'), `wave` ('reflected' or
+axis. The complex amplitudes are ratios to the incident field (`reference['amplitude_units']`
+is `'1'`), referenced at the physical interface and cell center in each order's s/p frame.
+Like a Fresnel coefficient they describe the cell, so a stronger source leaves them unchanged,
+as in `wavebit.rcwa`. The source amplitude is `reference['incident_amplitude']` (V/m), and what
+it moves carries units:
+- `power` is each order's outgoing power and `reference['incident_power']` the incident power
+  through one cell. Both are in W for a crossed cell, or W/m per unit length of an invariant y
+  (`power_units`, `incident_power_units`). Both scale with the square of the amplitude.
+- The planes and snapshots below scale with the amplitude itself, phase included.
+
+Efficiencies are normalized by the incident-only power, so `power = efficiency *
+incident_power`. The band's k_par is fixed at its centre wavelength, so each wavelength meets
+the cell at its own angle (`metadata['theta_radians']`), and its incident power is taken at that
+angle. At a wavelength where no incident wave propagates, `incident_power`, `power` and
+`efficiency` are NaN and `metadata['power_defined']` and `metadata['efficiency_defined']` are
+False there. Reference stepping can reach such a wavelength; shared stepping refuses the band.
+Each `reference` names its `port` ('top' or 'bottom'), `wave` ('reflected' or
 'transmitted'), `plane` (the interface z, in `length_units`), `lateral_origin` `(0., 0.)`,
 `incident_amplitude` (V/m), and `cell_measure` with `cell_measure_units` ('m^2' for the
 crossed cell, or 'm' per unit length of an invariant y, whose `invariant_axes` is `('y',)`).

@@ -532,7 +532,9 @@ class Result:
         ts=self.provenance['time_unit_seconds']
         raw=_engine(sample_fdtd_fields,self._engine_diagnostics,x=x,y=y,z=z,
                     t=None if times_seconds is None else np.asarray(times_seconds)/ts)
+        # A host copy: the drive may be a Torch leaf or a JAX array, and this is NumPy.
         amplitude=self.provenance['incident_amplitude']
+        amplitude=complex(np.asarray(amplitude.detach().cpu() if hasattr(amplitude,'detach') else amplitude))
         return TimeSeries(values=np.concatenate((raw['E'],raw['H']/Z0),axis=-1)*amplitude,
             coordinates={'x':x,'y':y,'z':z},components=('Ex','Ey','Ez','Hx','Hy','Hz'),
             units=_component_units(('Ex','Ey','Ez','Hx','Hy','Hz'),self.provenance['length_units']),
@@ -550,26 +552,50 @@ def _adapt(raw,diag,problem,numerics,execution):
     invariant=('y',) if diag.get('invariant_y') else ()
     period=problem.stack.period[:2-len(invariant)]
     cell_measure=float(np.prod(period))*u.length_unit_meters**(2-len(invariant))
+    from wavebit._common.conventions import boundary_kz
+    from wavebit.rcwa._adapt import _array
+    # The drive, as the backend array the result is in (rcwa's conversion).
+    incident=_array(xp,amplitude,execution,True)
+    # The incident power through one cell, per wavelength. Both engines fix k_par at the band's
+    # centre, so each wavelength meets the cell at its own angle (``diag['angles']``) and its
+    # efficiency is divided by that wavelength's incident flux, Re(kz_inc/mu) of the lit medium.
+    # The same flux here makes ``power = efficiency * incident_power`` the engine's own
+    # definition. Past the light line no incident wave propagates (the shared route's angle is
+    # NaN there, the reference route's sine is clipped to 1): power and efficiency are NaN.
+    lit=problem.stack.top if source.side=='top' else problem.stack.bottom
+    eps=_array(xp,lit.epsilon,execution,True)
+    mu=_array(xp,1. if lit.mu is None else lit.mu,execution,True)
+    sine=xp.sin(_array(xp,diag['angles'],execution))
+    defined=xp.isfinite(sine)&(xp.abs(sine)<1)
+    # Each where is doubled so that no NaN reaches a gradient through the masked branch.
+    kz=boundary_kz(xp,eps*mu,xp.where(defined,eps*mu*sine**2,0.)+0j)
+    incident_power=xp.where(defined,xp.abs(incident)**2/(2*Z0)*xp.real(kz/mu)*cell_measure,float('nan'))
+    power_units='W/m' if invariant else 'W'
     def orders(which,leg):
         subs=[getattr(r,leg) for r in raw]
         if any(s is None for s in subs): return None
-        efficiency=xp.stack([getattr(s,which.upper()) for s in subs])
-        nv,nu=efficiency.shape[-2:]
+        efficiency=xp.where(defined[:,None,None],xp.stack([getattr(s,which.upper()) for s in subs]),float('nan'))
         # Engine windows can be offset; retain their explicit integer labels.
         (cu,hu),(cv,hv)=raw[0].order_window
         z=depth if (source.side=='top')==(which=='r') else 0.
         face=source.side if which=='r' else ('bottom' if source.side=='top' else 'top')
+        # The amplitudes are the engine's ratios to the incident field (a unit Jones pair). They
+        # describe the cell and not the drive: the drive is ``incident_amplitude`` and moves
+        # ``power`` with |A|**2 (fieldalgo/wavebit#54).
         return DiffractionOrders(wavelengths=wavelengths,
             orders_u=tuple(range(cu-hu,cu+hu+1)),orders_v=tuple(range(cv-hv,cv+hv+1)),
-            efficiency=efficiency,amplitude_s=xp.stack([getattr(s,which+'_s') for s in subs])*amplitude,
-            amplitude_p=xp.stack([getattr(s,which+'_p') for s in subs])*amplitude,
+            efficiency=efficiency,power=efficiency*incident_power[:,None,None],
+            amplitude_s=xp.stack([getattr(s,which+'_s') for s in subs]),
+            amplitude_p=xp.stack([getattr(s,which+'_p') for s in subs]),
             reference={'port':face,'wave':'reflected' if which=='r' else 'transmitted',
                 'plane':z,'length_units':u.length,'lateral_origin':(0.,0.),'polarization_frame':'per-order s/p',
-                'amplitude_units':'V/m','incident_amplitude':amplitude,'incident_amplitude_units':'V/m',
+                'amplitude_units':'1','incident_amplitude':incident,'incident_amplitude_units':'V/m',
+                'incident_power':incident_power,'incident_power_units':power_units,'power_units':power_units,
                 'cell_measure':cell_measure,'cell_measure_units':'m' if invariant else 'm^2',
                 'invariant_axes':invariant},
-            reference_wavelength_fields=(),
-            metadata={'theta_radians':diag.get('angles'),'normalization':'incident-only power; unit Jones pair'})
+            metadata={'theta_radians':diag.get('angles'),'power_defined':defined,'efficiency_defined':defined,
+                      'normalization':'amplitudes per unit incident field (unit Jones pair); '
+                                      'efficiency over the incident-only power'})
     basis={}
     for leg in ('s_inc','p_inc'):
         reflected=orders('r',leg)

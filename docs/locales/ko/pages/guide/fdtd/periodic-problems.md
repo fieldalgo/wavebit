@@ -60,9 +60,22 @@ Region/포트 재료는 비분산 `Material` 선언입니다. 래스터 epsilon�
 `RasterDispersion(labels=..., poles={label: (Drude(...), Lorentz(...))})`가 물리적 전기 극점을
 제공합니다. 레이블 0은 비분산입니다. 지원하지 않는 인과 모델이나 영역 분산 요청은 거부합니다.
 
-반사·투과 `DiffractionOrders`에는 항상 맨 앞에 파장 축이 있습니다. 효율은 입사파만의 파워로
-정규화합니다. 복소 진폭은 V/m 단위이며, 물리 경계면과 셀 중심에서 각 차수의 s/p 좌표계로
-기준을 잡습니다. 각 `reference`에는 `port`('top' 또는 'bottom'), `wave`('reflected' 또는
+반사·투과 `DiffractionOrders`에는 항상 맨 앞에 파장 축이 있습니다. 복소 진폭은 입사 전기장에
+대한 비율(ratio), 곧 단위가 없는 값입니다(`reference['amplitude_units']`는 `'1'`). 물리 경계면과
+셀 중심에서 각 차수의 s/p 좌표계로 기준을 잡습니다. 이 비율은 프레넬 반사계수처럼 셀의 성질이라서,
+광원 진폭을 키워도 바뀌지 않습니다. `wavebit.rcwa`도 같습니다. 광원 진폭은
+`reference['incident_amplitude']`(V/m)에 있고, 광원 진폭에 따라 바뀌는 값에는 단위가 붙습니다.
+- `power`는 차수마다 나가는 파워이고, `reference['incident_power']`는 셀 하나를 지나는 입사 파워입니다.
+  교차 셀이면 W, y 불변이면 y 방향 단위 길이당 W/m입니다(`power_units`, `incident_power_units`).
+  둘 다 광원 진폭의 제곱에 비례합니다.
+- 아래의 평면 값과 스냅숏은 광원 진폭 자체에 비례하고, 위상도 따라갑니다.
+
+효율은 입사파만의 파워로 정규화하므로 `power = efficiency * incident_power`입니다. 파장 범위의
+k_par(경계면에 나란한 파수)는 중심 파장에서 정하므로, 파장마다 셀에 들어오는 각도가 조금씩
+다릅니다(`metadata['theta_radians']`). 입사 파워도 파장마다 그 각도로 계산합니다. 입사파가 나아가지
+못하는 파장에서는 `incident_power`, `power`, `efficiency`가 NaN이고, 그 파장의
+`metadata['power_defined']`와 `metadata['efficiency_defined']`는 False입니다. reference 스테핑은
+그런 파장까지 계산하고, shared 스테핑은 그런 파장 범위를 거부합니다. 각 `reference`에는 `port`('top' 또는 'bottom'), `wave`('reflected' 또는
 'transmitted'), `plane`(경계면 z, `length_units` 단위), `lateral_origin` `(0., 0.)`,
 `incident_amplitude`(V/m), 그리고 `cell_measure`와 `cell_measure_units`(교차 셀이면 'm^2', y 불변이면
 y 방향 단위 길이당 'm'이며 이때 `invariant_axes`는 `('y',)`)가 들어 있습니다. `R`과 `T`는 이 효율을
