@@ -84,7 +84,7 @@ def test_example_places_the_spacer_at_the_bottom_and_matches_its_independent_ref
             excitation=rcwa.Excitation(wavelength=wavelength, sources=(rcwa.PlaneWave(),)))
         result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(0, 0), algorithm='etm'), backend='jax')
         for name, port in (('r', 'reflection'), ('t', 'transmission')):
-            np.testing.assert_allclose(getattr(result, port).amplitude_s.item(),
+            np.testing.assert_allclose(getattr(result, port).amplitude_ratio_s.item(),
                                        target[name][index], atol=2e-14)
 
 

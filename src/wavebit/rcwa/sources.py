@@ -11,9 +11,13 @@ class PlaneWave:
     pair, normalized to unit electric magnitude. Its phase remains meaningful.
     Use either theta/phi (radians) or kx/ky (inverse scene lengths).
 
+    The amplitude is published as ``reference['incident_field']`` of the result's orders. Their
+    ``amplitude_ratio_*`` and ``efficiency`` do not depend on it; ``field_*`` (the ratio times
+    it) scales with it and ``power`` with its square.
+
     Under evanescent incidence, theta = pi/2 + 1j*alpha, the p unit vector is
-    complex: ``E.E = 1`` but ``|E| = sqrt(cosh(2*alpha)) * amplitude``. Port powers in W
-    are then per this bilinear amplitude at the stack interface.
+    complex: ``E.E = 1`` but ``|E| = sqrt(cosh(2*alpha)) * amplitude``. Port powers in W,
+    and ``field_*``, are then per this bilinear amplitude at the stack interface.
     """
     side: str = 'top'
     polarization: object = 's'

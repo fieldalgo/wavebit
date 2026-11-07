@@ -192,7 +192,14 @@ from wavebit._common._jobs_v1 import SPEC_VERSION
 # American spellings in emitted values (shape_coordinates.origin and lattice.fourier_origin
 # are 'cell_center', omitted_centre is omitted_center). Jobs stay v2 and run records
 # wavebit.run/v2. Renamed, not aliased.
-MANIFEST_VERSION = '26'
+# '27': one name, one quantity in diffraction results (fieldalgo/wavebit#54): the
+# DiffractionOrders amplitudes are amplitude_ratio_s/_p/_xyz in every solver (fdtd.periodic's
+# no longer carry the source amplitude), with field_s/_p/_xyz in V/m for a CW drive;
+# reference['incident_amplitude'] is incident_field (V/m) or incident_spectrum (V*s/m), and
+# amplitude_units is amplitude_ratio_units; RawDiffractionSpectrum is a sibling whose arrays
+# are spectrum_s/_p/_xyz; fdtd.periodic orders gain power and incident_power. Jobs stay v2 and
+# run records wavebit.run/v2. Renamed, not aliased.
+MANIFEST_VERSION = '27'
 
 
 # --------------------------------------------------------------- how a structure is spelled

@@ -43,7 +43,7 @@ def problems(profile, polarization):
 def observations(outputs, indices=None):
     if indices is None:
         indices = [0, 1, 2]
-    amplitudes = np.stack([np.stack((o.amplitude_s[..., indices], o.amplitude_p[..., indices]))
+    amplitudes = np.stack([np.stack((o.amplitude_ratio_s[..., indices], o.amplitude_ratio_p[..., indices]))
                            for o in outputs])
     powers = np.stack([o.efficiency[..., indices] for o in outputs])
     return amplitudes, powers
@@ -83,7 +83,7 @@ def test_public_order_amplitudes_and_powers_converge_at_shared_reference_planes(
         ports = (result['r'], result['t'])
         for port, other, reference_z in zip(ports, (reference.reflection, reference.transmission), (.2, 0.)):
             assert tuple(port.orders_u) == (-1, 0, 1)
-            assert port.amplitude_s.shape == (1, 1, 3)
+            assert port.amplitude_ratio_s.shape == (1, 1, 3)
             assert port.reference['plane'] == other.reference['plane'][0] == reference_z
             assert port.reference['wave'] == other.reference['wave']
             assert (port.reference['port'], other.reference['port']) in (('z+', 'top'), ('z-', 'bottom'))
@@ -94,6 +94,11 @@ def test_public_order_amplitudes_and_powers_converge_at_shared_reference_planes(
             assert port.reference['mu'] == other.reference['mu'][0] == 1.
             assert port.reference['cell_measure'] == pytest.approx(other.reference['cell_measure'][0])
             assert port.reference['cell_measure_units'] == other.reference['cell_measure_units'] == 'm^2'
+            # Both publish ratios; only the CW drive is a field in V/m, the pulse is a spectrum.
+            assert port.reference['amplitude_ratio_units'] == other.reference['amplitude_ratio_units'] == '1'
+            assert other.reference['incident_field_units'] == 'V/m' and 'incident_spectrum' not in other.reference
+            assert port.reference['incident_spectrum_units'] == 'V*s/m' and 'incident_field' not in port.reference
+            assert port.field_s is None and other.field_s is not None
             assert bool(port.metadata['source_usable'][0])
         measured.append(observations(ports))
 

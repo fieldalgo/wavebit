@@ -1,6 +1,6 @@
 # 12. Reading results: uppercase R/T and lowercase r/t
 
-The `result` returned by `rcwa.run(...)` contains **power fractions by diffraction order** and **complex amplitude coefficients by diffraction order**. Uppercase `R` and `T` are the reflected and transmitted power in each order divided by incident power. The lowercase coefficients, `amplitude_s` and `amplitude_p` of `result.reflection` and `result.transmission`, express each reflected or transmitted order in its s and p polarization components; this chapter writes them `r_s`, `r_p`, `t_s` and `t_p`.
+The `result` returned by `rcwa.run(...)` contains **power fractions by diffraction order** and **complex amplitude coefficients by diffraction order**. Uppercase `R` and `T` are the reflected and transmitted power in each order divided by incident power. The lowercase coefficients, `amplitude_ratio_s` and `amplitude_ratio_p` of `result.reflection` and `result.transmission`, express each reflected or transmitted order in its s and p polarization components, as ratios to the incident field; this chapter writes them `r_s`, `r_p`, `t_s` and `t_p`.
 
 ## Reading reflectance and transmittance by order
 
@@ -74,12 +74,12 @@ For single-plane-wave incidence, four arrays provide the complex amplitude coeff
 
 | Result array | Coefficient in each diffraction order |
 | --- | --- |
-| `result.reflection.amplitude_s` | s component of the reflected wave, `r_s` |
-| `result.reflection.amplitude_p` | p component of the reflected wave, `r_p` |
-| `result.transmission.amplitude_s` | s component of the transmitted wave, `t_s` |
-| `result.transmission.amplitude_p` | p component of the transmitted wave, `t_p` |
+| `result.reflection.amplitude_ratio_s` | s component of the reflected wave, `r_s` |
+| `result.reflection.amplitude_ratio_p` | p component of the reflected wave, `r_p` |
+| `result.transmission.amplitude_ratio_s` | s component of the transmitted wave, `t_s` |
+| `result.transmission.amplitude_ratio_p` | p component of the transmitted wave, `t_p` |
 
-`amplitude_xyz` beside them gives each outgoing order's electric field in the fixed Cartesian frame, with a trailing (x, y, z) axis. A result always carries the amplitudes; there is no setting that returns the power fractions alone.
+`amplitude_ratio_xyz` beside them gives the same ratio for each outgoing order's electric field in the fixed Cartesian frame, with a trailing (x, y, z) axis. `field_s`, `field_p` and `field_xyz` are these ratios times the source amplitude, `reference['incident_field']`: the outgoing field itself, in V/m. A result always carries the amplitude ratios; there is no setting that returns the power fractions alone.
 
 Each coefficient is a **ratio to the reference electric-field amplitude of the incident wave**. Calling that reference amplitude {math}`E_{\mathrm{in}}`, the transmitted s component of order {math}`(m,n)` is:
 
@@ -87,20 +87,20 @@ Each coefficient is a **ratio to the reference electric-field amplitude of the i
 t_s^{(m,n)}=\frac{E_{t,s}^{(m,n)}}{E_{\mathrm{in}}}.
 ```
 
-When the incident reference amplitude is 1, the coefficient itself is the complex amplitude of that output component. Each output is expressed in an s/p basis aligned with its own order’s propagation direction. Reflection phases are referenced to the incident-side interface and transmission phases to the opposite exit interface, at the height each port's `reference['plane']` records, and laterally to the cell centre, `x = y = 0`.
+When the incident reference amplitude is 1, the coefficient itself is the complex amplitude of that output component; at any source amplitude, `field_s` and `field_p` give that amplitude in V/m. Each output is expressed in an s/p basis aligned with its own order’s propagation direction. Reflection phases are referenced to the incident-side interface and transmission phases to the opposite exit interface, at the height each port's `reference['plane']` records, and laterally to the cell centre, `x = y = 0`.
 
 **A complex amplitude coefficient describes both magnitude and phase.** For example, if {math}`t_s^{(m,n)}=0.5e^{i\pi/4}`, that transmitted component has an electric-field amplitude half the incident reference amplitude and a phase difference of 45°. The complex modulus gives the amplitude magnitude; the complex argument gives the phase.
 
 ```python
 import numpy as np
 
-r_s = result.reflection.amplitude_s                    # Reflected s coefficients for every order
-t_s = result.transmission.order(0, 0).amplitude_s[0]   # Order (0, 0) at the first wavelength
-amplitude = np.abs(t_s)                                # 0.4852
-phase_deg = np.angle(t_s, deg=True)                    # 115.5
+r_s = result.reflection.amplitude_ratio_s                    # Reflected s coefficients for every order
+t_s = result.transmission.order(0, 0).amplitude_ratio_s[0]   # Order (0, 0) at the first wavelength
+amplitude = np.abs(t_s)                                      # 0.4852
+phase_deg = np.angle(t_s, deg=True)                          # 115.5
 ```
 
-Power depends on both electric and magnetic fields, so converting an amplitude coefficient to transmittance requires factors involving the medium and propagation direction. **The formula and its derivation** appear in {ref}`Chapter 13 <amplitude-to-efficiency>`. Read the already calculated per-order power fractions from `result.R` and `result.T`.
+Power depends on both electric and magnetic fields, so converting an amplitude coefficient to transmittance requires factors involving the medium and propagation direction. **The formula and its derivation** appear in {ref}`Chapter 13 <amplitude-to-efficiency>`. Read the already calculated per-order power fractions from `result.R` and `result.T`, and each order's power in W from the `power` of `result.reflection` and `result.transmission`.
 
 :::{admonition} Earlier interface
 :class: earlier-interface
@@ -110,12 +110,12 @@ The earlier interface (retired with `wavebit.compat` on 2026-10-15) returned a r
 
 ## Distinguishing incident and output polarization
 
-The `s` and `p` in `amplitude_s` and `amplitude_p` -- the `r_s` and `t_p` of this chapter -- describe **output polarization**: the s and p components of each outgoing order.
+The `s` and `p` in `amplitude_ratio_s` and `amplitude_ratio_p` -- the `r_s` and `t_p` of this chapter -- describe **output polarization**: the s and p components of each outgoing order.
 
 The **incident polarization** is the `PlaneWave(polarization=...)` of the run, `'s'` by default.
 A result answers that one incidence, and `result.R` and `result.T` describe it. The
-responses to pure s and pure p come from two runs, `'s'` and `'p'`, and their amplitudes combine
-linearly into those of any Jones pair (see the
+responses to pure s and pure p come from two runs, `'s'` and `'p'`, and their amplitude ratios
+combine linearly into those of any Jones pair (see the
 [light guide](../../guide/rcwa/light.md#the-polarization-comes-in-three-kinds)).
 
 :::{admonition} Earlier interface

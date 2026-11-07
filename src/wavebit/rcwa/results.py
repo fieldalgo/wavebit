@@ -208,6 +208,7 @@ def pack(problem, numerics, execution, solves, checks, report):
     """Convert solved snapshots without keeping any mutable solver alive."""
     from .. import __version__
     from ..observations import DiffractionOrders, Validity
+    from ..observations.contracts import RATIO_ARRAYS
     from ..observations.power import transverse_k_is_real
     from .._common.conventions import boundary_kz, half_space_medium
     from ._adapt import single_plane, _array, wavelengths
@@ -268,9 +269,9 @@ def pack(problem, numerics, execution, solves, checks, report):
                                            half_space_medium(material.epsilon, material.mu_value))*k0
                 if port == 'bottom':
                     longitudinal = -longitudinal
-                per_port[name].append(dict(amplitude_s=getattr(result, prefix+'_s'),
-                                           amplitude_p=getattr(result, prefix+'_p'),
-                                           amplitude_xyz=getattr(result, prefix+'_xyz'),
+                per_port[name].append(dict(amplitude_ratio_s=getattr(result, prefix+'_s'),
+                                           amplitude_ratio_p=getattr(result, prefix+'_p'),
+                                           amplitude_ratio_xyz=getattr(result, prefix+'_xyz'),
                                            # The engine has already set R/T to NaN where no incident
                                            # power exists; this ties the value to its own flag.
                                            efficiency=xp.where(normalized, result.R if name == 'reflected' else result.T, xp.nan),
@@ -290,9 +291,9 @@ def pack(problem, numerics, execution, solves, checks, report):
                 entries = per_port[name]
                 outputs[name] = DiffractionOrders(
                     wavelengths=effective_ws, orders_u=solves[0][1].orders_u, orders_v=solves[0][1].orders_v,
-                    amplitude_s=_stack([e['amplitude_s'] for e in entries]),
-                    amplitude_p=_stack([e['amplitude_p'] for e in entries]),
-                    amplitude_xyz=_stack([e['amplitude_xyz'] for e in entries]),
+                    amplitude_ratio_s=_stack([e['amplitude_ratio_s'] for e in entries]),
+                    amplitude_ratio_p=_stack([e['amplitude_ratio_p'] for e in entries]),
+                    amplitude_ratio_xyz=_stack([e['amplitude_ratio_xyz'] for e in entries]),
                     efficiency=_stack([e['efficiency'] for e in entries]),
                     power=_stack([e['power'] for e in entries]),
                     k_parallel=_stack([e['k_parallel'] for e in entries]),
@@ -301,18 +302,18 @@ def pack(problem, numerics, execution, solves, checks, report):
                                'length_units': problem.units.length,
                                'lateral_origin': (0., 0.), 'outward_normal': (0., 0., 1. if port == 'top' else -1.),
                                'incident_port': side,
-                               'incident_amplitude': amplitude, 'incident_amplitude_units': 'V/m',
+                               'incident_field': amplitude, 'incident_field_units': 'V/m',
                                'incident_power': _stack(incident_powers), 'incident_power_units': 'W',
                                'cell_measure': tuple(e['area'] for e in entries), 'cell_measure_units': 'm^2',
                                'invariant_axes': (),
                                'epsilon': tuple(e['epsilon'] for e in entries),
                                'mu': tuple(e['mu'] for e in entries),
-                               'amplitude_units': '1', 'power_units': 'W',
+                               'amplitude_ratio_units': '1', 'power_units': 'W',
                                'wavevector_units': 'rad/' + problem.units.length},
                     metadata={'power_defined': xp.stack(power_defined),
                               'efficiency_defined': xp.stack(efficiency_defined),
-                              'unavailable_power_reason': 'complex transverse wavevectors require a different spatial power integral; amplitudes remain valid',
-                              'unavailable_efficiency_reason': 'efficiencies need an incident power: a complex transverse wavevector has no cell power integral, and an evanescent incident wave carries none; amplitudes remain valid',
+                              'unavailable_power_reason': 'complex transverse wavevectors require a different spatial power integral; amplitude ratios and fields remain valid',
+                              'unavailable_efficiency_reason': 'efficiencies need an incident power: a complex transverse wavevector has no cell power integral, and an evanescent incident wave carries none; amplitude ratios and fields remain valid',
                               'propagation': 'continuum',
                               'polarization_frame': "each order's outgoing s/p frame",
                               'time_convention': 'exp(-i*omega*t)'})
@@ -360,9 +361,11 @@ def pack(problem, numerics, execution, solves, checks, report):
         for name in ('reflected', 'transmitted'):
             if name in outputs:
                 o = outputs[name]
+                # Every array the contract marks as masked; the wavevectors stay as computed,
+                # and field_* follows the masked ratios it is computed from.
                 outputs[name] = o.replace(**{key: xp.where(combined, getattr(o, key), xp.nan)
-                                            for key in ('amplitude_s', 'amplitude_p', 'amplitude_xyz', 'power', 'efficiency')
-                                            if getattr(o, key) is not None})
+                                            for key, (_, masked) in RATIO_ARRAYS.items()
+                                            if masked and getattr(o, key) is not None})
         for name in ('power_entering', 'absorption'):
             outputs[name] = xp.where(combined, outputs[name], xp.nan)
     # Retained reconstruction must obey the same admission guards as the

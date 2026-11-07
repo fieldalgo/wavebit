@@ -63,7 +63,7 @@ they need is kept per layer. Explained in [Near fields](../guide/rcwa/fields.md)
 
 | Field | Default | Accepts | Refuses |
 | --- | --- | --- | --- |
-| `diffraction` | `True` | a `bool`: per-order efficiencies, s/p amplitudes and powers at both ports (`result.R`, `result.T`, `result.reflection`, `result.transmission`). Only a single `PlaneWave` has them | not a `bool` (`1`): `outputs.boolean`, at construction; `True` beside any other source, or beside a second source: `rcwa.coherent_diffraction`, at check |
+| `diffraction` | `True` | a `bool`: per-order efficiencies, s/p amplitude ratios, the outgoing fields (`field_*`) and powers at both ports (`result.R`, `result.T`, `result.reflection`, `result.transmission`). Only a single `PlaneWave` has them | not a `bool` (`1`): `outputs.boolean`, at construction; `True` beside any other source, or beside a second source: `rcwa.coherent_diffraction`, at check |
 | `fields` | `False` | a `bool`: keep the state `result.field(x=..., y=..., z=...)` and `result.boundary_fields(...)` read | not a `bool`: `outputs.boolean` |
 | `scattering` | `False` | a `bool`: keep the stack's scattering matrix, one per wavelength, as `result.scattering` | not a `bool`: `outputs.boolean`; `True` under `algorithm='etm'`: `rcwa.scattering_algorithm`; `True` with a coherent source: `rcwa.coherent_scattering`, both at check |
 | `power_region` | `None`, read as `'cell'` | `'cell'`, `'infinite'`, or `((xmin, xmax), (ymin, ymax))` in the length unit: the area a coherent-source run averages its boundary power over. A single `PlaneWave` does not read it | any other string: `rcwa.invalid`, at run. A `GaussianBeam` or an isolated `ElectricDipole` without the finite rectangle: `rcwa.invalid`, at run |
@@ -150,7 +150,7 @@ or `jax.vmap` is refused with `rcwa.coherent_transform`.
 | --- | --- | --- | --- |
 | `side` | `'top'` | `'top'` or `'bottom'`: the half-space the light arrives from. Scene labels never move; results are incidence-relative, and `theta` and `phi` are measured in the incidence medium | anything else (`'bot'`): `source.side`, at construction |
 | `polarization` | `'s'` | `'s'`, `'p'`, or a complex Jones pair `(a_s, a_p)`. The pair is normalized to unit length and keeps its overall phase | another string (`'te'`): `source.polarization`, at construction; a pair that is zero, not finite or not two components: `source.polarization_value`, at check |
-| `amplitude` | `1.` | the incident electric amplitude, V/m. Fields and powers scale with it; efficiencies and amplitude ratios do not | zero, not finite, or an array: `source.amplitude`, at check |
+| `amplitude` | `1.` | the incident electric amplitude, V/m, published as the orders' `reference['incident_field']`. `field_*` and the other fields scale with it and `power` with its square; `amplitude_ratio_*` and `efficiency` do not | zero, not finite, or an array: `source.amplitude`, at check |
 | `theta` | `None`, normal incidence | polar angle of the incident light's direction from the inward normal, radians: the direction its power travels in a lossless medium of either sign of index (in a negative-index medium the in-plane wavevector then points the other way). A nonzero imaginary part selects the formal complex-angle parameterization; see [real-angle incidence](common/conventions.md#real-angle-incidence) and [negative-index media](../theory/rcwa/negative-index-media.md) | beside `kx` or `ky`: `source.direction_ambiguous`, at construction |
 | `phi` | `None`, read as `0.` | azimuth of the incident light's direction, radians | beside `kx` or `ky`: `source.direction_ambiguous` |
 | `kx`, `ky` | `None` | the transverse angular wavenumbers in the inverse length unit, an alternative to `theta`/`phi`. These are physical values, not divided by `2π/λ`; an omitted component is zero | beside `theta` or `phi`: `source.direction_ambiguous` |
@@ -329,6 +329,15 @@ on one.
 from the one a preparation fixed; its `.path` names the declaration that changed
 (`scene.domain`, `sources.<name>`, `initial.E`, `stack.layers[1].regions`, `units.length`, ...).
 
+The two diffraction-reference codes guard one name per physical quantity
+([amplitude ratios, fields and spectra](../migration/public-names.md#amplitude-ratios-fields-and-spectra)).
+`observation.reference_key` refuses a `reference` that still holds a renamed key
+(`incident_amplitude`, `incident_amplitude_units`, `amplitude_units`), and its message names the
+new one. `observation.amplitude_units` refuses a unit label other than the one its key allows
+(`amplitude_ratio_units` `'1'`, `spectrum_units` `'V*s/m'`), and an `incident_field` or
+`incident_spectrum` given without its label beside it (`incident_field_units` `'V/m'`,
+`incident_spectrum_units` `'V*s/m'`).
+
 | Area | Codes | Raised by |
 | --- | --- | --- |
 | `boundaries` | `boundaries.face` | `fdtd` |
@@ -351,7 +360,7 @@ from the one a preparation fixed; its `.path` names the declaration that changed
 | `native` | `native.invalid`, `native.unsupported` | `fdtd.native` |
 | `numerics` | `numerics.type`, `numerics.choice`, `numerics.orders`, `numerics.grid`, `numerics.detuning`, `numerics.half_space_merge_tolerance` | `rcwa` (`numerics.type`, `numerics.choice` and `numerics.orders` also FDTD) |
 | `numerics` (FDTD) | `numerics.absorber`, `numerics.checkpoint_steps`, `numerics.checkpoint_scope`, `numerics.discretization`, `numerics.duration`, `numerics.geometry_ranges`, `numerics.junction`, `numerics.memory_bound`, `numerics.stopping`; `numerics.time_step_seconds`; `numerics.spacing`, `numerics.duration_seconds`, `numerics.transverse_spacing`, `numerics.reference_scope` | `fdtd`; `fdtd.native`; `fdtd.periodic` |
-| `observation` | `observation.empty`, `observation.order_labels`, `observation.shape`, `observation.wavelength_axis` | `wavebit.DiffractionOrders` |
+| `observation` | `observation.empty`, `observation.order_labels`, `observation.shape`, `observation.wavelength_axis`; `observation.amplitude_units`, `observation.reference_key` | `wavebit.DiffractionOrders`, `wavebit.RawDiffractionSpectrum`; the same, and their one-order records `wavebit.observations.DiffractionOrder` and `RawDiffractionOrder` |
 | `operators` | `operators.type`, `operators.shape`, `operators.slots`, `operators.spectral_shape`, `operators.source_groups`, `operators.detuning`, `operators.execution`, `operators.physical_contract`, `operators.physical_transform` | `rcwa.operators` |
 | `outputs` | `outputs.boolean`, `outputs.unavailable` | `rcwa` |
 | `periodic` | `periodic.invalid`, `periodic.unsupported` | `fdtd.periodic` |
@@ -404,7 +413,7 @@ amplitudes and scattering matrices agree to round-off (3e-13 or better). The
 | `fourier_coefficients`, `factorization`, `raster_normal_method`, `nvf_projector`, `li_nesting`, `shape_nvf_grid_size` | `Numerics(...)`, the same names | the same values and defaults |
 | `formulation`, a solver attribute | `Numerics(formulation=...)` | |
 | `solve(auto_detune=...)` | `Numerics(detuning=...)` | **The default moved**: the earlier `solve()` retried at a relative step of `1e-12`; `Numerics()` solves the requested point. `detuning=1e-12` asks for the earlier default step |
-| `answers` | `Outputs(fields=...)` | `'field'` is `fields=True`; `'amplitude'` and `'efficiency'` are both `fields=False`, and the result carries amplitudes either way |
+| `answers` | `Outputs(fields=...)` | `'field'` is `fields=True`; `'amplitude'` and `'efficiency'` are both `fields=False`, and the result carries amplitude ratios either way |
 | `solver.scattering` | `Outputs(scattering=True)`, then `result.scattering` | one matrix per wavelength |
 | `power_region` | `Outputs(power_region=...)` | |
 | `length_unit` | `Problem(units=Units(length=...))` | one of `'m'`, `'mm'`, `'um'`, `'nm'` rather than a free factor |

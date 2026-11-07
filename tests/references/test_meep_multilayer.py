@@ -44,8 +44,8 @@ def test_constrained_coating_gradients_against_meep_and_continuum(record_propert
             nominal_layer_thickness=(.2,)*4, layer_smoothing=1/resolution, align_layers=True,
             duration_seconds=65*.5*(float(np.min(band))+float(np.max(band)))*units.time_unit_seconds,
             orders=(0, 0), extraction_method='directional'))
-        return jnp.stack((result.reflection.amplitude_s.reshape(-1),
-                          result.transmission.amplitude_s.reshape(-1)))
+        return jnp.stack((result.reflection.amplitude_ratio_s.reshape(-1),
+                          result.transmission.amplitude_ratio_s.reshape(-1)))
     def evaluate(resolution):
         f = lambda p: response(p, resolution)
         return tuple(map(np.asarray, jax.jit(lambda p: (f(p), jax.jacfwd(f)(p)))(p)))

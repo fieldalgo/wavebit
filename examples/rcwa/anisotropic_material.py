@@ -19,8 +19,8 @@ def main():
     print(f'Uniform film: R_s={float(answers["s"].R.sum()):.9f}, R_p={float(answers["p"].R.sum()):.9f}')
     rotated = crystal.rotated(np.deg2rad(30.), axis='z')
     result = rcwa.run(film(rotated), numerics=numerics)
-    # Vacuum ports and normal incidence make squared amplitude a power fraction.
-    cross_power = np.abs(result.transmission.amplitude_p)**2
+    # Vacuum ports and normal incidence make a squared amplitude ratio a power fraction.
+    cross_power = np.abs(result.transmission.amplitude_ratio_p)**2
     assert cross_power.sum() > 0
     np.testing.assert_allclose(result.R.sum()+result.T.sum(), 1., atol=1e-12)
     print(f'Rotated film: cross-polarized T_p={float(cross_power.sum()):.9f}')

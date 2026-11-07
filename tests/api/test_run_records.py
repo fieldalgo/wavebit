@@ -61,7 +61,14 @@ def test_rcwa_fields_scattering_coordinates_and_job_roundtrip(tmp_path, solved):
     restored = records.load_run(record.path)
     assert restored.job.key == job.key
     assert restored.job.problem.excitation.wavelength.dtype.str == '>f8'
-    np.testing.assert_array_equal(restored.outputs['transmitted']['amplitude_s'], result.transmission.amplitude_s)
+    transmitted = restored.outputs['transmitted']
+    np.testing.assert_array_equal(transmitted['amplitude_ratio_s'], result.transmission.amplitude_ratio_s)
+    # A record keeps fields, not properties: field_s is the saved ratio times the saved drive.
+    assert not {'amplitude_s', 'amplitude_p', 'amplitude_xyz',
+                'field_s', 'field_p', 'field_xyz'} & set(transmitted)
+    assert transmitted['reference']['incident_field_units'] == 'V/m'
+    np.testing.assert_array_equal(transmitted['amplitude_ratio_s']*transmitted['reference']['incident_field'],
+                                  result.transmission.field_s)
     np.testing.assert_array_equal(restored.outputs['transmitted']['efficiency'], result.T)
     assert not restored.outputs['transmitted']['efficiency'].flags.writeable
     field = restored.samples['field']

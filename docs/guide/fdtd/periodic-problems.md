@@ -67,15 +67,21 @@ Lorentz(...))})` supplies physical electric poles. Label zero is nondispersive.
 Unsupported causal models or region-dispersion requests are refused.
 
 Reflected/transmitted `DiffractionOrders` always include a leading wavelength
-axis. The complex amplitudes are ratios to the incident field (`reference['amplitude_units']`
-is `'1'`), referenced at the physical interface and cell center in each order's s/p frame.
-Like a Fresnel coefficient they describe the cell, so a stronger source leaves them unchanged,
-as in `wavebit.rcwa`. The source amplitude is `reference['incident_amplitude']` (V/m), and what
+axis. Their complex `amplitude_ratio_s` and `amplitude_ratio_p` are ratios to the incident
+field, so they have no unit (`reference['amplitude_ratio_units']` is `'1'`). They are referenced
+at the physical interface and cell center in each order's s/p frame. Like a Fresnel coefficient
+they describe the cell, so a stronger source leaves them unchanged, as in `wavebit.rcwa`. The
+source amplitude is `reference['incident_field']` (V/m, with `incident_field_units`), and what
 it moves carries units:
+- `field_s` and `field_p` are the ratios times `reference['incident_field']`: each order's
+  outgoing field in V/m, which scales with the amplitude, phase included. These orders carry no
+  Cartesian `amplitude_ratio_xyz`, so `field_xyz` is None.
 - `power` is each order's outgoing power and `reference['incident_power']` the incident power
   through one cell. Both are in W for a crossed cell, or W/m per unit length of an invariant y
   (`power_units`, `incident_power_units`). Both scale with the square of the amplitude.
-- The planes and snapshots below scale with the amplitude itself, phase included.
+- The planes and snapshots below scale with the amplitude itself, phase included. Under
+  `algorithm='reference'` the planes keep their soft-source-spectrum calibration, so there
+  `field_s` and `field_p` are the way to read an outgoing order's field in V/m.
 
 Efficiencies are normalized by the incident-only power, so `power = efficiency *
 incident_power`. The band's k_par is fixed at its centre wavelength, so each wavelength meets
@@ -85,10 +91,12 @@ angle. At a wavelength where no incident wave propagates, `incident_power`, `pow
 False there. Reference stepping can reach such a wavelength; shared stepping refuses the band.
 Each `reference` names its `port` ('top' or 'bottom'), `wave` ('reflected' or
 'transmitted'), `plane` (the interface z, in `length_units`), `lateral_origin` `(0., 0.)`,
-`incident_amplitude` (V/m), and `cell_measure` with `cell_measure_units` ('m^2' for the
-crossed cell, or 'm' per unit length of an invariant y, whose `invariant_axes` is `('y',)`).
-`R` and `T` are convenience views of these efficiencies. Available s/p basis observations
-are retained separately in `result.basis`.
+`amplitude_ratio_units` ('1'), `incident_field` with `incident_field_units` ('V/m'), and
+`cell_measure` with `cell_measure_units` ('m^2' for the crossed cell, or 'm' per unit length
+of an invariant y, whose `invariant_axes` is `('y',)`). `R` and `T` are convenience views of
+these efficiencies. Available s/p basis observations are retained separately in
+`result.basis`. Their amplitudes are ratios too, and each leg's `field_s` and `field_p` are the
+fields a pure s or a pure p incidence at the declared amplitude would give.
 
 `Outputs(planes={'name': z})` streams calibrated phasors. E is V/m and H is A/m;
 plane metadata records its calibration. Shared stepping calibrates unit incident
@@ -123,9 +131,12 @@ window is in seconds and is rounded up to whole time steps by the same rule as
 the given `threshold` and explicit unit labels in its keys ending in `_units`. These checks
 do not establish grid, smoothing or PML convergence.
 
-`validity.checks` holds `runtime_stability` and `numerical_finite` (R and T are finite).
-Reference stepping assesses no stability, so under `algorithm='reference'`
-`runtime_stability` is `None` (not assessed), not true. `diagnostics['invariant_axes']` is
+`validity.checks` holds `runtime_stability` and `numerical_finite`. `numerical_finite` reads
+the engine's R and T, before any published value is masked, and says they are finite. A
+wavelength with no propagating incident wave is NaN in the published `R` and `T` by design and
+is flagged False in the orders' `metadata['efficiency_defined']`, so read that flag, not
+`numerical_finite`, to find it. Reference stepping assesses no stability, so under
+`algorithm='reference'` `runtime_stability` is `None` (not assessed), not true. `diagnostics['invariant_axes']` is
 `('y',)` for an invariant-y problem and `()` otherwise. `result.provenance` records the
 `solver`, `execution`, `numerics`, `units`, `coordinate_frame`, `time_convention` and
 `time_step_seconds`. `observations.fit_modes` accepts SI timestamps for offline ringdown

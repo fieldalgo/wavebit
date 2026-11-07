@@ -37,13 +37,13 @@ def test_cuda_slab_refines_towards_independent_airy_and_matches_cpu(cuda, side):
         actual = getattr(result, name)
         assert actual.device.type == 'cuda'
         np.testing.assert_allclose(host(actual), getattr(cpu, name), rtol=2e-12, atol=1e-14)
-    actual = result.reflection.amplitude_s
+    actual = result.reflection.amplitude_ratio_s
     assert actual.device.type == 'cuda'
-    np.testing.assert_allclose(host(actual), cpu.reflection.amplitude_s, rtol=2e-12, atol=1e-14)
+    np.testing.assert_allclose(host(actual), cpu.reflection.amplitude_ratio_s, rtol=2e-12, atol=1e-14)
     phase = np.exp(4j*np.pi*1.5*.1/wavelengths)
     exact = (-.2+.2*phase)/(1-.04*phase)
     fine = p.run(problem, numerics=nums.replace(spacing=nums.spacing/2),
                  backend='torch', device='cuda:0')
-    fine_r = host(fine.reflection.amplitude_s)[:, 0, 0]
+    fine_r = host(fine.reflection.amplitude_ratio_s)[:, 0, 0]
     np.testing.assert_allclose(fine_r, exact, atol=.005)
     assert np.linalg.norm(fine_r-exact) < np.linalg.norm(host(actual)[:, 0, 0]-exact)

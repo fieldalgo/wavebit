@@ -62,18 +62,29 @@ def test_vmap_runs_a_check_for_each_live_geometry_and_masks_all_observations(jax
     def run(gap):
         result = prepared.run(pair(gap))
         return (result.validity.checks['shape_topology'], result.R, result.T,
-                result.transmission.amplitude_s, result.transmission.amplitude_p,
+                result.transmission.amplitude_ratio_s, result.transmission.amplitude_ratio_p,
+                result.transmission.amplitude_ratio_xyz,
+                # Read inside the transform: field_* follows the masked ratios it is made from.
+                result.transmission.field_s, result.reflection.field_xyz,
                 result.field(x=[0.], y=[0.], z=[90.]).values,
                 result.boundary_fields(side='top', x=[0.], y=[0.]).values,
-                tuple(getattr(result.scattering[0], k) for k in ('S11', 'S12', 'S21', 'S22')))
+                tuple(getattr(result.scattering[0], k) for k in ('S11', 'S12', 'S21', 'S22')),
+                # The wavevectors are deliberately not masked: they do not depend on the shapes.
+                (result.transmission.k_normal, result.transmission.k_parallel))
     compiled = jax.jit(jax.vmap(run))
     for gaps in ([10., 0., -10.], [0., 20., -20.]):
-        flag, *values, scattering = compiled(jnp.asarray(gaps))
+        flag, *values, scattering, wavevectors = compiled(jnp.asarray(gaps))
         np.testing.assert_array_equal(flag, [True, True, False])
         for value in (*values, *scattering):
             assert np.isfinite(value[:2]).all()
             assert np.isnan(value[2]).all()
-        np.testing.assert_allclose(values[1][0], rcwa.run(pair(gaps[0]), numerics=NUMERICS).T, rtol=2e-12)
+        fresh = rcwa.run(pair(gaps[0]), numerics=NUMERICS)
+        np.testing.assert_allclose(values[1][0], fresh.T, rtol=2e-12)
+        # Finite on the failed lane too, and the values an eager solve computes.
+        for value, name in zip(wavevectors, ('k_normal', 'k_parallel')):
+            assert np.isfinite(value).all(), name
+            np.testing.assert_allclose(value[2], getattr(fresh.transmission, name), rtol=1e-14,
+                                       err_msg=name)
     with pytest.raises(IncompatibleProblemError):
         prepared.run(pair(-10.))
 

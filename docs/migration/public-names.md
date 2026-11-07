@@ -1,4 +1,4 @@
-# Public names and result keys (2026-10-19, 2026-10-20)
+# Public names and result keys (2026-10-19, 2026-10-20, 2026-11-08)
 
 Wavebit is still in alpha, so the general-FDTD declarations were renamed in one clean break.
 Every class is now named for what it is, every monitor for what it records, and every keyword
@@ -16,7 +16,10 @@ modules `fdtd.native` and `fdtd.periodic`
 third change the next day, RCWA, the observation objects and the shared modules
 ([shared, observation and RCWA names](#shared-observation-and-rcwa-names)), and, from a fourth
 change the same day, the keys every solver's results and reports use
-([result and report keys](#result-and-report-keys)).
+([result and report keys](#result-and-report-keys)), and, from a fifth change on 2026-11-08
+([issue #54](https://github.com/fieldalgo/wavebit/issues/54)), the names of diffraction
+amplitudes, which now say whether a value is a ratio, a field or a spectrum
+([amplitude ratios, fields and spectra](#amplitude-ratios-fields-and-spectra)).
 
 ## Classes
 
@@ -297,7 +300,7 @@ its replacement, and nothing numerical changed.
 | `RawFieldSpectrum.spectrum`, `RawDiffractionSpectrum.spectrum`, and the `SpectralFlux.metadata` key `spectrum` | `.sidedness` | It holds `'two-sided'`, not a spectrum |
 | `fdtd.SpectralFlux.energy_density` | `.spectral_energy` | Energy per unit frequency through the plane, not a density in space |
 | `fdtd.Result.sources` | `fdtd.Result.source_references` | The recorded source references, not the sources |
-| `DiffractionOrders.cartesian`, `DiffractionOrder.cartesian` | `.amplitude_xyz` | The x, y, z amplitude components |
+| `DiffractionOrders.cartesian`, `DiffractionOrder.cartesian` | `.amplitude_xyz`, renamed again by the [fifth change](#amplitude-ratios-fields-and-spectra): now `.amplitude_ratio_xyz` (`.spectrum_xyz` on a `RawDiffractionSpectrum`) | The x, y, z amplitude components |
 | `DiffractionOrders.kz`, `DiffractionOrder.kz` | `.k_normal` | The wavevector component along the port normal (kz for a z-normal port), with its Cartesian sign: an order leaving through a −z port has `Re(k_normal) < 0` |
 | `DiffractionOrders.at_wavelength(i)` | `.at_wavelength_index(i)` | It takes an index, not a wavelength |
 | `wavebit.records.RecordedFields` | `wavebit.records.RecordedObject` | It holds any recorded object, not only fields |
@@ -349,7 +352,8 @@ A `TabulatedMaterial` is still saved under the field `interpolation`, so jobs th
 their keys.
 
 Run records stay `wavebit.run/v2`. A record saved from now on stores the new field names
-(`times_seconds`, `frequencies_hz`, `sidedness`, `amplitude_xyz`, `k_normal`, `spectral_energy`,
+(`times_seconds`, `frequencies_hz`, `sidedness`, `amplitude_xyz` (since the
+[fifth change](#amplitude-ratios-fields-and-spectra), `amplitude_ratio_xyz`), `k_normal`, `spectral_energy`,
 `power_region`, the `Port` fields, `extra['source_references']`, the diagnostics key
 `source_group_counts`). A record saved earlier keeps the names it was saved with, since
 `load_run` returns the stored fields as `RecordedObject` mappings rather than rebuilding the
@@ -398,7 +402,8 @@ the flat `backend`, `device` and `precision` keys: read `provenance['execution']
 ### Diffraction references
 
 `DiffractionOrders.reference` (and `RawDiffractionSpectrum.reference`) has one core key set
-from every producer:
+from every producer. The table gives the names of this change; the
+[fifth change](#amplitude-ratios-fields-and-spectra) renamed its amplitude keys:
 
 | Key | Meaning | Before |
 | --- | --- | --- |
@@ -407,19 +412,17 @@ from every producer:
 | `plane` | the port plane along its normal, in length units | rcwa and periodic `z` |
 | `length_units` | the length unit of `plane` and the coordinates | `length_unit`; periodic `coordinates` |
 | `lateral_origin` | coordinates | periodic `'cell_centre'` (now `(0., 0.)`) |
-| `incident_amplitude`, `incident_amplitude_units` | the incident amplitude and its unit | rcwa `incident_electric_amplitude_v_per_m` |
+| `incident_amplitude`, `incident_amplitude_units`; now `incident_field` or `incident_spectrum` with their `_units` | the incident amplitude and its unit | rcwa `incident_electric_amplitude_v_per_m` |
 | `cell_measure`, `cell_measure_units` | the periodic cell's measure: `'m^2'`, or `'m'`/`'1'` per unit length of each invariant axis | `cell_area_m2`; numeric `integration_measure(_units)` |
 | `invariant_axes` | axis names | a count |
 
-rcwa and `fdtd.periodic` also have `incident_power` and `incident_power_units` (rcwa's was
-`incident_power_w`; periodic's is new, with its orders' `power`). `fdtd.periodic`'s
-`amplitude_s`/`amplitude_p` were the ratio to the incident field times the source amplitude,
-labelled `'V/m'`. They are the ratio itself now, labelled `'1'`, as in rcwa and `fdtd`, so they
-no longer change with the source amplitude; `power`, `incident_power`, the planes and the
-snapshots do (fieldalgo/wavebit#54). The unit
-labels of a reference (`amplitude_units`, `power_units` where there is a power,
-`wavevector_units` where there are wavevectors) are in `reference` for every producer. A dimensionless amplitude is labeled `'1'`. rcwa's metadata string
-`integration_measure` (`'periodic cell'`) is gone.
+rcwa also has `incident_power` and `incident_power_units` (was `incident_power_w`);
+`fdtd.periodic` has them too since the fifth change. The unit labels of a reference
+(`amplitude_units`, now `amplitude_ratio_units`, or `spectrum_units` on a raw spectrum;
+`power_units` where there is a power; `wavevector_units` where there are wavevectors) are in
+`reference` for every producer. A
+dimensionless amplitude is labeled `'1'`. rcwa's metadata string `integration_measure`
+(`'periodic cell'`) is gone.
 
 ### Units and sample times
 
@@ -485,3 +488,163 @@ is refused with code `job.encoding`, like the declaration itself; write the pair
 stores a result's mappings as they were, so a record saved earlier keeps its old keys and one
 saved now has the new ones; a record loads only if its job does. The capability manifest is
 version 26. Every number, plan skeleton and reference golden is unchanged.
+
+## Amplitude ratios, fields and spectra
+
+The fifth change (2026-11-08, [issue #54](https://github.com/fieldalgo/wavebit/issues/54))
+makes one name hold one physical quantity in a diffraction result. Before it, `amplitude_s` was
+a dimensionless ratio in `rcwa` and `fdtd`, but in `fdtd.periodic` it was that ratio times the
+source amplitude, labelled `'V/m'`. `reference['incident_amplitude']` was a field in V/m in
+`rcwa` and `fdtd.periodic`, but in `fdtd` a pulse spectrum in V*s/m, one value per wavelength.
+Each quantity now has its own name. As before, nothing is aliased: an old amplitude name, as an
+attribute or a constructor keyword, fails and names its replacement, and an old `reference` key
+is refused.
+
+### Diffraction orders
+
+`wavebit.DiffractionOrders` and its one-order record `wavebit.observations.DiffractionOrder`:
+
+| Before | After | Unit | Source amplitude doubled |
+| --- | --- | --- | --- |
+| `amplitude_s`, `amplitude_p`, `amplitude_xyz` | `amplitude_ratio_s`, `amplitude_ratio_p`, `amplitude_ratio_xyz` | `'1'` | leaves them unchanged |
+| none | `field_s`, `field_p`, `field_xyz`, read-only | V/m | doubles them, phase included |
+| `efficiency` | `efficiency` | `'1'` | leaves it unchanged |
+| `power`, in `rcwa` only | `power`, now in `fdtd.periodic` too | W, or W/m across an invariant axis | multiplies it by four |
+
+An amplitude ratio is an outgoing order's complex electric field at `reference['plane']` and
+`reference['lateral_origin']`, in that order's own outgoing s/p frame (Cartesian, with a
+trailing xyz axis, for `amplitude_ratio_xyz`), divided by the incident wave's complex field at
+its own reference: the lit face, or `reference['incident_plane']` where a producer names one. For
+a transmitted port this is not the port's own plane, where no incident wave runs. Like a Fresnel coefficient it describes the structure, not the drive. `field_*` is that ratio
+times `reference['incident_field']`: the outgoing field in V/m. It is computed when it is read,
+and it exists only where the drive is a continuous wave given in V/m (`rcwa.run`,
+`fdtd.periodic.run`). On `fdtd.run`, whose drive is a pulse, and wherever the ratio itself is
+None, `field_*` is None. `fdtd.periodic` gives no Cartesian ratio, so its `field_xyz` is None
+too.
+
+### Diffraction reference keys
+
+| Before | After |
+| --- | --- |
+| `incident_amplitude`, `incident_amplitude_units` (`'V/m'`) in `rcwa` and `fdtd.periodic` | `incident_field`, `incident_field_units` (`'V/m'`): the drive of a continuous wave |
+| `incident_amplitude`, `incident_amplitude_units` (`'V*s/m'`) in `fdtd` | `incident_spectrum`, `incident_spectrum_units` (`'V*s/m'`): the measured incident pulse spectrum, one value per wavelength |
+| `amplitude_units` (`'1'`, but `'V/m'` in `fdtd.periodic`) | `amplitude_ratio_units`, always `'1'` |
+| on a `RawDiffractionSpectrum`, the field `amplitude_units` and `reference['amplitude_units']` (`'V*s/m'`) | `reference['spectrum_units']` (`'V*s/m'`) |
+| `fdtd.periodic`: no incident power | `incident_power` with `incident_power_units`, and `power_units`, as in `rcwa` |
+
+`fdtd.periodic`'s `incident_power` is the incident power through one periodic cell, per
+wavelength: W for a crossed cell, W/m per unit length of an invariant y. A band shares the
+transverse wavevector of its centre wavelength, so each wavelength meets the cell at its own
+angle, and its incident power is taken at that angle; `power = efficiency * incident_power`.
+
+`fdtd.periodic` orders also gain two `metadata` keys, always present: `power_defined` and
+`efficiency_defined`, one boolean per wavelength, which say where `power`, `efficiency` and
+`incident_power` are defined. `rcwa` has keys of the same names, but they do not mark the same
+wavelengths. `fdtd.periodic`'s `power` is `efficiency * incident_power`, so wherever no
+incident wave propagates both flags are False and all three values are NaN. `rcwa` keeps
+`power_defined` True for an evanescent incident wave and still returns its port powers there;
+only its `efficiency_defined` is False (see
+[Real-angle incidence](../reference/common/conventions.md#real-angle-incidence)). Their
+`metadata['normalization']` string changed from `'incident-only power; unit Jones pair'` to
+`'amplitudes per unit incident field (unit Jones pair); efficiency over the incident-only power'`.
+
+A `DiffractionOrders`, `DiffractionOrder`, `RawDiffractionSpectrum` or `RawDiffractionOrder`
+built with a `reference` that still holds `incident_amplitude`, `incident_amplitude_units` or
+`amplitude_units` is refused with code `observation.reference_key`, and the message names the
+new key. Code `observation.amplitude_units` refuses three things:
+- a unit label other than the one its key allows (`amplitude_ratio_units` `'1'`,
+  `spectrum_units` `'V*s/m'`);
+- the other kind's label: `spectrum_units` on a calibrated record, `amplitude_ratio_units` on a
+  raw spectrum;
+- a drive without its label beside it, or a label without its drive: `incident_field` goes with
+  `incident_field_units` `'V/m'` and `incident_spectrum` with `incident_spectrum_units` `'V*s/m'`,
+  both or neither (a `None` value counts as missing).
+
+Reading an old key from a result's `reference` raises `KeyError`, as for the
+[result and report keys](#result-and-report-keys).
+
+### Raw diffraction spectra
+
+`fdtd.DiffractionMonitor(raw=True)` still returns a `wavebit.RawDiffractionSpectrum`, but it is
+no longer a kind of `DiffractionOrders`. The two are separate classes that share the axes,
+`reference`, `metadata`, `order(m, n)` and `at_wavelength_index(i)`, and
+`isinstance(raw, wavebit.DiffractionOrders)` is now False. Its arrays are pulse spectra, not
+ratios:
+
+| Before | After |
+| --- | --- |
+| `RawDiffractionSpectrum.amplitude_s`, `.amplitude_p`, `.amplitude_xyz` | `.spectrum_s`, `.spectrum_p`, `.spectrum_xyz`, in V*s/m |
+| `raw.order(m, n)`, a `DiffractionOrder` | a `wavebit.observations.RawDiffractionOrder`, with the same per-order arrays: `spectrum_*`, `spectral_energy`, `k_parallel`, `k_normal` |
+
+A raw spectrum has no `amplitude_ratio_*`, `field_*`, `efficiency` or `power`. Its `reference`
+keeps `incident_spectrum` with `incident_spectrum_units` and has no `amplitude_ratio_units`.
+Inside the usable band (`metadata['source_usable']`), `raw.spectrum_s` equals, to round-off,
+`orders.amplitude_ratio_s * orders.reference['incident_spectrum'][:, None, None]`, where
+`orders` is the calibrated monitor with the same `plane`, `reference_plane`, `wave` and
+`wavelengths`; the same holds for `p`. Outside that band the relation does not hold: the ratios
+are NaN there and the raw spectra stay finite.
+`fdtd.run` gives no Cartesian raw spectrum, so its `spectrum_xyz` is None, as `amplitude_xyz`
+was.
+
+### What an old amplitude name does now
+
+The [#57 names](#shared-observation-and-rcwa-names) are refused as before, now naming the final
+spelling: `DiffractionOrders.cartesian` names `amplitude_ratio_xyz`, and
+`RawDiffractionSpectrum.cartesian` names `spectrum_xyz`. `RawDiffractionSpectrum.spectrum`
+still names `sidedness`, not the new `spectrum_s`. The raw spectrum's former field
+`amplitude_units` names `RawDiffractionSpectrum.reference`, where its unit label is now
+`reference['spectrum_units']`.
+
+```text
+>>> orders.amplitude_s
+AttributeError: DiffractionOrders.amplitude_s is now DiffractionOrders.amplitude_ratio_s. The old name was removed, not aliased; see the public-name migration guide, docs/migration/public-names.md.
+>>> raw.amplitude_s
+AttributeError: RawDiffractionSpectrum.amplitude_s is now RawDiffractionSpectrum.spectrum_s. The old name was removed, not aliased; see the public-name migration guide, docs/migration/public-names.md.
+>>> raw.amplitude_units
+AttributeError: RawDiffractionSpectrum.amplitude_units is now RawDiffractionSpectrum.reference; its unit label is reference['spectrum_units']. The old name was removed, not aliased; see the public-name migration guide, docs/migration/public-names.md.
+>>> wavebit.DiffractionOrders(wavelengths=(1.,), orders_u=(0,), orders_v=(0,), reference={'incident_amplitude': 1.})
+ValidationError: reference.incident_amplitude: reference['incident_amplitude'] is now 'incident_field' (a CW drive, V/m) or 'incident_spectrum' (a pulse, V*s/m) (fieldalgo/wavebit#54)
+```
+
+The constructors refuse the old keywords the same way: `DiffractionOrders(amplitude_s=...)`
+names `amplitude_ratio_s=`, `RawDiffractionSpectrum(amplitude_s=...)` names `spectrum_s=`,
+`RawDiffractionSpectrum(amplitude_units=...)` names `reference=` and its
+`reference['spectrum_units']`, and `RawDiffractionSpectrum(spectrum=...)` still names
+`sidedness=`.
+
+### Amplitude-ratio job files and run records
+
+No declaration or keyword is renamed (a source's `amplitude=` keeps its name), so jobs, their
+keys and `wavebit.job/v2` are unchanged. Run records stay `wavebit.run/v2`. A record saved from
+now on stores the new names: `amplitude_ratio_s`, `amplitude_ratio_p` and `amplitude_ratio_xyz`
+(on a raw spectrum `spectrum_s`, `spectrum_p` and `spectrum_xyz`), and in `reference`
+`incident_field` or `incident_spectrum`, `amplitude_ratio_units` and `spectrum_units`. `field_*`
+is a property, not a stored field, so a record does not hold it: multiply a stored
+`amplitude_ratio_*` by the stored `reference['incident_field']` to recover it. A record saved
+earlier keeps the names it was saved with (`amplitude_s`, `incident_amplitude`, ...), since
+`load_run` returns the stored fields as `RecordedObject` mappings rather than rebuilding the
+classes. The `amplitude_s` of an earlier `fdtd.periodic` record is the ratio times the source
+amplitude: divide it by the record's `reference['incident_amplitude']` to recover the ratio. A
+record saved with amplitude 0 holds no ratio. The capability manifest is version 27.
+
+### Amplitude-ratio numbers
+
+- `rcwa`: no number changes.
+- `fdtd.periodic`: the amplitude ratios, those in `result.basis` included, are no longer
+  multiplied by the source amplitude, so they equal the earlier `amplitude_s` and `amplitude_p`
+  only where that amplitude is 1, the default. Efficiencies, `R`, `T`, the planes, the
+  snapshots, `sample()` and `plane_power_z` keep their values, with one exception. Under
+  `algorithm='reference'`, a wavelength where no incident wave propagates (the band's shared
+  transverse wavevector is past that wavelength's light line) now has NaN `incident_power`,
+  `power` and `efficiency`, so NaN `R` and `T`, with `metadata['power_defined']` and
+  `metadata['efficiency_defined']` False there. Shared stepping refuses such a band, as before.
+- `fdtd`: the ratios, efficiencies and raw spectra are unchanged. At oblique Bloch incidence
+  `reference['incident_spectrum']` is referred to the cell centre, `reference['lateral_origin']`,
+  as the ratios and the raw spectra already were. The earlier `incident_amplitude` was referred to
+  the cell's low corner: the new `incident_spectrum` is the earlier `incident_amplitude` times
+  `exp(i*(k_u*L_u + k_v*L_v)/2)`, a phase factor of modulus one, where `L_u`, `L_v` are the
+  cell's lengths and `k_u`, `k_v` the incident transverse wavevector along them. To compare a
+  stored `incident_amplitude` with a new `incident_spectrum`, multiply it by that factor. At
+  normal incidence they are equal.
+
+No reference golden was regenerated and no tolerance changed.

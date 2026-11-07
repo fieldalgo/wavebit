@@ -62,8 +62,8 @@ PUBLIC = {
  'wavebit.materials.catalog': ('available', 'load'),
  'wavebit.migration': ('migrate_legacy_jobs',),
  'wavebit.observations': ('DiffractionOrder', 'DiffractionOrders', 'FieldSamples', 'ModeFit',
-                          'RawDiffractionSpectrum', 'RawFieldSpectrum', 'TimeSeries',
-                          'Validity', 'fit_modes'),
+                          'RawDiffractionOrder', 'RawDiffractionSpectrum', 'RawFieldSpectrum',
+                          'TimeSeries', 'Validity', 'fit_modes'),
  'wavebit.observations.modes': ('ModeFit', 'fit_modes'),
  'wavebit.rcwa': ('BoundaryPower', 'Circle', 'ElectricDipole', 'Ellipse', 'Excitation',
                   'GaussianBeam', 'IncidentOrders', 'Layer', 'Numerics', 'Outputs', 'PlaneWave',
@@ -523,7 +523,12 @@ def _order(**kw):
 
 def _raw_orders(**kw):
     from wavebit.observations import RawDiffractionSpectrum
-    return RawDiffractionSpectrum(wavelengths=(1.,), orders_u=(0,), orders_v=(0,), **kw)
+    return RawDiffractionSpectrum(**{'wavelengths': (1.,), 'orders_u': (0,), 'orders_v': (0,), **kw})
+
+
+def _raw_order(**kw):
+    from wavebit.observations import RawDiffractionOrder
+    return RawDiffractionOrder(wavelengths=(1.,), order_u=0, order_v=0, **kw)
 
 
 def _flux(**kw):
@@ -542,15 +547,34 @@ OBSERVATION_RENAMED = [
     (_time_series, 'time', 'TimeSeries.times_seconds'),
     (_field_spectrum, 'frequencies', 'RawFieldSpectrum.frequencies_hz'),
     (_field_spectrum, 'spectrum', 'RawFieldSpectrum.sidedness'),
-    (_orders, 'cartesian', 'DiffractionOrders.amplitude_xyz'),
+    (_orders, 'cartesian', 'DiffractionOrders.amplitude_ratio_xyz'),
     (_orders, 'kz', 'DiffractionOrders.k_normal'),
     (_orders, 'at_wavelength', 'DiffractionOrders.at_wavelength_index'),
-    (_order, 'cartesian', 'DiffractionOrder.amplitude_xyz'),
+    # fieldalgo/wavebit#54: the calibrated arrays are amplitude ratios, the raw ones spectra.
+    (_orders, 'amplitude_s', 'DiffractionOrders.amplitude_ratio_s'),
+    (_orders, 'amplitude_p', 'DiffractionOrders.amplitude_ratio_p'),
+    (_orders, 'amplitude_xyz', 'DiffractionOrders.amplitude_ratio_xyz'),
+    (_order, 'cartesian', 'DiffractionOrder.amplitude_ratio_xyz'),
     (_order, 'kz', 'DiffractionOrder.k_normal'),
-    (_raw_orders, 'cartesian', 'RawDiffractionSpectrum.amplitude_xyz'),
+    (_order, 'amplitude_s', 'DiffractionOrder.amplitude_ratio_s'),
+    (_order, 'amplitude_p', 'DiffractionOrder.amplitude_ratio_p'),
+    (_order, 'amplitude_xyz', 'DiffractionOrder.amplitude_ratio_xyz'),
+    (_raw_orders, 'cartesian', 'RawDiffractionSpectrum.spectrum_xyz'),
     (_raw_orders, 'kz', 'RawDiffractionSpectrum.k_normal'),
     (_raw_orders, 'spectrum', 'RawDiffractionSpectrum.sidedness'),
     (_raw_orders, 'at_wavelength', 'RawDiffractionSpectrum.at_wavelength_index'),
+    (_raw_orders, 'amplitude_s', 'RawDiffractionSpectrum.spectrum_s'),
+    (_raw_orders, 'amplitude_p', 'RawDiffractionSpectrum.spectrum_p'),
+    (_raw_orders, 'amplitude_xyz', 'RawDiffractionSpectrum.spectrum_xyz'),
+    # A (new, note) tombstone: the label moved into the reference, as reference['spectrum_units'].
+    # Its keyword, whose value the replacement does not take as it is, is checked with the note
+    # in tests/common/test_observation_selection.py.
+    (_raw_orders, 'amplitude_units', 'RawDiffractionSpectrum.reference'),
+    (_raw_order, 'cartesian', 'RawDiffractionOrder.spectrum_xyz'),
+    (_raw_order, 'kz', 'RawDiffractionOrder.k_normal'),
+    (_raw_order, 'amplitude_s', 'RawDiffractionOrder.spectrum_s'),
+    (_raw_order, 'amplitude_p', 'RawDiffractionOrder.spectrum_p'),
+    (_raw_order, 'amplitude_xyz', 'RawDiffractionOrder.spectrum_xyz'),
     (_flux, 'frequencies', 'fdtd.SpectralFlux.frequencies_hz'),
     (_flux, 'energy_density', 'fdtd.SpectralFlux.spectral_energy'),
     (_fdtd_result, 'sources', 'fdtd.Result.source_references'),
@@ -578,13 +602,27 @@ OBSERVATION_RENAMED_KEYWORDS = [
     (_time_series, 'times', np.arange(2.), 'times_seconds'),
     (_field_spectrum, 'frequencies', np.ones(1), 'frequencies_hz'),
     (_field_spectrum, 'spectrum', 'two-sided', 'sidedness'),
-    (_orders, 'cartesian', np.zeros((1, 1, 1, 3)), 'amplitude_xyz'),
+    (_orders, 'cartesian', np.zeros((1, 1, 1, 3)), 'amplitude_ratio_xyz'),
     (_orders, 'kz', np.ones((1, 1, 1)), 'k_normal'),
-    (_order, 'cartesian', np.zeros((1, 3)), 'amplitude_xyz'),
+    (_orders, 'amplitude_s', np.ones((1, 1, 1)), 'amplitude_ratio_s'),
+    (_orders, 'amplitude_p', np.ones((1, 1, 1)), 'amplitude_ratio_p'),
+    (_orders, 'amplitude_xyz', np.zeros((1, 1, 1, 3)), 'amplitude_ratio_xyz'),
+    (_order, 'cartesian', np.zeros((1, 3)), 'amplitude_ratio_xyz'),
     (_order, 'kz', np.ones(1), 'k_normal'),
-    (_raw_orders, 'cartesian', np.zeros((1, 1, 1, 3)), 'amplitude_xyz'),
+    (_order, 'amplitude_s', np.ones(1), 'amplitude_ratio_s'),
+    (_order, 'amplitude_p', np.ones(1), 'amplitude_ratio_p'),
+    (_order, 'amplitude_xyz', np.zeros((1, 3)), 'amplitude_ratio_xyz'),
+    (_raw_orders, 'cartesian', np.zeros((1, 1, 1, 3)), 'spectrum_xyz'),
     (_raw_orders, 'kz', np.ones((1, 1, 1)), 'k_normal'),
     (_raw_orders, 'spectrum', 'two-sided', 'sidedness'),
+    (_raw_orders, 'amplitude_s', np.ones((1, 1, 1)), 'spectrum_s'),
+    (_raw_orders, 'amplitude_p', np.ones((1, 1, 1)), 'spectrum_p'),
+    (_raw_orders, 'amplitude_xyz', np.zeros((1, 1, 1, 3)), 'spectrum_xyz'),
+    (_raw_order, 'cartesian', np.zeros((1, 3)), 'spectrum_xyz'),
+    (_raw_order, 'kz', np.ones(1), 'k_normal'),
+    (_raw_order, 'amplitude_s', np.ones(1), 'spectrum_s'),
+    (_raw_order, 'amplitude_p', np.ones(1), 'spectrum_p'),
+    (_raw_order, 'amplitude_xyz', np.zeros((1, 3)), 'spectrum_xyz'),
     (_flux, 'frequencies', np.ones(1), 'frequencies_hz'),
     (_flux, 'energy_density', np.ones(1), 'spectral_energy'),
     (_fdtd_result, 'sources', {}, 'source_references'),
@@ -614,19 +652,24 @@ def test_periodic_sample_names_its_seconds_keyword():
 
 
 def test_the_renamed_observation_members_answer_what_they_did():
+    from wavebit.observations import RawDiffractionOrder
     orders = _orders(wavelengths=(1., 2.), k_normal=np.arange(2.).reshape(2, 1, 1),
-                     amplitude_xyz=np.arange(6.).reshape(2, 1, 1, 3))
+                     amplitude_ratio_xyz=np.arange(6.).reshape(2, 1, 1, 3))
     selected = orders.at_wavelength_index(1)
     assert selected.wavelengths == (2.,) and selected.k_normal.tolist() == [[[1.]]]
+    assert selected.amplitude_ratio_xyz.tolist() == [[[[3., 4., 5.]]]]
     order = orders.order(0)
-    assert order.k_normal.tolist() == [0., 1.] and order.amplitude_xyz.shape == (2, 3)
+    assert order.k_normal.tolist() == [0., 1.] and order.amplitude_ratio_xyz.shape == (2, 3)
+    raw = _raw_orders(wavelengths=(1., 2.), spectrum_xyz=np.arange(6.).reshape(2, 1, 1, 3))
+    assert type(raw.order(0)) is RawDiffractionOrder and raw.order(0).spectrum_xyz.shape == (2, 3)
+    assert raw.at_wavelength_index(1).spectrum_xyz.tolist() == [[[[3., 4., 5.]]]]
     assert _raw_orders().sidedness == _field_spectrum().sidedness == 'two-sided'
     assert _time_series(times_seconds=np.arange(2.)).times_seconds.tolist() == [0., 1.]
     assert 'times_seconds=' in repr(_time_series()) and 'times=' not in repr(_time_series())
 
 
 @pytest.mark.parametrize('build', [_time_series, _field_spectrum, _orders, _order, _raw_orders,
-                                   _flux, _fdtd_result], ids=lambda build: build.__name__)
+                                   _raw_order, _flux, _fdtd_result], ids=lambda build: build.__name__)
 def test_a_tombstoned_observation_survives_a_jit_round_trip(build):
     """The class ``__getattr__`` reads no instance state, so flatten/unflatten (which build an
     object field by field) and ``jit`` see the fields only, and the tombstones still answer."""

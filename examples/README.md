@@ -26,7 +26,7 @@ All checks live alongside the example so a copied script retains its verificatio
 | [`pulse_slab.py`](fdtd/pulse_slab.py) | A physical pulse, outside PML padding and a named time record. | Base install |
 | [`film_optimization.py`](rcwa/film_optimization.py) | Reuse a prepared RCWA calculation, differentiate film thickness with JAX and minimize reflectance; check the derivative against an independent Airy formula and the design against the quarter-wave thickness. | `wavebit[jax]` |
 | [`dispersive_fields.py`](fdtd/dispersive_fields.py) | A Lorentz film with SI rates, time-domain E and raw Fourier E/H; check passive power balance and linear field scaling under prepared reuse. | Base install; `wavebit[plot]` only for `--plot` |
-| [`film_and_grating.py`](cross_solver/film_and_grating.py) | Declare the same film or shifted grating for both solvers; compare powers and complex odd-order amplitudes at matched reference faces while refining RCWA order, FDTD spacing and duration separately. | Base install |
+| [`film_and_grating.py`](cross_solver/film_and_grating.py) | Declare the same film or shifted grating for both solvers; compare powers and complex odd-order amplitude ratios at matched reference faces while refining RCWA order, FDTD spacing and duration separately. | Base install |
 
 For example, from the repository root:
 

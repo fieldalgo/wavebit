@@ -1,6 +1,6 @@
 # 12. 결과 읽기: 큰 R/T와 작은 r/t
 
-`rcwa.run(...)`이 반환하는 `result`에는 **회절차수별 전력 비율**과 **회절차수별 복소 진폭 계수**가 들어 있습니다. 큰 `R`, `T`는 각 차수의 반사·투과 전력을 입사 전력으로 나눈 비율입니다. 작은 계수인 `result.reflection`, `result.transmission`의 `amplitude_s`, `amplitude_p`는 각 차수의 반사·투과파를 s·p 편광 성분으로 나타낸 복소 진폭 계수이며, 이 장에서는 이를 `r_s`, `r_p`, `t_s`, `t_p`로 씁니다.
+`rcwa.run(...)`이 반환하는 `result`에는 **회절차수별 전력 비율**과 **회절차수별 복소 진폭 계수**가 들어 있습니다. 큰 `R`, `T`는 각 차수의 반사·투과 전력을 입사 전력으로 나눈 비율입니다. 작은 계수인 `result.reflection`, `result.transmission`의 `amplitude_ratio_s`, `amplitude_ratio_p`는 각 차수의 반사·투과파를 s·p 편광 성분으로 나타낸 복소 진폭 계수이며, 입사 전기장에 대한 비율(ratio)입니다. 이 장에서는 이를 `r_s`, `r_p`, `t_s`, `t_p`로 씁니다.
 
 ## 차수별 반사율·투과율 읽기
 
@@ -74,12 +74,12 @@ T_00_by_order = result.transmission.order(0, 0).efficiency[0]   # 같은 값
 
 | 결과 배열 | 각 회절차수에 담긴 계수 |
 | --- | --- |
-| `result.reflection.amplitude_s` | 반사파의 s 편광 성분, `r_s` |
-| `result.reflection.amplitude_p` | 반사파의 p 편광 성분, `r_p` |
-| `result.transmission.amplitude_s` | 투과파의 s 편광 성분, `t_s` |
-| `result.transmission.amplitude_p` | 투과파의 p 편광 성분, `t_p` |
+| `result.reflection.amplitude_ratio_s` | 반사파의 s 편광 성분, `r_s` |
+| `result.reflection.amplitude_ratio_p` | 반사파의 p 편광 성분, `r_p` |
+| `result.transmission.amplitude_ratio_s` | 투과파의 s 편광 성분, `t_s` |
+| `result.transmission.amplitude_ratio_p` | 투과파의 p 편광 성분, `t_p` |
 
-같은 자리의 `amplitude_xyz`는 나가는 각 차수의 전기장을 고정된 직교 좌표계로 나타내며, 맨 뒤에 (x, y, z) 축이 붙습니다. 결과에는 항상 진폭이 들어 있으며, 전력 비율만 돌려받는 설정은 없습니다.
+같은 자리의 `amplitude_ratio_xyz`는 나가는 각 차수의 전기장에 대한 같은 비율을 고정된 직교 좌표계로 나타내며, 맨 뒤에 (x, y, z) 축이 붙습니다. `field_s`, `field_p`, `field_xyz`는 이 비율에 광원 진폭 `reference['incident_field']`를 곱한 값, 곧 V/m 단위로 나타낸 나가는 전기장 자체입니다. 결과에는 항상 진폭비가 들어 있으며, 전력 비율만 돌려받는 설정은 없습니다.
 
 각 계수는 **입사파의 기준 전기장 진폭에 대한 비율**입니다. 그 기준 진폭을 {math}`E_{\mathrm{in}}`이라 하면, {math}`(m,n)`차의 투과 s 성분은 다음과 같습니다.
 
@@ -87,20 +87,20 @@ T_00_by_order = result.transmission.order(0, 0).efficiency[0]   # 같은 값
 t_s^{(m,n)}=\frac{E_{t,s}^{(m,n)}}{E_{\mathrm{in}}}.
 ```
 
-입사파의 기준 진폭을 1로 두면 계수 자체가 해당 출력 성분의 복소 진폭이 됩니다. 각 출력 성분은 해당 차수의 진행 방향에 맞춘 s·p 기저로 표현합니다. 반사 계수의 위상은 입사 쪽 경계면에서, 투과 계수의 위상은 반대쪽 출사 경계면에서 읽으며, 그 높이는 각 포트의 `reference['plane']`에 기록됩니다. 가로 방향의 기준은 셀 중심 `x = y = 0`입니다.
+입사파의 기준 진폭을 1로 두면 계수 자체가 해당 출력 성분의 복소 진폭이 됩니다. 광원 진폭이 얼마이든 `field_s`, `field_p`가 그 진폭을 V/m 단위로 줍니다. 각 출력 성분은 해당 차수의 진행 방향에 맞춘 s·p 기저로 표현합니다. 반사 계수의 위상은 입사 쪽 경계면에서, 투과 계수의 위상은 반대쪽 출사 경계면에서 읽으며, 그 높이는 각 포트의 `reference['plane']`에 기록됩니다. 가로 방향의 기준은 셀 중심 `x = y = 0`입니다.
 
 **복소 진폭 계수는 크기와 위상을 함께 나타냅니다.** 예를 들어 {math}`t_s^{(m,n)}=0.5e^{i\pi/4}`이면 해당 투과 성분의 전기장 진폭 크기는 입사 기준 진폭의 0.5배이고, 위상차는 45°입니다. 복소수의 절댓값이 진폭의 크기이고, 편각이 위상입니다.
 
 ```python
 import numpy as np
 
-r_s = result.reflection.amplitude_s                    # 모든 차수의 반사 s 성분 계수 배열
-t_s = result.transmission.order(0, 0).amplitude_s[0]   # 첫 파장에서 (0, 0)차
-amplitude = np.abs(t_s)                                # 0.4852
-phase_deg = np.angle(t_s, deg=True)                    # 115.5
+r_s = result.reflection.amplitude_ratio_s                    # 모든 차수의 반사 s 성분 계수 배열
+t_s = result.transmission.order(0, 0).amplitude_ratio_s[0]   # 첫 파장에서 (0, 0)차
+amplitude = np.abs(t_s)                                      # 0.4852
+phase_deg = np.angle(t_s, deg=True)                          # 115.5
 ```
 
-전력은 전기장과 자기장을 함께 사용해 계산하므로, 투과율에는 매질과 진행 방향에 따른 환산이 필요합니다. **진폭 계수에서 투과율을 구하는 식과 그 유도**는 {ref}`13장 <amplitude-to-efficiency>`에서 설명합니다. 계산된 차수별 전력 비율은 `result.R`, `result.T`로 읽습니다.
+전력은 전기장과 자기장을 함께 사용해 계산하므로, 투과율에는 매질과 진행 방향에 따른 환산이 필요합니다. **진폭 계수에서 투과율을 구하는 식과 그 유도**는 {ref}`13장 <amplitude-to-efficiency>`에서 설명합니다. 계산된 차수별 전력 비율은 `result.R`, `result.T`로 읽고, 차수별 전력(W)은 `result.reflection`, `result.transmission`의 `power`로 읽습니다.
 
 :::{admonition} 이전 인터페이스
 :class: earlier-interface
@@ -110,12 +110,12 @@ phase_deg = np.angle(t_s, deg=True)                    # 115.5
 
 ## 입사 편광과 출력 편광 구분하기
 
-`amplitude_s`, `amplitude_p`에 붙은 `s`, `p`, 즉 이 장의 `r_s`, `t_p`는 **출력 편광**, 다시 말해 나가는 각 차수의 s 성분과 p 성분을 나타냅니다.
+`amplitude_ratio_s`, `amplitude_ratio_p`에 붙은 `s`, `p`, 즉 이 장의 `r_s`, `t_p`는 **출력 편광**, 다시 말해 나가는 각 차수의 s 성분과 p 성분을 나타냅니다.
 
 **입사 편광**은 그 실행의 `PlaneWave(polarization=...)`이며 기본값은 `'s'`입니다. 결과는 그
 입사 하나에 대한 답이고, `result.R`과 `result.T`도 그 입사의 반사율·투과율입니다. 순수 s와 순수 p에
-대한 응답은 `'s'`와 `'p'`로 두 번 실행해서 얻고, 두 실행의 진폭을 선형 결합하면 임의의 Jones 쌍에
-대한 진폭이 됩니다([빛 안내서](../../guide/rcwa/light.md#the-polarization-comes-in-three-kinds) 참고).
+대한 응답은 `'s'`와 `'p'`로 두 번 실행해서 얻고, 두 실행의 진폭비를 선형 결합하면 임의의 Jones 쌍에
+대한 진폭비가 됩니다([빛 안내서](../../guide/rcwa/light.md#the-polarization-comes-in-three-kinds) 참고).
 
 :::{admonition} 이전 인터페이스
 :class: earlier-interface

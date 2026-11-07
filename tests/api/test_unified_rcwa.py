@@ -74,6 +74,21 @@ def test_physical_amplitude_scales_power_and_si_fields_but_not_efficiency():
     b = rcwa.run(scaled, numerics=rcwa.Numerics())
     np.testing.assert_allclose(b.R, a.R)
     np.testing.assert_allclose(b.reflection.power, 4*a.reflection.power, rtol=1e-12)
+    # The amplitude ratios are a property of the stack; the fields in V/m carry the drive,
+    # phase included (fieldalgo/wavebit#54).
+    for port in ('reflection', 'transmission'):
+        for pol in ('s', 'p', 'xyz'):
+            ratio_a = getattr(getattr(a, port), 'amplitude_ratio_' + pol)
+            ratio_b = getattr(getattr(b, port), 'amplitude_ratio_' + pol)
+            np.testing.assert_array_equal(ratio_b, ratio_a, err_msg=f'{port}.amplitude_ratio_{pol}')
+            field_a = getattr(getattr(a, port), 'field_' + pol)
+            field_b = getattr(getattr(b, port), 'field_' + pol)
+            np.testing.assert_array_equal(field_a, ratio_a, err_msg=f'{port}.field_{pol}')
+            np.testing.assert_allclose(field_b, 2j*field_a, rtol=1e-15, atol=0,
+                                       err_msg=f'{port}.field_{pol}')
+        assert getattr(b, port).reference['incident_field'] == 2j
+        np.testing.assert_allclose(getattr(b, port).order(0, 0).field_s,
+                                   2j*getattr(a, port).order(0, 0).amplitude_ratio_s, rtol=1e-15)
     fa = a.boundary_fields(side='top', x=[0.], y=[0.], part='incoming')
     fb = b.boundary_fields(side='top', x=[0.], y=[0.], part='incoming')
     np.testing.assert_allclose(fb.values, 2j*fa.values, rtol=2e-12, atol=1e-15)
@@ -253,27 +268,35 @@ def test_each_port_names_its_side_the_lit_side_and_its_medium(side):
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
 def test_each_port_reference_carries_the_core_keys_every_solver_shares(side):
-    """The DiffractionOrders.reference core keys rcwa, fdtd and fdtd.periodic all give."""
+    """The DiffractionOrders.reference core keys every solver gives, with the CW drive's
+    ``incident_field``/``incident_field_units`` that rcwa and fdtd.periodic share (fdtd.run's
+    pulse gives ``incident_spectrum``/``incident_spectrum_units`` instead)."""
     result = rcwa.run(slab(side=side, amplitude=2.), numerics=rcwa.Numerics())
     other = 'bottom' if side == 'top' else 'top'
     for observation, port, wave in ((result.reflection, side, 'reflected'),
                                     (result.transmission, other, 'transmitted')):
         reference = observation.reference
         labels = {key: reference[key] for key in (
-            'port', 'wave', 'length_units', 'lateral_origin', 'incident_amplitude_units',
-            'incident_power_units', 'cell_measure_units', 'invariant_axes', 'amplitude_units', 'power_units',
-            'wavevector_units')}
+            'port', 'wave', 'length_units', 'lateral_origin', 'incident_field_units',
+            'incident_power_units', 'cell_measure_units', 'invariant_axes', 'amplitude_ratio_units',
+            'power_units', 'wavevector_units')}
         assert labels == {'port': port, 'wave': wave, 'length_units': 'um', 'lateral_origin': (0., 0.),
-                          'incident_amplitude_units': 'V/m', 'incident_power_units': 'W',
-                          'cell_measure_units': 'm^2', 'invariant_axes': (), 'amplitude_units': '1',
+                          'incident_field_units': 'V/m', 'incident_power_units': 'W',
+                          'cell_measure_units': 'm^2', 'invariant_axes': (), 'amplitude_ratio_units': '1',
                           'power_units': 'W', 'wavevector_units': 'rad/um'}
         np.testing.assert_allclose(reference['plane'], (.18 if port == 'top' else 0.,)*3, rtol=1e-15)
-        assert complex(reference['incident_amplitude']) == 2.
+        assert complex(reference['incident_field']) == 2.
         assert reference['incident_power'].shape == (3,)
         np.testing.assert_allclose(reference['cell_measure'], (.7*.8e-12,)*3, rtol=1e-14)
+        # The names fieldalgo/wavebit#54 replaced are gone, not kept beside the new ones; a CW
+        # drive has a field and no pulse spectrum.
         assert not {'z', 'side', 'coordinates', 'incident_power_w', 'incident_electric_amplitude_v_per_m',
-                    'cell_area_m2', 'integration_measure', 'length_unit'} & set(reference)
-        assert not {'amplitude_units', 'power_units', 'length_unit', 'integration_measure'} & set(observation.metadata)
+                    'cell_area_m2', 'integration_measure', 'length_unit', 'incident_amplitude',
+                    'incident_amplitude_units', 'amplitude_units', 'incident_spectrum',
+                    'incident_spectrum_units', 'spectrum_units'} & set(reference)
+        assert not {'amplitude_units', 'amplitude_ratio_units', 'incident_amplitude',
+                    'incident_amplitude_units', 'incident_field', 'incident_field_units',
+                    'power_units', 'length_unit', 'integration_measure'} & set(observation.metadata)
 
 
 @pytest.mark.parametrize('side', ['top', 'bottom'])
@@ -282,7 +305,8 @@ def test_amplitudes_are_linear_in_the_normalized_jones_pair(side):
 
     A patterned layer at an oblique azimuth couples s and p, so each port's s and p amplitudes
     both carry a cross term the recipe has to reproduce. The source amplitude (V/m) does not
-    enter the dimensionless amplitudes; summed efficiencies are not the pair's efficiency.
+    enter the dimensionless amplitude ratios, only the fields in V/m; summed efficiencies are not
+    the pair's efficiency.
     """
     eps = np.array([[4.0, 1.0, 2.25, 1.0], [1.0, 9.0, 1.0, 4.0]])
 
@@ -299,12 +323,15 @@ def test_amplitudes_are_linear_in_the_normalized_jones_pair(side):
     a_s, a_p = np.asarray(pair) / np.linalg.norm(pair)
     s, p, both, brighter = run('s'), run('p'), run(pair), run(pair, amplitude=3.)
     for port in ('reflection', 'transmission'):
-        for name in ('amplitude_s', 'amplitude_p', 'amplitude_xyz'):
+        for pol in ('s', 'p', 'xyz'):
+            name = 'amplitude_ratio_' + pol
             got = np.asarray(getattr(getattr(both, port), name))
             np.testing.assert_allclose(got, a_s*np.asarray(getattr(getattr(s, port), name))
                                        + a_p*np.asarray(getattr(getattr(p, port), name)),
                                        atol=1e-14, rtol=0, err_msg=f'{port}.{name}')
             np.testing.assert_array_equal(np.asarray(getattr(getattr(brighter, port), name)), got)
+            np.testing.assert_allclose(np.asarray(getattr(getattr(brighter, port), 'field_' + pol)),
+                                       3*got, rtol=1e-15, atol=0, err_msg=f'{port}.field_{pol}')
     summed = abs(a_s)**2*np.asarray(s.R) + abs(a_p)**2*np.asarray(p.R)
     assert np.abs(summed - np.asarray(both.R)).max() > 1e-3
 
@@ -325,7 +352,7 @@ def test_explicit_magnetic_operators_match_direct_solver_and_refuse_stale_stack(
     assert matrices.mu[0] is not None
     direct, assembled = rcwa.run(problem, numerics=rcwa.Numerics()), operators.solve(problem, matrices)
     np.testing.assert_allclose(assembled.R, direct.R, atol=2e-14)
-    np.testing.assert_allclose(assembled.transmission.amplitude_s, direct.transmission.amplitude_s, atol=2e-14)
+    np.testing.assert_allclose(assembled.transmission.amplitude_ratio_s, direct.transmission.amplitude_ratio_s, atol=2e-14)
     assert assembled.provenance['constitutive_operators'] == 'explicit cell-centered operators'
     changed = problem.replace(stack=problem.stack.replace(layers=(problem.stack.layers[0].replace(thickness=.2),)))
     with pytest.raises(IncompatibleProblemError):

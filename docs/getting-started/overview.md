@@ -6,7 +6,8 @@ whole computation — so the same code that predicts a device's response can als
 For periodic layered structures, the method is **RCWA** (rigorous coupled-wave analysis, also called the Fourier modal method).
 It expands the field in the plane-wave orders a periodic structure supports, solves each layer
 as an eigenproblem in that basis, and joins the layers into a stack response. What comes back
-is one complex amplitude and one efficiency per diffraction order.
+per diffraction order is one complex amplitude ratio (outgoing over incident field, with the
+outgoing field itself in V/m beside it) and one efficiency.
 
 ## What it is good at
 

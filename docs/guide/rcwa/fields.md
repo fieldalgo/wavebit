@@ -10,7 +10,7 @@ print(samples.units)
 
 The components are `(Ex,Ey,Ez,Hx,Hy,Hz)`. Public E is in V/m and H is in A/m; coordinates use the problem's length unit. `samples.units` says so per key: each component and `'coordinates'`. The wavelength axis remains even for a single wavelength. These are complex phasors under `exp(-i omega t)`. `result.boundary_fields(side=..., x=..., y=..., part=...)` samples incoming, outgoing or total boundary phasors from the same retained state.
 
-`result.reflection` and `result.transmission` are diffraction observations with wavelength and order metadata. Select an order with `.order(m,n)` and a wavelength by its position with `.at_wavelength_index(i)`. Raw amplitudes, normalized efficiencies and entering power are distinct quantities; inspect their validity and reference metadata. A later run cannot change an earlier result's retained field.
+`result.reflection` and `result.transmission` are diffraction observations with wavelength and order metadata. Select an order with `.order(m,n)` and a wavelength by its position with `.at_wavelength_index(i)`. Amplitude ratios (`amplitude_ratio_s`, `amplitude_ratio_p`, `amplitude_ratio_xyz`, with no unit), the outgoing fields they give at the source amplitude (`field_s`, `field_p`, `field_xyz`, in V/m), normalized efficiencies and entering power are distinct quantities; inspect their validity and reference metadata. A later run cannot change an earlier result's retained field.
 
 The sections below give the sampling rules, the retained state and the differentiation scope of
 these two methods. Public H is already in A/m: do not divide it by Z0.
@@ -44,7 +44,7 @@ condition used by reconstruction had changed since the solve.
 
 | `Outputs` | Retained results |
 | --- | --- |
-| `Outputs()` (default) | Computed power results: diffraction efficiencies, complex amplitudes and powers for a single plane wave, boundary power for other sources |
+| `Outputs()` (default) | Computed power results: diffraction efficiencies, complex amplitude ratios and powers for a single plane wave, boundary power for other sources |
 | `Outputs(fields=True)` | Also the per-layer state for boundary and internal fields |
 
 This rule applies to every source type. `boundary_fields` and `field` both require

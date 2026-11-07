@@ -134,9 +134,10 @@ trouble is.
   and fills `.s_inc` and `.p_inc` beside `.incident`.
 
 A current `fdtd.DiffractionMonitor` returns the same selection as a `DiffractionOrders`:
-`.order(m, n)` gives `efficiency`, `amplitude_s` and `amplitude_p` over its wavelengths, the
-whole arrays have the same `(wavelengths, n_v, n_u)` shape, and each wavelength's angle is
-`metadata['theta_radians']`. It has no `polarizations='both'` yet.
+`.order(m, n)` gives `efficiency`, `amplitude_ratio_s` and `amplitude_ratio_p` (ratios to the
+measured incident field, with no unit) over its wavelengths, the whole arrays have the same
+`(wavelengths, n_v, n_u)` shape, and each wavelength's angle is `metadata['theta_radians']`.
+It has no `polarizations='both'` yet.
 
 ## Comparing with RCWA
 
@@ -158,7 +159,7 @@ for i, lam in enumerate(wavelengths):
         excitation=rcwa.Excitation(wavelength=lam, sources=(rcwa.PlaneWave(
             side='top', polarization='s', theta=math.radians(theta_at[i]), phi=0.0),)))
     ref = rcwa.run(problem, numerics=rcwa.Numerics(orders=(15, 15)))
-    print(lam, t.order(-1, 0).t_s[i], complex(ref.transmission.order(-1, 0).amplitude_s[0]))
+    print(lam, t.order(-1, 0).t_s[i], complex(ref.transmission.order(-1, 0).amplitude_ratio_s[0]))
 ```
 
 `polarization='s'` is s incidence and `'p'` is p; a complex `(a_s, a_p)` pair is any mixture

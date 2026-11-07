@@ -77,14 +77,14 @@ def test_jax_entire_observation_and_nested_references_are_pytrees():
     import jax.numpy as jnp
     def response(plasma):
         epsilon=DispersiveMaterial(2.,(Drude(plasma,1e13),)).at(jnp.asarray(800.),units=Units(length='nm')).epsilon
-        return DiffractionOrders(wavelengths=jnp.array([800.]),orders_u=(0,),orders_v=(0,),amplitude_s=epsilon.reshape((1,1,1)),reference={'frame':'s/p','medium':epsilon,'source':{'amplitude':plasma}},metadata={'solver':'test'})
+        return DiffractionOrders(wavelengths=jnp.array([800.]),orders_u=(0,),orders_v=(0,),amplitude_ratio_s=epsilon.reshape((1,1,1)),reference={'frame':'s/p','medium':epsilon,'source':{'amplitude':plasma}},metadata={'solver':'test'})
     with jax.enable_x64(True):
         result=jax.jit(response)(2e15)
         assert result.reference['frame']=='s/p'
-        gradient=jax.grad(lambda p:jnp.real(response(p).amplitude_s).sum())(2e15)
+        gradient=jax.grad(lambda p:jnp.real(response(p).amplitude_ratio_s).sum())(2e15)
         assert gradient!=0
-        assert result.order(0).amplitude_s.shape==(1,)
-        assert result.at_wavelength_index(0).amplitude_s.shape==(1,1,1)
+        assert result.order(0).amplitude_ratio_s.shape==(1,)
+        assert result.at_wavelength_index(0).amplitude_ratio_s.shape==(1,1,1)
 
 
 def test_torch_material_values_keep_their_graph():

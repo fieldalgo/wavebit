@@ -8,7 +8,20 @@
 
 Written: 2026-08-11.
 
-Current version **26** (2026-10-20, later) records the fourth public-name change: the keys of
+Current version **27** (2026-11-08) records the fifth public-name change: one name holds one
+physical quantity in a diffraction result. The amplitudes are `amplitude_ratio_s`,
+`amplitude_ratio_p` and `amplitude_ratio_xyz` in every solver, dimensionless (`fdtd.periodic`'s
+no longer carry the source amplitude), beside `field_s`, `field_p` and `field_xyz` in V/m for a
+continuous-wave drive; `reference['incident_amplitude']` is `incident_field` (V/m) or
+`incident_spectrum` (V*s/m), and `amplitude_units` is `amplitude_ratio_units`;
+`RawDiffractionSpectrum` is a sibling of `DiffractionOrders` whose arrays are `spectrum_s`,
+`spectrum_p` and `spectrum_xyz`; `fdtd.periodic` orders gain `power` and `incident_power` (see
+the [migration guide](../../migration/public-names.md#amplitude-ratios-fields-and-spectra)). No
+manifest key changes, `current_lifecycle.job.schema` stays `wavebit.job/v2` and run records stay
+`wavebit.run/v2`, but these are names a consumer reads a result with, and the old ones are gone,
+not aliased. Consumers expecting v26 must recognize this version change.
+
+Updated 2026-10-20 (later): manifest version **26** records the fourth public-name change: the keys of
 results and reports are one vocabulary across solvers (`validity.checks['runtime_stability']`,
 `time_step_seconds`, one `DiffractionOrders.reference` key set, `area.item` error codes, `orders=`
 an explicit pair; see the
