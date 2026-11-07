@@ -315,7 +315,8 @@ class DiffractionResult:
         #: centre, matching ``wavebit.rcwa``. Raw Fourier extraction uses the low corner.
         self.lateral_origin = extras['lateral_origin']
         self.raw = {key: extras[key] for key in ('raw_s','raw_p','raw_flux','cell_area',
-                    'epsilon','mu','k_parallel','tangent_axes','outward_normal') if key in extras}
+                    'epsilon','mu','k_parallel','tangent_axes','outward_normal',
+                    'incident_carrier') if key in extras}
         self.runs = runs
 
     def with_both(self, other_sub):

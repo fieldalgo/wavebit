@@ -44,7 +44,10 @@ PML, and the scene's `background` fills every cell no structure claims. A `Plane
 `polarization` is `'s'` or `'p'`. A `DiffractionMonitor`'s `amplitude_s` and `amplitude_p`
 use each outgoing order's own s/p frame with the cell centre as lateral phase origin, its
 `efficiency` is a power fraction, and `reference_plane` and `incident_plane` name the planes
-its phases refer to (the monitor's own plane by default). Fields are E in V/m and H in A/m.
+its phases refer to (the monitor's own plane by default). The measured incident spectrum the
+amplitudes are divided by, `reference['incident_amplitude']`, is referred to the same cell
+centre, so a `raw=True` monitor's amplitudes are exactly the amplitudes times it. Fields are E
+in V/m and H in A/m.
 
 :::{admonition} Earlier interface
 :class: earlier-interface

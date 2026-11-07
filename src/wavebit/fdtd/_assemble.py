@@ -227,7 +227,8 @@ def _incident_split(series, wavelengths):
 
     Returns a dict with the tangential ``Eu``, ``Ev`` of the wave travelling the source's way
     (at the entry node plane, the stagger removed and the transverse phase referred to the
-    origin), the wave's ``KP``, ``kappa``, ``cos``, ``Omega``, the medium and ``K_u``, ``K_v``.
+    cell's low corner, the column's cell (0, 0)), the wave's ``KP``, ``kappa``, ``cos``,
+    ``Omega``, the medium and ``K_u``, ``K_v``.
     A TFSF column over layers holds the layers' reflection too; the E/H split of ``_post``
     removes it. A PlaneWave column holds the incident wave alone and the split changes nothing.
     """
@@ -297,8 +298,10 @@ def incident_amplitude(series, wavelengths, plane=None):
     """``(nf,)`` complex: the incident wave's amplitude along its polarisation unit vector.
 
     A ``PlaneWave``'s polarisation is s or p in the frame of ``_post`` at its own ``K_par``; a
-    TFSF's is its ``polarization`` axis. Referred to the scene's transverse origin and to the
-    entry plane, or to ``plane`` (a position along the propagation axis) by the Yee kz.
+    TFSF's is its ``polarization`` axis. Referred to the cell's low corner (the column's cell
+    (0, 0)) and to the entry plane, or to ``plane`` (a position along the propagation axis) by
+    the Yee kz. ``fdtd.run`` publishes it moved to the cell centre by the Bloch carrier
+    ``_diffraction_sub`` returns; the frozen stage-3 archive pins this low-corner value.
     """
     ctx = series.context
     rt = ctx.rt
@@ -487,6 +490,10 @@ def _diffraction_sub(monitor, scene, plan, acc, rt, sources):
     kpar = xp.sqrt(ku0 ** 2 + kv0 ** 2)
     sin_theta = kpar / (n_inc * inc['omega'])
     theta_at = xp.asin(sin_theta) * (180.0 / math.pi)
+    # The incident wave's Bloch carrier from the cell's low corner to its centre. The raw
+    # amplitudes and the published incident reference are both moved by it, so that both
+    # are referred to ``lateral_origin`` and ``raw = ratio * incident`` holds exactly.
+    carrier = xp.exp(1j * (ku0 * grid.size[u] / 2 + kv0 * grid.size[v] / 2))
     return dict(sub=sub, order_window=((0, int(Mu)), (0, int(Mv))), theta_at=theta_at,
                 lateral_origin=(grid.low[u] + grid.size[u] / 2.0,
                                 grid.low[v] + grid.size[v] / 2.0),
@@ -494,8 +501,9 @@ def _diffraction_sub(monitor, scene, plan, acc, rt, sources):
                 kz=kz, polarization=pw.polarization, source=pw.name,
                 # Keep raw observations independently of incident normalization. In
                 # particular, a zero incident source still has a finite zero raw DFT.
-                raw_s=xp.where(odd, -Es, Es)*xp.exp(1j*(ku0*grid.size[u]/2+kv0*grid.size[v]/2)),
-                raw_p=xp.where(odd, -Ep, Ep)*xp.exp(1j*(ku0*grid.size[u]/2+kv0*grid.size[v]/2)),
+                raw_s=xp.where(odd, -Es, Es)*carrier,
+                raw_p=xp.where(odd, -Ep, Ep)*carrier,
+                incident_carrier=carrier,
                 raw_flux=Ss+Sp, cell_area=grid.size[u]*grid.size[v], epsilon=eps, mu=mu,
                 k_parallel=xp.stack((xp.ones_like(kz)*ku[None,None,:],
                                      xp.ones_like(kz)*kv[None,:,None]),axis=-1),

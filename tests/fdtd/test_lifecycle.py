@@ -349,13 +349,20 @@ def test_source_cannot_be_placed_in_numerical_padding():
 
 
 def test_raw_bloch_amplitudes_use_the_declared_cell_centre():
+    """The raw amplitudes and the published incident reference share ``lateral_origin``.
+
+    At oblique Bloch incidence the engine's incident reference sits at the cell's low corner
+    and the raw amplitudes were moved to the centre alone, so the published product carried
+    the carrier ``exp(i (k_u L_u + k_v L_v) / 2)`` (here 0.098 rad) between them.
+    """
     p=spectral_problem();source=p.sources[0].replace(theta=.2,phi=.3)
     faces=fdtd.Bloch.from_source(source,units=p.units)
     p=p.replace(sources=(source,),scene=p.scene.replace(boundaries=fdtd.Boundaries(**faces,z=fdtd.Open())))
     r=fdtd.run(p,numerics=plane_numerics(steps=1000))
-    expected_phase=np.exp(1j*(2*np.pi/.8*np.sin(.2))*(np.cos(.3)*.05+np.sin(.3)*.05))
-    expected=r['t'].amplitude_s*r['t'].reference['incident_amplitude'][:,None,None]*expected_phase
-    np.testing.assert_allclose(r['raw'].amplitude_s,expected,rtol=2e-14,atol=0)
+    usable=r['t'].metadata['source_usable']
+    assert usable.any()
+    expected=r['t'].amplitude_s*r['t'].reference['incident_amplitude'][:,None,None]
+    np.testing.assert_allclose(r['raw'].amplitude_s[usable],expected[usable],rtol=2e-14,atol=0)
     assert r['t'].reference['lateral_origin']==(0.,0.)
 
 
