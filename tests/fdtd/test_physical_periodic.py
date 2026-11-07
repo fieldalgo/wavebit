@@ -43,9 +43,16 @@ def test_port_amplitudes_and_si_plane_power_match_original_and_airy(algorithm,si
         reference=dict(orders.reference)
         assert reference.pop('incident_amplitude')==1.
         assert reference.pop('cell_measure')==pytest.approx(.2e-6,rel=1e-15)
+        # Normal incidence from vacuum: |A|**2/(2 Z0) through a 0.2 um period, per metre of y.
+        incident_power=reference.pop('incident_power')
+        assert incident_power.shape==(3,)
+        np.testing.assert_allclose(incident_power,.5/Z0*.2e-6,rtol=1e-14)
+        np.testing.assert_allclose(orders.power,orders.efficiency*incident_power[:,None,None],rtol=1e-15)
         assert reference=={'port':port,'wave':wave,'plane':pytest.approx(plane),'length_units':'um',
-            'lateral_origin':(0.,0.),'polarization_frame':'per-order s/p','amplitude_units':'V/m',
-            'incident_amplitude_units':'V/m','cell_measure_units':'m','invariant_axes':('y',)}
+            'lateral_origin':(0.,0.),'polarization_frame':'per-order s/p','amplitude_units':'1',
+            'incident_amplitude_units':'V/m','incident_power_units':'W/m','power_units':'W/m',
+            'cell_measure_units':'m','invariant_axes':('y',)}
+        assert orders.metadata['power_defined'].all() and orders.metadata['efficiency_defined'].all()
 
 
 @pytest.mark.parametrize('algorithm',['shared','reference'])
