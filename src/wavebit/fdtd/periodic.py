@@ -490,8 +490,10 @@ class Result:
 
     ``snapshots`` maps each recorded component ('Ex'..'Hz') to its ``TimeSeries``.
     ``validity.checks['runtime_stability']`` is ``None`` (not assessed) under
-    ``algorithm='reference'``, whose stepping assesses no stability; ``numerical_finite`` covers
-    R and T.
+    ``algorithm='reference'``, whose stepping assesses no stability; ``numerical_finite`` says
+    the engine's R and T are finite. A wavelength with no propagating incident wave is NaN in the
+    published ``R`` and ``T`` by design, and flagged False in the orders'
+    ``metadata['efficiency_defined']``.
     """
     reflection: DiffractionOrders
     transmission: DiffractionOrders
@@ -579,17 +581,17 @@ def _adapt(raw,diag,problem,numerics,execution):
         (cu,hu),(cv,hv)=raw[0].order_window
         z=depth if (source.side=='top')==(which=='r') else 0.
         face=source.side if which=='r' else ('bottom' if source.side=='top' else 'top')
-        # The amplitudes are the engine's ratios to the incident field (a unit Jones pair). They
-        # describe the cell and not the drive: the drive is ``incident_amplitude`` and moves
-        # ``power`` with |A|**2 (fieldalgo/wavebit#54).
+        # The amplitude ratios are the engine's (a unit Jones pair). They describe the cell and
+        # not the drive: the drive is ``reference['incident_field']``, which ``field_*`` carries
+        # and ``power`` carries squared (fieldalgo/wavebit#54).
         return DiffractionOrders(wavelengths=wavelengths,
             orders_u=tuple(range(cu-hu,cu+hu+1)),orders_v=tuple(range(cv-hv,cv+hv+1)),
             efficiency=efficiency,power=efficiency*incident_power[:,None,None],
-            amplitude_s=xp.stack([getattr(s,which+'_s') for s in subs]),
-            amplitude_p=xp.stack([getattr(s,which+'_p') for s in subs]),
+            amplitude_ratio_s=xp.stack([getattr(s,which+'_s') for s in subs]),
+            amplitude_ratio_p=xp.stack([getattr(s,which+'_p') for s in subs]),
             reference={'port':face,'wave':'reflected' if which=='r' else 'transmitted',
                 'plane':z,'length_units':u.length,'lateral_origin':(0.,0.),'polarization_frame':'per-order s/p',
-                'amplitude_units':'1','incident_amplitude':incident,'incident_amplitude_units':'V/m',
+                'amplitude_ratio_units':'1','incident_field':incident,'incident_field_units':'V/m',
                 'incident_power':incident_power,'incident_power_units':power_units,'power_units':power_units,
                 'cell_measure':cell_measure,'cell_measure_units':'m' if invariant else 'm^2',
                 'invariant_axes':invariant},

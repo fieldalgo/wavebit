@@ -60,15 +60,22 @@ Region/포트 재료는 비분산 `Material` 선언입니다. 래스터 epsilon�
 `RasterDispersion(labels=..., poles={label: (Drude(...), Lorentz(...))})`가 물리적 전기 극점을
 제공합니다. 레이블 0은 비분산입니다. 지원하지 않는 인과 모델이나 영역 분산 요청은 거부합니다.
 
-반사·투과 `DiffractionOrders`에는 항상 맨 앞에 파장 축이 있습니다. 복소 진폭은 입사 전기장에
-대한 비율(ratio), 곧 단위가 없는 값입니다(`reference['amplitude_units']`는 `'1'`). 물리 경계면과
-셀 중심에서 각 차수의 s/p 좌표계로 기준을 잡습니다. 이 비율은 프레넬 반사계수처럼 셀의 성질이라서,
-광원 진폭을 키워도 바뀌지 않습니다. `wavebit.rcwa`도 같습니다. 광원 진폭은
-`reference['incident_amplitude']`(V/m)에 있고, 광원 진폭에 따라 바뀌는 값에는 단위가 붙습니다.
+반사·투과 `DiffractionOrders`에는 항상 맨 앞에 파장 축이 있습니다. 복소수 `amplitude_ratio_s`와
+`amplitude_ratio_p`는 입사 전기장에 대한 비율(ratio)이라서 단위가 없습니다
+(`reference['amplitude_ratio_units']`는 `'1'`). 물리 경계면과 셀 중심에서 각 차수의 s/p 좌표계로
+기준을 잡습니다. 이 비율은 프레넬 반사계수처럼 셀의 성질이라서, 광원 진폭을 키워도 바뀌지 않습니다.
+`wavebit.rcwa`도 같습니다. 광원 진폭은 `reference['incident_field']`(V/m, 단위 라벨은
+`incident_field_units`)에 있고, 광원 진폭에 따라 바뀌는 값에는 단위가 붙습니다.
+- `field_s`와 `field_p`는 이 비율에 `reference['incident_field']`를 곱한 값, 곧 차수마다 나가는
+  전기장(V/m)입니다. 광원 진폭에 비례하고, 위상도 따라갑니다. 이 차수들에는 직교 좌표 성분인
+  `amplitude_ratio_xyz`가 없으므로 `field_xyz`는 None입니다.
 - `power`는 차수마다 나가는 파워이고, `reference['incident_power']`는 셀 하나를 지나는 입사 파워입니다.
   교차 셀이면 W, y 불변이면 y 방향 단위 길이당 W/m입니다(`power_units`, `incident_power_units`).
   둘 다 광원 진폭의 제곱에 비례합니다.
 - 아래의 평면 값과 스냅숏은 광원 진폭 자체에 비례하고, 위상도 따라갑니다.
+  `algorithm='reference'`에서는 평면 값이 soft-source 스펙트럼 보정(광원 펄스의 스펙트럼으로 나누는
+  보정)을 그대로 쓰므로, 나가는 차수의 전기장을 V/m로 읽으려면 그곳에서는 `field_s`와 `field_p`를
+  씁니다.
 
 효율은 입사파만의 파워로 정규화하므로 `power = efficiency * incident_power`입니다. 파장 범위의
 k_par(경계면에 나란한 파수)는 중심 파장에서 정하므로, 파장마다 셀에 들어오는 각도가 조금씩
@@ -77,9 +84,11 @@ k_par(경계면에 나란한 파수)는 중심 파장에서 정하므로, 파장
 `metadata['power_defined']`와 `metadata['efficiency_defined']`는 False입니다. reference 스테핑은
 그런 파장까지 계산하고, shared 스테핑은 그런 파장 범위를 거부합니다. 각 `reference`에는 `port`('top' 또는 'bottom'), `wave`('reflected' 또는
 'transmitted'), `plane`(경계면 z, `length_units` 단위), `lateral_origin` `(0., 0.)`,
-`incident_amplitude`(V/m), 그리고 `cell_measure`와 `cell_measure_units`(교차 셀이면 'm^2', y 불변이면
-y 방향 단위 길이당 'm'이며 이때 `invariant_axes`는 `('y',)`)가 들어 있습니다. `R`과 `T`는 이 효율을
-편하게 보는 뷰입니다. 사용 가능한 s/p 기저 관측값은 `result.basis`에 따로 보관합니다.
+`amplitude_ratio_units`('1'), `incident_field`와 `incident_field_units`('V/m'), 그리고 `cell_measure`와
+`cell_measure_units`(교차 셀이면 'm^2', y 불변이면 y 방향 단위 길이당 'm'이며 이때 `invariant_axes`는
+`('y',)`)가 들어 있습니다. `R`과 `T`는 이 효율을 편하게 보는 뷰입니다. 사용 가능한 s/p 기저 관측값은
+`result.basis`에 따로 보관합니다. 그 진폭도 비율이며, 각 기저의 `field_s`와 `field_p`는 선언한
+진폭으로 순수 s 편광 또는 순수 p 편광이 입사했을 때 나올 전기장입니다.
 
 `Outputs(planes={'name': z})`는 보정된 phasor를 스트리밍합니다. E는 V/m, H는 A/m이며,
 평면 메타데이터에 보정 방식이 기록됩니다. shared 스테핑은 경계면의 단위 입사 E로 보정하고,
@@ -107,9 +116,12 @@ AD는 유지하지 않습니다. 순간 Poynting 벡터는 phasor 인자 1/2 없
 `threshold`, `_units`로 끝나는 키의 명시적 단위 라벨과 함께 남습니다. 이 검사로 격자, smoothing,
 PML 수렴이 확인되지는 않습니다.
 
-`validity.checks`에는 `runtime_stability`와 `numerical_finite`(R과 T가 유한한지)가 있습니다.
-reference 스테핑은 안정성을 판단하지 않으므로 `algorithm='reference'`에서는 `runtime_stability`가
-참이 아니라 `None`(판단 안 함)입니다. `diagnostics['invariant_axes']`는 y 불변 문제에서 `('y',)`,
+`validity.checks`에는 `runtime_stability`와 `numerical_finite`가 있습니다. `numerical_finite`는
+엔진이 계산한 R과 T를 읽습니다. 공개 결과에서 값을 NaN으로 가리기 전의 값이며, 이 값이 유한한지를
+알려 줍니다. 입사파가 나아가지 못하는 파장에서는 공개되는 `R`과 `T`가 일부러 NaN이고, 차수의
+`metadata['efficiency_defined']`가 그 파장에서 False입니다. 그런 파장을 찾을 때는
+`numerical_finite`가 아니라 이 표시를 보세요. reference 스테핑은 안정성을 판단하지 않으므로
+`algorithm='reference'`에서는 `runtime_stability`가 참이 아니라 `None`(판단 안 함)입니다. `diagnostics['invariant_axes']`는 y 불변 문제에서 `('y',)`,
 그 밖에는 `()`입니다. `result.provenance`에는 `solver`, `execution`, `numerics`, `units`,
 `coordinate_frame`, `time_convention`, `time_step_seconds`가 기록됩니다. `observations.fit_modes`는 오프라인 ringdown
 피팅에 SI 타임스탬프를 받고 Hz와 1/s 단위 감쇠율을 반환합니다. 창과 모델 차수 수렴은 별도

@@ -55,6 +55,11 @@ Physical materials and units are shared by both solvers. A common declaration do
 
 .. autoclass:: wavebit.DiffractionOrders
    :members:
+   :inherited-members:
+
+.. autoclass:: wavebit.observations.DiffractionOrder
+   :members:
+   :inherited-members:
 
 .. autoclass:: wavebit.FieldSamples
    :members:
@@ -63,6 +68,10 @@ Physical materials and units are shared by both solvers. A common declaration do
    :members:
 
 .. autoclass:: wavebit.RawDiffractionSpectrum
+   :members:
+   :inherited-members:
+
+.. autoclass:: wavebit.observations.RawDiffractionOrder
    :members:
 
 .. autoclass:: wavebit.TimeSeries

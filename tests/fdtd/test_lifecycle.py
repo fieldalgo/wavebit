@@ -11,6 +11,7 @@ from wavebit.units import C0, EPSILON0, Z0
 from wavebit.fdtd import _legacy as legacy
 from wavebit.errors import IncompatibleProblemError, UnsupportedFeatureError
 from wavebit.fdtd._lower_public import lower_problem
+from wavebit.observations import DiffractionOrders, RawDiffractionOrder
 
 
 def periodic_problem(*,units='um',epsilon=1.,amplitude=1.,outputs=None):
@@ -183,7 +184,7 @@ def spectral_problem(scale=1.,length='um',amplitude=1.):
 def test_raw_spectral_energy_integrates_the_cell_and_keeps_one_port():
     r=fdtd.run(spectral_problem(),numerics=plane_numerics(steps=1000))
     outgoing=r['raw'];scattering=r['t']
-    assert scattering.amplitude_s.shape==(1,1,1)
+    assert scattering.amplitude_ratio_s.shape==(1,1,1)
     assert scattering.k_parallel.shape==(1,1,1,2)
     assert np.all(np.real(scattering.k_normal)<0)  # transmitted wave travels toward -z
     assert scattering.reference['outward_normal']==(0,0,-1)
@@ -191,20 +192,38 @@ def test_raw_spectral_energy_integrates_the_cell_and_keeps_one_port():
     # The core reference keys every diffraction producer shares (rcwa and fdtd.periodic too).
     for port in (scattering,outgoing):
         labels={key:port.reference[key] for key in ('port','wave','plane','length_units','lateral_origin',
-            'incident_amplitude_units','cell_measure_units')}
+            'incident_spectrum_units','cell_measure_units')}
         assert labels=={'port':'z-','wave':'transmitted','plane':pytest.approx(-.4),'length_units':'um',
-            'lateral_origin':(0.,0.),'incident_amplitude_units':'V*s/m','cell_measure_units':'m^2'}
-        assert port.reference['incident_amplitude'].shape==(1,) and 'invariant_axes' in port.reference
+            'lateral_origin':(0.,0.),'incident_spectrum_units':'V*s/m','cell_measure_units':'m^2'}
+        assert port.reference['incident_spectrum'].shape==(1,) and 'invariant_axes' in port.reference
+        # The pulse drive is a spectrum, never a CW field; the names #54 replaced are gone.
         assert not {'z','side','coordinates','cell_area_m2','integration_measure','integration_measure_units',
-                    'length_unit','incident_power','incident_power_units'}&set(port.reference)
-    assert scattering.reference['amplitude_units']=='1' and outgoing.reference['amplitude_units']=='V*s/m'
+                    'length_unit','incident_power','incident_power_units','incident_field',
+                    'incident_field_units','incident_amplitude','incident_amplitude_units',
+                    'amplitude_units'}&set(port.reference)
+    assert scattering.reference['amplitude_ratio_units']=='1' and outgoing.reference['spectrum_units']=='V*s/m'
+    assert 'spectrum_units' not in scattering.reference and 'amplitude_ratio_units' not in outgoing.reference
+    # A pulse has no single field in V/m, so the calibrated orders have no field_*.
+    assert scattering.field_s is None and scattering.field_p is None and scattering.field_xyz is None
+    assert scattering.order(0,0).field_s is None
     assert scattering.reference['wavevector_units']=='rad/um' and 'wavevector_units' not in scattering.metadata
     assert scattering.power is None and not hasattr(scattering,'T')
     assert bool(scattering.metadata['source_usable'][0])
     assert float(scattering.efficiency[0,0,0])==pytest.approx(1.,abs=3e-6)
     np.testing.assert_allclose(outgoing.spectral_energy[:,0,0],-r['q'].spectral_energy,rtol=1e-6,atol=0)
-    np.testing.assert_allclose(outgoing.amplitude_s,
-        scattering.amplitude_s*scattering.reference['incident_amplitude'][:,None,None],rtol=1e-14)
+    # The raw arrays are pulse spectra in V*s/m: the ratios times the measured incident spectrum.
+    assert outgoing.spectrum_s is not None and scattering.amplitude_ratio_s is not None
+    np.testing.assert_allclose(outgoing.spectrum_s,
+        scattering.amplitude_ratio_s*scattering.reference['incident_spectrum'][:,None,None],rtol=1e-14)
+    assert not isinstance(outgoing,DiffractionOrders) and not hasattr(outgoing,'amplitude_ratio_s')
+    raw_order=outgoing.order(0,0)
+    assert isinstance(raw_order,RawDiffractionOrder)
+    np.testing.assert_array_equal(raw_order.spectrum_s,outgoing.spectrum_s[:,0,0])
+    # The old names are refused, naming what replaced them.
+    with pytest.raises(AttributeError,match=r'DiffractionOrders\.amplitude_ratio_s'):
+        scattering.amplitude_s
+    with pytest.raises(AttributeError,match=r'RawDiffractionSpectrum\.spectrum_s'):
+        outgoing.amplitude_s
     assert outgoing.reference['spectral_energy_units']=='J/Hz'
     assert r['f'].units=={'Ey':'V*s/m','Hx':'A*s/m','coordinates':'um'}
     assert dict(r['f'].metadata)=={'duration_seconds':r['f'].metadata['duration_seconds']}
@@ -236,7 +255,7 @@ def test_provenance_carries_the_shared_core_keys():
 def test_raw_spectral_units_are_invariant_under_geometry_length_unit():
     a=fdtd.run(spectral_problem(),numerics=plane_numerics(steps=700))
     b=fdtd.run(spectral_problem(1000.,'nm'),numerics=plane_numerics(1000.,steps=700))
-    for name in ('amplitude_s','amplitude_p','spectral_energy'):
+    for name in ('spectrum_s','spectrum_p','spectral_energy'):
         np.testing.assert_allclose(getattr(a['raw'],name),getattr(b['raw'],name),rtol=2e-11,atol=0)
     for component in ('Ey','Hx'):
         np.testing.assert_allclose(a['f'].values[component],b['f'].values[component],rtol=2e-11,atol=0)
@@ -247,11 +266,11 @@ def test_zero_source_retains_zero_raw_spectrum_but_cannot_normalize():
     with np.errstate(invalid='ignore',divide='ignore'):
         r=fdtd.run(spectral_problem(amplitude=0.),numerics=plane_numerics(steps=30))
     assert not bool(r.validity.checks['source_reference']['t'][0])
-    assert np.isnan(r['t'].amplitude_s).all() and np.isnan(r['t'].efficiency).all()
+    assert np.isnan(r['t'].amplitude_ratio_s).all() and np.isnan(r['t'].efficiency).all()
     # The NaN is the published mask of an unusable wavelength, not a nonfinite computation.
     assert bool(r.validity.checks['numerical_finite'])
-    np.testing.assert_array_equal(r['raw'].amplitude_s,0.)
-    np.testing.assert_array_equal(r['raw'].amplitude_p,0.)
+    np.testing.assert_array_equal(r['raw'].spectrum_s,0.)
+    np.testing.assert_array_equal(r['raw'].spectrum_p,0.)
     np.testing.assert_array_equal(r['raw'].spectral_energy,0.)
 
 
@@ -349,11 +368,12 @@ def test_source_cannot_be_placed_in_numerical_padding():
 
 
 def test_raw_bloch_amplitudes_use_the_declared_cell_centre():
-    """The raw amplitudes and the published incident reference share ``lateral_origin``.
+    """The raw spectra and the published incident spectrum share ``lateral_origin``.
 
     At oblique Bloch incidence the engine's incident reference sits at the cell's low corner
-    and the raw amplitudes were moved to the centre alone, so the published product carried
-    the carrier ``exp(i (k_u L_u + k_v L_v) / 2)`` (here 0.098 rad) between them.
+    and the raw spectra were moved to the centre alone, so the published product carried
+    the carrier ``exp(i (k_u L_u + k_v L_v) / 2)`` (here 0.098 rad) between them. Inside the
+    usable band ``spectrum_s`` is ``amplitude_ratio_s * incident_spectrum`` to round-off.
     """
     p=spectral_problem();source=p.sources[0].replace(theta=.2,phi=.3)
     faces=fdtd.Bloch.from_source(source,units=p.units)
@@ -361,8 +381,8 @@ def test_raw_bloch_amplitudes_use_the_declared_cell_centre():
     r=fdtd.run(p,numerics=plane_numerics(steps=1000))
     usable=r['t'].metadata['source_usable']
     assert usable.any()
-    expected=r['t'].amplitude_s*r['t'].reference['incident_amplitude'][:,None,None]
-    np.testing.assert_allclose(r['raw'].amplitude_s[usable],expected[usable],rtol=2e-14,atol=0)
+    expected=r['t'].amplitude_ratio_s*r['t'].reference['incident_spectrum'][:,None,None]
+    np.testing.assert_allclose(r['raw'].spectrum_s[usable],expected[usable],rtol=2e-14,atol=0)
     assert r['t'].reference['lateral_origin']==(0.,0.)
 
 
@@ -373,8 +393,12 @@ def test_diffraction_band_guard_is_separate_from_runtime_stability():
     np.testing.assert_array_equal(r['t'].metadata['source_usable'],(True,False))
     assert r.validity.checks['runtime_stability']
     assert np.isnan(r['t'].efficiency[1]).all()
-    assert np.isfinite(r['raw'].amplitude_s).all()
-    assert r['t'].at_wavelength_index(1).metadata['source_usable'].shape==(1,)
+    assert np.isfinite(r['raw'].spectrum_s).all()
+    second=r['t'].at_wavelength_index(1)
+    assert second.metadata['source_usable'].shape==(1,)
+    # The pulse spectrum has a wavelength axis and is sliced with the orders.
+    assert second.reference['incident_spectrum'].shape==(1,)
+    np.testing.assert_array_equal(second.reference['incident_spectrum'],r['t'].reference['incident_spectrum'][1:])
 
 
 def test_ranged_geometry_derivative_and_runtime_guard_survive_public_lifecycle():

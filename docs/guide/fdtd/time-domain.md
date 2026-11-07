@@ -14,7 +14,7 @@ examples run only on a historical checkout; each sits in an *Earlier interface* 
 like any other: `Periodic()` x and y faces (or the `Bloch` faces `Bloch.from_source` writes for
 an oblique wave), `Open()` z faces with a PML added outside them, the layers as structures, one
 `PlaneWave`, and a `DiffractionMonitor` on each side. Each monitor returns the per-order
-complex s/p amplitudes and efficiencies RCWA returns, normalized by the plane wave's own
+complex s/p amplitude ratios and efficiencies RCWA returns, normalized by the plane wave's own
 measured incident field. [How the solver models a problem](model.md) describes each piece.
 
 The earlier periodic factory, `wavebit.fdtd(stack=..., incidence=...)`, read the same `Stack`
@@ -41,13 +41,16 @@ radians, with +z upward. In FDTD a layer is a cell-snapped `SnappedSlab(z=(lo, h
 `Box`; a half-space is a `SnappedSlab` that reaches an `Open()` face and continues into that face's
 PML, and the scene's `background` fills every cell no structure claims. A `PlaneWave` with
 `direction='-z'` (the default) lights the stack from above and `'+z'` from below; its
-`polarization` is `'s'` or `'p'`. A `DiffractionMonitor`'s `amplitude_s` and `amplitude_p`
-use each outgoing order's own s/p frame with the cell centre as lateral phase origin, its
-`efficiency` is a power fraction, and `reference_plane` and `incident_plane` name the planes
-its phases refer to (the monitor's own plane by default). The measured incident spectrum the
-amplitudes are divided by, `reference['incident_amplitude']`, is referred to the same cell
-centre, so a `raw=True` monitor's amplitudes are exactly the amplitudes times it. Fields are E
-in V/m and H in A/m.
+`polarization` is `'s'` or `'p'`. A `DiffractionMonitor`'s `amplitude_ratio_s` and
+`amplitude_ratio_p` use each outgoing order's own s/p frame with the cell centre as lateral
+phase origin, its `efficiency` is a power fraction, and `reference_plane` and `incident_plane`
+name the planes its phases refer to (the monitor's own plane by default). The ratios have no
+unit: the measured incident spectrum they are divided by, `reference['incident_spectrum']`
+(V*s/m), is referred to the same cell centre, so inside the pulse's usable band
+(`metadata['source_usable']`) a `raw=True` monitor's `spectrum_s` and `spectrum_p` equal the
+ratios times it, to round-off; outside that band the ratios are NaN and the raw spectra stay
+finite. A pulse has no single incident field in V/m, so the orders' `field_s`, `field_p` and
+`field_xyz` are None here. Fields are E in V/m and H in A/m.
 
 :::{admonition} Earlier interface
 :class: earlier-interface
@@ -167,7 +170,7 @@ The two problems share their `Material` and `Units` objects, not a scene: RCWA r
 [`Stack`](../rcwa/scene.md) of layers, FDTD a domain of structures. Every face here lies on a
 cell boundary, so `fdtd.check` reports no snapped face. Each `DiffractionMonitor` returns what
 RCWA's `result.transmission` and `result.reflection` return — `order(m).efficiency` and the
-complex `amplitude_s` and `amplitude_p` with a leading wavelength axis — with the phases moved
+complex `amplitude_ratio_s` and `amplitude_ratio_p` with a leading wavelength axis — with the phases moved
 to the faces named by `reference_plane` and `incident_plane`, as RCWA's are. The FDTD numbers
 were regenerated with the current module on 2026-10-15; the earlier factory printed a 2.0e-3
 gap on the same 10 nm grid. The gap is the grid's: it is second order, so a 5 nm cell brings

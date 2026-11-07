@@ -25,8 +25,8 @@ def test_explicit_units_expand_the_same_sweep_and_keep_per_order_complex_amplitu
         a,b=run(current),original_run(previous)
         np.testing.assert_allclose(a.R[0],b.R,atol=2e-13)
         np.testing.assert_allclose(a.T[0],b.T,atol=2e-13)
-        np.testing.assert_allclose(a.reflection.amplitude_s[0],b.incident.r_s,atol=2e-13)
-        np.testing.assert_allclose(a.transmission.amplitude_p[0],b.incident.t_p,atol=2e-13)
+        np.testing.assert_allclose(a.reflection.amplitude_ratio_s[0],b.incident.r_s,atol=2e-13)
+        np.testing.assert_allclose(a.transmission.amplitude_ratio_p[0],b.incident.t_p,atol=2e-13)
 
 
 @pytest.mark.parametrize('tetm,word',[('te','s'),('tm','p'),('TM','p')])
@@ -45,7 +45,7 @@ def test_a_tetm_declaration_migrates_to_the_word_for_the_same_light(tetm,word):
     np.testing.assert_allclose(a.T[0],b.T,atol=2e-13)
     for port,prefix in (('reflection','r'),('transmission','t')):
         for channel in ('s','p'):
-            np.testing.assert_allclose(getattr(getattr(a,port),'amplitude_'+channel)[0],
+            np.testing.assert_allclose(getattr(getattr(a,port),'amplitude_ratio_'+channel)[0],
                                        getattr(b.incident,f'{prefix}_{channel}'),atol=2e-13)
 
 
@@ -68,8 +68,8 @@ def test_shape_defaults_and_aliases_preserve_complex_scattering(shape):
     from wavebit._common._jobs_v1 import JobSpec
     old=original_run(JobSpec.from_dict(doc))
     current=run(migrate_legacy_jobs(doc,units=Units(length='um'))[0])
-    np.testing.assert_allclose(current.reflection.amplitude_s[0],old.incident.r_s,atol=2e-13)
-    np.testing.assert_allclose(current.transmission.amplitude_p[0],old.incident.t_p,atol=2e-13)
+    np.testing.assert_allclose(current.reflection.amplitude_ratio_s[0],old.incident.r_s,atol=2e-13)
+    np.testing.assert_allclose(current.transmission.amplitude_ratio_p[0],old.incident.t_p,atol=2e-13)
 
 
 def test_unrecognized_shape_fields_cannot_be_silently_dropped():
@@ -92,4 +92,4 @@ def test_table_permeability_and_oblique_cell_preserve_bottom_incidence():
     assert Job.from_json(job.to_json()).key==job.key
     a,b=run(job),original_run(spec)
     np.testing.assert_allclose(a.R[0],b.R,rtol=1e-12,atol=2e-14)
-    np.testing.assert_allclose(a.transmission.amplitude_p[0],b.incident.t_p,rtol=1e-12,atol=2e-14)
+    np.testing.assert_allclose(a.transmission.amplitude_ratio_p[0],b.incident.t_p,rtol=1e-12,atol=2e-14)

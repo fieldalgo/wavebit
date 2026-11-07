@@ -429,7 +429,7 @@ cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 �
 정합니다. 다른 주파수의 접선 입사장은 이산 전달비 `G(omega)/G(omega0)`를 가집니다.
 여기서 `G(omega) = -i sin(kappa dx/2) exp(i kappa dx/2)`이고 `kappa`는 column의
 Yee 종방향 파수입니다. 따라서 광대역 원시장은 광원의 전달 특성에 의존합니다.
-회절 진폭은 측정한 입사장으로 정규화합니다. 중심 주파수는 선택한 격자의 column을
+회절 진폭비(amplitude ratio)는 측정한 입사장으로 정규화합니다. 중심 주파수는 선택한 격자의 column을
 따라 전파할 수 있어야 하며, cutoff나 종방향 Nyquist에 걸리면 준비 단계에서 거부합니다.
 
 s 편광과 정확한 수직 입사는 hard 전기장 구동을 유지합니다. 따라서 각도가 0으로
@@ -459,7 +459,7 @@ s 편광과 정확한 수직 입사는 hard 전기장 구동을 유지합니다.
 | `TimeSeriesMonitor(name, at=..., component="Ey")` | 한 성분의, 가장 가까운 Yee 점에서의 시계열. V/m 또는 A/m, 시간 축 `times_seconds`는 초 |
 | `FieldMonitor(name, wavelengths=..., plane=... 또는 box=..., components=...)` | 각 성분의 점에서의 푸리에 페이저(V·s/m, A·s/m) |
 | `FluxMonitor(name, wavelengths=..., plane=... 또는 box=...)` | 평면을 (`+` 법선 방향으로) 지나거나 닫힌 상자에서 나가는 포인팅 에너지의 진동수당 양: 와트가 아니라 J/Hz 단위의 펄스 스펙트럼 에너지(`spectral_energy`). 닫힌 상자는 각 구조물을 통째로 감싸거나 통째로 빼야 합니다. |
-| `DiffractionMonitor(name, plane=..., wavelengths=..., source=..., wave=..., orders=None)` | 주기 셀에서 한 파동으로 나가는 차수들(입사 쪽의 `"reflected"` 또는 반대쪽의 `"transmitted"`). 각 차수의 s/p 좌표계에서의 복소 진폭과 효율이며, 이름 붙은 `PlaneWave`가 직접 잰 입사장으로 정규화됩니다. `PlaneWave`가 정확히 하나여야 합니다. `reference_plane`과 `incident_plane`은 위상 기준면을 옮기고, `raw=True`는 정규화하지 않은 스펙트럼을 남깁니다. `orders`는 남길 차수 창 `(Mu, Mv)`로, 두 격자 벡터 방향의 음이 아닌 정수 쌍을 명시합니다(`None`이면 요청 파장에서 전파하는 모든 차수). 정수 하나만 주면 생성 시점에 `monitor.orders`로 거부합니다. 펄스의 사용 가능한 대역 밖 파장은 NaN으로 돌려주며, 그곳에서 `validity.checks["source_reference"]`가 거짓입니다. |
+| `DiffractionMonitor(name, plane=..., wavelengths=..., source=..., wave=..., orders=None)` | 주기 셀에서 한 파동으로 나가는 차수들(입사 쪽의 `"reflected"` 또는 반대쪽의 `"transmitted"`). 각 차수의 s/p 좌표계에서의 복소 진폭비(`amplitude_ratio_s`, `amplitude_ratio_p`, 입사장에 대한 비율이라 단위가 없음)와 효율이며, 이름 붙은 `PlaneWave`가 직접 잰 입사장으로 정규화됩니다. 그 입사장의 스펙트럼은 `reference['incident_spectrum']`(V*s/m)입니다. 펄스에는 V/m 단위의 단일 전기장이 없으므로 `field_s`, `field_p`, `field_xyz`는 None입니다. `PlaneWave`가 정확히 하나여야 합니다. `reference_plane`과 `incident_plane`은 위상 기준면을 옮기고, `raw=True`는 대신 `RawDiffractionSpectrum`을 돌려줍니다. 그 정규화하지 않은 `spectrum_s`, `spectrum_p`(V*s/m)는 펄스의 사용 가능한 대역(`metadata['source_usable']`이 참인 파장) 안에서 진폭비에 그 스펙트럼을 곱한 값입니다. `orders`는 남길 차수 창 `(Mu, Mv)`로, 두 격자 벡터 방향의 음이 아닌 정수 쌍을 명시합니다(`None`이면 요청 파장에서 전파하는 모든 차수). 정수 하나만 주면 생성 시점에 `monitor.orders`로 거부합니다. 사용 가능한 대역 밖 파장에서는 진폭비와 효율이 NaN이고 정규화하지 않은 스펙트럼은 NaN이 되지 않고 측정값 그대로 남으며, 그곳에서 `validity.checks["source_reference"]`가 거짓입니다. |
 | `FarFieldMonitor(name, wavelengths=..., box=..., propagation="continuum")` | 열린 장면의 복사: 모든 것을 감싸는 닫힌 상자를 무한원으로 변환합니다. `intensity(theta, phi)`는 라디안을 받습니다. 주기 셀은 거절됩니다(주기 셀의 원거리장은 회절 차수입니다). `propagation="yee"`는 격자 자체의 분산을 씁니다. |
 | `Outputs(final_fields=True)` | 실행 끝의 E, H 배열과 각 성분의 좌표 |
 

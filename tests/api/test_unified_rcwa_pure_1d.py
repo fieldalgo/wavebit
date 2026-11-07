@@ -67,8 +67,8 @@ def observables(result, problem):
     out = {}
     for port in ('reflected', 'transmitted'):
         o = result.outputs[port]
-        for name in ('amplitude_s', 'amplitude_p', 'amplitude_xyz', 'efficiency', 'power',
-                     'k_parallel', 'k_normal'):
+        for name in ('amplitude_ratio_s', 'amplitude_ratio_p', 'amplitude_ratio_xyz', 'field_s',
+                     'field_p', 'field_xyz', 'efficiency', 'power', 'k_parallel', 'k_normal'):
             out[f'{port}.{name}'] = host(getattr(o, name))
     out['absorption'] = host(result.absorption)
     out['power_entering'] = host(result.outputs['power_entering'])
@@ -85,10 +85,13 @@ def _family(name):
     """The observables one scale is read from: a quantity that is round-off on one path has no
     scale of its own. A cross-polarized amplitude is an exact zero on the pure path and noise on
     the conical one, measured against the co-polarized amplitude of the same port; a lossless
-    stack's absorption is measured against the power entering it."""
+    stack's absorption is measured against the power entering it. The fields in V/m are the
+    ratios times the drive, so they group the same way."""
     port, _, quantity = name.rpartition('.')
-    if quantity in ('amplitude_s', 'amplitude_p'):
-        return f'{port}.amplitude_sp'
+    if quantity in ('amplitude_ratio_s', 'amplitude_ratio_p'):
+        return f'{port}.amplitude_ratio_sp'
+    if quantity in ('field_s', 'field_p'):
+        return f'{port}.field_sp'
     return 'budget' if name in ('absorption', 'power_entering') else name
 
 
@@ -168,7 +171,7 @@ CASES = {
     'a Rayleigh point': (lambda pol: grating(pol, theta=float(np.arcsin(WAVELENGTH/PERIOD - 1.0)),
                                              bottom=1.0), ORDERS),
     # theta = pi/2 + 0.2j from glass: an evanescent incident wave, which has no power to
-    # normalize by, so efficiencies are NaN on both paths and the amplitudes carry the answer.
+    # normalize by, so efficiencies are NaN on both paths and the amplitude ratios carry the answer.
     'evanescent incidence': (lambda pol: grating(pol, theta=np.pi/2 + 0.2j, top=2.25, fields=False),
                              ORDERS),
 }

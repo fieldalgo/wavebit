@@ -228,34 +228,38 @@ def adapt_result(problem,numerics,execution,raw,metadata):
                 plane=value.reference_plane,incident_plane=value.incident_plane,length_units=units.length,
                 lateral_origin=value.lateral_origin,propagation='yee',polarization_frame='per-order s/p',
                 source=m.source,normalization='measured incident reference',
-                amplitude_units='1',invariant_axes=invariant_axes,
+                amplitude_ratio_units='1',invariant_axes=invariant_axes,
                 epsilon=value.raw['epsilon'],mu=value.raw['mu'],
                 outward_normal=value.raw['outward_normal'],tangent_axes=value.raw['tangent_axes'],
-                incident_amplitude=incident,incident_amplitude_units='V*s/m',
+                # A pulse drive has a spectrum and no single field: no ``incident_field`` here,
+                # so the orders' ``field_*`` is None (fieldalgo/wavebit#54).
+                incident_spectrum=incident,incident_spectrum_units='V*s/m',
                 # The periodic cell's measure: an area, or per unit length of each invariant axis.
                 cell_measure=value.raw['cell_area']*units.length_unit_meters**(2-invariant)/raw.plan.dx**invariant,
                 cell_measure_units=('m^2','m','1')[invariant],wavevector_units='rad/'+units.length)
             common=dict(wavelengths=value.wavelengths,orders_u=tuple(value.orders.orders_u),
                         orders_v=tuple(value.orders.orders_v),k_normal=value.kz*next(v for v in value.raw['outward_normal'] if v),k_parallel=value.raw['k_parallel'],
-                        reference_wavelength_fields=('epsilon','mu','incident_amplitude'),
+                        reference_wavelength_fields=('epsilon','mu','incident_spectrum'),
                         metadata={'theta_radians':value.theta_at*math.pi/180,'spectral_axis_retained':True,
                             'source_usable':usable,'source_band_cutoff':declaration.pulse.cutoff,
                             'measured_reference_floor':floor})
             if m.raw:
                 measured.extend((value.raw[k],None) for k in ('raw_s','raw_p','raw_flux'))
-                reference.update(normalization='none (raw pulse transform)',amplitude_units='V*s/m',
+                # The raw arrays are spectra, not ratios: no ratio label on them.
+                reference.pop('amplitude_ratio_units')
+                reference.update(normalization='none (raw pulse transform)',spectrum_units='V*s/m',
                                  spectral_energy_units=flux_units)
-                outputs[name]=RawDiffractionSpectrum(**common,amplitude_s=value.raw['raw_s']*ts,
-                    amplitude_p=value.raw['raw_p']*ts,
+                outputs[name]=RawDiffractionSpectrum(**common,spectrum_s=value.raw['raw_s']*ts,
+                    spectrum_p=value.raw['raw_p']*ts,
                     spectral_energy=value.raw['raw_flux']*value.raw['cell_area']*spectral_factor,
-                    reference=reference,window=transform['window'],amplitude_units='V*s/m')
+                    reference=reference,window=transform['window'])
             else:
                 valid=usable[:,None,None]
                 measured.extend((v,valid) for v in (a,b,efficiency))
                 measured.append((getattr(order,side+'_xyz'),valid[...,None]))
-                outputs[name]=DiffractionOrders(**common,amplitude_s=xp.where(valid,a,complex('nan')),
-                    amplitude_p=xp.where(valid,b,complex('nan')),efficiency=xp.where(valid,efficiency,float('nan')),
-                    amplitude_xyz=xp.where(valid[...,None],getattr(order,side+'_xyz'),complex('nan')),
+                outputs[name]=DiffractionOrders(**common,amplitude_ratio_s=xp.where(valid,a,complex('nan')),
+                    amplitude_ratio_p=xp.where(valid,b,complex('nan')),efficiency=xp.where(valid,efficiency,float('nan')),
+                    amplitude_ratio_xyz=xp.where(valid[...,None],getattr(order,side+'_xyz'),complex('nan')),
                     reference=reference)
     source_references={}
     for name,s in raw.sources.items():

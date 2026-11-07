@@ -99,8 +99,8 @@ def test_evanescent_efficiencies_are_undefined_and_amplitudes_are_kept(alpha, po
         assert np.isnan(np.asarray(value)).all(), (name, value)
 
     want_r, want_t = _fresnel(theta, polarization)
-    got_r = complex(np.ravel(getattr(result.reflection, 'amplitude_' + polarization))[0])
-    got_t = complex(np.ravel(getattr(result.transmission, 'amplitude_' + polarization))[0])
+    got_r = complex(np.ravel(getattr(result.reflection, 'amplitude_ratio_' + polarization))[0])
+    got_t = complex(np.ravel(getattr(result.transmission, 'amplitude_ratio_' + polarization))[0])
     assert abs(got_r - want_r) < 1e-14, (got_r, want_r)
     assert abs(got_t - want_t) < 1e-14, (got_t, want_t)
 
@@ -123,9 +123,9 @@ def test_the_tunnelled_power_is_kept_in_watts(alpha, polarization):
     result = rcwa.run(_problem(theta, polarization), numerics=rcwa.Numerics(orders=(0, 0)))
     reference = result.reflection.reference
     scale = (float(_first(reference['cell_measure'][0]))
-             * abs(complex(_first(reference['incident_amplitude'])))**2 / (2 * Z0))
-    r = complex(_first(getattr(result.reflection, 'amplitude_' + polarization)))
-    t = complex(_first(getattr(result.transmission, 'amplitude_' + polarization)))
+             * abs(complex(_first(reference['incident_field'])))**2 / (2 * Z0))
+    r = complex(_first(getattr(result.reflection, 'amplitude_ratio_' + polarization)))
+    t = complex(_first(getattr(result.transmission, 'amplitude_ratio_' + polarization)))
     kx = np.sin(theta).real
     k1, k2 = 1j * np.sqrt(kx**2 - EPS_TOP), np.sqrt(EPS_BOTTOM - kx**2)
 
@@ -296,7 +296,7 @@ def test_a_jitted_solve_marks_the_same_values():
             result = prepared.run(_problem(theta))
             metadata = result.reflection.metadata
             return (result.R, result.T, metadata['power_defined'], metadata['efficiency_defined'],
-                    result.transmission.amplitude_s, result.transmission.power)
+                    result.transmission.amplitude_ratio_s, result.transmission.power)
 
         jitted = jax.jit(evaluate)
         for alpha in ALPHAS[:2]:

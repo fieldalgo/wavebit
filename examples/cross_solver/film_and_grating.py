@@ -1,8 +1,8 @@
 """Compare the current RCWA and FDTD APIs on one film and one shifted grating.
 
 Both use shared materials and um, a cell-centred lateral origin, +z upward, and a
-film occupying z=0..0.2. Amplitudes refer to the film's top/bottom faces, not the
-FDTD monitor planes. The odd orders of the shifted grating retain complex phase.
+film occupying z=0..0.2. Amplitude ratios refer to the film's top/bottom faces, not
+the FDTD monitor planes. The odd orders of the shifted grating retain complex phase.
 This small spatial/time ladder is a case-specific check, not a universal accuracy
 certificate. NumPy only. Use --polarization p for the other linear polarization.
 """
@@ -47,10 +47,12 @@ def problems(profile, polarization):
 
 def arrays(ports):
     # Match order labels explicitly; RCWA also retains higher, evanescent orders.
-    amplitude = np.array([[[np.asarray(port.order(m).amplitude_s)[0],
-                           np.asarray(port.order(m).amplitude_p)[0]] for m in ORDERS] for port in ports])
+    # Both solvers publish dimensionless ratios to their own incident field, so they compare
+    # directly; the drives themselves differ (V/m for RCWA, a V*s/m pulse spectrum for FDTD).
+    ratio = np.array([[[np.asarray(port.order(m).amplitude_ratio_s)[0],
+                       np.asarray(port.order(m).amplitude_ratio_p)[0]] for m in ORDERS] for port in ports])
     efficiency = np.array([[np.asarray(port.order(m).efficiency)[0] for m in ORDERS] for port in ports])
-    return amplitude, efficiency
+    return ratio, efficiency
 
 
 def spectral_run(problem, order):
@@ -68,7 +70,7 @@ def compare(profile, polarization):
     if profile == 'grating':
         assert np.max(np.abs(expected[0][:, [0, 2]])) > .1
     print(f'\n{profile}, {polarization}; reference faces z=0.2/0 um, lateral origin=(0,0)')
-    print('spacing (nm)   duration (fs)   max complex-amplitude gap   max efficiency gap')
+    print('spacing (nm)   duration (fs)   max amplitude-ratio gap   max efficiency gap')
     observed = []
     for spacing, duration in ((.05, 70e-15), (.025, 70e-15), (.025, 100e-15), (.025, 140e-15)):
         result = fdtd.run(temporal, numerics=fdtd.Numerics(grid=fdtd.UniformGrid(spacing=spacing),
@@ -80,13 +82,15 @@ def compare(profile, polarization):
             assert port.reference['incident_plane'] == THICKNESS
             for key in ('wave', 'lateral_origin', 'outward_normal', 'cell_measure_units'):
                 assert port.reference[key] == other.reference[key]
+            # The ratios compared below are dimensionless in both solvers, not only alike.
+            assert port.reference['amplitude_ratio_units'] == other.reference['amplitude_ratio_units'] == '1'
             for key in ('epsilon', 'mu', 'cell_measure'):
                 np.testing.assert_allclose(port.reference[key], other.reference[key])
             assert np.all(port.metadata['source_usable'])
         current = arrays(ports)
         observed.append(current)
         gaps = [np.max(np.abs(a-b)) for a, b in zip(current, expected)]
-        print(f'{spacing*1000:12.1f}   {duration*1e15:13.1f}   {gaps[0]:25.6g}   {gaps[1]:18.6g}')
+        print(f'{spacing*1000:12.1f}   {duration*1e15:13.1f}   {gaps[0]:23.6g}   {gaps[1]:18.6g}')
     for index, tolerance in ((0, .012), (1, .005)):
         coarse = np.max(np.abs(observed[0][index]-expected[index]))
         fine = np.max(np.abs(observed[1][index]-expected[index]))

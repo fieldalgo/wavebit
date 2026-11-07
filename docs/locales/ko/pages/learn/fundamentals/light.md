@@ -572,7 +572,7 @@ print(kx, ky)
 이 경로로 횡파수에 허수부가 생기면 결과를 읽는 방법이 달라집니다.
 
 - **세기가 표면을 따라 변합니다.** `top=Material(epsilon=4+3j)`, 진공 파장 1,000 nm에서 `kx/k0 = n sin(30°) = 1.0607 + 0.3536i`이면, 한 주기 1200 nm를 지나는 동안 세기가 약 1/207로 줄어듭니다.
-- **나눌 입사 전력이 없습니다.** 표면에서 세기가 균일하다는 전력 정규화가 성립하지 않으므로 `R`, `T`, `power_entering`, `absorption`과 포트 전력은 `NaN`이고, `result.reflection.metadata['power_defined']`는 거짓입니다. 복소 진폭 `amplitude_s`, `amplitude_p`, `amplitude_xyz`는 반환됩니다. 정규화는 {ref}`13장 <half-space-power>`에서 설명합니다.
+- **나눌 입사 전력이 없습니다.** 표면에서 세기가 균일하다는 전력 정규화가 성립하지 않으므로 `R`, `T`, `power_entering`, `absorption`과 포트 전력은 `NaN`이고, `result.reflection.metadata['power_defined']`는 거짓입니다. 복소 진폭비(입사 전기장에 대한 비율) `amplitude_ratio_s`, `amplitude_ratio_p`, `amplitude_ratio_xyz`와 V/m 단위 전기장 `field_s`, `field_p`, `field_xyz`는 반환됩니다. 정규화는 {ref}`13장 <half-space-power>`에서 설명합니다.
 - **실행마다 `ComplexIncidenceWarning` 경고를 한 번 냅니다.** 경고 분류가 따로 있으므로, 의도한 계산이라면 `warnings.filterwarnings('ignore', category=wavebit.rcwa.diagnostics.ComplexIncidenceWarning)`로 이 경고만 끌 수 있습니다.
 - **다른 솔버와 답이 다를 수 있습니다.** 위아래 반공간의 각 차수에서 `kz`의 두 근 중 무엇을 고를지가 규약이 되어, 같은 입력에서도 Wavebit, fmmax, RETICOLO가 서로 다른 반사계수를 낼 수 있습니다. 규칙마다 무엇이 다른지는 {ref}`부록 A <complex-kx-roots>`에서 무손실 매질로 설명하고, 흡수 입사 매질에서 실수 `theta`와 복소 `theta`가 왜 다른 `kx`를 주는지와 흡수·이득 반공간에서 달라지는 점은 {ref}`부록 B <complex-kx-lossy-gain>`에서 설명합니다.
 
@@ -582,7 +582,7 @@ print(kx, ky)
 이전 인터페이스(2026-10-15에 `wavebit.compat`와 함께 퇴역)는 여기서 `NaN` 대신 형식적인 `R`, `T` 비율을 돌려주었습니다. 무손실 구조에서도 합이 1을 넘을 수 있었습니다. 13장 예제 구조에서 `top`만 무손실 `4`로 바꾸고 `theta = 30° + 0.2i`를 넣으면 `T = 1.379`였습니다. `power_entering`과 `absorption`은 `NaN`이었습니다.
 :::
 
-소멸파 입사처럼 `theta = π/2 + iα` 꼴의 복소 각도는 `sin(θ) = cosh(α)`가 실수입니다. 입사 매질이 무손실이면 `kx/k0 = n cosh(α)`도 실수로 남으므로 `ComplexIncidenceWarning`이 나오지 않습니다. 이때 입사파 자체가 소멸파여서 표면 쪽으로 전력을 나르지 않으므로, 반사 전력과 투과 전력을 나눌 기준이 없습니다. 그래서 `R`, `T`, `incident_power`, `power_entering`, `absorption`은 경고 없이 `NaN`이고 `result.reflection.metadata['efficiency_defined']`는 거짓입니다. `power_defined`는 참으로 남아 W 단위 포트 전력은 반환됩니다. 반대쪽으로 터널링해 나가는 빛은 실제 전력을 나르기 때문입니다. `result.reflection.amplitude_s` 같은 진폭은 평소대로 반환됩니다. 입사 매질이 흡수성이면 n이 복소수라 `kx`도 복소수가 되고 경고가 나옵니다.
+소멸파 입사처럼 `theta = π/2 + iα` 꼴의 복소 각도는 `sin(θ) = cosh(α)`가 실수입니다. 입사 매질이 무손실이면 `kx/k0 = n cosh(α)`도 실수로 남으므로 `ComplexIncidenceWarning`이 나오지 않습니다. 이때 입사파 자체가 소멸파여서 표면 쪽으로 전력을 나르지 않으므로, 반사 전력과 투과 전력을 나눌 기준이 없습니다. 그래서 `R`, `T`, `incident_power`, `power_entering`, `absorption`은 경고 없이 `NaN`이고 `result.reflection.metadata['efficiency_defined']`는 거짓입니다. `power_defined`는 참으로 남아 W 단위 포트 전력은 반환됩니다. 반대쪽으로 터널링해 나가는 빛은 실제 전력을 나르기 때문입니다. `result.reflection.amplitude_ratio_s` 같은 진폭비와 `result.reflection.field_s` 같은 전기장은 평소대로 반환됩니다. 입사 매질이 흡수성이면 n이 복소수라 `kx`도 복소수가 되고 경고가 나옵니다.
 
 (absorbing-transmission)=
 ### 투과 매질에 손실이 있을 때

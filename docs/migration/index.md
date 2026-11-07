@@ -8,7 +8,10 @@ now `Snapshots`, `native.Tail` is now `native.DecayCheck`, and so on). RCWA, the
 objects and the shared modules followed on 2026-10-20 (`rcwa.OrderExcitation(orders=)` is now
 `rcwa.IncidentOrders(weights=)`, `TimeSeries.times` is now `times_seconds`, and so on), and the
 result and report keys the same day (`validity.checks['stable']` is now `'runtime_stability'`,
-`orders=` takes only a pair, and so on). See
+`orders=` takes only a pair, and so on). The diffraction amplitudes followed on 2026-11-08
+(`amplitude_s` is now `amplitude_ratio_s`, beside a new `field_s` in V/m;
+`reference['incident_amplitude']` is now `incident_field` or `incident_spectrum`; and
+`fdtd.periodic`'s amplitude ratios no longer scale with the source amplitude). See
 [public names](public-names.md) for every old and new spelling.
 :::
 
@@ -27,13 +30,15 @@ engines and their scientific regression tests remain; no replacement mutable fac
 | `solver.slice_structure` | `rcwa.sample_structure(problem, quantity='epsilon' or 'mu')` |
 | Experimental NVF and scattering operators | `rcwa.experimental` and `rcwa.operators` |
 | `JobSpec` v10 | `migration.migrate_legacy_jobs(document, units=Units(...))` → tuple of current `Job` objects |
-| Capability manifest v21 | v22: `current_lifecycle` is the public index; detailed `solvers`/result tables explicitly describe private normalized engines. v23 (2026-10-19): the [public names](public-names.md) and `wavebit.job/v2`. v24 (2026-10-19): the [native and periodic names](public-names.md#native-grid-and-periodic-stack-names). v25 (2026-10-20): the [shared, observation and RCWA names](public-names.md#shared-observation-and-rcwa-names). v26 (2026-10-20): the [result and report keys](public-names.md#result-and-report-keys) |
+| Capability manifest v21 | v22: `current_lifecycle` is the public index; detailed `solvers`/result tables explicitly describe private normalized engines. v23 (2026-10-19): the [public names](public-names.md) and `wavebit.job/v2`. v24 (2026-10-19): the [native and periodic names](public-names.md#native-grid-and-periodic-stack-names). v25 (2026-10-20): the [shared, observation and RCWA names](public-names.md#shared-observation-and-rcwa-names). v26 (2026-10-20): the [result and report keys](public-names.md#result-and-report-keys). v27 (2026-11-08): the [amplitude ratios, fields and spectra](public-names.md#amplitude-ratios-fields-and-spectra) |
 | Import-time JAX precision change | Configure `jax.config.update('jax_enable_x64', True)` before constructing arrays |
 
 Spatial lengths use `Units`; times, conductivity and material rates use SI. H is A/m.
 Layer stacks remain bottom-to-top; angles are radians. Preserve the declared numerical
 algorithm, cell origin, phase reference, source normalization and integration measure when
-comparing complex fields. A native Fourier field is a time integral, not a calibrated phasor;
+comparing complex fields. Across solvers, compare amplitude ratios, efficiencies, powers and
+fields, never one solver's `incident_field` (V/m) with another's `incident_spectrum` (V*s/m).
+A native Fourier field is a time integral, not a calibrated phasor;
 a periodic plane power is W/m for invariant-y geometry and W for a crossed cell.
 
 ## Existing work

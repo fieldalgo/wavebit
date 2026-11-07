@@ -196,9 +196,18 @@ def test_every_public_callable_is_a_compile_door():
             _public_wavebit.fdtd.native, _public_wavebit.fdtd.periodic} <= seen_modules
     assert {_public_wavebit.rcwa.Problem, _public_wavebit.fdtd.Problem,
             _public_wavebit.Material, _public_wavebit.DiffractionOrders} <= classes
-    from wavebit.observations import DiffractionOrder
-    classes.add(DiffractionOrder)
+    from wavebit.observations import DiffractionOrder, RawDiffractionOrder, contracts
+    # The one-order records are handed out by ``order()``, not exported at the top level.
+    classes |= {DiffractionOrder, RawDiffractionOrder}
     classes |= _reached_types()
+    # The private parents carry the shared members (``order``, ``at_wavelength_index``,
+    # ``field_*``); the walk reaches them through each public class's MRO. Pinned per class:
+    # DiffractionOrders alone reaches both, so a union would not see another class lose one.
+    from wavebit.observations import DiffractionOrders, RawDiffractionSpectrum
+    for cls, parents in ((DiffractionOrders, {contracts._OrderArrays, contracts._FieldsOfOneOrder}),
+                         (RawDiffractionSpectrum, {contracts._OrderArrays}),
+                         (DiffractionOrder, {contracts._FieldsOfOneOrder})):
+        assert cls in classes and parents <= set(cls.__mro__), cls
     for cls in classes:
         if issubclass(cls, (enum.Enum, BaseException)):
             continue

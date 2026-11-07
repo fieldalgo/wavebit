@@ -87,8 +87,12 @@ class DiffractionMonitor:
     ``orders`` is the retained window ``(Mu, Mv)``, an explicit pair of nonnegative integers: the
     half-widths along the two lattice vectors (``None``, the default, keeps every order
     propagating at any requested wavelength); ``reference_plane`` and ``incident_plane`` refer the
-    amplitudes to other planes along the propagation axis. ``raw=True`` returns the
-    un-normalized :class:`wavebit.RawDiffractionSpectrum` instead.
+    amplitude ratios to other planes along the propagation axis. The ratios
+    (``amplitude_ratio_s/_p/_xyz``) divide by the measured incident pulse spectrum, published as
+    ``reference['incident_spectrum']`` (V*s/m); a pulse has no single field in V/m, so
+    ``field_*`` is None. ``raw=True`` returns the un-normalized
+    :class:`wavebit.RawDiffractionSpectrum` instead, whose ``spectrum_s/_p`` (V*s/m) are the
+    ratios times that spectrum.
     """
     name: str
     plane: object

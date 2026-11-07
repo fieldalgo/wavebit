@@ -132,8 +132,8 @@ def test_oblique_lattice_job_roundtrip_preserves_physical_basis_and_scattering()
     assert isinstance(restored.problem.stack.lattice, Lattice)
     assert restored.problem.stack.lattice.axis_aligned is False
     np.testing.assert_array_equal(restored.problem.stack.lattice.columns, cell.columns)
-    np.testing.assert_allclose(run(restored).transmission.amplitude_s,
-                               run(original).transmission.amplitude_s, atol=2e-14)
+    np.testing.assert_allclose(run(restored).transmission.amplitude_ratio_s,
+                               run(original).transmission.amplitude_ratio_s, atol=2e-14)
 
 
 def test_a_v1_job_file_is_refused_with_the_migration_guide_named():

@@ -28,20 +28,20 @@ def test_port_amplitudes_and_si_plane_power_match_original_and_airy(algorithm,si
         return_diagnostics=True,field_monitors={'outside':-.2}),backend='numpy' if algorithm=='shared' else None)
     for name in ('R','T'):
         np.testing.assert_allclose(getattr(r,name),np.stack([getattr(v,name) for v in old]),rtol=1e-12,atol=1e-15)
-    np.testing.assert_allclose(r.reflection.amplitude_s,np.stack([v.incident.r_s for v in old]),rtol=2e-12,atol=1e-14)
+    np.testing.assert_allclose(r.reflection.amplitude_ratio_s,np.stack([v.incident.r_s for v in old]),rtol=2e-12,atol=1e-14)
     np.testing.assert_allclose(r.plane_power_z['outside'],diag['monitors']['outside']['power_z']*1e-6/Z0,rtol=2e-12)
     # Independent Fresnel recursion for a 1.5-index slab between vacuum ports.
     phase=np.exp(4j*np.pi*1.5*.1/np.array([.85,.9,.95]))
     exact=(-.2+.2*phase)/(1-.04*phase)
     fine=p.run(q,numerics=n.replace(spacing=n.spacing/2))
-    np.testing.assert_allclose(fine.reflection.amplitude_s[:,0,0],exact,atol=.005)
-    assert np.linalg.norm(fine.reflection.amplitude_s[:,0,0]-exact)<np.linalg.norm(r.reflection.amplitude_s[:,0,0]-exact)
+    np.testing.assert_allclose(fine.reflection.amplitude_ratio_s[:,0,0],exact,atol=.005)
+    assert np.linalg.norm(fine.reflection.amplitude_ratio_s[:,0,0]-exact)<np.linalg.norm(r.reflection.amplitude_ratio_s[:,0,0]-exact)
     np.testing.assert_allclose((r.R+r.T)[:,0,0],1.,atol=.002)
     other='bottom' if side=='top' else 'top'
     for orders,port,wave,plane in ((r.reflection,side,'reflected',.1 if side=='top' else 0.),
                                    (r.transmission,other,'transmitted',0. if side=='top' else .1)):
         reference=dict(orders.reference)
-        assert reference.pop('incident_amplitude')==1.
+        assert reference.pop('incident_field')==1.
         assert reference.pop('cell_measure')==pytest.approx(.2e-6,rel=1e-15)
         # Normal incidence from vacuum: |A|**2/(2 Z0) through a 0.2 um period, per metre of y.
         incident_power=reference.pop('incident_power')
@@ -49,8 +49,8 @@ def test_port_amplitudes_and_si_plane_power_match_original_and_airy(algorithm,si
         np.testing.assert_allclose(incident_power,.5/Z0*.2e-6,rtol=1e-14)
         np.testing.assert_allclose(orders.power,orders.efficiency*incident_power[:,None,None],rtol=1e-15)
         assert reference=={'port':port,'wave':wave,'plane':pytest.approx(plane),'length_units':'um',
-            'lateral_origin':(0.,0.),'polarization_frame':'per-order s/p','amplitude_units':'1',
-            'incident_amplitude_units':'V/m','incident_power_units':'W/m','power_units':'W/m',
+            'lateral_origin':(0.,0.),'polarization_frame':'per-order s/p','amplitude_ratio_units':'1',
+            'incident_field_units':'V/m','incident_power_units':'W/m','power_units':'W/m',
             'cell_measure_units':'m','invariant_axes':('y',)}
         assert orders.metadata['power_defined'].all() and orders.metadata['efficiency_defined'].all()
 

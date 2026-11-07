@@ -1,4 +1,4 @@
-# 공개 이름과 결과 키 (2026-10-19, 2026-10-20)
+# 공개 이름과 결과 키 (2026-10-19, 2026-10-20, 2026-11-08)
 
 Wavebit은 아직 알파 단계이므로 general-FDTD 선언의 이름을 한 번에 바꿨습니다. 이제 모든
 클래스는 그것이 무엇인지로, 모든 모니터는 무엇을 기록하는지로 이름이 붙고, 단위가 분명하지 않은
@@ -13,7 +13,10 @@ Wavebit은 아직 알파 단계이므로 general-FDTD 선언의 이름을 한 �
 `fdtd.periodic`을 다룹니다([native 격자와 주기 적층의 이름](#native-grid-and-periodic-stack-names)).
 다음 날의 세 번째 변경으로 이름이 바뀐 RCWA, 관측 객체, 공통 모듈도 다룹니다
 ([공통·관측·RCWA 이름](#shared-observation-and-rcwa-names)). 같은 날의 네 번째 변경으로 바뀐, 모든
-솔버의 결과와 보고서가 쓰는 키도 다룹니다([결과와 보고 키](#result-and-report-keys)).
+솔버의 결과와 보고서가 쓰는 키도 다룹니다([결과와 보고 키](#result-and-report-keys)). 마지막으로
+2026-11-08의 다섯 번째 변경([이슈 #54](https://github.com/fieldalgo/wavebit/issues/54))으로 바뀐 회절
+진폭의 이름도 다룹니다. 이제 이름만 보고도 그 값이 비율인지, 장(field)인지, 스펙트럼인지 알 수
+있습니다([진폭 비, 장, 스펙트럼](#amplitude-ratios-fields-and-spectra)).
 
 ## 클래스
 
@@ -285,7 +288,7 @@ native 사례(E, H, 분극 밀도, 스냅샷, 스펙트럼, 7단계 감쇠 창)�
 | `RawFieldSpectrum.spectrum`, `RawDiffractionSpectrum.spectrum`, `SpectralFlux.metadata`의 키 `spectrum` | `.sidedness` | 스펙트럼이 아니라 `'two-sided'`를 담음 |
 | `fdtd.SpectralFlux.energy_density` | `.spectral_energy` | 공간 밀도가 아니라 평면을 지나는 주파수당 에너지 |
 | `fdtd.Result.sources` | `fdtd.Result.source_references` | 소스가 아니라 기록된 소스 기준값 |
-| `DiffractionOrders.cartesian`, `DiffractionOrder.cartesian` | `.amplitude_xyz` | x, y, z 진폭 성분 |
+| `DiffractionOrders.cartesian`, `DiffractionOrder.cartesian` | `.amplitude_xyz`. [다섯 번째 변경](#amplitude-ratios-fields-and-spectra)에서 다시 바뀌어 이제 `.amplitude_ratio_xyz`(`RawDiffractionSpectrum`에서는 `.spectrum_xyz`) | x, y, z 진폭 성분 |
 | `DiffractionOrders.kz`, `DiffractionOrder.kz` | `.k_normal` | 포트 법선 방향 파수 성분(z 법선 포트이면 kz). 데카르트 부호를 그대로 쓰므로 −z 포트로 나가는 차수는 `Re(k_normal) < 0` |
 | `DiffractionOrders.at_wavelength(i)` | `.at_wavelength_index(i)` | 파장이 아니라 인덱스를 받음 |
 | `wavebit.records.RecordedFields` | `wavebit.records.RecordedObject` | 필드만이 아니라 기록된 어떤 객체든 담음 |
@@ -335,7 +338,8 @@ native 사례(E, H, 분극 밀도, 스냅샷, 스펙트럼, 7단계 감쇠 창)�
 저장되므로 이를 담은 job의 키도 그대로입니다.
 
 실행 기록은 `wavebit.run/v2` 그대로입니다. 이제부터 저장하는 기록에는 새 필드 이름
-(`times_seconds`, `frequencies_hz`, `sidedness`, `amplitude_xyz`, `k_normal`, `spectral_energy`,
+(`times_seconds`, `frequencies_hz`, `sidedness`, `amplitude_xyz`([다섯 번째
+변경](#amplitude-ratios-fields-and-spectra) 이후에는 `amplitude_ratio_xyz`), `k_normal`, `spectral_energy`,
 `power_region`, `Port` 필드, `extra['source_references']`, 진단 키 `source_group_counts`)이
 들어갑니다. 이전에 저장한 기록은 저장 당시의 이름을 유지합니다. `load_run`은 클래스를 다시 만들지
 않고 저장된 필드를 `RecordedObject` 매핑으로 돌려주기 때문입니다. 다만 기록은 그 job을 읽을 수
@@ -383,7 +387,8 @@ periodic의 `coordinate_convention`은 `coordinate_frame`입니다. rcwa의 `cod
 ### 회절 기준 값
 
 `DiffractionOrders.reference`(와 `RawDiffractionSpectrum.reference`)는 모든 생산자에서 핵심 키가
-같습니다.
+같습니다. 아래 표는 이 변경 당시의 이름이며, [다섯 번째 변경](#amplitude-ratios-fields-and-spectra)에서
+진폭에 관한 키의 이름이 다시 바뀌었습니다.
 
 | 키 | 뜻 | 이전 |
 | --- | --- | --- |
@@ -392,18 +397,16 @@ periodic의 `coordinate_convention`은 `coordinate_frame`입니다. rcwa의 `cod
 | `plane` | 법선 방향의 포트 평면 위치(길이 단위) | rcwa와 periodic `z` |
 | `length_units` | `plane`과 좌표의 길이 단위 | `length_unit`; periodic `coordinates` |
 | `lateral_origin` | 좌표 | periodic `'cell_centre'`(이제 `(0., 0.)`) |
-| `incident_amplitude`, `incident_amplitude_units` | 입사 진폭과 그 단위 | rcwa `incident_electric_amplitude_v_per_m` |
+| `incident_amplitude`, `incident_amplitude_units`. 지금은 `incident_field` 또는 `incident_spectrum`과 각각의 `_units` | 입사 진폭과 그 단위 | rcwa `incident_electric_amplitude_v_per_m` |
 | `cell_measure`, `cell_measure_units` | 주기 셀의 측도: `'m^2'`, 또는 불변 축마다 단위 길이당 `'m'`/`'1'` | `cell_area_m2`; 숫자 `integration_measure(_units)` |
 | `invariant_axes` | 축 이름 | 개수 |
 
-rcwa와 `fdtd.periodic`에는 `incident_power`와 `incident_power_units`도 있습니다(rcwa는 전에
-`incident_power_w`였고, periodic은 차수별 `power`와 함께 새로 생겼습니다). `fdtd.periodic`의
-`amplitude_s`/`amplitude_p`는 입사 전기장에 대한 비율에 광원 진폭을 곱한 값이었고 라벨이 `'V/m'`였습니다.
-이제는 rcwa, `fdtd`처럼 비율 자체이고 라벨은 `'1'`입니다. 그래서 광원 진폭을 바꿔도 변하지 않고,
-`power`, `incident_power`, 평면 값, 스냅숏이 변합니다(fieldalgo/wavebit#54). 기준 값의
-단위 라벨(`amplitude_units`, 전력이 있으면 `power_units`, 파수가 있으면 `wavevector_units`)은 모든
-생산자에서 `reference`에 있습니다. 무차원 진폭의 라벨은 `'1'`입니다. rcwa metadata의 문자열 `integration_measure`
-(`'periodic cell'`)는 없어졌습니다.
+rcwa에는 `incident_power`와 `incident_power_units`도 있습니다(전에는 `incident_power_w`).
+다섯 번째 변경부터는 `fdtd.periodic`에도 있습니다. 기준 값의 단위 라벨(`amplitude_units`, 지금은
+`amplitude_ratio_units`, 가공하지 않은 스펙트럼에서는 `spectrum_units`; 전력이 있으면 `power_units`;
+파수가 있으면 `wavevector_units`)은 모든
+생산자에서 `reference`에 있습니다. 무차원 진폭의 라벨은 `'1'`입니다. rcwa metadata의 문자열
+`integration_measure`(`'periodic cell'`)는 없어졌습니다.
 
 ### 단위와 표본 시각
 
@@ -466,3 +469,157 @@ Job 필드 이름은 바뀌지 않으므로 job 키와 `wavebit.job/v2`는 그�
 저장한 기록은 옛 키를 유지하고 지금 저장하는 기록에는 새 키가 들어갑니다. 기록은 그 job을 읽을 수
 있을 때만 읽힙니다. 기능 매니페스트는 버전 26입니다. 수치, 계획
 골격, 기준 골든은 하나도 바뀌지 않았습니다.
+
+## Amplitude ratios, fields and spectra
+
+다섯 번째 변경(2026-11-08, [이슈 #54](https://github.com/fieldalgo/wavebit/issues/54))은 회절 결과에서
+이름 하나가 물리량 하나만 뜻하도록 합니다. 전에는 `amplitude_s`가 `rcwa`와 `fdtd`에서는 단위 없는
+비율이었지만, `fdtd.periodic`에서는 그 비율에 광원 진폭을 곱한 값이었고 라벨이 `'V/m'`였습니다.
+`reference['incident_amplitude']`도 `rcwa`와 `fdtd.periodic`에서는 V/m 단위의 장(전기장)이었지만,
+`fdtd`에서는 파장마다 값이 하나씩 있는 V*s/m 단위의 펄스 스펙트럼이었습니다. 이제 물리량마다 이름이
+따로 있습니다. 이전과 같이 별칭은 없습니다. 옛 진폭 이름을 속성이나 생성자 키워드로 쓰면 실패하고 새
+이름을 알려 주며, 옛 `reference` 키는 거부됩니다.
+
+### 회절 차수
+
+`wavebit.DiffractionOrders`와, 차수 하나를 담는 `wavebit.observations.DiffractionOrder`:
+
+| 이전 | 이후 | 단위 | 광원 진폭이 두 배가 되면 |
+| --- | --- | --- | --- |
+| `amplitude_s`, `amplitude_p`, `amplitude_xyz` | `amplitude_ratio_s`, `amplitude_ratio_p`, `amplitude_ratio_xyz` | `'1'` | 그대로 |
+| 없음 | `field_s`, `field_p`, `field_xyz`(읽기 전용) | V/m | 위상까지 포함해 두 배 |
+| `efficiency` | `efficiency` | `'1'` | 그대로 |
+| `power`(`rcwa`에만 있었음) | `power`, 이제 `fdtd.periodic`에도 있음 | W, 또는 불변 축을 따라 단위 길이당 W/m | 네 배 |
+
+진폭 비(amplitude ratio)는 나가는 차수의 복소 전기장을 입사파의 복소 전기장으로 나눈 값입니다.
+입사파의 장은 그 자신의 기준 위치에서 잽니다. 빛이 들어오는 면이고, 결과를 만든 솔버가
+`reference['incident_plane']`을 적어 두었다면 그 면입니다. 투과 포트라면 이 위치는 포트 자신의 평면이
+아닙니다. 그 평면에는 입사파가 없기 때문입니다. 나가는 장은 `reference['plane']`과 `reference['lateral_origin']`에서, 그 차수 자신의 나가는 s/p
+좌표계로 잽니다(`amplitude_ratio_xyz`는 직교 좌표계로 재고, 마지막에 x, y, z 축이 붙습니다). 프레넬
+계수(두 매질의 경계에서 반사·투과하는 전기장의 비율)처럼 광원이 아니라 구조의 성질입니다. `field_*`는
+이 비율에 `reference['incident_field']`를 곱한 값, 즉 V/m 단위로 나가는 장입니다. 읽을 때 계산하며,
+광원이 V/m로 주어진 연속파(한 주파수로 끝없이 이어지는 파동)인 곳(`rcwa.run`, `fdtd.periodic.run`)에만
+있습니다. 광원이 펄스인 `fdtd.run`에서, 그리고 비율 자체가 None인 곳에서는 `field_*`가 None입니다.
+`fdtd.periodic`은 직교 좌표 비율을 주지 않으므로 `field_xyz`도 None입니다.
+
+### 회절 기준 값의 키
+
+| 이전 | 이후 |
+| --- | --- |
+| `rcwa`와 `fdtd.periodic`의 `incident_amplitude`, `incident_amplitude_units`(`'V/m'`) | `incident_field`, `incident_field_units`(`'V/m'`): 연속파 광원의 장 |
+| `fdtd`의 `incident_amplitude`, `incident_amplitude_units`(`'V*s/m'`) | `incident_spectrum`, `incident_spectrum_units`(`'V*s/m'`): 측정한 입사 펄스 스펙트럼, 파장마다 값 하나 |
+| `amplitude_units`(`'1'`, `fdtd.periodic`에서는 `'V/m'`) | `amplitude_ratio_units`, 언제나 `'1'` |
+| `RawDiffractionSpectrum`의 필드 `amplitude_units`와 `reference['amplitude_units']`(`'V*s/m'`) | `reference['spectrum_units']`(`'V*s/m'`) |
+| `fdtd.periodic`: 입사 전력 없음 | `rcwa`처럼 `incident_power`와 `incident_power_units`, 그리고 `power_units` |
+
+`fdtd.periodic`의 `incident_power`는 주기 셀 하나를 지나는 입사 전력이며 파장마다 값이 하나씩
+있습니다. 2차원으로 주기적인 셀이면 W, y 방향으로 불변이면 y 단위 길이당 W/m입니다. 한 대역은
+중심 파장의 횡방향 파수벡터(경계면에 나란한 성분)를 함께 쓰므로 파장마다 셀에 들어오는 각도가 다르고,
+입사 전력은 그 파장 자신의 각도로 계산합니다. 그래서 `power = efficiency * incident_power`입니다.
+
+`fdtd.periodic`의 차수에는 `metadata` 키 두 개가 늘 붙습니다. `power_defined`와
+`efficiency_defined`이며, 파장마다 참/거짓 값이 하나씩 있어 `power`, `efficiency`, `incident_power`가
+그 파장에서 정의되는지 알려 줍니다. `rcwa`에도 같은 이름의 키가 있지만, False가 되는 파장이 같지
+않습니다. `fdtd.periodic`의 `power`는 `efficiency * incident_power`이므로, 입사파가 전파하지 못하는
+파장에서는 두 표시가 모두 False이고 세 값이 모두 NaN입니다. `rcwa`는 입사파가 소멸파(경계면에서 멀어질수록
+세기가 줄어들며 전력을 나르지 않는 파동)일 때 `power_defined`를 True로 두고 포트 전력도 그대로
+돌려주며, `efficiency_defined`만 False입니다([좌표·부호 규약](../reference/common/conventions.md#real-angle-incidence) 참고).
+`metadata['normalization']` 문자열도 `'incident-only power; unit Jones pair'`에서
+`'amplitudes per unit incident field (unit Jones pair); efficiency over the incident-only power'`로
+바뀌었습니다.
+
+`reference`에 `incident_amplitude`, `incident_amplitude_units`, `amplitude_units`가 남아 있는
+`DiffractionOrders`, `DiffractionOrder`, `RawDiffractionSpectrum`, `RawDiffractionOrder`를 만들면
+코드 `observation.reference_key`로 거부되고, 메시지가 새 키를 알려 줍니다. 코드
+`observation.amplitude_units`로는 다음 세 가지가 거부됩니다.
+- 키가 허용하는 것과 다른 단위 라벨(`amplitude_ratio_units`는 `'1'`, `spectrum_units`는 `'V*s/m'`만 허용)
+- 다른 종류의 라벨: 비율을 담은 결과에 붙은 `spectrum_units`, 가공하지 않은 스펙트럼에 붙은
+  `amplitude_ratio_units`
+- 단위 라벨 없이 온 광원 값, 또는 광원 값 없이 온 단위 라벨. `incident_field`는
+  `incident_field_units` `'V/m'`과, `incident_spectrum`은 `incident_spectrum_units` `'V*s/m'`과
+  함께 있거나 둘 다 없어야 합니다(값이 `None`이면 없는 것으로 봅니다).
+
+결과의 `reference`에서 옛 키를 읽으면
+[결과와 보고 키](#result-and-report-keys)에서처럼 `KeyError`가 납니다.
+
+### 가공하지 않은 회절 스펙트럼
+
+`fdtd.DiffractionMonitor(raw=True)`는 여전히 `wavebit.RawDiffractionSpectrum`을 돌려주지만, 이것은 더
+이상 `DiffractionOrders`의 한 종류가 아닙니다. 두 클래스는 서로 다른 클래스이며, 축, `reference`,
+`metadata`, `order(m, n)`, `at_wavelength_index(i)`를 함께 씁니다. 그래서
+`isinstance(raw, wavebit.DiffractionOrders)`는 이제 False입니다. 이 객체의 배열은 비율이 아니라 펄스
+스펙트럼입니다.
+
+| 이전 | 이후 |
+| --- | --- |
+| `RawDiffractionSpectrum.amplitude_s`, `.amplitude_p`, `.amplitude_xyz` | `.spectrum_s`, `.spectrum_p`, `.spectrum_xyz`(V*s/m) |
+| `raw.order(m, n)`, `DiffractionOrder` 하나 | `wavebit.observations.RawDiffractionOrder` 하나. 차수별 배열 `spectrum_*`, `spectral_energy`, `k_parallel`, `k_normal`이 같은 이름으로 들어 있음 |
+
+가공하지 않은 스펙트럼에는 `amplitude_ratio_*`, `field_*`, `efficiency`, `power`가 없습니다.
+`reference`에는 `incident_spectrum`과 `incident_spectrum_units`가 그대로 있고, `amplitude_ratio_units`는
+없습니다. 쓸 수 있는 대역(`metadata['source_usable']`) 안에서 `raw.spectrum_s`는 반올림 오차 안에서
+`orders.amplitude_ratio_s * orders.reference['incident_spectrum'][:, None, None]`과 같습니다. 여기서
+`orders`는 `plane`, `reference_plane`, `wave`(반사 또는 투과), `wavelengths`가 모두 같은 정규화된
+모니터입니다. `p`도 마찬가지입니다. 그 대역 밖에서는 이 관계가 성립하지 않습니다. 그곳에서 비율은
+NaN이고 가공하지 않은 스펙트럼은 유한한 값으로 남습니다.
+`fdtd.run`은 직교 좌표 스펙트럼을 주지 않으므로, 전의 `amplitude_xyz`처럼 `spectrum_xyz`가 None입니다.
+
+### 옛 진폭 이름을 쓰면
+
+[#57의 이름](#shared-observation-and-rcwa-names)도 전처럼 거부되며, 이제 최종 이름을 알려 줍니다.
+`DiffractionOrders.cartesian`은 `amplitude_ratio_xyz`를, `RawDiffractionSpectrum.cartesian`은
+`spectrum_xyz`를 알려 줍니다. `RawDiffractionSpectrum.spectrum`은 새 `spectrum_s`가 아니라 여전히
+`sidedness`를 알려 줍니다. 가공하지 않은 스펙트럼에 있던 필드 `amplitude_units`는
+`RawDiffractionSpectrum.reference`를 알려 줍니다. 그 단위 라벨이 이제 `reference['spectrum_units']`에
+있기 때문입니다.
+
+```text
+>>> orders.amplitude_s
+AttributeError: DiffractionOrders.amplitude_s is now DiffractionOrders.amplitude_ratio_s. The old name was removed, not aliased; see the public-name migration guide, docs/migration/public-names.md.
+>>> raw.amplitude_s
+AttributeError: RawDiffractionSpectrum.amplitude_s is now RawDiffractionSpectrum.spectrum_s. The old name was removed, not aliased; see the public-name migration guide, docs/migration/public-names.md.
+>>> raw.amplitude_units
+AttributeError: RawDiffractionSpectrum.amplitude_units is now RawDiffractionSpectrum.reference; its unit label is reference['spectrum_units']. The old name was removed, not aliased; see the public-name migration guide, docs/migration/public-names.md.
+>>> wavebit.DiffractionOrders(wavelengths=(1.,), orders_u=(0,), orders_v=(0,), reference={'incident_amplitude': 1.})
+ValidationError: reference.incident_amplitude: reference['incident_amplitude'] is now 'incident_field' (a CW drive, V/m) or 'incident_spectrum' (a pulse, V*s/m) (fieldalgo/wavebit#54)
+```
+
+생성자도 옛 키워드를 같은 방식으로 거부합니다. `DiffractionOrders(amplitude_s=...)`는
+`amplitude_ratio_s=`를, `RawDiffractionSpectrum(amplitude_s=...)`는 `spectrum_s=`를,
+`RawDiffractionSpectrum(amplitude_units=...)`는 `reference=`와 그 안의 `reference['spectrum_units']`를
+알려 주고, `RawDiffractionSpectrum(spectrum=...)`는 여전히 `sidedness=`를 알려 줍니다.
+
+### 진폭 비 Job 파일과 실행 기록
+
+선언이나 키워드의 이름은 바뀌지 않았으므로(광원의 `amplitude=`도 그대로) job, job 키,
+`wavebit.job/v2`는 그대로입니다. 실행 기록도 `wavebit.run/v2` 그대로입니다. 이제부터 저장하는 기록에는
+새 이름이 들어갑니다. `amplitude_ratio_s`, `amplitude_ratio_p`, `amplitude_ratio_xyz`(가공하지 않은
+스펙트럼에서는 `spectrum_s`, `spectrum_p`, `spectrum_xyz`), 그리고 `reference` 안의 `incident_field`
+또는 `incident_spectrum`, `amplitude_ratio_units`, `spectrum_units`입니다. `field_*`는 저장되는 필드가
+아니라 속성(읽을 때 계산하는 값)이므로 기록에 들어가지 않습니다. 저장된 `amplitude_ratio_*`에 저장된
+`reference['incident_field']`를 곱하면 다시 얻을 수 있습니다. 이전에 저장한 기록은 저장 당시의
+이름(`amplitude_s`, `incident_amplitude` 등)을 유지합니다. `load_run`은 클래스를 다시 만들지 않고 저장된
+필드를 `RecordedObject` 매핑으로 돌려주기 때문입니다. 이전 `fdtd.periodic` 기록의 `amplitude_s`는
+비율에 광원 진폭을 곱한 값입니다. 비율을 다시 얻으려면 그 기록의 `reference['incident_amplitude']`로
+나누세요. 진폭 0으로 저장한 기록에는 비율이 남아 있지 않습니다. 기능 매니페스트는 버전 27입니다.
+
+### 진폭 비 수치
+
+- `rcwa`: 바뀐 수치가 없습니다.
+- `fdtd.periodic`: 진폭 비(`result.basis`에 든 것 포함)에 더 이상 광원 진폭을 곱하지 않습니다. 그래서
+  전의 `amplitude_s`, `amplitude_p`와 같은 것은 광원 진폭이 기본값 1일 때뿐입니다. 효율, `R`, `T`, 평면
+  값, 스냅숏, `sample()`, `plane_power_z`는 값이 그대로이며, 예외가 하나 있습니다.
+  `algorithm='reference'`에서 입사파가 전파하지 못하는 파장(대역이 함께 쓰는 횡방향 파수벡터가 그 파장의
+  light line, 즉 그 파장의 빛이 입사 매질에서 가질 수 있는 가장 큰 횡방향 파수를 넘는 경우)에서는 이제
+  `incident_power`, `power`, `efficiency`가 NaN이고, 따라서 `R`, `T`도 NaN이며,
+  `metadata['power_defined']`와 `metadata['efficiency_defined']`가 그 파장에서 False입니다. 이런 대역은
+  전과 같이 shared 스테핑에서는 거부됩니다.
+- `fdtd`: 비율, 효율, 가공하지 않은 스펙트럼은 그대로입니다. 비스듬한 블로흐 입사(주기 셀에 비스듬히
+  들어오는 평면파)에서 `reference['incident_spectrum']`은 이제 비율과 가공하지 않은 스펙트럼이 원래
+  그랬듯 셀 중심, 즉 `reference['lateral_origin']`을 기준으로 합니다. 전의 `incident_amplitude`는 셀의
+  낮은 쪽 모서리를 기준으로 했습니다. 새 `incident_spectrum`은 전의 `incident_amplitude`에 크기가 1인
+  위상 인자 `exp(i*(k_u*L_u + k_v*L_v)/2)`를 곱한 값입니다. 여기서 `L_u`, `L_v`는 셀의 두 변의 길이이고
+  `k_u`, `k_v`는 그 방향의 입사 횡방향 파수입니다. 저장해 둔 `incident_amplitude`를 새
+  `incident_spectrum`과 비교하려면 그 값에 이 인자를 곱하십시오. 수직 입사에서는 둘이 같습니다.
+
+기준 골든은 다시 만들지 않았고, 허용 오차도 바꾸지 않았습니다.

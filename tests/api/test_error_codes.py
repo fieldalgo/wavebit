@@ -173,6 +173,12 @@ REFUSALS = {
     'periodic.numerics.spacing': lambda: periodic.Numerics(spacing=-.1, duration_seconds=1e-15),
     'periodic.periodic.invalid': lambda: periodic.check(*_periodic_case(orders=(1, 1))[:1],
                                                         numerics=_periodic_case(orders=(1, 1))[1]),
+    # One name, one physical quantity (fieldalgo/wavebit#54): a ratio labelled with a field's
+    # unit, and a reference key the rename replaced.
+    'observation.amplitude_units': lambda: wavebit.DiffractionOrders(
+        wavelengths=(1.,), orders_u=(0,), orders_v=(0,), reference={'amplitude_ratio_units': 'V/m'}),
+    'observation.reference_key': lambda: wavebit.DiffractionOrders(
+        wavelengths=(1.,), orders_u=(0,), orders_v=(0,), reference={'incident_amplitude': 1.}),
 }
 
 

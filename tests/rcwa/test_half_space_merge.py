@@ -598,14 +598,14 @@ def test_a_jitted_prepared_run_merges_its_constant_materials(algorithm, regions)
 
         def run(th, eps):
             result = prepared.run(_knife_problem(th, eps, regions))
-            return (result.reflection.amplitude_s, result.transmission.amplitude_s,
+            return (result.reflection.amplitude_ratio_s, result.transmission.amplitude_ratio_s,
                     result.diagnostics['half_space_merge'][0])
 
         r, t, merged = jax.jit(lambda th: run(th, 9.0))(jnp.asarray(theta))
         traced = jax.jit(lambda eps: run(theta, eps)[2])(9.0)
     assert eager.diagnostics['half_space_merge'][0]['bottom'] == 1
     assert int(merged['bottom']) == 1 and int(merged['top']) == 0
-    for got, want in ((r, eager.reflection.amplitude_s), (t, eager.transmission.amplitude_s)):
+    for got, want in ((r, eager.reflection.amplitude_ratio_s), (t, eager.transmission.amplitude_ratio_s)):
         want = np.asarray(want)
         assert np.max(np.abs(np.asarray(got) - want)) < 1e-12 * np.max(np.abs(want))
     assert traced is None
@@ -681,7 +681,7 @@ def test_shared_traced_permittivity_matches_interface_and_its_derivative(algorit
         def run(eps):
             result = prepared.run(_shared_problem(eps, side=side))
             assert result.diagnostics['half_space_merge'][0][side] == 1
-            return result.reflection.amplitude_s.ravel()[2]
+            return result.reflection.amplitude_ratio_s.ravel()[2]
 
         eps = jnp.asarray([8.5, 9., 9.5])
         values = jax.jit(jax.vmap(run))(eps)
@@ -713,7 +713,7 @@ def test_equal_independent_tracers_keep_the_layer_and_its_derivative(algorithm):
         def run(eps, layer_eps):
             result = prepared.run(_shared_problem(eps, layer_eps, thickness=100.))
             assert result.diagnostics['half_space_merge'][0] is None
-            return jnp.real(result.reflection.amplitude_s.ravel()[2])
+            return jnp.real(result.reflection.amplitude_ratio_s.ravel()[2])
 
         value, gradient = jax.jit(jax.value_and_grad(run, argnums=1))(9., 9.)
         # Ordinary thin-film Fresnel composition, independently of the engine.
@@ -755,7 +755,7 @@ def test_shared_permeability_keeps_its_magnetic_interface_derivative(algorithm):
         def run(mu):
             result = prepared.run(problem(mu))
             assert result.diagnostics['half_space_merge'][0]['bottom'] == 1
-            return jnp.real(result.reflection.amplitude_s.ravel()[2])
+            return jnp.real(result.reflection.amplitude_ratio_s.ravel()[2])
 
         value, gradient = jax.jit(jax.value_and_grad(run))(1.5)
         h = 1e-5
@@ -765,7 +765,7 @@ def test_shared_permeability_keeps_its_magnetic_interface_derivative(algorithm):
         def separate(mu):
             result = prepared.run(problem(mu, layer_mu=1.5))
             assert result.diagnostics['half_space_merge'][0] is None
-            return jnp.real(result.reflection.amplitude_s.ravel()[2])
+            return jnp.real(result.reflection.amplitude_ratio_s.ravel()[2])
 
         assert np.isfinite(float(jax.jit(separate)(1.5)))
 

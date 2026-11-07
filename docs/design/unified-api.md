@@ -472,7 +472,8 @@ and **one** incident/Bloch transverse-wavevector group:
 wavelengths, orders_u, orders_v
 base transverse wavevector and reciprocal lattice (or per-order wavevectors)
 reference medium response and longitudinal propagation data
-amplitude_s, amplitude_p, optional Cartesian amplitudes
+amplitude_ratio_s, amplitude_ratio_p, optional amplitude_ratio_xyz (dimensionless)
+field_s, field_p, field_xyz in V/m, where the drive is a continuous wave in V/m
 calibrated outgoing modal power, and efficiency when an incident normalization exists
 reference plane, lateral origin, polarization frame, propagation convention
 source normalization and incident reference plane
@@ -506,13 +507,22 @@ integration (or J/(Hz*m) per invariant length), not steady power in W.
 RawFieldSpectrum and RawDiffractionSpectrum record transform normalization,
 window, sampling, and the one-sided/two-sided spectrum convention. Spectral
 density per wavelength requires the frequency-to-wavelength Jacobian.
+RawDiffractionSpectrum is a sibling of DiffractionOrders, not a kind of it: its
+arrays are pulse spectra, spectrum_s/_p/_xyz in V*s/m
+(`reference['spectrum_units']`), and it has no amplitude ratios or fields.
 
 FDTD can form comparable dimensionless scattering amplitudes/efficiencies by
 normalizing with an explicitly selected incident source reference. Its declared
 usable spectral band excludes unresolved or effectively zero source amplitudes.
-Such transfer observations use DiffractionOrders; normalized amplitude_s/p are
-dimensionless and any additionally calibrated fields/powers state the reference
-incident amplitude. Raw Fourier arrays are never relabeled as V/m, A/m, or W.
+Such transfer observations use DiffractionOrders; normalized amplitude_ratio_s/p
+are dimensionless, and the orders state the incident reference they are
+normalized by: `reference['incident_field']` (V/m) for a continuous-wave drive,
+whose orders also give outgoing fields (field_s/_p, and field_xyz where there is
+a Cartesian ratio) and powers, or `reference['incident_spectrum']` (V*s/m, per
+wavelength) for a pulse, whose orders give ratios and efficiencies only. One producer's
+incident field is never divided by another's incident spectrum; solvers are
+compared through ratios, efficiencies, powers and fields. Raw Fourier arrays are
+never relabeled as V/m, A/m, or W.
 Both raw and normalized observation forms remain available when requested.
 
 The common type must retain continuum versus Yee propagation/de-embedding
@@ -1295,3 +1305,25 @@ periodic refusals no longer escape as plain `ValueError`. `orders=` is an explic
 numbers, plans and goldens are unchanged, run records stay `wavebit.run/v2`, and the capability
 manifest is version 26. The
 [migration guide](../migration/public-names.md#result-and-report-keys) lists every key.
+
+A fifth change (2026-11-08, [issue #54](https://github.com/fieldalgo/wavebit/issues/54)) made one
+name hold one physical quantity in a diffraction result. `fdtd.periodic` had published the
+amplitude ratio times the source amplitude, labelled V/m, under the name `rcwa` and `fdtd` used
+for the ratio itself, and `incident_amplitude` was a field in V/m in two solvers and a pulse
+spectrum in V*s/m in the third. The amplitudes are now `amplitude_ratio_s`, `amplitude_ratio_p`
+and `amplitude_ratio_xyz` in every solver (the third change's `amplitude_xyz` included),
+dimensionless and unchanged by the source amplitude; `field_s`, `field_p` and `field_xyz` are those
+ratios times `reference['incident_field']`, in V/m, where the drive is a continuous wave, and
+None for the pulse of `fdtd`. The fourth change's `incident_amplitude` is split into
+`incident_field` (V/m: `rcwa`, `fdtd.periodic`) and `incident_spectrum` (V*s/m: `fdtd`), and
+`amplitude_units` is `amplitude_ratio_units`, always `'1'`; the observation contract refuses the
+old keys and any other unit label. `fdtd.periodic` orders gain `power` and
+`reference['incident_power']`. `RawDiffractionSpectrum` is a sibling of `DiffractionOrders`
+rather than a subclass, its arrays are `spectrum_s`, `spectrum_p` and `spectrum_xyz` in V*s/m,
+and its `order(m, n)` is a `RawDiffractionOrder`. An old amplitude name, as an attribute or a
+keyword, is refused and names its replacement. `rcwa` numbers are unchanged; `fdtd.periodic` amplitude ratios no
+longer carry the source amplitude, and `fdtd`'s incident spectrum at oblique Bloch incidence is
+referred to the cell centre, as its ratios already were. No golden was regenerated. Jobs stay
+`wavebit.job/v2` and run records `wavebit.run/v2`, and the capability manifest is version 27.
+The [migration guide](../migration/public-names.md#amplitude-ratios-fields-and-spectra) lists
+every change.

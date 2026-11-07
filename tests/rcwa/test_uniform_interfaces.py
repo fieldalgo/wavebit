@@ -36,8 +36,8 @@ def test_independent_slab_values_fields_and_tangents(algorithm, side, pol):
         def run(e):
             result = prepared.run(problem(e, side=side, pol=pol))
             assert result.diagnostics['half_space_merge'][0] is None
-            r = getattr(result.reflection, 'amplitude_'+pol).ravel()[2]
-            t = getattr(result.transmission, 'amplitude_'+pol).ravel()[2]
+            r = getattr(result.reflection, 'amplitude_ratio_'+pol).ravel()[2]
+            t = getattr(result.transmission, 'amplitude_ratio_'+pol).ravel()[2]
             field = result.field(x=[0.], y=[0.], z=z if side == 'bottom' else 20000-z).values.reshape((-1,6))
             if pol == 's':
                 f = jnp.stack((field[:,1], field[:,3]*Z0*(1 if side=='bottom' else -1), field[:,5]*Z0), axis=-1)
@@ -74,8 +74,8 @@ def test_two_layers_keep_fields_power_and_both_scattering_ports(algorithm, side,
         numerics = rcwa.Numerics(orders=(1,1), algorithm=algorithm)
         prepared = rcwa.prepare(scene(4.), numerics=numerics, backend='jax')
         def select(r):
-            arrays = (r.reflection.amplitude_s, r.reflection.amplitude_p,
-                      r.transmission.amplitude_s, r.transmission.amplitude_p,
+            arrays = (r.reflection.amplitude_ratio_s, r.reflection.amplitude_ratio_p,
+                      r.transmission.amplitude_ratio_s, r.transmission.amplitude_ratio_p,
                       r.field(x=[0.], y=[0.], z=[10.,149.999999,150.000001,350.]).values)
             if algorithm == 'smm':
                 arrays += tuple(getattr(r.scattering[0], key) for key in ('S11','S12','S21','S22'))
@@ -95,7 +95,7 @@ def test_independent_material_reverse_derivative_and_batch():
     with jax.enable_x64(True):
         prepared = rcwa.prepare(problem(9.), numerics=rcwa.Numerics(orders=(2,0)), backend='jax')
         def run(e):
-            return prepared.run(problem(e)).reflection.amplitude_s.ravel()[2]
+            return prepared.run(problem(e)).reflection.amplitude_ratio_s.ravel()[2]
         rows = REFERENCE['rows'][:5]
         eps = jnp.asarray([r['epsilon'] for r in rows])
         value = jax.jit(jax.vmap(run))(eps)
@@ -111,8 +111,8 @@ def test_torch_independent_material_keeps_its_tangent(pol):
     row = next(r for r in REFERENCE['rows'] if r['polarization'] == pol)
     e = torch.tensor(9., dtype=torch.float64, requires_grad=True)
     result = rcwa.run(problem(e, pol=pol), numerics=rcwa.Numerics(orders=(2,0)), backend='torch')
-    r = getattr(result.reflection, 'amplitude_'+pol).ravel()[2]
-    t = getattr(result.transmission, 'amplitude_'+pol).ravel()[2]
+    r = getattr(result.reflection, 'amplitude_ratio_'+pol).ravel()[2]
+    t = getattr(result.transmission, 'amplitude_ratio_'+pol).ravel()[2]
     np.testing.assert_allclose([r.detach().numpy(),t.detach().numpy()],
                                [complex(*v) for v in row['values'][:2]], rtol=1e-12, atol=0)
     grad, = torch.autograd.grad(r.real/1e52, e)
