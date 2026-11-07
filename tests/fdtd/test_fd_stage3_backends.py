@@ -66,6 +66,10 @@ from wavebit.fdtd._legacy_results import FieldResult
 
 sys.path.insert(0, str(repository_path('tests/references')))
 from tests.references._fd_stage3_cases import BACKENDS, EXPECTED, EXPECTED_WARNINGS, FAR_ANGLES, GOLDEN, GRATING_WAVELENGTHS, RUN_WARNING, SERIES_FIELDS, TOL, WAVELENGTHS, capture, conical_source, content_digest, describe, lowered, relative_gap, sample_indices, scenes, solve, bloch_stack_source
+from tests.references._plan_skeleton_floats import encoded_static, rebuilt_skeleton
+
+#: The frozen skeletons' floats (``tests/references/interface/freeze_fd_stage3_skeleton_floats.py``).
+SKELETON_FLOATS = GOLDEN.with_name('fd_golden_stage3_skeleton_floats.json')
 
 SCENES = scenes()
 NAMES = tuple(SCENES)
@@ -196,13 +200,80 @@ def test_the_archive_covers_every_stage_three_path(golden):
     assert 'bloch_stack__lowered__axis1d__y' not in arrays
 
 
+@pytest.fixture(scope='module')
+def skeleton_floats(golden):
+    """The frozen skeletons' float leaves, checked to belong to this archive's skeletons."""
+    _, meta = golden
+    record = json.loads(SKELETON_FLOATS.read_text(encoding='utf-8'))
+    assert record['archive'] == GOLDEN.name
+    assert set(record['scenes']) == set(NAMES)
+    for name in NAMES:
+        assert record['scenes'][name]['skeleton'] == meta['scenes'][name]['skeleton'], name
+    return {name: record['scenes'][name]['floats'] for name in NAMES}
+
+
 @pytest.mark.parametrize('name', NAMES)
-def test_the_scene_is_the_one_frozen(golden, name):
-    """Static content by the skeleton and the regions; the leaves by the lowered rows below."""
+def test_the_scene_is_the_one_frozen(golden, skeleton_floats, name):
+    """Static content by the skeleton and the regions; the leaves by the lowered rows below.
+
+    The skeleton's structure, integers and strings must be the frozen ones exactly, and its
+    floats the frozen ones to the gate's ``TOL``: a skeleton hashes its floats in hex, and the
+    conical scene's oblique p ``PlaneWave`` gain is one last digit apart on Windows and Linux
+    (``tests/references/_plan_skeleton_floats.py``). The frozen floats written back over the
+    live ones inside ``TOL`` must rebuild the frozen hash itself.
+    """
     arrays, meta = golden
     p = plan_of(name)
-    assert describe(SCENES[name], p) == meta['scenes'][name]
+    got, want = describe(SCENES[name], p), dict(meta['scenes'][name])
+    frozen = want.pop('skeleton')
+    assert got.pop('skeleton') == p.skeleton
+    assert got == want
+    encoded = encoded_static(p)
+    # The record is the frozen floats: written back whole, they rebuild the frozen hash.
+    assert rebuilt_skeleton(encoded, skeleton_floats[name], math.inf)[0] == frozen
+    rebuilt, worst = rebuilt_skeleton(encoded, skeleton_floats[name], TOL)
+    assert rebuilt == frozen, worst
     assert np.array_equal(arrays[f'{name}__samples'], sample_indices(p.shape))
+
+
+def test_the_skeleton_tolerance_forgives_round_off_and_nothing_else(golden, skeleton_floats):
+    """The tolerant check, made to fail: a float moved past ``TOL``, a changed integer, a float
+    leaf added. Each must miss the frozen skeleton; one last digit must not."""
+    _, meta = golden
+    name = 'conical'
+    frozen, floats = meta['scenes'][name]['skeleton'], skeleton_floats[name]
+    encoded = encoded_static(plan_of(name))
+
+    def moved(edit):
+        copy = json.loads(json.dumps(encoded))
+        edit(copy)
+        return rebuilt_skeleton(copy, floats, TOL)[0]
+
+    def first(wanted, node, act):
+        if wanted(node):
+            act(node)
+            return True
+        children = (node[1] if node[0] == 'tuple' else
+                    [c for _, c in node[1]] if node[0] not in ('none', 'bool', 'int', 'str',
+                                                               'float', 'complex') else [])
+        return any(first(wanted, child, act) for child in children)
+
+    def nonzero_float(node):
+        return node[0] == 'float' and float.fromhex(node[1]) != 0
+
+    def scale(factor):
+        def act(node):
+            node[1] = (float.fromhex(node[1]) * factor).hex()
+        return lambda copy: first(nonzero_float, copy, act)
+
+    def bump_int(copy):
+        first(lambda n: n[0] == 'int', copy, lambda n: n.__setitem__(1, n[1] + 1))
+
+    assert moved(lambda copy: None) == frozen
+    assert moved(scale(1 + 4e-16)) == frozen                   # a last digit or two
+    assert moved(scale(1 + 1e-9)) != frozen
+    assert moved(bump_int) != frozen
+    assert moved(lambda copy: copy[1].append(['extra', ['float', (1.0).hex()]])) != frozen
 
 
 @pytest.mark.parametrize('name', NAMES)

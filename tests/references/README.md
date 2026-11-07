@@ -392,6 +392,22 @@ case list its digest and gap come from, and the stage-2 one its sampling rule co
 content digest the test recomputes, a changed shape reported as a moved scene, and
 `--rebaseline` as the only way to overwrite.
 
+**The scene skeletons are held with their floats inside the 1e-12 budget (2026-11-08).** The
+archive records each scene's plan skeleton, a SHA-256 over the plan's static content with every
+float written in hex. On Windows the `conical` scene's skeleton differed from the frozen one,
+although every frozen array and every other static value agreed. The only moved value was the
+oblique p `PlaneWave` column's `current_gain`: `1+6.516909065175717j` on Windows against
+`1+6.5169090651757156j` on Linux, one last digit (2.7e-16 relative) from the math library. A
+hash cannot be compared with a tolerance, so `fd_golden_stage3_skeleton_floats.json` keeps the
+frozen skeletons' float leaves beside the archive. `tests/fdtd/test_fd_stage3_backends.py`
+holds the structure, every integer and every string exactly, and each float to 1e-12 of the
+frozen one: the frozen floats written back over the live ones inside that budget must rebuild
+the recorded hash itself (`_plan_skeleton_floats.py`). The record is checked against the archive
+the same way, written back whole. `interface/freeze_fd_stage3_skeleton_floats.py --write` writes
+it, and refuses unless every live skeleton is the archive's bit for bit. So it runs on the
+platform the archive was frozen on (Linux), and again after any re-freeze of
+`fd_golden_stage3.npz`.
+
 **`PML(stabilize=)` moved nothing in any of the four fd archives (2026-09-19).** The PML's
 stabilizing loss -- a matched loss on the component normal to the face, which stops a bound mode
 near the light line from growing under a PEC-backed stretch (`tests/fdtd/test_fd_pml_stability.py`)
@@ -1426,6 +1442,8 @@ golden, to be compared against these before it replaces them.
 | `fd_golden_stage2.npz` — those answers, committed; `tests/fdtd/test_fd_stage2_backends.py` holds them | nothing; **run in CI everywhere** |
 | `interface/freeze_fd_stage3.py`, `_fd_stage3_cases.py` — the same for stage 3's monitors, with every DFT accumulator whole, every result built from it and the sources' spectra, plus the lowered DFT frequencies and Axis1D factor | the project env with NumPy, JAX and Torch; run by hand |
 | `fd_golden_stage3.npz` — those answers, committed; `tests/fdtd/test_fd_stage3_backends.py` holds them | nothing; **run in CI everywhere** |
+| `interface/freeze_fd_stage3_skeleton_floats.py`, `_plan_skeleton_floats.py` — record the float leaves of the archive's scene skeletons, so a skeleton is held with its floats inside 1e-12 | the project env, on the platform that reproduces the archive's skeletons (Linux); run by hand |
+| `fd_golden_stage3_skeleton_floats.json` — that record, committed; `tests/fdtd/test_fd_stage3_backends.py` checks it against the archive and uses it | nothing; **run in CI everywhere** |
 ## A golden frozen ahead of its consumer
 
 `golden_fmmax_magnetic.npz` holds rows nothing in this solver can consume — permeability has no
