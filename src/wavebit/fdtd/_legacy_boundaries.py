@@ -317,7 +317,11 @@ class PEC(FaceType):
 
 @spec
 class PMC(FaceType):
-    """Perfect magnetic conductor: tangential H vanishes on the wall."""
+    """Perfect magnetic conductor: tangential H vanishes on the wall.
+
+    Tangential H lives on half planes, so the wall is half a cell from the declared face:
+    outside a low face, inside a high face (``check(...).resolved['boundary_planes']``).
+    """
 
 
 @spec

@@ -23,7 +23,7 @@
 | `Box`, `Sphere`, `Cylinder`, `Prism` | **스무딩** 바디: 경계에 걸친 셀은 바디가 채운 비율만큼 섞은 재료를 받습니다 |
 | `Open()` 면 | 물리 영역 **바깥**에 덧붙는 PML. 그 면에 닿는 매질에 맞춰집니다 |
 | `Periodic()`, `Bloch(...)` | 셀이 반복됩니다. `Bloch`는 위상을 더하고 실행을 복소수로 만듭니다 |
-| `PEC()`, `PMC()`, `MirrorSymmetry(parity)`, `InvariantAxis(k, k_max)` | 도체 벽, 거울면, 정확히 미분되는 불변 축 |
+| `PEC()`, `PMC()`, `MirrorSymmetry(parity)`, `InvariantAxis(k, k_max)` | 도체 벽, 거울면, 정확히 미분되는 불변 축. PMC 벽과 높은 쪽 거울면은 선언한 면에서 반 셀 떨어진 곳에서 작용합니다(`resolved["boundary_planes"]`) |
 | `Numerics(courant=0.5)` | 시간 간격 `dt = courant · dx / (c·√3)` |
 | `TimeSeriesMonitor` | 한 성분의, 가장 가까운 Yee 점에서의 시계열 |
 | `FieldMonitor`, `FluxMonitor`, `DiffractionMonitor`, `FarFieldMonitor` | 실행 중에 누적되는 장의 푸리에 변환 |
@@ -334,9 +334,25 @@ stencil의 지원 범위는 그대로입니다. 진공 속 구 하나와 미분�
 | `Open()` | 바깥으로 나가는 면: 물리 도메인 바깥의 PML이 그 면에 닿는 균일 매질에 맞춰집니다. 균일 매질만 닿을 수 있습니다. 배경, 그 축을 가로지르는 `SnappedSlab`, `Structure.continuation`을 선언하고 가로 방향 양쪽 면을 한 셀 넘게 지나가는 회전하지 않은 `Box`, 또는 그 면을 지나 이어진다고 선언한 `SnappedBox` 코어입니다. 그 밖의 유한한 바디가 닿거나, 슬래브나 이어지는 `Box`가 직교하는 `Open()` 면을 가로지르면 거절됩니다([일반 장면 API의 범위](#일반-장면-api의-범위) 참고). |
 | `Periodic()` | 두 면이 위상 없이 이어집니다. 주기 셀에서의 수직 입사. |
 | `Bloch(phase=φ)` 또는 `Bloch(k=k)` | 두 면이 위상을 두고 이어집니다. 실행이 복소수가 되어 메모리와 계산이 두 배입니다. `Bloch.from_source(source, units=...)`가 비스듬한 `PlaneWave`에 필요한 면을 만들어 줍니다. |
-| `PEC()` / `PMC()` | 벽에서 접선 E / 접선 H가 0입니다. 벽 너머로 뻗은 구조물은 잘리고 `GeometryClippedWarning`이 납니다. |
-| `MirrorSymmetry(parity=±1)` | 거울면. `+1`은 접선 E가 면에 대해 짝수(PMC와 비슷한 면), `-1`은 홀수입니다. |
+| `PEC()` / `PMC()` | 벽에서 접선 E / 접선 H가 0입니다. PEC 벽은 선언한 면 자체이고, PMC 벽은 그 옆의 반 셀 면으로, 낮은 면에서는 반 셀 **바깥**, 높은 면에서는 반 셀 **안쪽**입니다(아래 참고). 벽 너머로 뻗은 구조물은 잘리고 `GeometryClippedWarning`이 납니다. |
+| `MirrorSymmetry(parity=±1)` | 거울면. `+1`은 접선 E가 면에 대해 짝수(PMC와 비슷한 면), `-1`은 홀수입니다. 낮은 면에서는 면 자체가, 높은 면에서는 반 셀 **안쪽**이 거울면입니다(아래 참고). |
 | `InvariantAxis(k=..., k_max=...)` | 미분이 정확히 `ik`인 한 셀짜리 불변 축. 2차원 원뿔 격자의 균일한 축을, 한 셀 차분의 인위적 분산 없이 표현합니다. |
+
+**각 벽이 작용하는 위치.** 접선 E는 노드 면에, 접선 H는 반 셀 면에 있으므로, 접선 H에 대한
+조건이나 마지막 E 층을 비추는 거울면은 선언한 면이 아니라 반 셀 면에 놓입니다.
+
+| 면 | 낮은 면(`x-`) | 높은 면(`x+`) |
+| --- | --- | --- |
+| `PEC()` | 면 자체 | 면 자체 |
+| `PMC()` | 면에서 `dx/2` 바깥 | 면에서 `dx/2` 안쪽 |
+| `MirrorSymmetry(parity=±1)` | 면 자체 | 면에서 `dx/2` 안쪽 |
+
+이를 보정하려고 도메인 크기를 바꾸지는 않습니다. PEC 면과 PMC 면 사이의 공진기 길이는 `L`이 아니라
+`L - dx/2`이고, 선언한 면을 기준으로 쓴 모드는 실행의 모드가 아닙니다. 이는 `dx`에 대한 1차
+효과이므로, 중요할 때는 유효 면을 기준으로 도메인을 정하세요.
+`check(...).resolved["boundary_planes"]`는 면마다 `boundary`(면 종류), `declared`(그 축을 따라 선언한
+면의 좌표, `Problem.units` 단위), `effective`(조건이 실제로 작용하는 좌표. `Open`, `Periodic`,
+`Bloch`, `InvariantAxis` 면은 `None`), `offset_cells`(`(effective - declared) / dx`)를 알려 줍니다.
 
 `Numerics(absorber=PML(...))`가 모든 `Open()` 면의 흡수층을 정합니다. `cells=12`(그보다 적으면
 `allow_thin=True` 없이는 거절), `reflection=1e-8`, `wavelength`(생략하면 소스들이 공유하는 중심

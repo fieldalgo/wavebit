@@ -89,7 +89,8 @@ class MirrorSymmetry:
     ``fdtd.Boundaries(x=(fdtd.MirrorSymmetry(parity=-1), fdtd.PEC()), ...)`` models half of a
     scene that is mirror-symmetric about the low x face. ``parity=+1`` keeps tangential E even
     across the plane (PMC-like); ``-1`` makes it odd (PEC-like). A mirror goes on at most one
-    face of an axis, with PEC or PMC on the other.
+    face of an axis, with PEC or PMC on the other. On a low face the plane is the face; on a
+    high face it is half a cell inside it (``check(...).resolved['boundary_planes']``).
     """
     parity: int
 
