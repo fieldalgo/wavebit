@@ -2,18 +2,19 @@
 
 With only the wavelength, an angle or a thickness traced, the raster reaches the Fourier
 builders as a concrete array, and every geometry decision they take from it can be read: the
-NVF interface mask and normal field, a raster's block compression, and the passive-dielectric
-check that spares the inverse rule its singular values. Inside the trace ``structure[i]`` was
-staged all the same -- JAX stages every operation there, an index into a constant included --
-so the layer it returned was a tracer with no value. ``factorization='nvf'`` then raised
-``TracerBoolConversionError`` from the interface mask, and the ``integrated`` coefficients
-raised it from the compression, although nothing about the geometry was traced. ``jax.vmap``
-was never affected: it stages only the values it batches.
+NVF interface mask and normal field, a raster's block compression, the tensor path's phase
+labels, and the passive-dielectric check that spares the inverse rule its singular values.
+Inside the trace ``structure[i]`` was staged all the same -- JAX stages every operation there,
+an index into a constant included -- so the layer it returned was a tracer with no value.
+``factorization='nvf'`` then raised ``TracerBoolConversionError`` from the interface mask, the
+``integrated`` coefficients raised it from the compression, and a tensor raster was refused
+with "freeze_geometry() before tracing a tensor raster", although nothing about the geometry
+was traced. ``jax.vmap`` was never affected: it stages only the values it batches.
 
-The builders now cut their layers under :func:`wavebit._common.backend.concrete_scope`, so the
-traced solve takes the eager solve's branches and has to reproduce its numbers. A raster the
-caller traces still needs a frozen geometry; ``tests/rcwa/test_frozen_geometry.py`` pins that
-side.
+The builders now cut their layers under :func:`wavebit._common.backend.concrete_scope` (the
+tensor path under the solver's own ``_eager``), so the traced solve takes the eager solve's
+branches and has to reproduce its numbers. A raster the caller traces still needs a frozen
+geometry; ``tests/rcwa/test_frozen_geometry.py`` pins that side.
 """
 
 from wavebit._common.backend import _enable_x64 as _legacy_wavebit_enable_x64
@@ -34,11 +35,21 @@ BASE = dict(wavelength=620., period=(1000., 900.), thickness=(300.,), top=1.0, b
             theta=0.2, phi=0.3, psi=0.4, truncation_order=TRUNCATION)
 #: The point every test solves at: (wavelength, theta, thickness).
 POINT = (620., 0.2, 300.)
+TENSOR = np.array([[2.9 + .02j, .21 - .05j, .13 + .04j],
+                   [.21 - .05j, 3.4 + .01j, -.19 - .09j],
+                   [.13 + .04j, -.19 - .09j, 2.8]])
+TENSOR = (TENSOR + TENSOR.conj().T) / 2
 
 
 def _rod(value=12.25):
     cell = np.ones((1, 8, 8), dtype=np.asarray(value).dtype)
     cell[0, 1:5, 2:7] = value
+    return cell
+
+
+def _tensor_rod():
+    cell = np.broadcast_to(np.eye(3, dtype=complex), (1, 8, 8, 3, 3)).copy()
+    cell[0, 1:5, 2:7] = TENSOR
     return cell
 
 
@@ -62,6 +73,7 @@ PATHS = {
                                fourier_coefficients='integrated'),
     'nvf-mu': dict(structure=_rod(), mu=_mu_rod(), factorization='nvf'),
     'nvf-metal': dict(structure=_rod(-18.3 + 1.1j), factorization='nvf'),
+    'nvf-tensor': dict(structure=_tensor_rod(), factorization='nvf'),
 }
 
 #: Fixed weights, so the derivative is not of a conserved total: on a lossless cell
@@ -118,7 +130,7 @@ def test_a_constant_raster_differentiates_under_jit_as_it_does_eagerly(path):
     np.testing.assert_allclose(traced, eager, rtol=1e-10, atol=0)
 
 
-@pytest.mark.parametrize('path', ['nvf', 'nvf-integrated'])
+@pytest.mark.parametrize('path', ['nvf', 'nvf-integrated', 'nvf-tensor'])
 def test_a_constant_raster_vmaps_inside_jit(path):
     """``jit(vmap)`` over a wavelength batch: the trace is jit's, and the batch rides inside it."""
     import jax
