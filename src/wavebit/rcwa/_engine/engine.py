@@ -6322,8 +6322,15 @@ class CoreFactorizationMixin:
         """
         if self.lattice_is_axis_aligned:
             return
-        common = ('The cell basis is non-orthogonal (set via .lattice). ')
         factorization = self.factorization
+        if factorization == Factorization.LI and _lattice.reverses_an_axis(self._lattice_basis):
+            raise NotImplementedError(
+                'The cell basis is diagonal with a negative side (set via .lattice), so the raster '
+                'is read along a reversed axis and the cell takes the general path. '
+                f"factorization={factorization.value!r} is built on the rectangular path, which "
+                'takes positive sides. Spell the cell with positive sides -- reversing the raster '
+                "along that axis keeps the same structure -- or use factorization='nvf' or 'laurent'.")
+        common = ('The cell basis is non-orthogonal (set via .lattice). ')
         if factorization == Factorization.LI:
             raise NotImplementedError(
                 common + f"factorization={factorization.value!r} applies the inverse "

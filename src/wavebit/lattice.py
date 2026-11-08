@@ -550,7 +550,7 @@ def as_lattice(period=None, lattice=None):
     if p.size != 2:
         raise ValueError(f'period: expected 1 or 2 lengths, got {p.size}')
     D = np.diag(p)
-    return Lattice(D[:, 0], D[:, 1], True)   # a period spells a diagonal; nothing to test
+    return Lattice(D[:, 0], D[:, 1], is_axis_aligned(D))
 
 
 #: How far past the Lagrange condition a basis may sit and still be its own reduction. The
@@ -667,27 +667,64 @@ def reduced_basis(A, transform=None):
     try:
         cols = np.array([[checked_float(u[0]), checked_float(v[0])],
                          [checked_float(u[1]), checked_float(v[1])]])
-        aligned = is_axis_aligned(cols)
+        # Diagonal, whatever the signs: a reduced basis only enumerates images, and the
+        # rectangular fold reads it through `periods_of`, which has no sign. A unimodular
+        # reduction can land on `diag(Lx, -Ly)`, and that must keep the fold it always had.
+        aligned = _is_diagonal(cols)
     except Exception:                       # noqa: BLE001 - a traced basis: the general path
         aligned = False
     return Lattice(u, v, aligned)
 
 
+def _is_diagonal(A, tol=1e-12):
+    """Whether ``A`` has no off-diagonal entry, relative to its largest one."""
+    A = np.asarray(A, dtype=float)
+    scale = float(np.max(np.abs(A)))
+    return scale == 0 or bool(abs(A[0, 1]) <= tol * scale and abs(A[1, 0]) <= tol * scale)
+
+
 def is_axis_aligned(A, tol=1e-12):
-    """Whether ``A`` is ``diag(Lx, Ly)`` — the case the tensor-product k-layout can express.
+    """Whether ``A`` is ``diag(Lx, Ly)`` with ``Lx, Ly > 0`` — the case the tensor-product k-layout can express.
 
     Orthogonality alone is *not* enough. A basis rotated 45 degrees still has ``a1 . a2 == 0``
     but gives every order a ``kx`` that depends on both ``m`` and ``n``, which is precisely the
     layout that cannot be written as two 1-D vectors. Only a diagonal basis keeps them
     separable, so that is what this tests.
+
+    **Positive sides too.** The rectangular path reads the cell as ``period = (|a1|, |a2|)``:
+    its order wavevectors and raster both run along ``+x`` and ``+y``. A diagonal with a
+    negative side, ``diag(-Lx, Ly)``, spans the same lattice, but it was handed to that path
+    while the shape coefficients and the field reconstruction read the basis as spelled, along
+    ``-x`` -- so a shape was solved as its mirror image (``R`` off by 1e-2 on a lossy grating)
+    and a field came back mirrored, with nothing to say so. Such a basis now takes the general
+    path, which reads every basis as spelled: a shape is the same structure on either spelling,
+    and a raster is drawn along ``a1`` as :meth:`Lattice.meshgrid_xy` draws it
+    (:func:`reverses_an_axis`).
     """
     if isinstance(A, Lattice):
         return A.axis_aligned
     A = np.asarray(A, dtype=float)
-    scale = float(np.max(np.abs(A)))
-    if scale == 0:
+    if float(np.max(np.abs(A))) == 0:
         return True
-    return bool(abs(A[0, 1]) <= tol * scale and abs(A[1, 0]) <= tol * scale)
+    return _is_diagonal(A, tol) and bool(A[0, 0] > 0 and A[1, 1] > 0)
+
+
+def reverses_an_axis(A, tol=1e-12):
+    """Whether ``A`` is diagonal with a negative side -- ``diag(-Lx, Ly)`` and its kin.
+
+    Such a basis spans the rectangular lattice ``diag(|Lx|, |Ly|)`` spans, but it reads a raster
+    and names the orders along the reversed axis, so :func:`is_axis_aligned` sends it down the
+    general path, which reads every basis as spelled. This only names that case for a
+    refusal's message; a basis that cannot be read (traced) is not claimed to be one.
+    """
+    try:
+        M = constant_array(A.columns if isinstance(A, Lattice) else A)
+    except Exception:                       # noqa: BLE001 - a tracer, not a mistake
+        return False
+    M = np.asarray(M, dtype=float)
+    if M.shape != (2, 2) or float(np.max(np.abs(M))) == 0:
+        return False
+    return _is_diagonal(M, tol) and bool(M[0, 0] < 0 or M[1, 1] < 0)
 
 
 def periods_of(A):

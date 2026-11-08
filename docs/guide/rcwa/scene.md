@@ -167,6 +167,14 @@ plausible wrong number: `factorization='li'` on a raster, whose inverse rule fol
 axes, which are `a1` / `a2` once skewed. Li is the raster default, so a skewed raster names
 `rcwa.Numerics(factorization='nvf')`.
 
+**A diagonal basis with a negative side** -- `lattice=np.diag((-Lx, Ly))`, or
+`Lattice.rectangular(-Lx, Ly)` -- spans the same lattice as `period=(Lx, Ly)`, and a shape on it is
+the same structure, field included. The basis is read as spelled, as every non-rectangular one is:
+a raster is drawn along `-x`, as that basis's `meshgrid_xy` draws it, and order `(m, n)` carries
+`m*b1 + n*b2` with `b1` along `-x`, so the per-order arrays come out reversed along that axis. Such
+a cell takes the general path, so `factorization='li'` is refused there (`rcwa.unsupported`); spell
+the cell with positive sides for Li.
+
 See [`../oblique-lattice.md`](../../theory/rcwa/oblique-lattice.md) and
 [`tutorial 05`](https://github.com/fieldalgo/wavebit/blob/main/tutorials/rcwa/05-oblique-lattice.ipynb).
 
