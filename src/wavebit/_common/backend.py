@@ -1096,8 +1096,11 @@ class ExceptionalPointWarning(UserWarning):
 
     Isolated exceptional-point pairs are rebuilt in a regular basis. An eager screen of each
     layer's final mode basis warns when it still contains a nearly dependent cluster with a
-    non-normal restriction of the layer operator. Ordinary diagonalizable degeneracies do not
-    trigger it.
+    non-normal restriction of the layer operator. On the 2D path a second eager screen warns
+    when two or more rebuilt pairs share a cluster (exceptional points that nearly coincide)
+    and the rebuilt modes miss the layer operator by more than the layer's thickness and roots
+    tolerate (in a thick layer with small roots, possibly by rounding alone). Ordinary
+    diagonalizable degeneracies do not trigger either.
 
     The result may be inaccurate. Detuning, ``rcwa.Numerics(detuning=...)``, does not act on
     this warning: its Rayleigh detuning ladder is too small to leave a coincident
