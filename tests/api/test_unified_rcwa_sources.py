@@ -130,3 +130,77 @@ def test_a_lit_order_outside_the_window_is_refused_in_public_spelling():
                                               r'\(5, 0\).*Numerics\(orders=\(2, 2\)\)') as caught:
         rcwa.run(problem, numerics=rcwa.Numerics(orders=(2, 2)))
     assert 'truncation_order' not in str(caught.value)
+
+
+def _crossed_grating(source):
+    """A 2D grating lit by one source; ``orders=(1, 1)`` keeps three orders per axis."""
+    return rcwa.Problem(
+        units=Units(length='nm'),
+        stack=rcwa.Stack(period=(700., 700.), bottom=Material(epsilon=2.25), layers=(
+            rcwa.Layer(thickness=300., epsilon=np.array([[1., 12.25], [12.25, 12.25]])),)),
+        excitation=rcwa.Excitation(wavelength=900., sources=(source,)))
+
+
+_DIRECTED_SOURCES = {
+    'PlaneWave': lambda **angles: rcwa.PlaneWave(**angles),
+    'IncidentOrders': lambda **angles: rcwa.IncidentOrders(weights=(((0, 0), 1.),), **angles),
+    'GaussianBeam': lambda **angles: rcwa.GaussianBeam(waist=2000., **angles),
+}
+
+
+@pytest.mark.parametrize('kind', sorted(_DIRECTED_SOURCES))
+@pytest.mark.parametrize('name,value', [
+    # Three angles against three orders per axis: this length broadcast inside the engine, and
+    # check and run then reported one clean answer for a mixture of incidences.
+    ('theta', np.linspace(.05, .3, 3)),
+    ('theta', [.05, .175, .3]),
+    ('theta', np.array([.2])),
+    ('phi', np.linspace(0., .3, 3)),
+    ('theta', float('nan')),
+    ('phi', float('inf')),
+])
+def test_an_incidence_angle_is_one_finite_number(kind, name, value):
+    from wavebit.errors import ValidationError
+    angles = dict(theta=.2, phi=.1)
+    angles[name] = value
+    problem = _crossed_grating(_DIRECTED_SOURCES[kind](**angles))
+    numerics = rcwa.Numerics(orders=(1, 1))
+    (issue,) = rcwa.check(problem, numerics=numerics).issues
+    assert issue.code == 'source.direction'
+    assert issue.path == f'excitation.sources[0].{name}'
+    assert f'{kind}({name}=...)' in issue.message
+    with pytest.raises(ValidationError) as caught:
+        rcwa.run(problem, numerics=numerics)
+    assert caught.value.code == 'source.direction'
+
+
+def test_scalar_angles_of_every_spelling_still_run_and_agree():
+    """A Python float, a 0-d NumPy array and a 0-d tensor with a derivative are one angle."""
+    torch = pytest.importorskip('torch')
+    numerics = rcwa.Numerics(orders=(1, 1))
+    reference = rcwa.run(_crossed_grating(rcwa.PlaneWave(theta=.2, phi=.1)), numerics=numerics)
+    as_array = rcwa.run(_crossed_grating(rcwa.PlaneWave(theta=np.float64(.2), phi=np.asarray(.1))),
+                        numerics=numerics)
+    np.testing.assert_array_equal(np.asarray(as_array.R), np.asarray(reference.R))
+    theta = torch.tensor(.2, dtype=torch.float64, requires_grad=True)
+    differentiable = rcwa.run(_crossed_grating(rcwa.PlaneWave(theta=theta, phi=.1)),
+                              numerics=numerics, backend='torch')
+    np.testing.assert_allclose(differentiable.R.detach().numpy(), np.asarray(reference.R),
+                               rtol=0, atol=1e-12)
+    differentiable.R.sum().backward()
+    assert theta.grad is not None and torch.isfinite(theta.grad)
+
+
+def test_a_traced_scalar_angle_still_runs_under_jit():
+    """Under ``jax.jit`` the check reads only the angle's shape, which the trace still knows."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    with jax.enable_x64(True):
+        problem = _crossed_grating(rcwa.PlaneWave(theta=.2, phi=.1))
+        numerics = rcwa.Numerics(orders=(1, 1))
+        prepared = rcwa.prepare(problem, numerics=numerics, backend='jax')
+        def reflected(theta):
+            source = problem.excitation.sources[0].replace(theta=theta)
+            return prepared.run(problem.replace(excitation=problem.excitation.replace(sources=(source,)))).R.sum()
+        eager = float(rcwa.run(problem, numerics=numerics).R.sum())
+        assert float(jax.jit(reflected)(jnp.float64(.2))) == pytest.approx(eager, abs=1e-12)

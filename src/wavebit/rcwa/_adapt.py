@@ -542,6 +542,16 @@ def validate_values(problem):
             if a.shape or not np.isfinite(a) or (single_plane(problem) and abs(a) == 0):
                 raise ValidationError('Source amplitude must be finite; a single incident plane wave must be nonzero.',
                                       code='source.amplitude', path=f'excitation.sources[{i}].amplitude')
+        for name in ('theta', 'phi'):
+            # One direction per source. An array here was read by the engine as one angle per
+            # retained order whenever its length happened to broadcast against them, and the
+            # run returned a mixture of incidences with every diagnostic clean.
+            angle = getattr(source, name, None)
+            if angle is not None and not _finite_scalar(angle, f'excitation.sources.{name}'):
+                raise ValidationError(f'{type(source).__name__}({name}=...) must be one finite angle in radians '
+                                      '(real, or complex for formal evanescent incidence), not a sequence or '
+                                      'array. Run one problem per direction to sweep angles.',
+                                      code='source.direction', path=f'excitation.sources[{i}].{name}')
         if isinstance(source, GaussianBeam) and not _positive_real(source.angular_spectrum_extent):
             # The engine refuses the same values under its own keyword name; the public
             # declaration is named here, at check, before the engine ever sees them.
@@ -549,6 +559,23 @@ def validate_values(problem):
                                   'number: the half-width of the angular-spectrum quadrature, in 1/waist.',
                                   code='source.angular_spectrum_extent',
                                   path=f'excitation.sources[{i}].angular_spectrum_extent')
+
+
+def _finite_scalar(value, path):
+    """Whether ``value`` is one finite number (complex allowed), read without detaching AD.
+
+    A value under ``jax.jit`` or ``jax.vmap`` is judged by its shape alone, which a trace
+    still knows; its finiteness is left to the run's own guard.
+    """
+    if isinstance(value, (list, tuple, dict, str)) or getattr(value, 'shape', ()) != ():
+        return False
+    if opaque(value):
+        return True
+    try:
+        a = host(value, path)
+        return a.shape == () and bool(np.isfinite(a))
+    except (TypeError, ValueError):
+        return False
 
 
 def _positive_real(value):
