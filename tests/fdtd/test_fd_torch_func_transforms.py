@@ -9,7 +9,6 @@ scalar (to rounding) and against a central difference of NumPy runs.
 """
 import warnings
 
-import numpy as np
 import pytest
 
 from wavebit import Material, Units, fdtd
