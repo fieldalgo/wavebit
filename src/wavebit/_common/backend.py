@@ -1096,7 +1096,8 @@ class ExceptionalPointWarning(UserWarning):
 
     Isolated exceptional-point pairs are rebuilt in a regular basis. On the 2D path, exceptional
     points that coincide or nearly coincide form a defective cluster of three or four modes
-    (two order rows of a y-invariant layer at one x-cutoff, or a pair beside an unpaired root),
+    (two order rows of a y-invariant layer at one x-cutoff, the two degenerate doublets just off a
+    symmetric coincidence, or a pair beside an unpaired root),
     and the cluster is rebuilt as a whole, eagerly and under every trace; the warning fires
     when that joint rebuild fails its own check. An eager screen of each layer's final mode
     basis warns when it still contains a nearly dependent cluster with a non-normal restriction

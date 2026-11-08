@@ -382,7 +382,8 @@ def _collapsed(seed):
 def test_a_collapsed_start_is_loud(seed):
     """Three nearly parallel columns for a three-mode cluster (:func:`_collapsed`, smallest
     singular value ~6e-16) leave the cluster's subspace undetermined beyond one Newton step:
-    measured backward errors 3.7e-4 .. 6.1e-2 on four CPU arithmetic paths, and the joint
+    measured backward errors 3.7e-4 .. 6.1e-2 on four CPU arithmetic paths (9.7e-6 .. 1.9e-2
+    after the second step), and the joint
     rebuild's check reads them (its subspace residual against <= 7e-14 on every measured
     layer). Eagerly an ``ExceptionalPointWarning``; under ``jax.jit`` a NaN answer. Catches the
     check removed, or not applied to a traced layer."""
@@ -407,6 +408,113 @@ def test_a_collapsed_start_is_loud(seed):
         return solve_2d._rebuild_defective_pairs(jnp, A, jnp.eye(12, dtype=complex), W, W / q, q,
                                                  w, pairs, clusters=clusters)[2]
     assert np.all(np.isnan(np.asarray(traced(jnp.asarray(w), jnp.asarray(W), jnp.asarray(A)))))
+
+
+def _poor_start(err, seed, gap=1e-2, both=False):
+    """:func:`_two_clusters_and_a_pair`'s operator with the first cluster's four ``eig`` columns
+    (with ``both``, the second's too) replaced by an orthonormal basis of its invariant subspace
+    mixed by a matrix of singular values ``1, 1, 1e-3, 1e-3``, plus a perturbation of
+    ``1e-3 * err``: a start whose subspace is off by about ``err``, as ``eig``'s is where its
+    columns are nearly dependent. ``(A, w, W)``."""
+    A = _two_clusters_and_a_pair(gap, seed)
+    rng = np.random.default_rng(seed)
+    U, _ = np.linalg.qr(rng.normal(size=(16, 16)) + 1j * rng.normal(size=(16, 16)))
+    Vh, _ = np.linalg.qr(rng.normal(size=(16, 16)) + 1j * rng.normal(size=(16, 16)))
+    P = U @ np.diag(np.geomspace(1, 10, 16)) @ Vh
+    w, W = np.linalg.eig(A)
+    W = W.copy()
+    rng = np.random.default_rng(100 + seed)
+    for centre, cols in ((0.3, slice(0, 4)), (0.3 + gap, slice(4, 8)))[:2 if both else 1]:
+        near = np.sort(np.argsort(np.abs(w - centre))[:4])
+        B = np.linalg.qr(P[:, cols])[0]
+        X, _ = np.linalg.qr(rng.normal(size=(4, 4)) + 1j * rng.normal(size=(4, 4)))
+        Y, _ = np.linalg.qr(rng.normal(size=(4, 4)) + 1j * rng.normal(size=(4, 4)))
+        R = rng.normal(size=(16, 4)) + 1j * rng.normal(size=(16, 4))
+        W[:, near] = (B @ X @ np.diag([1, 1, 1e-3, 1e-3]) @ Y
+                      + 1e-3 * err * R / np.linalg.norm(R, axis=0))
+        W[:, near] /= np.linalg.norm(W[:, near], axis=0)
+    return A, w, W
+
+
+@pytest.mark.parametrize('seed', [1, 2, 3])
+@pytest.mark.parametrize('err, both', [(1e-6, False), (3e-6, False), (1e-4, False), (1e-6, True)],
+                         ids=['1e-6', '3e-6', '1e-4', 'both 1e-6'])
+def test_a_poor_start_takes_a_second_step(err, both, seed):
+    """One Newton step leaves a remainder of second order in the start's error, which the check
+    reads; a second step, the chord method's (Kelley 1995, ch. 5) with no new solve, leaves third
+    order. A start off by 1e-6 .. 3e-6 (:func:`_poor_start`): one step measured 8.0e-14 ..
+    1.5e-12 of ``||A||``, loud from 3e-6; two steps <= 1.2e-14 and quiet, on seven CPU arithmetic
+    paths. Off by 1e-4, two steps leave 4.6e-11 .. 4.3e-10 and the check still warns. Both
+    clusters off by 1e-6: two steps <= 1.5e-15, and 2.7e-13 with the residual expansion's rows
+    between the clusters left out of the second step's residual. Catches the second step dropped,
+    or its residual missing a block's rows."""
+    A, w, W = _poor_start(err, seed, both=both)
+    q = np.sqrt(w)
+    pairs = solve_2d._defective_pairs(np, w, W, q, 8)
+    clusters = solve_2d._defective_clusters(np, w, W, q, pairs, lambda: A, 4)
+    assert np.asarray(clusters[1]).sum(axis=1).tolist() == [4, 4]
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        rebuilt = solve_2d._rebuild_defective_pairs(np, A, np.eye(16, dtype=complex), W, W / q, q,
+                                                    w, pairs, clusters=clusters)
+    loud = any(issubclass(r.category, _legacy_wavebit_ExceptionalPointWarning) for r in rec)
+    if err >= 1e-4:
+        assert loud
+        return
+    assert not loud
+    assert _backward(A, rebuilt) < 3e-14
+
+
+@pytest.mark.parametrize('name', list(SCENES))
+@pytest.mark.parametrize('dth', [0.0, 1e-8, -1.5e-7, 1e-6])
+def test_a_first_step_at_rounding_keeps_its_basis(name, dth, monkeypatch):
+    """Where one step already reaches rounding (the y-Littrow clusters), the second moves the basis
+    by rounding alone and is not kept (``_EP_STEP_GAIN``): the answer is the one-step answer
+    (``_EP_STEP_GAIN = 0``), bit for bit, and not the two-step one (``_EP_STEP_GAIN = inf``),
+    whose bits differ. At an exact coincidence ``eig(T)``'s eigenvectors are sensitive to rounding
+    in ``T``, and on two CPU arithmetic paths such a basis turned the split's ``cond(X)`` from 1.9
+    to 2.6e3 and from 3.4 to 156, each loud. Catches the second step kept always, or on any
+    decrease."""
+    scene = _littrow(SCENES[name], dth)
+
+    def solve():
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter('always')
+            r = _solver(scene, algo='SMM', two_d=True).solve(auto_detune=False)
+        return [_np(getattr(r, k)).tobytes() for k in ('R', 'T', 'r_xyz', 't_xyz')], rec
+    got, rec = solve()
+    assert not [w for w in rec if issubclass(w.category, _legacy_wavebit_ExceptionalPointWarning)]
+    monkeypatch.setattr(solve_2d, '_EP_STEP_GAIN', 0.0)
+    assert solve()[0] == got
+    monkeypatch.setattr(solve_2d, '_EP_STEP_GAIN', float('inf'))
+    assert solve()[0] != got
+
+
+def test_the_step_choice_reads_the_split(monkeypatch):
+    """The second step is kept by the check's miss, which reads the split as well as the residual.
+    Instrumented: a start off by 1e-5 (:func:`_poor_start`), where one step fails the check
+    (residual) and two pass it, with the two-step basis's split reporting a ``cond(X)`` 1e8 times
+    its own -- a split the check would refuse. The one-step basis is kept, and the answer is
+    loud; reading the residual alone would keep the two-step basis, quiet. Catches the choice made
+    by the residual alone."""
+    A, w, W = _poor_start(1e-5, 1)
+    q = np.sqrt(w)
+    pairs = solve_2d._defective_pairs(np, w, W, q, 8)
+    clusters = solve_2d._defective_clusters(np, w, W, q, pairs, lambda: A, 4)
+    original, calls = solve_2d._cluster_split, []
+
+    def split(xp, T, valid, pad):
+        X, J, cond = original(xp, T, valid, pad)
+        calls.append(None)
+        return X, J, cond * (1e8 if len(calls) == 2 else 1.0)
+    monkeypatch.setattr(solve_2d, '_cluster_split', split)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        rebuilt = solve_2d._rebuild_defective_pairs(np, A, np.eye(16, dtype=complex), W, W / q, q,
+                                                    w, pairs, clusters=clusters)
+    assert len(calls) == 2
+    assert any(issubclass(r.category, _legacy_wavebit_ExceptionalPointWarning) for r in rec)
+    assert _backward(A, rebuilt) > 1e-13
 
 
 def _chain(seed=0):
@@ -453,28 +561,26 @@ def _two_clusters_and_a_pair(gap, seed=1, far=(2.4, 3.0)):
     return P @ J @ np.linalg.inv(P)
 
 
-@pytest.mark.parametrize('seed', [1, 2, 3])
+@pytest.mark.parametrize('seed', [1, 2, 3, 4, 5])
 @pytest.mark.parametrize('gap', [2e-4, 5e-4, 1e-3, 1e-2])
 def test_two_clusters_and_a_pair_in_a_general_basis(gap, seed):
     """Two defective clusters and a pair, ``gap`` apart, in a basis that does not decouple them:
     every block's Newton step reads the others' rows -- a cluster's rows in another cluster's
-    correction by the Kronecker solve, in a pair's by ``k x k`` solves. Measured on four CPU
-    arithmetic paths (seeds 1 .. 5) and, at gaps 2e-4, 1e-3 and 1e-2, seven more (seeds 1 .. 3):
-    the layer model ``A W = W Q^2`` to <= 2.5e-15 of ``||A||`` at gaps 5e-4 .. 1e-2, quiet; at
-    2e-4 one Newton step leaves a remainder of second order over
-    the small gap, up to 4.3e-13, and on one path the check read it as a miss (residual 3.24e-12
-    against 3.00e-12) and warned -- still exact, so there the warning is allowed.
-    ``Omega_R W = V Q``; ``Q``'s coupling squares to exactly zero; the entry list names exactly
-    its nonzero entries. On the y-Littrow scenes the inter-block rows change no answer (the
-    blocks live in orthogonal order rows) and only the check reads their absence
-    (:func:`test_two_clusters_in_one_layer` then warns); here they change the answer. Catches the
-    Kronecker or the pair-to-cluster rows dropped."""
+    correction by the Kronecker solve, in a pair's by ``k x k`` solves. One step leaves a
+    remainder of second order over the gap: at 2e-4 up to 4.3e-13 of ``||A||``, which the check
+    on one path read as a miss (residual 3.24e-12 against 3.00e-12). The second step takes it
+    out: <= 2.0e-15 on seven CPU arithmetic paths, quiet at every gap. ``Omega_R W = V Q``; ``Q``'s coupling squares to
+    exactly zero; the entry list names exactly its nonzero entries. On the y-Littrow scenes the
+    inter-block rows change no answer (the blocks live in orthogonal order rows) and only the
+    check reads their absence (:func:`test_two_clusters_in_one_layer` then warns); here they
+    change the answer. Catches the Kronecker or the pair-to-cluster rows dropped, and the second
+    step's residual missing them."""
     A = _two_clusters_and_a_pair(gap, seed)
     pairs, clusters, rebuilt, warned = _layer(A, cap=8, slots=4)
-    assert gap < 5e-4 or not warned
+    assert not warned
     assert np.asarray(clusters[1]).sum(axis=1).tolist() == [4, 4]
     W, V, Q, a, b, mask = (np.asarray(x) for x in rebuilt)
-    assert _backward(A, rebuilt) < 1e-12
+    assert _backward(A, rebuilt) < 1e-13
     assert np.linalg.norm(W - V @ Q) < 1e-13 * np.linalg.norm(W)
     off = Q - np.diag(np.diag(Q))
     assert np.array_equal(off @ off, np.zeros_like(off))
@@ -497,12 +603,58 @@ def test_a_large_operator_norm_does_not_fail_the_check(seed):
     assert _backward(A, rebuilt) < 1e-12
 
 
-@pytest.mark.parametrize('model', ['beside 1e-9', 'two clusters'])
+def _split_doublets(s, seed=1, crowd=False):
+    """Two copies of a Jordan pair at 0.3 split to ``0.3 +- s`` (coupling 0.05 above the diagonal,
+    ``s**2 / 0.05`` below): two degenerate doublets ``2 s`` apart, each column nearly parallel to
+    its copy's other one (sine about ``2 s / 0.05``), as off a C4v coincidence. With ``crowd`` also
+    :func:`_two_clusters_and_a_pair`'s two clusters and pair, 1e-3 apart, at 1.2. In a basis of
+    condition 10."""
+    rng = np.random.default_rng(seed)
+    d = [0.3] * 4 + ([1.2] * 4 + [1.201] * 4 + [1.199] * 2 if crowd else []) + [
+        0.8, 1.6, 1.9, 2.2, 2.6, 3.0, 3.4, 3.8]
+    n = len(d)
+    U, _ = np.linalg.qr(rng.normal(size=(n, n)) + 1j * rng.normal(size=(n, n)))
+    Vh, _ = np.linalg.qr(rng.normal(size=(n, n)) + 1j * rng.normal(size=(n, n)))
+    P = U @ np.diag(np.geomspace(1, 10, n)) @ Vh
+    J = np.diag(d).astype(complex)
+    for i in (0, 2):
+        J[i, i + 1], J[i + 1, i] = 0.05, s * s / 0.05
+    if crowd:
+        J[4, 5], J[6, 7], J[8, 9], J[10, 11], J[12, 13] = 0.05, 0.04, 0.03, 0.06, 0.05
+    return P @ J @ np.linalg.inv(P)
+
+
+@pytest.mark.parametrize('seed', [1, 2, 3])
+@pytest.mark.parametrize('s', [1e-6, 1e-4, 3e-4])
+def test_split_doublets_are_one_cluster(s, seed):
+    """Two doublets ``2 s`` apart whose columns stay nearly dependent (:func:`_split_doublets`):
+    no pair is gated (each mode's nearest eigenvalue is its degenerate twin, at a sine above
+    ``_EP_SINE``), and beyond ``_EP_CLUSTER`` the narrow ball holds a doublet only. The wide ball
+    (``_EP_JOINT_RADIUS``) takes the four as one cluster while their columns are dependent to
+    within ``_EP_SINE``: out to ``s = 3e-4`` on every path measured (at 1e-3, the sine's edge, on
+    some, exact there too). Measured <= 2.4e-15 of ``||A||`` on seven paths, quiet. Catches the wide level removed or
+    narrowed below ``2 s``."""
+    A = _split_doublets(s, seed)
+    pairs, clusters, rebuilt, warned = _layer(A, cap=8, slots=4)
+    assert pairs is None and not warned
+    assert np.asarray(clusters[1]).sum(axis=1).tolist() == [4]
+    assert _backward(A, rebuilt) < 1e-13
+
+
+@pytest.mark.parametrize('model', ['beside 1e-9', 'two clusters', 'split doublets',
+                                   'split doublets beside two clusters'])
 def test_the_traced_cluster_gate_takes_the_eager_set(model):
     """Under ``jax.jit`` and ``torch.func.vmap`` the gate returns static slots with masks as data;
-    the live slots must be the eager clusters, member for member. Catches the slots ranked or
-    masked differently from the eager gate."""
-    A = _jordan_beside(1e-9)[0] if model == 'beside 1e-9' else _two_clusters_and_a_pair(1e-3)
+    the live slots must be the eager clusters, member for member, from either radius. Beside the
+    split doublets, :func:`_two_clusters_and_a_pair`'s clusters sit in one wide ball of ten (too
+    many for one cluster), so the narrow level takes them: three clusters, one wide and two
+    narrow. Catches the slots ranked or masked differently from the eager gate, and a level's
+    seeds, or the narrow balls inside a taken wide one, masked differently under a trace."""
+    A, want_sizes = {'beside 1e-9': (_jordan_beside(1e-9)[0], [3]),
+                     'two clusters': (_two_clusters_and_a_pair(1e-3), [4, 4]),
+                     'split doublets': (_split_doublets(1e-4), [4]),
+                     'split doublets beside two clusters': (_split_doublets(1e-4, crowd=True),
+                                                            [4, 4, 4])}[model]
     w, W = np.linalg.eig(A)
     q = np.sqrt(w)
     eager = solve_2d._defective_clusters(np, w, W, q, solve_2d._defective_pairs(np, w, W, q, 8),
@@ -512,6 +664,7 @@ def test_the_traced_cluster_gate_takes_the_eager_set(model):
         members, valid = np.asarray(members), np.asarray(valid)
         return sorted(tuple(sorted(m[v].tolist())) for m, v in zip(members, valid) if v.any())
     want = sets(*eager[:2])
+    assert [len(c) for c in want] == want_sizes
     jax = pytest.importorskip('jax')
     jax.config.update('jax_enable_x64', True)
     jnp = jax.numpy
@@ -901,13 +1054,13 @@ def test_a_coincidence_field_and_its_gradient_are_the_1d_rebuild_s(name, dth, al
 GENUINE_C4V = 641.1137704156972
 
 
-def _c4v_amplitudes(wavelength, eps=12.25, algo='ETM'):
+def _c4v_amplitudes(wavelength, eps=12.25, algo='ETM', factorization='laurent'):
     st = np.ones((1, 20, 20), dtype=complex if np.iscomplexobj(eps) else float)
     st[0, 6:14, 6:14] = eps
     s = _legacy_wavebit_rcwa(backend='numpy', wavelength=wavelength, period=[1000., 1000.],
                              truncation_order=[4, 4], structure=st, thickness=[300.], top=1.0,
                              bot=2.1025, theta=0.0, phi=0.0, psi=np.pi / 4, layer_algorithm=algo,
-                             factorization='laurent')
+                             factorization=factorization)
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         r = s.solve(auto_detune=False)
@@ -915,30 +1068,56 @@ def _c4v_amplitudes(wavelength, eps=12.25, algo='ETM'):
             [w.category for w in rec])
 
 
-@pytest.mark.parametrize('rel', [0.0, 1e-9, -1e-9])
-def test_a_genuinely_2d_coincident_cluster_matches_a_cauchy_oracle(rel, joint_layers, monkeypatch):
-    """A coincidence on a genuinely 2D raster (:data:`GENUINE_C4V`): the four modes are one
-    cluster, rebuilt jointly, within 1e-12 of a Cauchy oracle and quiet, ETM and SMM. The oracle is
-    the mean of the amplitudes over a circle in the pillar's permittivity (radius 1e-2, 16 points:
-    the trapezoidal rule, L. N. Trefethen and J. A. C. Weideman, SIAM Rev. 56, 385, 2014, Sec. 12),
-    on which the exceptional points move off, with every rebuild closed; it agreed with itself
-    to 2.1e-15 across radii 1e-3 / 1e-2 and 16 / 32 points. Measured <= 4.3e-15; with the pair
-    rebuild alone 3.3e-8 (ETM) and 1.1e-6 (SMM), loud. Further off the coincidence the two
-    doublets leave the cluster radius while their columns stay nearly dependent: silent and a few
-    1e-12 off with or without the joint rebuild (``rayleigh-points.md`` §8, limits)."""
-    wavelength = GENUINE_C4V * (1 + rel)
+def _c4v_exact_and_quiet(wavelength, factorization, joint_layers, monkeypatch):
+    """ETM and SMM within 1e-12 of the Cauchy oracle and quiet, every jointly rebuilt layer one
+    cluster of four. The oracle is the mean of the amplitudes over a circle in the pillar's
+    permittivity (radius 1e-2, 16 points: the trapezoidal rule, L. N. Trefethen and J. A. C.
+    Weideman, SIAM Rev. 56, 385, 2014, Sec. 12), on which the exceptional points move off, with
+    every rebuild closed; it agreed with itself to 2.1e-15 across radii 1e-3 / 1e-2 and 16 / 32
+    points."""
     with monkeypatch.context() as m:
         m.setattr(solve_2d, '_EP_SINE', 0.0)
         from wavebit.rcwa._engine import solve_2d_first_order as fo
         m.setattr(fo, '_PARALLEL_SIN', 0.0)
-        oracle = np.mean([_c4v_amplitudes(wavelength, 12.25 + 1e-2 * np.exp(2j * np.pi * k / 16))[0]
-                          for k in range(16)], axis=0)
+        oracle = np.mean([_c4v_amplitudes(wavelength, 12.25 + 1e-2 * np.exp(2j * np.pi * k / 16),
+                                          factorization=factorization)[0] for k in range(16)],
+                         axis=0)
+    joint_layers.clear()
     for algo in ('ETM', 'SMM'):
-        got, warned = _c4v_amplitudes(wavelength, algo=algo)
+        got, warned = _c4v_amplitudes(wavelength, algo=algo, factorization=factorization)
         err = np.max(np.abs(got - oracle))
-        assert _legacy_wavebit_ExceptionalPointWarning not in warned, f'{algo} rel {rel:g}: warned'
-        assert err < 1e-12, f'{algo} rel {rel:g}: {err:.1e} off'
+        assert _legacy_wavebit_ExceptionalPointWarning not in warned, f'{algo}: warned'
+        assert err < 1e-12, f'{algo}: {err:.1e} off'
     assert joint_layers and all(valid.sum(axis=1).tolist() == [4] for _, (_, valid), _ in joint_layers)
+
+
+@pytest.mark.parametrize('rel', [0.0, 1e-9, -1e-9])
+def test_a_genuinely_2d_coincident_cluster_matches_a_cauchy_oracle(rel, joint_layers, monkeypatch):
+    """A coincidence on a genuinely 2D raster (:data:`GENUINE_C4V`): the four modes are one
+    cluster, rebuilt jointly, within 1e-12 of a Cauchy oracle (:func:`_c4v_exact_and_quiet`) and
+    quiet, ETM and SMM. Measured <= 4.3e-15; with the pair rebuild alone 3.3e-8 (ETM) and 1.1e-6
+    (SMM), loud. Off the coincidence: :func:`test_off_a_c4v_coincidence_the_doublets_are_one_cluster`."""
+    _c4v_exact_and_quiet(GENUINE_C4V * (1 + rel), 'laurent', joint_layers, monkeypatch)
+
+
+#: C4v coincidences of :func:`_c4v_amplitudes`'s pillar: :data:`GENUINE_C4V`, a second under the
+#: Laurent factorization, and one under NVF.
+C4V = [('laurent', GENUINE_C4V), ('laurent', 623.6028730062790), ('nvf', 603.4978930437392)]
+
+
+@pytest.mark.parametrize('rel', [1e-8, -1e-8, -3e-7, 1e-6, -1e-6])
+@pytest.mark.parametrize('factorization, coincidence', C4V)
+def test_off_a_c4v_coincidence_the_doublets_are_one_cluster(factorization, coincidence, rel,
+                                                             joint_layers, monkeypatch):
+    """Off a C4v coincidence the two exceptional points split into degenerate doublets whose
+    spread grows like the square root of the offset (1.6e-4 .. 2.6e-4 at relative offsets 1e-8 ..
+    1e-7) while their four columns stay nearly dependent, so beyond ``_EP_CLUSTER`` only the wide
+    ball (``_EP_JOINT_RADIUS``) holds them. Within 1e-12 of the Cauchy oracle
+    (:func:`_c4v_exact_and_quiet`), quiet, ETM and SMM, the four rebuilt as one cluster.
+    Measured <= 3.3e-14 on seven CPU arithmetic paths, five coincidences and offsets 1e-9 ..
+    3e-6; with the narrow ball alone silent and up to 9.1e-12 off. Catches the wide level
+    removed."""
+    _c4v_exact_and_quiet(coincidence * (1 + rel), factorization, joint_layers, monkeypatch)
 
 
 def test_smm_screens_with_the_thickness_etm_reads(monkeypatch):
