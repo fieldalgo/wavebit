@@ -132,6 +132,12 @@ wavebit.Lattice.rectangular(700., 1100.)              # diag(700, 1100) as an ob
 wavebit.Lattice.from_columns(np.column_stack((a1, a2)))
 ```
 
+`wavebit.Lattice(u, v, axis_aligned)` itself takes the flag as a declaration -- a pytree rebuild
+and a traced `period` need that. Where the vectors can be read, a `True` they contradict (a sheared
+cell, or a diagonal with a negative side) is not trusted: the solver takes the general path, as it
+does for a saved job whose flag was edited. Two cells compare equal, and hash alike, when their
+vectors and declarations are the same.
+
 They store no angle, so building one *inside* a differentiated function makes the cell's shape
 a design variable — through `prepared.run` that is a PyTorch or an eager `jax.grad` derivative;
 a cell traced under `jax.jit` is refused (code `prepared.host_topology`); see
