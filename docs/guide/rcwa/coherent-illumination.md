@@ -448,10 +448,15 @@ PyTorch does, and differentiates. Under
 `torch.compile` it runs eagerly inside the compiled caller, as every public wavebit callable
 does ([`torch-compile.md`](../../development/torch-compile.md) §6). Eager derivatives with
 respect to a region permittivity, a layer thickness and a radius were compared with a central
-difference on both backends for two plane waves (`tests/api/test_eager_grad_parity.py`), and
-the layer-thickness derivative of a top-side `GaussianBeam`, whose phase on the top face moves
-with the stack height (`tests/rcwa/test_source_derivatives.py`); other inputs and sources have
-not been compared. It does not expose the single-plane-wave `R`, `T`, per-order
+difference on both backends for two plane waves (`tests/api/test_eager_grad_parity.py`). So
+were layer-thickness derivatives of a top-side `GaussianBeam` (whose phase on the top face moves
+with the stack height), of a run with an `ElectricDipole` (host layer and the layer above it),
+and of an interior field above the varied layer, and the derivative with respect to a
+`GaussianBeam` polarization (`tests/rcwa/test_source_derivatives.py`). A `GaussianBeam` builds
+its angular spectrum from concrete directions, so a derivative with respect to its direction
+(`theta`, `phi`, `kx`, `ky`), the wavelength or the lit half-space's material is refused (code
+`rcwa.unsupported`) rather than returned partial. Other inputs and sources have not been
+compared. It does not expose the single-plane-wave `R`, `T`, per-order
 amplitudes or scattering matrix: `Outputs(diffraction=True)` is refused (code
 `rcwa.coherent_diffraction`), and so is `Outputs(scattering=True)` (code
 `rcwa.coherent_scattering`). A prepared problem fixes the cell, the wavelengths, the source

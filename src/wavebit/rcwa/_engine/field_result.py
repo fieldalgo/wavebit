@@ -258,6 +258,9 @@ class FieldState:
                          atol=1e-12*max(1., float(np.asarray(_host_value(edges[-1])))))) for h in heights):
             raise ValueError('The point-source plane has a singular field; sample strictly above or below it.')
         coefficient = None
+        # Host edges select the segment; its lower face is the sum of the live segment
+        # thicknesses below it, so a field above a layer sees that layer's thickness derivative.
+        start = ge[0]
         for j, layer in enumerate(g['layers']):
             eps, d, lf, pf, lb, pb, af, ab = layer[:8]
             coupled = len(layer) > 8      # a regular-pair layer (illumination._cascade)
@@ -267,7 +270,8 @@ class FieldState:
             mask = owner == g['hosts'][j]
             if heights:
                 mask = mask & (z >= ge[j]) & (z <= ge[j+1])
-            local = _local_height(xp, z, ge[j], d, mask)
+            local = _local_height(xp, z, start, d, mask)
+            start = start + d
             if lf.ndim == 2 or lb.ndim == 2:
                 from wavebit.rcwa._engine.modal_gradient import exponential
                 state = (pf @ (exponential(xp, lf, 1j*g['k0']*local, coupled=coupled) @ af[..., None])
