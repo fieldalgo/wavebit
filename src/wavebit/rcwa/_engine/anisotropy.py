@@ -83,6 +83,58 @@ def scene_is_tensor(structure, mu=None):
     return any(getattr(a, 'ndim', 0) == 5 for a in (structure, mu))
 
 
+def _isotropic_value(value):
+    """The scalar a material quantity stands for, or ``None`` where it is a tensor.
+
+    A scalar is itself. Three equal principal values, or a 3x3 equal to ``c*I``, is ``c`` when
+    every entry is a concrete number: a traced or differentiated entry keeps the tensor, since
+    a tangent along one component is anisotropic even where the value is not, and a tracer
+    has no number to compare.
+    """
+    shape = tensor_shape(value)
+    if shape == ():
+        return value
+    leaves = list(value) if isinstance(value, (list, tuple)) else [value]
+    while any(isinstance(v, (list, tuple)) for v in leaves):
+        leaves = [w for v in leaves for w in (v if isinstance(v, (list, tuple)) else [v])]
+    if any(carries_autodiff(v) for v in leaves):
+        return None
+    try:
+        a = np.asarray([fac._to_numpy(v) for v in leaves]).reshape(shape)
+    except Exception:                                  # noqa: BLE001 - no number to read
+        return None
+    diagonal = a if shape == (3,) else np.diagonal(a)
+    if shape == (3, 3) and np.any(a[~np.eye(3, dtype=bool)] != 0):
+        return None
+    return diagonal[0].item() if np.all(diagonal == diagonal[0]) else None
+
+
+def isotropic_layer(layer, quantity='epsilon'):
+    """A shape layer with each region's *quantity* as a scalar, or ``None`` if one is a tensor.
+
+    A layer whose regions are all isotropic -- scalars, or ``c*I`` written as a tensor
+    (:func:`_isotropic_value`) -- is built by the scalar shape builder, the rule it would take
+    with no tensor anywhere in the stack, so another layer's tensor never changes it. The
+    view holds ``epsilon`` or ``mu_value`` in each material slot, as the scalar permeability
+    pass does (``_mu_structure``).
+    """
+    def scalar(v):
+        # Both quantities decide, so the permittivity and permeability passes agree.
+        m = as_material(v)
+        if not material_is_tensor(v):
+            return m.epsilon if quantity == 'epsilon' else m.mu_value
+        eps = _isotropic_value(m.epsilon)
+        mu = m.mu_value if m.mu is None else _isotropic_value(m.mu)
+        if eps is None or mu is None:
+            return None
+        return eps if quantity == 'epsilon' else mu
+    background = scalar(layer.get('background', 1.))
+    shapes = [dict(s, material=scalar(s.get('material', 1.))) for s in layer.get('shapes', [])]
+    if background is None or any(s['material'] is None for s in shapes):
+        return None
+    return dict(layer, background=background, shapes=shapes)
+
+
 
 
 

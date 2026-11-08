@@ -56,6 +56,31 @@ including when an artificial shape divides regions with identical tensors.
 When z is decoupled, zz is integrated directly. With z coupling, all three
 components close together, and the resulting zz operator is inverted.
 
+## Isotropic layers in a tensor stack
+
+The rule is chosen per layer. A patterned layer whose regions are all isotropic
+keeps the scalar shape route (`factorization='nvf'`, integrated coefficients)
+it would take with no tensor anywhere in the stack, whatever the other layers
+hold. A tensor equal to `c*I` -- `Material([c, c, c])` or `Material(c*np.eye(3))`
+-- counts as isotropic when its entries are concrete numbers; a traced or
+differentiated tensor keeps the tensor route, because a derivative along one
+of its components is anisotropic. Uniform layers are exact under either route.
+
+Until 2026-11 a tensor material on any layer sent every patterned layer of the
+stack through the construction above. At a fixed order that changed the
+isotropic layers' answers: a circle of `epsilon = 6.25` beside a uniform
+`Material([2.1, 2.5, 3.0])` layer (orders 3 x 3, 730 nm, lossless) gave
+`R + T - 1` of +6.3e-3 and -4.8e-3 for the two incident polarizations, and
+writing the second layer as `Material([2.1] * 3)` moved the circle's `R` from
+0.6196 to 0.6677 against the stack with `2.1`. Both now conserve energy to
+1e-13, and the `c*I` stack matches the scalar one. The converged limit was not
+affected. `tests/rcwa/test_tensor_stack_isotropic_layers.py` holds these cases.
+
+Two routes still build every layer the tensor way: tensor Li
+(`factorization='li'`), which reproduces scalar Li exactly on an isotropic
+layer, and the explicit `fourier_coefficients='sampled'` shape route, which the
+scalar shape path does not build.
+
 ## Geometry and remaining approximations
 
 - Disjoint circles, ellipses and rectangles use analytic indicator transforms.
