@@ -170,3 +170,41 @@ def test_torch_single_constant_material_keeps_single_precision():
     assert response.epsilon.dtype == torch.complex64
     gradient, = torch.autograd.grad(response.epsilon.real, value)
     assert gradient.item() == 1.
+
+
+def _double_dispersive(make):
+    return DispersiveMaterial(make(2.25), (Lorentz(make(3e15), make(1e13), make(4e30)),
+                                           Drude(make(1.2e16), make(1e14)), Debye(make(1e-15), make(.5))))
+
+
+# 0.62788... um is the Lorentz resonance (3e15 rad/s), where a float32 omega read 4e-5 off.
+@pytest.mark.parametrize('wavelength', [.5, 1.55, 2*np.pi*C0/3e15*1e6])
+def test_torch_double_poles_form_omega_in_double_through_python_wavelength(wavelength):
+    """A Python wavelength must not round a double dispersive material's frequency to float32."""
+    torch = pytest.importorskip('torch')
+    units = Units(length='um')
+    double = _double_dispersive(lambda v: torch.tensor(v, dtype=torch.float64))
+    host = _double_dispersive(np.float64)
+    omega = 2*np.pi*C0/(wavelength*1e-6)
+    closed = (2.25 + 4e30/((3e15)**2 - omega**2 - 1j*1e13*omega)
+              - (1.2e16)**2/(omega**2 + 1j*1e14*omega) + .5/(1 - 1j*omega*1e-15))
+    value = double.at(wavelength, units=units).epsilon
+    assert value.dtype == torch.complex128
+    reference = complex(host.at(wavelength, units=units).epsilon)
+    assert abs(complex(value) - reference) <= 4e-16*abs(reference)
+    assert abs(complex(value) - closed) <= 4e-15*abs(closed)
+    conductive = ConductiveMaterial(torch.tensor(2., dtype=torch.float64), torch.tensor(1e5, dtype=torch.float64))
+    expected = 2. + 1j*1e5/(EPSILON0*omega)
+    assert abs(complex(conductive.at(wavelength, units=units).epsilon) - expected) <= 4e-16*abs(expected)
+
+
+@pytest.mark.parametrize('angle', ['python', 'float32'])
+def test_torch_double_tensor_rotates_in_double(angle):
+    """Neither a Python angle nor a single-precision angle narrows a double tensor material."""
+    torch = pytest.importorskip('torch')
+    a = .7 if angle == 'python' else torch.tensor(.7, dtype=torch.float32)
+    rotated = Material(torch.tensor([2., 3., 5.], dtype=torch.float64)).rotated(a, 'z').epsilon
+    assert rotated.dtype == torch.complex128
+    t = float(a)
+    R = np.array([[np.cos(t), -np.sin(t), 0.], [np.sin(t), np.cos(t), 0.], [0., 0., 1.]])
+    np.testing.assert_allclose(rotated.numpy(), R @ np.diag([2., 3., 5.]) @ R.T, rtol=0, atol=4e-15)
