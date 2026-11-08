@@ -16,6 +16,7 @@ to the conical versions, so this module reuses ``solve_1d``'s boundary init and
 ``final_matching`` verbatim.
 """
 from wavebit._common.backend import _concrete
+from wavebit._common.backend import _eig_raw
 from wavebit._common.backend import _readable
 from wavebit._common.backend import array_namespace
 from wavebit._common.backend import as_array
@@ -234,14 +235,16 @@ _EP_SINE = 1e-2
 _EP_ROOT_FLOOR = 1e-9
 
 #: A pair with an unpaired eigenvalue within this of either member (relative to
-#: max(1, |w|)) is not rebuilt: the Newton step divides that row by its distance to the pair.
-#: Measured on a Jordan pair beside a plain root at delta: the rebuilt pair's residual 2.0e-12
-#: at 1e-8, 3.5e-13 at 2e-8, <= 8.1e-14 from 5e-8 on (three random bases). Another gated pair
-#: is not counted: its rows take the 2x2 Sylvester closed form. That form also divides by the
-#: two pairs' gap, and close pairs are screened after the rebuild instead (:data:`_EP_BACKWARD`).
+#: max(1, |w|)) is not rebuilt as a pair: the Newton step divides that row by its distance to
+#: the pair. Measured on a Jordan pair beside a plain root at delta: the rebuilt pair's residual
+#: 2.0e-12 at 1e-8, 3.5e-13 at 2e-8, <= 8.1e-14 from 5e-8 on (three random bases). The three
+#: modes are a defective cluster instead, rebuilt jointly (:func:`_defective_clusters`). Another
+#: gated pair is not counted: its rows take the 2x2 Sylvester closed form. That form also
+#: divides by the two pairs' gap; two pairs within :data:`_EP_CLUSTER` of each other are one
+#: cluster, rebuilt jointly, and the rest are screened after the rebuild (:data:`_EP_BACKWARD`).
 _EP_SEPARATION = 1e-7
 
-#: The radius of the clusters _unresolved_defective_cluster reads.
+#: The radius of the clusters :func:`_defective_clusters` and the screens read.
 _EP_CLUSTER = 1e-4
 
 #: A cluster whose restriction T = Q^H A Q departs from normality by more than
@@ -312,11 +315,14 @@ def _unresolved_defective_cluster(xp, w, W, operator, sine, group=None):
 
 _UNRESOLVED_2D = (
     'a 2D layer holds three or more modes of one defective eigenvalue cluster (exceptional '
-    'points that coincide, such as two order rows of a y-invariant layer at the same x-cutoff), '
-    'which no pair rebuild spans: the eigenvector basis was kept, and the answer can be '
-    'inaccurate. Move the angle or wavelength by more than a relative 1e-4 to check it.')
+    'points that coincide) that no rebuild takes exactly -- more than four modes, a chain of '
+    'nearly equal eigenvalues, or a Jordan chain of length three: the eigenvector basis was '
+    'kept, and the answer can be inaccurate. Move the angle or wavelength by more than a '
+    'relative 1e-4 to check it.')
 
-#: A cluster (:data:`_EP_CLUSTER`) holding two or more rebuilt pairs warns when the layer model
+#: A cluster (:data:`_EP_CLUSTER`) holding two or more pairs rebuilt one at a time -- a cluster
+#: the joint rebuild did not take; its own clusters answer to its check (:data:`_EP_RESIDUAL`)
+#: -- warns when the layer model
 #: its modes define misses the operator by more than this, in units of the cluster's own scale
 #: ``max(1, |w|)`` and scaled by ``eps / eps64``: ``||(A W_c - W Q^2[:, c]) W^-1[c, :]||_2``,
 #: ``c`` the cluster's columns. Two pairs a few 1e-8 .. 2e-6 apart -- exceptional points that
@@ -353,7 +359,8 @@ _IMPRECISE_2D = (
 
 def _crowded_pairs_imprecise(xp, w, A, W, Q, a, b, mask, k0_d=None):
     """Eagerly, whether a cluster holding two or more rebuilt pairs has a backward error above
-    :data:`_EP_BACKWARD`; ``None`` under an abstract trace.
+    :data:`_EP_BACKWARD`; ``None`` under an abstract trace. ``layer_modes_2d`` hands it only the
+    pairs outside the jointly rebuilt clusters.
 
     ``(W, Q, a, b, mask)`` is :func:`_rebuild_defective_pairs`' answer for the product operator
     ``A``, with ``Q`` the ``2n x 2n`` matrix ``diag(q) + tau``. A cluster is a connected set of
@@ -485,7 +492,274 @@ def _one_hot(xp, n2, index, mask, dtype, dev):
     return xp.astype((idx[:, None] == index[None, :]) & mask[None, :], dtype)
 
 
-def _rebuild_defective_pairs(xp, A, Omega_R, W, V, q, w, pairs):
+#: The most modes one defective cluster may hold for the joint rebuild
+#: (:func:`_defective_clusters`): two exceptional-point pairs at or near one coincidence, or a
+#: pair and the unpaired root beside it. Static, so that every traced slot has one shape.
+_EP_CLUSTER_SIZE = 4
+
+
+def _gather_pairs(xp, M, rows, cols):
+    """``M[rows, cols]`` entry by entry (``rows`` and ``cols`` broadcast), by one flat take."""
+    rows, cols = xp.broadcast_arrays(rows, cols)
+    flat = xp.take(xp.reshape(M, (-1,)), xp.reshape(rows * M.shape[1] + cols, (-1,)))
+    return xp.reshape(flat, rows.shape)
+
+
+def _slot_columns(xp, W, members):
+    """``(S, n, k)``: column ``members[s, l]`` of ``W`` at ``[s, :, l]``."""
+    S, k = members.shape
+    cols = xp.take(W, xp.reshape(members, (-1,)), axis=1)
+    return xp.permute_dims(xp.reshape(cols, (W.shape[0], S, k)), (1, 0, 2))
+
+
+def _conj_t(xp, X):
+    return xp.conj(xp.matrix_transpose(X))
+
+
+def _defective_clusters(xp, w, W, q, pairs, operator, slots):
+    """The defective clusters of a 2D layer the joint rebuild takes, or ``None`` when none is.
+
+    A cluster is a ball of the product operator's eigenvalues: the modes within
+    :data:`_EP_CLUSTER` of its lowest-index member (relative to ``max(1, |w|)``, as in
+    :func:`_unresolved_defective_cluster`). It is taken when the ball is closed -- every member's
+    own ball is the same set, so no chain runs out of it -- holds three to
+    :data:`_EP_CLUSTER_SIZE` modes with roots above :data:`_EP_ROOT_FLOOR`, its unit columns are
+    nearly dependent (smallest singular value below :data:`_EP_SINE`), and its restriction
+    ``T = Q^H A Q`` departs from normality (:data:`_DEFECT_NU`). That is what ``eig`` hands back
+    where exceptional points coincide or nearly coincide -- two order rows of a y-invariant layer
+    at one x-cutoff -- and where a pair has an unpaired root within :data:`_EP_SEPARATION`, which
+    :func:`_defective_pairs` refuses. A ball of exactly three that holds one gated pair is left to
+    the pair rebuild: exact for a pair beside a root more than :data:`_EP_SEPARATION` away, not
+    for a length-3 Jordan chain (which no disjoint split represents; the unresolved screen then
+    warns). A degenerate (normal) cluster is left alone, whatever basis ``eig`` chose for it.
+
+    Returns ``(members, valid, Q0, overflow)``: ``members`` ``(S, k)`` the clusters' mode
+    indices, nearest the seed first; ``valid`` which lanes are members (a three-mode cluster pads
+    its last lane, and under a trace a slot nothing took is all padding); ``Q0`` ``(S, n2, k)`` an
+    orthonormal basis of each cluster's unit columns (zero-padded before the QR); and, under an
+    abstract trace, whether more clusters qualified than the ``slots`` held (``None`` eagerly).
+    ``operator()`` builds the product operator, only when a candidate needs it.
+
+    Read through :func:`~wavebit._common.backend._concrete`, as :func:`_defective_pairs` is.
+    Eagerly the answer is exactly the qualifying clusters, and a layer with none returns ``None``
+    after an ``O(n2**2)`` look at the eigenvalues; under an abstract trace there is nothing to
+    read, so ``max(1, min(slots, n2 // 3))`` slots come back, the qualifying balls with the
+    smallest singular values, with their masks as data. The defect measure is read only on the
+    slots, so a degenerate ball whose ``eig`` basis is nearly dependent counts toward the
+    overflow too: a trace can return NaN for a layer whose eager solve takes no cluster.
+    """
+    n2 = w.shape[0]
+    k = min(_EP_CLUSTER_SIZE, n2)
+    dev = getattr(W, 'device', None)
+    idx = xp.arange(n2, device=dev)
+    scale = xp.maximum(xp.ones_like(xp.abs(w)), xp.abs(w))
+    d = xp.abs(w[:, None] - w[None, :])
+    near = d <= _EP_CLUSTER * xp.maximum(scale[:, None], scale[None, :])
+    count = xp.sum(xp.astype(near, xp.int32), axis=1)
+    lower = xp.any(near & (idx[None, :] < idx[:, None]), axis=1)
+    seed = (count >= 3) & (count <= k) & ~lower
+    any_seed = _concrete(xp.any(seed))
+    if any_seed is False:
+        return None
+    # Eagerly only the seeds' rows are read; under a trace every row, masked by `seed`.
+    rows = xp.nonzero(seed)[0] if any_seed else idx
+    m = rows.shape[0]
+    near_r = xp.take(near, rows, axis=0)
+    key = xp.where(near_r, xp.take(d, rows, axis=0), xp.full(near_r.shape, float('inf'),
+                                                               dtype=d.dtype, device=dev))
+    # The ball's members first, nearest first, ties by index: k argmin passes. A pass that finds
+    # no member left is a padded lane (its index is whatever argmin returns over infinities).
+    picks, found = [], []
+    for _ in range(k):
+        j = xp.argmin(key, axis=1)
+        picks.append(j)
+        found.append(xp.isfinite(xp.min(key, axis=1)))
+        key = xp.where(idx[None, :] == j[:, None], xp.full_like(key, float('inf')), key)
+    del key, near_r
+    nbr = xp.stack(picks, axis=1)                                         # (m, k)
+    valid = xp.stack(found, axis=1)
+    vv = valid[:, :, None] & valid[:, None, :]
+    clique = xp.all(~vv | _gather_pairs(xp, near, nbr[:, :, None], nbr[:, None, :]), axis=(1, 2))
+    count_r = xp.take(count, rows)
+    same_ball = xp.all(~valid | (xp.reshape(xp.take(count, xp.reshape(nbr, (-1,))), nbr.shape)
+                                 == count_r[:, None]), axis=1)
+    qabs = xp.reshape(xp.abs(xp.take(q, xp.reshape(nbr, (-1,)))), nbr.shape)
+    floor_ok = xp.all(~valid | (qabs > _EP_ROOT_FLOOR), axis=1)
+    # The Gram matrix of the ball's unit columns, entry by entry: two n2-column gathers alive at
+    # a time, the pair gate's peak. Padded lanes read the identity.
+    Wn = W / xp.linalg.vector_norm(W, axis=0)[None, :]
+    C = W.dtype
+    lane = xp.arange(k, device=dev)
+    eye_k = xp.astype(lane[:, None] == lane[None, :], C)
+    G = xp.broadcast_to(eye_k[None], (m, k, k))
+    for i in range(k):
+        Wi = xp.conj(xp.take(Wn, nbr[:, i], axis=1))
+        for j in range(i + 1, k):
+            g = xp.sum(Wi * xp.take(Wn, nbr[:, j], axis=1), axis=0)
+            Eij = xp.astype((lane[:, None] == i) & (lane[None, :] == j), C)
+            G = G + g[:, None, None] * Eij[None] + xp.conj(g)[:, None, None] * xp.matrix_transpose(Eij)[None]
+        del Wi
+    G = xp.where(vv, G, eye_k[None])
+    # Rounding can leave a rank-deficient Gram's smallest eigenvalue below zero.
+    low = xp.linalg.eigvalsh(G)[:, 0]
+    sigma = xp.sqrt(xp.maximum(low, xp.zeros_like(low)))
+    if pairs is not None:
+        a, b, mask = pairs[:3]
+        in_pair = xp.any(((idx[:, None] == a[None, :]) | (idx[:, None] == b[None, :]))
+                         & mask[None, :], axis=1)
+    else:
+        in_pair = xp.zeros(n2, dtype=xp.bool, device=dev)
+    held = xp.sum(xp.astype(valid & xp.reshape(xp.take(in_pair, xp.reshape(nbr, (-1,))),
+                                               nbr.shape), xp.int32), axis=1)
+    lone_pair = (count_r == 3) & (held == 2)
+    cand = (xp.take(seed, rows) & clique & same_ball & floor_ok & (sigma < _EP_SINE)
+            & ~lone_pair)
+    decided = _concrete(xp.any(cand))
+    if decided is False:
+        return None
+    overflow = None
+    if decided:
+        sel = xp.nonzero(cand)[0]
+        live = xp.ones(sel.shape, dtype=xp.bool, device=dev)
+    else:
+        S = max(1, min(slots, n2 // 3))
+        order = xp.argsort(xp.where(cand, sigma, xp.full_like(sigma, float('inf'))), stable=True)
+        sel = order[:S]
+        live = xp.take(cand, sel)
+        overflow = xp.sum(xp.astype(cand, xp.int32)) > S
+    members = xp.take(nbr, sel, axis=0)
+    mvalid = xp.take(valid, sel, axis=0) & live[:, None]
+    # The restriction's departure from normality, as the unresolved screen reads it.
+    A = operator()
+    cols = _slot_columns(xp, Wn, members)
+    Q0, _ = xp.linalg.qr(xp.where(mvalid[:, None, :], cols, xp.zeros_like(cols)))
+    T = _conj_t(xp, Q0) @ (A @ Q0)
+    T = xp.where(mvalid[:, :, None] & mvalid[:, None, :], T, xp.zeros_like(T))
+    nv = xp.sum(xp.astype(mvalid, C), axis=1)
+    lam = xp.sum(xp.linalg.diagonal(T), axis=1) / xp.where(nv != 0, nv, xp.ones_like(nv))
+    TH = _conj_t(xp, T)
+    nu = (xp.linalg.matrix_norm(T @ TH - TH @ T)
+          / xp.maximum(xp.ones_like(xp.abs(lam)), xp.abs(lam)) ** 2)
+    eps = float(xp.finfo(xp.real(T).dtype).eps) / 2.220446049250313e-16
+    engaged = live & (nu > _DEFECT_NU * eps * eps)
+    if decided:
+        if not _concrete(xp.any(engaged)):
+            return None
+        keep = xp.nonzero(engaged)[0]
+        return (xp.take(members, keep, axis=0), xp.take(mvalid, keep, axis=0),
+                xp.take(Q0, keep, axis=0), None)
+    return members, mvalid & engaged[:, None], Q0, overflow
+
+
+def _split_candidates(k):
+    """Every nonempty proper subset ``J`` of ``k`` lanes, grouped by size: for each size ``j``
+    the ``(nc, j)`` lanes of ``J``, the ``(nc, k - j)`` lanes of its complement (ascending), the
+    ``(nc, k)`` mask of ``J``, and the ``(nc, k)`` lane order of ``[J | K]``."""
+    import itertools
+
+    import numpy as np
+    groups = []
+    for j in range(1, k):
+        combos = list(itertools.combinations(range(k), j))
+        rest = [[x for x in range(k) if x not in J] for J in combos]
+        mask = np.zeros((len(combos), k), dtype=bool)
+        for c, J in enumerate(combos):
+            mask[c, list(J)] = True
+        order = np.array([list(J) + rest[c] for c, J in enumerate(combos)])
+        groups.append((j, np.array(combos), np.array(rest), mask, order))
+    return groups
+
+
+def _dead_last(xp, lam, E, mu, dead):
+    """Eigenpairs with the one nearest ``mu`` moved to the last position where ``dead``.
+
+    A padded lane is decoupled at the stand-in eigenvalue ``mu``; ``eig`` returns its pair in no
+    promised position, so it is put back on its lane explicitly, by a one-hot permutation.
+    """
+    k = lam.shape[-1]
+    dev = getattr(lam, 'device', None)
+    ar = xp.arange(k, device=dev)
+    pd = xp.argmin(xp.abs(lam - mu[..., None]), axis=-1)
+    src = xp.where(ar == k - 1, pd[..., None], xp.where(ar == pd[..., None], k - 1, ar))
+    src = xp.where(dead[..., None], src, xp.broadcast_to(ar, src.shape))
+    P = xp.astype(ar[:, None] == src[..., None, :], E.dtype)        # P[p, l]: l takes p
+    return xp.sum(lam[..., :, None] * P, axis=-2), E @ P
+
+
+def _cluster_split(xp, T, valid, pad):
+    """A basis ``X`` with ``X^-1 T X`` diagonal but for a block on rows ``J``, columns ``K``.
+
+    ``T`` is ``(S, k, k)``, each cluster's restriction with its padded lanes decoupled at the
+    stand-in ``pad``. ``J`` ranges over every nonempty proper subset of ``eig(T)``'s unit
+    eigenvectors that holds only member lanes; ``K``'s columns are the eigenvectors of the
+    quotient ``C^H T C`` on the orthonormal complement ``C`` of ``span(E_J)`` (G. H. Golub and
+    C. F. Van Loan, Matrix Computations, 4th ed., sections 7.1.4 and 7.6). Then
+    ``X = [E_J | C Y]`` puts ``T`` in the block upper-triangular form ``[[L_J, B], [0, L_K]]``,
+    whose coupling ``B`` has rows ``J`` and columns ``K`` disjoint: the form the exponential,
+    inverse and derivative rules below take exactly. Where every Jordan chain of the cluster has
+    length at most two, some ``J`` leaves no other off-diagonal entry; the split with the
+    smallest ``cond(X)`` is taken (measured at most 8.14 on the y-Littrow scenes, 12.2 on a
+    genuinely 2D one).
+
+    Returns ``(X, J, cond)``. A slot with no admissible split -- and under a trace a slot with no
+    members -- takes ``X = I`` and ``cond = inf``; every padded row and column of ``X`` is the
+    identity's, so no stand-in leaks into a member's column.
+    """
+    import numpy as np
+    S, k, _ = T.shape
+    C = T.dtype
+    dev = getattr(T, 'device', None)
+    lane = xp.arange(k, device=dev)
+    eye = xp.astype(lane[:, None] == lane[None, :], C)
+    dead = ~valid[:, k - 1]
+    vv = valid[:, :, None] & valid[:, None, :]
+    mu = pad * xp.ones(S, dtype=C, device=dev)
+    lam, E = _eig_raw(T)
+    E = E / xp.linalg.vector_norm(E, axis=-2)[..., None, :]
+    lam, E = _dead_last(xp, lam, E, mu, dead)
+    Xs, conds, oks, masks = [], [], [], []
+    for j, Jidx, Kidx, Jmask, order in _split_candidates(k):
+        nc = Jidx.shape[0]
+        Ji = xp.asarray(Jidx.reshape(-1), device=dev)
+        EJ = xp.permute_dims(xp.reshape(xp.take(E, Ji, axis=2), (S, k, nc, j)), (0, 2, 1, 3))
+        Qc, _ = xp.linalg.qr(EJ, mode='complete')
+        Cc = Qc[..., j:]
+        lq, Yq = _eig_raw(_conj_t(xp, Cc) @ T[:, None] @ Cc)
+        Yq = Yq / xp.linalg.vector_norm(Yq, axis=-2)[..., None, :]
+        # The padded lane is K's last whenever J holds only members.
+        _, Yq = _dead_last(xp, lq, Yq, mu[:, None], xp.broadcast_to(dead[:, None], (S, nc)))
+        # P[c, p, l] = 1 where position p of [J | K] is lane l: back to lane order, exactly.
+        P = xp.astype(xp.asarray(order, device=dev)[:, :, None] == lane[None, None, :], C)
+        X = xp.concat([EJ, Cc @ Yq], axis=-1) @ P[None]
+        X = X / xp.linalg.vector_norm(X, axis=-2)[..., None, :]
+        X = xp.where(vv[:, None], X, xp.broadcast_to(eye, X.shape))
+        sv = xp.linalg.svdvals(X)
+        pos = sv[..., -1] > 0
+        conds.append(xp.where(pos, sv[..., 0] / xp.where(pos, sv[..., -1], xp.ones_like(sv[..., -1])),
+                              xp.full_like(sv[..., 0], float('inf'))))
+        vJ = xp.reshape(xp.take(valid, Ji, axis=1), (S, nc, j))
+        vK = xp.reshape(xp.take(valid, xp.asarray(Kidx.reshape(-1), device=dev), axis=1),
+                        (S, nc, k - j))
+        oks.append(xp.all(vJ, axis=-1) & xp.any(vK, axis=-1))
+        Xs.append(X)
+        masks.append(Jmask)
+    X = xp.concat(Xs, axis=1)                                         # (S, ncand, k, k)
+    cond = xp.concat(conds, axis=1)
+    ok = xp.concat(oks, axis=1) & xp.isfinite(cond)
+    Jm = xp.asarray(np.concatenate(masks, axis=0), device=dev)        # (ncand, k)
+    ncand = Jm.shape[0]
+    best = xp.argmin(xp.where(ok, cond, xp.full_like(cond, float('inf'))), axis=1)
+    pick = xp.arange(S, device=dev) * ncand + best
+    has = xp.any(ok, axis=1)
+    Xb = xp.take(xp.reshape(X, (S * ncand, k, k)), pick, axis=0)
+    Xb = xp.where(has[:, None, None], Xb, xp.broadcast_to(eye, Xb.shape))
+    cb = xp.take(xp.reshape(cond, (-1,)), pick)
+    cb = xp.where(has, cb, xp.full_like(cb, float('inf')))
+    J = xp.take(Jm, best, axis=0) & valid & has[:, None]
+    return Xb, J, cb
+
+
+def _rebuild_defective_pairs(xp, A, Omega_R, W, V, q, w, pairs, clusters=None):
     """Each near-defective pair of a 2D layer as an orthonormal Schur pair; values only.
 
     ``A`` is the layer's product operator ``Omega2 = Omega_L Omega_R``, ``(W, V, q)`` the modes
@@ -524,7 +798,13 @@ def _rebuild_defective_pairs(xp, A, Omega_R, W, V, q, w, pairs):
 
     Every divisor is guarded where its lane is discarded, so an unmasked lane under a trace forms
     no ``inf``; such a lane keeps the construction's columns and a zero coupling.
+
+    ``clusters`` (:func:`_defective_clusters`' answer, optional) hands the layer's defective
+    clusters to :func:`_rebuild_defective_clusters`, which rebuilds each one jointly and the pairs
+    outside them as here; without it this function is the pairs' rebuild alone.
     """
+    if clusters is not None:
+        return _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters)
     a, b, mask, v, x0, overflow = pairs
     n2 = W.shape[0]
     C = W.dtype
@@ -600,8 +880,292 @@ def _rebuild_defective_pairs(xp, A, Omega_R, W, V, q, w, pairs):
     return W, V, Q, a, b, mask
 
 
+#: The joint rebuild's check (:func:`_rebuild_defective_clusters`) reads the corrected
+#: subspace's residual ``||A Q1 - Q1 T||_F`` against the larger of :data:`_EP_BACKWARD` at the
+#: cluster's scale and this many units of ``eps ||A||_F``, the rounding a product with ``A``
+#: leaves: the residual grows with the truncation through the evanescent orders while the
+#: misses that matter do not.
+_EP_RESIDUAL = 8.0
+
+_JOINT_IMPRECISE_2D = (
+    'a 2D layer holds a defective cluster of exceptional points (such as two order rows of a '
+    'y-invariant layer at or near the same x-cutoff) whose joint rebuild failed its own check: '
+    'the rebuilt modes miss the layer operator by more than rounding, and the answer can be '
+    'inaccurate. Move the angle or wavelength by more than a relative 1e-4 to check it.')
+
+
+def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
+    """:func:`_rebuild_defective_pairs` for a layer holding defective clusters; values only.
+
+    ``clusters`` is :func:`_defective_clusters`' answer. Each cluster is rebuilt jointly, and
+    every pair outside the clusters as :func:`_rebuild_defective_pairs` rebuilds it; a pair inside
+    a cluster is switched off. Returns ``(W, V, Q, a, b, mask)`` in that function's shape, with
+    ``(a, b, mask)`` an *entry list*: one lane per nonzero off-diagonal entry of ``Q``,
+    ``Q[a_e, b_e]``, every entry listed once -- a pair's one entry, a cluster's block on its
+    rows ``J`` and columns ``K``. The coupled rows and columns stay disjoint, so the exponential,
+    the inverse and the derivative rules (:func:`_pair_sylvester`, :func:`_pair_inverse`), which
+    sum over lanes, take it exactly as they take the pairs. Eagerly the list holds exactly the
+    entries; under a trace every slot's ``k x k`` lanes, masked.
+
+    **The subspace.** One Newton step for each cluster's invariant subspace, as for a pair
+    (Stewart 1973; Demmel 1986), in the basis ``W0`` with every pair and every cluster
+    orthonormalised. A cluster's restriction ``M_c = Q0^H A Q0`` is a dense ``k x k`` block, so
+    its rows in another mode's correction solve ``k x k`` systems instead of dividing by a gap:
+    a plain row ``y (lambda_i - M_c) = -g_i``, a pair's two rows the triangular Sylvester system
+    with that pair's ``M``, another cluster's rows the Kronecker form of ``M_r Y - Y M_s = -G``
+    (Golub and Van Loan, section 7.6.3), and the cluster's own rows zero. Two clusters, or a
+    cluster and a pair, are at least :data:`_EP_CLUSTER` apart -- a cluster's ball is closed --
+    so these systems are nonsingular; inside a cluster nothing is divided at all. The blocks are
+    not normal, so near that distance the one Newton step leaves a remainder of second order
+    over the gap, which the check below may read as a miss.
+
+    **The modes.** With ``Q1`` the corrected orthonormal basis and ``T = Q1^H A Q1``,
+    :func:`_cluster_split` gives ``X`` with ``X^-1 T X = L + B``: ``L`` diagonal and ``B`` on rows
+    ``J``, columns ``K``, disjoint. Then ``q = diag(r) + B / (r_j + r_k)`` on ``J x K`` is the
+    exact square root of ``L + B`` (``B**2 = 0``), every ``r = sqrt(L)`` taken on the side of
+    the cluster member whose label decays most, as a pair's roots are. ``W = Q1 X`` and
+    ``V = Omega_R W q^-1`` satisfy both first-order relations to the rounding of the split.
+
+    **The check.** The corrected subspace's residual ``||A Q1 - Q1 T||_F`` (against
+    :data:`_EP_RESIDUAL`) and the part of ``X^-1 T X`` the split drops, times ``cond(X)``,
+    must stay below :data:`_EP_BACKWARD` at the cluster's scale. A start ``eig`` collapsed
+    (a nearly rank-one basis for the cluster, beyond one Newton step) or a Jordan chain of length
+    three (no disjoint split exists) fails it: eagerly an :class:`ExceptionalPointWarning`,
+    under a trace a NaN answer, as an overflow of the trace's slots is.
+    """
+    members, cvalid, Q0, c_over = clusters
+    n2 = W.shape[0]
+    C = W.dtype
+    dev = getattr(W, 'device', None)
+    idx = xp.arange(n2, device=dev)
+    S, k = members.shape
+    one = xp.ones_like
+    lane = xp.arange(k, device=dev)
+    eyek = xp.astype(lane[:, None] == lane[None, :], C)
+    mflat = xp.reshape(members, (-1,))
+    Oc = (idx[:, None] == mflat[None, :]) & xp.reshape(cvalid, (-1,))[None, :]   # (n2, S k)
+    is_c = xp.any(Oc, axis=1)
+    pc = xp.argmax(xp.astype(Oc, xp.int32), axis=1)                    # a member's flat lane
+    slot_of = pc // k
+    if pairs is not None:
+        a, b, mask, v, x0, p_over = pairs
+    else:
+        # One discarded pair lane, so that the pairs' arithmetic keeps its shapes.
+        a = b = xp.zeros(1, dtype=idx.dtype, device=dev)
+        mask = xp.zeros(1, dtype=xp.bool, device=dev)
+        e01 = xp.astype(xp.eye(n2, 2, device=dev), C)
+        v, x0 = e01[:, :1], e01[:, 1:]
+        p_over = None
+    pmask = mask & ~xp.take(is_c, a) & ~xp.take(is_c, b)
+    npair = a.shape[0]
+    Oa = _one_hot(xp, n2, a, pmask, C, dev)
+    Ob = _one_hot(xp, n2, b, pmask, C, dev)
+    is_a = xp.any(Oa != 0, axis=1)
+    is_b = xp.any(Ob != 0, axis=1)
+    pa = xp.argmax(xp.astype(Oa != 0, xp.int32), axis=1)
+    pb = xp.argmax(xp.astype(Ob != 0, xp.int32), axis=1)
+
+    def place(col_a, col_b, base):
+        return xp.where(is_a[None, :], xp.take(col_a, pa, axis=1),
+                        xp.where(is_b[None, :], xp.take(col_b, pb, axis=1), base))
+
+    def place_c(cols, base):                     # (S, n, k) -> the members' columns
+        flat = xp.reshape(xp.permute_dims(cols, (1, 0, 2)), (cols.shape[1], S * k))
+        return xp.where(is_c[None, :], xp.take(flat, pc, axis=1), base)
+
+    vv = cvalid[:, :, None] & cvalid[:, None, :]
+    # A stand-in eigenvalue for padded lanes, far from every mode's.
+    F = 10.0 * (1.0 + xp.max(xp.abs(w)))
+
+    def padded(M, pad):
+        return xp.where(vv, M, xp.where(eyek != 0, pad * one(M), xp.zeros_like(M)))
+
+    W0 = place_c(Q0, place(v, x0, W))
+    Av, Ax = A @ v, A @ x0
+    m00 = xp.sum(xp.conj(v) * Av, axis=0)
+    m01 = xp.sum(xp.conj(v) * Ax, axis=0)
+    m11 = xp.sum(xp.conj(x0) * Ax, axis=0)
+    R = xp.concat([Av - v * m00[None, :], Ax - v * m01[None, :] - x0 * m11[None, :]], axis=1)
+    AQ0 = A @ Q0
+    Mc = xp.where(vv, _conj_t(xp, Q0) @ AQ0, xp.zeros_like(vv, dtype=C))
+    Rc = xp.where(cvalid[:, None, :], AQ0 - Q0 @ Mc, xp.zeros_like(AQ0))
+    del AQ0
+    eye = xp.astype(xp.eye(n2, device=dev), C)
+    W0s = xp.where(xp.any(pmask) | xp.any(cvalid), W0, eye)
+    G = linear_solve(xp, W0s, R)
+    # The clusters' residual takes a solve of its own, so the pairs' solve keeps its right-hand
+    # sides: a solve's blocking, and with it its rounding, may depend on how many there are.
+    Gc = linear_solve(xp, W0s, xp.reshape(xp.permute_dims(Rc, (1, 0, 2)), (n2, S * k)))
+    del W0s, Rc
+    Ca, Cb = G[:, :npair], G[:, npair:]
+    lam = xp.where(is_a, xp.take(m00, pa), xp.where(is_b, xp.take(m11, pb), w))
+    own = ((idx[:, None] == a[None, :]) | (idx[:, None] == b[None, :]))
+    off = own | ~pmask[None, :]                  # own rows, and every row of a discarded lane
+    den0 = xp.where(off, one(Ca), lam[:, None] - m00[None, :])
+    den1 = xp.where(off, one(Ca), lam[:, None] - m11[None, :])
+    Y0 = -Ca / den0
+    Y1 = (-Cb + Y0 * m01[None, :]) / den1
+    m01_row = xp.where(is_a, xp.take(m01, pa), xp.zeros_like(w))
+    partner = xp.where(is_a, xp.take(b, pa), idx)
+    Y0 = xp.where(is_a[:, None], (-Ca - m01_row[:, None] * xp.take(Y0, partner, axis=0)) / den0, Y0)
+    Y1 = xp.where(is_a[:, None], (-Cb - m01_row[:, None] * xp.take(Y1, partner, axis=0)
+                                  + Y0 * m01[None, :]) / den1, Y1)
+    # A cluster's rows in a pair's correction: M_c Y - Y M_p = -C there, M_p the pair's
+    # upper-triangular restriction -- two k x k solves per pair and cluster.
+    Mp = padded(Mc, F)
+    rows_c = cvalid[:, :, None]
+    Ca_c = xp.reshape(xp.take(Ca, mflat, axis=0), (S, k, npair))
+    Cb_c = xp.reshape(xp.take(Cb, mflat, axis=0), (S, k, npair))
+    Ca_c = xp.where(rows_c, Ca_c, xp.zeros_like(Ca_c))
+    Cb_c = xp.where(rows_c, Cb_c, xp.zeros_like(Cb_c))
+    live_p = pmask[None, :, None, None]
+    M0 = xp.where(live_p, Mp[:, None] - m00[None, :, None, None] * eyek, eyek * one(Mp[:, None]))
+    M1 = xp.where(live_p, Mp[:, None] - m11[None, :, None, None] * eyek, eyek * one(Mp[:, None]))
+    y0c = xp.linalg.solve(M0, -xp.permute_dims(Ca_c, (0, 2, 1))[..., None])[..., 0]   # (S, P, k)
+    y1c = xp.linalg.solve(M1, (-xp.permute_dims(Cb_c, (0, 2, 1))
+                               + m01[None, :, None] * y0c)[..., None])[..., 0]
+    Y0 = xp.where(is_c[:, None], xp.take(xp.reshape(xp.permute_dims(y0c, (0, 2, 1)),
+                                                    (S * k, npair)), pc, axis=0), Y0)
+    Y1 = xp.where(is_c[:, None], xp.take(xp.reshape(xp.permute_dims(y1c, (0, 2, 1)),
+                                                    (S * k, npair)), pc, axis=0), Y1)
+    zero = xp.zeros_like(Y0)
+    Y0, Y1 = xp.where(own, zero, Y0), xp.where(own, zero, Y1)
+    # Each cluster's correction. Plain rows y_i (lambda_i - M_c) = -g_i (a pair's `a` row also
+    # takes -m01 y_b); member rows are set below.
+    Gs = xp.permute_dims(xp.reshape(Gc, (n2, S, k)), (1, 0, 2))               # (S, n2, k)
+    Mrow = lam[None, :, None, None] * eyek - padded(Mc, -F)[:, None]          # (S, n2, k, k)
+    Mrow = xp.matrix_transpose(xp.where(is_c[None, :, None, None], eyek * one(Mrow), Mrow))
+    Yc = xp.linalg.solve(Mrow, -Gs[..., None])[..., 0]
+    rhs_a = -Gs - m01_row[None, :, None] * xp.take(Yc, partner, axis=1)
+    Yc = xp.where(is_a[None, :, None], xp.linalg.solve(Mrow, rhs_a[..., None])[..., 0], Yc)
+    del Mrow, rhs_a
+    if S > 1:
+        # Another cluster's rows: M_r Y - Y M_s = -G, k*k unknowns (vec column-major), with
+        # stand-ins of opposite sign on padded lanes so that no pivot is zero.
+        Mr, Ms = padded(Mc, F), padded(Mc, -F)
+        Kt = (eyek[None, None, :, None, :, None] * Mr[:, None, None, :, None, :]
+              - xp.permute_dims(Ms, (0, 2, 1))[None, :, :, None, :, None]
+              * eyek[None, None, None, :, None, :])
+        Kt = xp.reshape(Kt, (S, S, k * k, k * k))
+        GG = xp.reshape(xp.take(Gc, mflat, axis=0), (S, k, S, k))             # [r, i, s, j]
+        rhs = -xp.reshape(xp.permute_dims(GG, (0, 2, 3, 1)), (S, S, k * k))
+        rv = xp.reshape(xp.broadcast_to(cvalid[:, None, None, :], (S, S, k, k)), (S, S, k * k))
+        same = xp.arange(S, device=dev)[:, None] == xp.arange(S, device=dev)[None, :]
+        lane2 = xp.arange(k * k, device=dev)
+        Kt = xp.where(same[:, :, None, None],
+                      xp.astype(lane2[:, None] == lane2[None, :], C) * one(Kt), Kt)
+        rhs = xp.where(rv & ~same[:, :, None], rhs, xp.zeros_like(rhs))
+        sol = xp.linalg.solve(Kt, rhs[..., None])[..., 0]
+        Yrs = xp.reshape(xp.permute_dims(xp.reshape(sol, (S, S, k, k)), (0, 3, 1, 2)),
+                         (S * k, S, k))
+        Yc = xp.where(is_c[None, :, None], xp.permute_dims(xp.take(Yrs, pc, axis=0), (1, 0, 2)),
+                      Yc)
+        del Kt, GG, rhs, sol, Yrs
+    ownc = is_c[None, :] & (slot_of[None, :] == xp.arange(S, device=dev)[:, None])
+    Yc = xp.where(ownc[:, :, None] | ~cvalid[:, None, :], xp.zeros_like(Yc), Yc)
+    # The pairs, as in _rebuild_defective_pairs.
+    v1 = v + W0 @ Y0
+    x1 = x0 + W0 @ Y1
+    v1 = v1 / xp.linalg.vector_norm(v1, axis=0)[None, :]
+    x1 = x1 - v1 * xp.sum(xp.conj(v1) * x1, axis=0)[None, :]
+    x1 = x1 / xp.linalg.vector_norm(x1, axis=0)[None, :]
+    Av1, Ax1 = A @ v1, A @ x1
+    T00 = xp.sum(xp.conj(v1) * Av1, axis=0)
+    T01 = xp.sum(xp.conj(v1) * Ax1, axis=0)
+    T11 = xp.sum(xp.conj(x1) * Ax1, axis=0)
+    ra, rb = xp.sqrt(T00), xp.sqrt(T11)
+    qa, qb = xp.take(q, a), xp.take(q, b)
+    ref = xp.where(xp.real(qa) >= xp.real(qb), qa, qb)
+    alpha = xp.where(xp.real(xp.conj(ref) * ra) >= 0, ra, -ra)
+    beta = xp.where(xp.real(xp.conj(ref) * rb) >= 0, rb, -rb)
+    alpha = xp.where(pmask, alpha, one(alpha))
+    beta = xp.where(pmask, beta, one(beta))
+    t = xp.where(pmask, T01 / (alpha + beta), xp.zeros_like(T01))
+    Va = (Omega_R @ v1) / alpha[None, :]
+    Vb = (Omega_R @ x1 - Va * t[None, :]) / beta[None, :]
+    # The clusters: the corrected bases, their restrictions, the disjoint split.
+    Q1, _ = xp.linalg.qr(Q0 + W0 @ Yc)
+    Q1 = xp.where(cvalid[:, None, :], Q1, Q0)
+    del W0, Yc
+    AQ1 = A @ Q1
+    T = xp.where(vv, _conj_t(xp, Q1) @ AQ1, xp.zeros_like(vv, dtype=C))
+    res1 = xp.linalg.matrix_norm(xp.where(cvalid[:, None, :], AQ1 - Q1 @ T, xp.zeros_like(AQ1)))
+    del AQ1
+    T = padded(T, F)
+    X, J, cond = _cluster_split(xp, T, cvalid, F)
+    Mx = xp.linalg.solve(X, T @ X)
+    dg = xp.linalg.diagonal(Mx)
+    JK = J[:, :, None] & (~J & cvalid)[:, None, :]
+    dropped = xp.linalg.matrix_norm(xp.where(vv & ~(JK | (eyek != 0)), Mx, xp.zeros_like(Mx)))
+    # One side for the cluster: the root nearer the label of its most decaying member.
+    qm = xp.reshape(xp.take(q, mflat), (S, k))
+    key = xp.where(cvalid, xp.real(qm), xp.full_like(xp.real(qm), -float('inf')))
+    cref = xp.sum(xp.astype(lane[None, :] == xp.argmax(key, axis=1)[:, None], C) * qm, axis=1)
+    r = xp.sqrt(dg)
+    r = xp.where(xp.real(xp.conj(cref)[:, None] * r) >= 0, r, -r)
+    r = xp.where(cvalid, r, one(r))
+    total = r[:, :, None] + r[:, None, :]
+    N = xp.where(JK, Mx / xp.where(JK, total, one(total)), xp.zeros_like(Mx))
+    Wcl = Q1 @ X
+    Dinv = 1 / r
+    Vcl = (Omega_R @ Wcl) @ (eyek * Dinv[:, None, :] - Dinv[:, :, None] * N * Dinv[:, None, :])
+    W = place_c(Wcl, place(v1, x1, W))
+    V = place_c(Vcl, place(Va, Vb, V))
+    qd = xp.where(is_a, xp.take(alpha, pa), xp.where(is_b, xp.take(beta, pb), q))
+    qd = xp.where(is_c, xp.take(xp.reshape(r, (-1,)), pc), qd)
+    Q = _diag(xp, qd) + Oa @ (t[:, None] * xp.matrix_transpose(Ob))
+    # The clusters' blocks by placement, never by a sum: Q stays exactly zero off each J x K.
+    blk = xp.arange(S * k, device=dev) // k
+    JKf = (xp.reshape(xp.broadcast_to(JK[:, :, None, :], (S, k, S, k)), (S * k, S * k))
+           & (blk[:, None] == blk[None, :]))
+    Nf = xp.reshape(xp.broadcast_to(N[:, :, None, :], (S, k, S, k)), (S * k, S * k))
+    Ocf = xp.astype(Oc, C)
+    OcT = xp.matrix_transpose(Ocf)
+    pos = (Ocf @ xp.astype(JKf, C) @ OcT) != 0
+    Q = xp.where(pos, Ocf @ xp.where(JKf, Nf, xp.zeros_like(Nf)) @ OcT, Q)
+    # The check, at each cluster's scale.
+    rdt = xp.real(dg).dtype
+    eps = float(xp.finfo(rdt).eps)
+    nvalid = xp.sum(xp.astype(cvalid, rdt), axis=1)
+    lam_c = (xp.sum(xp.where(cvalid, dg, xp.zeros_like(dg)), axis=1)
+             / xp.maximum(nvalid, xp.ones_like(nvalid)))
+    tau = (_EP_BACKWARD * (eps / 2.220446049250313e-16)
+           * xp.maximum(xp.ones_like(xp.abs(lam_c)), xp.abs(lam_c)))
+    tau_res = xp.maximum(tau, _EP_RESIDUAL * eps * xp.linalg.matrix_norm(A) * xp.ones_like(tau))
+    finite = xp.isfinite(cond)
+    bad = xp.any(cvalid, axis=1) & (~finite | (res1 > tau_res)
+                                    | (xp.where(finite, cond, xp.zeros_like(cond)) * dropped > tau))
+    if c_over is None:
+        if _concrete(xp.any(bad)):
+            import warnings
+            from wavebit._common.backend import ExceptionalPointWarning
+            warnings.warn(_JOINT_IMPRECISE_2D, ExceptionalPointWarning, stacklevel=5)
+        overflow = p_over
+    else:
+        overflow = c_over | xp.any(bad)
+        if p_over is not None:
+            overflow = overflow | p_over
+    if overflow is not None:
+        # More clusters or pairs than the trace's slots, or a failed check: loud, never silent.
+        Q = Q * xp.where(overflow, float('nan'), 1.0)
+    members = xp.astype(members, a.dtype)
+    a_e = xp.concat([a, xp.reshape(xp.broadcast_to(members[:, :, None], (S, k, k)), (-1,))])
+    b_e = xp.concat([b, xp.reshape(xp.broadcast_to(members[:, None, :], (S, k, k)), (-1,))])
+    mask_e = xp.concat([pmask, xp.reshape(JK, (-1,))])
+    if c_over is None:
+        keep = xp.nonzero(mask_e)[0]
+        a_e, b_e, mask_e = xp.take(a_e, keep), xp.take(b_e, keep), xp.take(mask_e, keep)
+    return W, V, Q, a_e, b_e, mask_e
+
+
 def _pair_coupling(xp, Q, a, b, mask):
-    """``t_p = Q[a_p, b_p]`` (zero where unmasked) and the two one-hot maps, by gathers."""
+    """``t_p = Q[a_p, b_p]`` (zero where unmasked) and the two one-hot maps, by gathers.
+
+    Here and in the two rules below, ``(a, b, mask)`` lists the coupling entry by entry: a pair's
+    one entry, or a jointly rebuilt cluster's ``J x K`` block one lane per entry
+    (:func:`_rebuild_defective_clusters`), every nonzero entry once; a row may appear in several
+    lanes, and the coupled rows and columns are disjoint. Every product below sums over lanes,
+    so it is exact for such a list."""
     n2 = Q.shape[0]
     dev = getattr(Q, 'device', None)
     Oa = _one_hot(xp, n2, a, mask, Q.dtype, dev)
@@ -614,9 +1178,10 @@ def _pair_sylvester(xp, T, S, a, b, mask):
     """``X`` with ``T X + X T = S`` for ``T = diag(t) + coupling`` on the pairs ``(a_p, b_p)``.
 
     :func:`~wavebit.rcwa._engine.solve_1d._coupled_sylvester`'s four divided-difference passes, with the
-    coupling's products taken by gathers (``O(n**2)`` per pair) rather than dense products: the
-    coupling has one entry per pair. With no coupling every pass is ``S / (t_i + t_j)``, the
-    arithmetic :func:`~wavebit.rcwa._engine.modal_gradient.generator` forms.
+    coupling's products taken by gathers (``O(n**2)`` per entry) rather than dense products: the
+    coupling has a few entries (:func:`_pair_coupling`). With no coupling every pass is
+    ``S / (t_i + t_j)``, the arithmetic :func:`~wavebit.rcwa._engine.modal_gradient.generator`
+    forms.
     """
     tv = xp.linalg.diagonal(T)
     total = tv[:, None] + tv[None, :]
@@ -669,7 +1234,7 @@ def _pair_inverse(xp, Q, a, b, mask):
     with disjoint rows and columns (``D^-1 - D^-1 N D^-1``). Its own tangent drops every term in
     which the coupling ``N`` meets an off-diagonal ``dQ``; they are added here on a zero value,
     ``M Eoff D^-1 + D^-1 Eoff M - M E M`` with ``M = D^-1 N D^-1``, ``E = Q - stop(Q)`` and
-    ``Eoff`` its off-diagonal part -- by gathers, ``M`` having one entry per pair. With no coupling
+    ``Eoff`` its off-diagonal part -- by gathers, ``M`` listed entry by entry. With no coupling
     they are zero and the arithmetic is :func:`~wavebit.rcwa._engine.modal_gradient.inverse`'s.
     """
     from wavebit.rcwa._engine.modal_gradient import _stop
@@ -795,8 +1360,9 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     evaluated by row and column scaling, including during a grazing-cluster rebuild.
 
     ``pair_cap`` bounds the number of exceptional-point pairs held under an abstract
-    trace; callers with an order grid pass its larger axis count. An overflow poisons
-    the generator with NaN. Eagerly every eligible pair is rebuilt. ``screen_k0_d`` is the
+    trace, and ``pair_cap // 2`` the defective clusters rebuilt jointly; callers with an order
+    grid pass its larger axis count. An overflow poisons the generator with NaN. Eagerly every
+    eligible pair and cluster is rebuilt. ``screen_k0_d`` is the
     optical thickness the eager screen of nearly coincident pairs reads
     (:func:`_crowded_pairs_imprecise`) and nothing else; it defaults to ``k0_d``, so SMM, which
     takes no labels from a thickness, passes it on its own. ``with_coupling``
@@ -950,39 +1516,64 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
         import math
         pair_cap = math.isqrt(W.shape[0] // 2) + 1
     pairs = _defective_pairs(xp, w, W, q, pair_cap)
+    built = []
 
     def _operator():
-        if differentiated:
-            return _stop(Omega2_LR)
-        B_, D_, Cc_, E_ = left_blocks()
-        return _block(xp, [[-Cc_, B_], [-D_, E_]]) @ Omega_R
+        # Formed once, on first need: released above to keep the eager peak, and again below.
+        if not built:
+            if differentiated:
+                built.append(_stop(Omega2_LR))
+            else:
+                B_, D_, Cc_, E_ = left_blocks()
+                built.append(_block(xp, [[-Cc_, B_], [-D_, E_]]) @ Omega_R)
+        return built[0]
 
-    def _screen(W_final, operator=_operator, rebuilt=None):
-        # Eagerly loud: coincident exceptional points the pair gate cannot see, and nearly
-        # coincident ones whose pairs one rebuild cannot separate. One warning per layer.
+    # Defective clusters of three or four modes, rebuilt jointly (`_rebuild_defective_clusters`);
+    # a trace holds `pair_cap // 2` of them, with their masks as data.
+    clusters = _defective_clusters(xp, _stop(w), _stop(W), _stop(q), pairs, _operator,
+                                   max(1, pair_cap // 2))
+
+    def _screen(W_final, operator=_operator, rebuilt=None, joint=None):
+        # Eagerly loud: defective clusters no rebuild took, and nearly coincident pairs one
+        # rebuild cannot separate. A jointly rebuilt cluster answers to its own check instead.
+        # One warning per layer.
         import warnings
         from wavebit._common.backend import ExceptionalPointWarning
-        if _unresolved_defective_cluster(xp, _stop(w), _stop(W_final), operator, _EP_SINE):
+        group = None
+        if joint is not None:
+            # Each rebuilt member in a group of its own: never in a cluster again.
+            ii = xp.arange(w.shape[0], device=getattr(W_final, 'device', None))
+            group = xp.where(joint, ii + 1, xp.zeros_like(ii))
+            a_, b_, mask_ = rebuilt[2:]
+            rebuilt = rebuilt[:2] + (a_, b_, mask_ & ~xp.take(joint, a_) & ~xp.take(joint, b_))
+        if _unresolved_defective_cluster(xp, _stop(w), _stop(W_final), operator, _EP_SINE,
+                                         group):
             warnings.warn(_UNRESOLVED_2D, ExceptionalPointWarning, stacklevel=4)
         elif rebuilt is not None and _crowded_pairs_imprecise(
                 xp, _stop(w), operator(), *(_stop(x) for x in rebuilt),
                 k0_d=k0_d if screen_k0_d is None else screen_k0_d):
             warnings.warn(_IMPRECISE_2D, ExceptionalPointWarning, stacklevel=4)
-    if pairs is None:
+    if pairs is None and clusters is None:
         _screen(W)
-    if pairs is not None:
-        if differentiated:
-            A = _stop(Omega2_LR)
-        else:
-            # Released above to keep the eager peak; formed again only for a gated layer.
-            B, D, Cc, E = left_blocks()
-            A = _block(xp, [[-Cc, B], [-D, E]]) @ Omega_R
-            del B, D, Cc, E
+        built.clear()
+    else:
+        A = _operator()
         if env is not None:
             env.Wi = None
-        W, V, Q, a, b, mask = _rebuild_defective_pairs(xp, A, _stop(Omega_R), W, V, q, w, pairs)
-        _screen(W, lambda: A, (W, Q, a, b, mask))
+        if clusters is None:
+            W, V, Q, a, b, mask = _rebuild_defective_pairs(xp, A, _stop(Omega_R), W, V, q, w,
+                                                           pairs)
+            joint = None
+        else:
+            W, V, Q, a, b, mask = _rebuild_defective_pairs(
+                xp, A, _stop(Omega_R), _stop(W), _stop(V), _stop(q), _stop(w), pairs,
+                clusters=clusters)
+            ii = xp.arange(w.shape[0], device=getattr(W, 'device', None))
+            joint = xp.any((ii[:, None] == xp.reshape(clusters[0], (-1,))[None, :])
+                           & xp.reshape(clusters[1], (-1,))[None, :], axis=1)
+        _screen(W, lambda: A, (W, Q, a, b, mask), joint)
         del A
+        built.clear()
         if differentiated:
             Q = _pair_generator(xp, Omega2_LR, W, Q, a, b, mask)
             V = Omega_R @ W @ _pair_inverse(xp, Q, a, b, mask)

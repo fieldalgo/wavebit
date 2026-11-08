@@ -395,7 +395,8 @@ def exponential(xp, q, scale, coupled=False):
                 # passed into a trace): the formula for the value, the closed-form Frechet
                 # derivative for the tangent (:func:`_jax_coupled_exponential`). An integer
                 # `coupled` is the most coupled rows (and columns) the caller can produce -- a 2D
-                # layer's pair cap (`solve_2d._rebuild_defective_pairs`) -- `True` the 1D default.
+                # layer's pair cap (`solve_2d._rebuild_defective_pairs`; a pair couples one row,
+                # a jointly rebuilt cluster its rows J) -- `True` the 1D default.
                 cap = _COUPLED_CAP if coupled is True else max(_COUPLED_CAP, int(coupled))
                 return _jax_coupled_exponential(cap)(q, scale)
         exact = _expm(xp, a, count)
@@ -489,7 +490,10 @@ def _expm(xp, a, count):
 #: At most this many coupled rows, and as many columns, in one coupled ``q`` take the closed
 #: form's higher terms (:func:`_coupled_frechet`); more gives a NaN tangent (loud), the value
 #: untouched. A rebuilt layer couples one family-1 mode per cluster pair -- every patterned
-#: point measured couples one -- and a uniform layer none (its coupling is exactly zero).
+#: point measured couples one -- and a uniform layer none (its coupling is exactly zero). A 2D
+#: layer's jointly rebuilt cluster couples its rows J to its columns K (two and two on the
+#: four-mode clusters measured, one and two on a three-mode one), counted with the layer's pairs
+#: against its integer cap.
 _COUPLED_CAP = 4
 
 #: At or below this diameter a set of points takes the Taylor series of its divided difference
@@ -771,10 +775,10 @@ def two_face(xp, q, scale, top, bottom, keep, coupled=False):
         tau = _stop(q) - eye * _stop(values)
         keep = xp.logical_and(keep, xp.logical_not(xp.any(tau != 0, axis=1)))
         if coupled == 'pairs':
-            # A 2D layer's rebuilt pairs (`solve_2d._rebuild_defective_pairs`): the coupling's
-            # columns are read off the bottom face too. Their tangent's lower entry `d_ba` is
-            # not tied to the pair's gap, as a conical cutoff pair's is (below), so a kept `b`
-            # beside its dropped `a` would divide it by that gap.
+            # A 2D layer's rebuilt pairs and clusters (`solve_2d._rebuild_defective_pairs`): the
+            # coupling's columns are read off the bottom face too. Their tangent's lower entry
+            # `d_ba` is not tied to the pair's gap, as a conical cutoff pair's is (below), so a
+            # kept `b` beside its dropped `a` would divide it by that gap.
             keep = xp.logical_and(keep, xp.logical_not(xp.any(tau != 0, axis=0)))
     e = xp.exp(xp.where(keep, scale * values, xp.zeros_like(values)))
     difference = values[:, None] - values[None, :]

@@ -1094,19 +1094,26 @@ class ExceptionalPointWarning(UserWarning):
 
     Public path: ``wavebit.rcwa.diagnostics.ExceptionalPointWarning``.
 
-    Isolated exceptional-point pairs are rebuilt in a regular basis. An eager screen of each
-    layer's final mode basis warns when it still contains a nearly dependent cluster with a
-    non-normal restriction of the layer operator. On the 2D path a second eager screen warns
-    when two or more rebuilt pairs share a cluster (exceptional points that nearly coincide)
+    Isolated exceptional-point pairs are rebuilt in a regular basis. On the 2D path, exceptional
+    points that coincide or nearly coincide form a defective cluster of three or four modes
+    (two order rows of a y-invariant layer at one x-cutoff, or a pair beside an unpaired root),
+    and the cluster is rebuilt as a whole, eagerly and under every trace; the warning fires
+    when that joint rebuild fails its own check. An eager screen of each layer's final mode
+    basis warns when it still contains a nearly dependent cluster with a non-normal restriction
+    of the layer operator: a cluster no rebuild took exactly (more than four modes, a chain of
+    nearly equal eigenvalues, a Jordan chain of length three, or any coincident cluster on the
+    first-order path). On the 2D path a
+    third eager screen warns when two or more pairs rebuilt one at a time share such a cluster
     and the rebuilt modes miss the layer operator by more than the layer's thickness and roots
-    tolerate (in a thick layer with small roots, possibly by rounding alone). Ordinary
-    diagonalizable degeneracies do not trigger either.
+    tolerate. Ordinary diagonalizable degeneracies trigger none of them.
 
     The result may be inaccurate. Detuning, ``rcwa.Numerics(detuning=...)``, does not act on
     this warning: its Rayleigh detuning ladder is too small to leave a coincident
-    exceptional-point band. The screen cannot run under an abstract trace (``jax.jit`` or
-    ``jax.vmap``), where the unresolved cluster remains silent; see
-    ``docs/theory/rcwa/rayleigh-points.md`` for the measured limits.
+    exceptional-point band. The screens cannot run under an abstract trace (``jax.jit`` or
+    ``jax.vmap``), where an untaken cluster remains silent; a failed joint rebuild there, or
+    more candidate clusters than the trace's slots (degenerate ones in a nearly dependent basis
+    counted too), returns NaN instead. See ``docs/theory/rcwa/rayleigh-points.md`` for the
+    measured limits.
     """
 
 
