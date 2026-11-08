@@ -54,11 +54,20 @@ def rotated_material(material, angle, axis):
     xp = array_namespace(*(live or arrays or [np.asarray(0.)]))
     ref = (live or arrays or [None])[0]
     dev = getattr(ref, 'device', None)
-    dtype = xp.complex64 if str(getattr(ref, 'dtype', '')) in ('float32', 'complex64', 'torch.float32', 'torch.complex64') else xp.complex128
+    # Rotate at the widest precision among the inputs: a single-precision angle
+    # (or Torch's float32 default for a Python angle) must not narrow a double material.
+    names = [str(getattr(v, 'dtype', '')) for v in arrays]
+    from wavebit.materials.models import _double_available
+    wide = _double_available(xp) and any(
+        n in ('float64', 'complex128', 'torch.float64', 'torch.complex128') for n in names)
+    single = str(getattr(ref, 'dtype', '')) in ('float32', 'complex64', 'torch.float32', 'torch.complex64')
+    dtype = xp.complex64 if single and not wide else xp.complex128
     a = as_array(xp, angle, device=dev)
     if a.ndim != 0 or xp.isdtype(a.dtype, 'complex floating'):
         raise ValueError('rotation angle must be a real scalar in radians')
-    a = xp.astype(a, xp.float32 if dtype == xp.complex64 else xp.float64)
+    real = xp.float32 if dtype == xp.complex64 else xp.float64
+    # Convert the original angle, not its float32 copy, so a Python float keeps its digits.
+    a = xp.astype(a, real) if hasattr(angle, 'dtype') else as_array(xp, angle, dtype=real, device=dev)
     if _concrete(xp.isfinite(a)) is False:
         raise ValueError('rotation angle must be finite')
     c, s = xp.cos(a), xp.sin(a)

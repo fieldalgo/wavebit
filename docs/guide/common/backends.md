@@ -53,7 +53,11 @@ the same recursion; `smm` also exposes both scattering ports. A compensated norm
 residual reduces the phase error accumulated across long layers. This applies to JAX material
 transformations and PyTorch material gradients. Concrete eager solves keep their existing path. A double-precision material response
 also retains its precision when a Python wavelength would otherwise select a single-precision
-PyTorch intermediate; this prevents overflow of large, finite material cotangents.
+PyTorch intermediate; this prevents overflow of large, finite material cotangents. The angular
+frequency of a conductive or dispersive model, and the rotation of a tensor material, are formed
+at the widest precision among the material's own backend arrays and the wavelength or angle: a
+Python wavelength or a single-precision angle beside double-precision PyTorch parameters is
+converted in double precision, so the result agrees with the NumPy evaluation to rounding.
 
 The direct interface uses material differences before rounding can turn zero contrast into
 a fictitious reflection. Tests cover the 20 um complex-angle slab with independent layer
