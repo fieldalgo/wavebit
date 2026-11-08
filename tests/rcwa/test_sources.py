@@ -204,3 +204,66 @@ def test_emission_balance_with_tensor_host_and_patterned_neighbor():
     flux = .5*np.real(f[..., 0]*f[..., 4].conj()-f[..., 1]*f[..., 3].conj()).mean(axis=(1, 2))
     np.testing.assert_allclose(flux[1]-flux[0], r.power.outgoing_top+r.power.outgoing_bottom,
                                rtol=2e-8, atol=1e-10)
+
+
+def _outgoing(result, x=(.13, -.4), y=(-.07, .3)):
+    return np.concatenate([host(result.boundary_fields(side, list(x), list(y), part='outgoing')).ravel()
+                           for side in ('top', 'bottom')])
+
+
+@pytest.mark.parametrize('lattice,shift', [
+    (None, (1, 0)), (None, (3, 0)), (None, (-2, 1)),
+    (((2.3, 0.), (.7, 2.5)), (1, 0)), (((2.3, 0.), (.7, 2.5)), (2, -3))])
+def test_dipole_bloch_k_and_a_reciprocal_shift_are_one_source(lattice, shift):
+    """exp(i k.R) = exp(i (k+G).R) on every lattice translation R, so bloch_k and bloch_k + G
+    describe one periodic dipole array and must radiate the same fields. Its order window was
+    centred on bloch_k as written: one G away the fields were off by 62 %, three by 181 %."""
+    options = vacuum(structure=[dict(background=4., shapes=[]), dict(background=1.7, shapes=[])],
+                     thickness=[.43, .35], bot=2.25, answers='amplitude', length_unit=1e-6)
+    if lattice is not None:
+        options.pop('period')
+        options['lattice'] = np.array(lattice).T
+    columns = options.get('lattice', np.diag(options.get('period', (2.3, 2.7))))
+    reciprocal = 2*np.pi*np.linalg.inv(np.asarray(columns, float)).T
+    source = _legacy_wavebit_ElectricDipole(position=(.1, -.07, .2), moment=(1e-29, .2e-29j, .3e-29),
+                                            bloch_k=(.2, .1))
+    shifted = replace(source, bloch_k=tuple(np.array([.2, .1]) + reciprocal @ np.array(shift)))
+    a, b = (_legacy_wavebit_rcwa(**options, excitation=s).solve(power_region='infinite')
+            for s in (source, shifted))
+    expected = _outgoing(a)
+    np.testing.assert_allclose(_outgoing(b), expected, rtol=0, atol=1e-13*np.max(np.abs(expected)))
+    for name in ('outgoing_top', 'outgoing_bottom'):
+        np.testing.assert_allclose(getattr(b.power, name), getattr(a.power, name), rtol=1e-13)
+
+
+def test_dipole_bloch_k_outside_the_retained_orders_still_radiates():
+    """Only the zone orders propagate here. With bloch_k three reciprocal vectors out and one
+    retained order each side, every retained order was evanescent: 6.6e-18 for 0.156."""
+    options = vacuum(wavelength=1.5, structure=[dict(background=4., shapes=[])], thickness=[.5],
+                     answers='amplitude', length_unit=1e-6)
+    source = _legacy_wavebit_ElectricDipole(position=(.1, -.07, .2), moment=(1e-29, .2e-29j, .3e-29),
+                                            bloch_k=(.2 + 3*2*np.pi/2.3, .1))
+    far = _legacy_wavebit_rcwa(**options, excitation=source).solve(power_region='infinite')
+    near = _legacy_wavebit_rcwa(**options, excitation=replace(source, bloch_k=(.2, .1))).solve(
+        power_region='infinite')
+    assert host(near.power.outgoing_top) > .1
+    for name in ('outgoing_top', 'outgoing_bottom'):
+        np.testing.assert_allclose(getattr(far.power, name), getattr(near.power, name), rtol=1e-13)
+
+
+@pytest.mark.parametrize('order', [1, 2])
+def test_dipole_one_reciprocal_vector_away_superposes_with_a_plane_wave(order):
+    """A plane wave at q and a dipole at q + G share one Bloch sector. Run together they must
+    give the sum of their separate runs: before, the dipole's own run centred its orders on
+    q + G and the joint run on q, and the sum was off by 61 % (orders 1) and 36 % (orders 2)."""
+    options = vacuum(structure=[dict(background=4., shapes=[]), dict(background=1.7, shapes=[])],
+                     thickness=[.43, .35], bot=2.25, truncation_order=(order, order),
+                     answers='amplitude', length_unit=1e-6)
+    dipole = _legacy_wavebit_ElectricDipole(position=(.1, -.07, .2), moment=(1e-29, .2e-29j, .3e-29),
+                                            bloch_k=(.2 + 2*np.pi/2.3, .1))
+    plane = _legacy_wavebit_PlaneWave(side='bottom', kx=.2, ky=.1, amplitude=.7j)
+    joint, alone, lit = (_legacy_wavebit_rcwa(**options, excitation=e).solve(power_region='infinite')
+                         for e in ([dipole, plane], dipole, plane))
+    assert joint.group_count == 1
+    expected = _outgoing(alone) + _outgoing(lit)
+    np.testing.assert_allclose(_outgoing(joint), expected, rtol=0, atol=1e-13*np.max(np.abs(expected)))
