@@ -137,6 +137,17 @@ Both connecting algorithms share the same eigenmodes and boundary conventions an
 the only one that returns `result.scattering`, requested with `rcwa.Outputs(scattering=True)`. See
 [`../connecting-algorithms.md`](../../theory/rcwa/connecting-algorithms.md).
 
+One layer is refused by SMM at check: a layer whose in-plane permittivity has magnitude below
+the square root of the run's machine epsilon everywhere (1.5e-8 in double precision, 3.5e-4 in
+single), when a plane wave's in-plane wavevector has a y component or a source is not a plane
+wave. SMM inverts the layer's magnetic modes, whose p columns are of order `eps` there, so with
+s and p mixed it loses about `1/|eps|` of relative accuracy: a uniform layer of `eps = 1e-13` at
+`theta = 0.3`, `phi = 0.4` gave `R + T - 1 = -1.1e-6`, and `eps = 1e-16` gave `+0.09`. The issue
+code is `rcwa.near_zero_permittivity_smm`. Use `algorithm="etm"` for such a layer: in double
+precision it conserved energy to 4e-16 down to `eps = 1e-16`, and its `R` approaches the
+`eps -> 0` limit linearly. Without a y wavevector component SMM is exact and nothing is refused.
+A traced permittivity cannot be read and is not refused.
+
 ## Sampling the normal field
 
 `shape_nvf_grid_size` is the grid the normal field is read off, per axis, and it is the one number here

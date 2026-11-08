@@ -105,6 +105,7 @@ def _resolve(problem, numerics, execution):
     solvers = []
     with execution._scope():
         for wavelength in _adapt.wavelengths(problem):
+            _adapt.refuse_near_zero_smm_layers(problem, numerics, execution, wavelength)
             solver = _adapt.build_solver(problem, numerics, execution, wavelength)
             scene = _engine_scene(solver)
             if numerics.topology_check == 'host' and (
