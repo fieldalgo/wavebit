@@ -70,6 +70,7 @@ import warnings
 
 import numpy as np
 
+from wavebit._common.conventions import snap_to_cell_boundary
 from wavebit.fdtd.diagnostics import AbsorberProximityWarning
 from wavebit.fdtd.diagnostics import CoarseMeshWarning
 from wavebit.fdtd.diagnostics import PMLStabilityWarning
@@ -1280,7 +1281,7 @@ def _snapped_mirror(shape, grid, a, side):
         return None
     n, dx, low = grid.n[a], grid.dx, grid.low[a]
     alpha, beta = (lo - low) / dx, (hi - low) / dx
-    k0, k1 = int(round(alpha)), int(round(beta))
+    k0, k1 = snap_to_cell_boundary(lo, low, dx), snap_to_cell_boundary(hi, low, dx)
     slack = 0.5 * (1.0 + 1e-9)
     if side == '-':
         if k0 >= 0:
@@ -1419,8 +1420,8 @@ def check_seams(scene, grid):
             if span is None:
                 continue
             n = grid.n[a]
-            k0 = int(round((span[0] - grid.low[a]) / grid.dx))
-            k1 = int(round((span[1] - grid.low[a]) / grid.dx))
+            k0 = snap_to_cell_boundary(span[0], grid.low[a], grid.dx)
+            k1 = snap_to_cell_boundary(span[1], grid.low[a], grid.dx)
             if (k0 < 0 or k1 > n) and not (k0 <= 0 and k1 >= n):
                 lost = (max(0, -k0) + max(0, k1 - n)) / (k1 - k0)
                 raise ValueError(

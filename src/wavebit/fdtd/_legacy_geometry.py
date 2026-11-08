@@ -32,9 +32,13 @@ surprise.
 
 The snapping rule, written once: with the grid's low corner ``lo`` and cell size ``dx``,
 
-    k0 = round((z_lo - lo) / dx),   k1 = round((z_hi - lo) / dx)
+    k0 = snap(z_lo),   k1 = snap(z_hi),   snap(z) = floor((z - lo) / dx + 1/2 + 1e-9)
 
-clipped to ``[0, n]``, and the structure occupies cells ``k0 .. k1 - 1``. A slab whose two
+clipped to ``[0, n]``, and the structure occupies cells ``k0 .. k1 - 1``. That is the nearest
+boundary, and a face exactly half way (to 1e-9 of a cell, so representation error does not
+choose) goes to the higher one -- one rule, unchanged by shifting ``lo`` by whole cells, so the
+PML cells added outside the physical domain and the length unit do not move a face
+(``wavebit._common.conventions.snap_to_cell_boundary``). A slab whose two
 boundaries snap to the same cell boundary is refused: it asked for a layer and would have
 got nothing, which is the one snapping outcome a reader cannot see in a result.
 
@@ -85,6 +89,7 @@ static, it is in the skeleton, and a traced leaf on a structure that asked for t
 from wavebit._common.backend import eager_under_torch_compile as _eager_under_torch_compile
 import math
 
+from wavebit._common.conventions import snap_to_cell_boundary
 from wavebit._common.declarations import spec
 from wavebit._common.declarations import static_float
 from wavebit._common.declarations import torch_carried
@@ -324,8 +329,8 @@ class Slab(Shape):
         """``(k0, k1)``: the half-open range of cell indices along :attr:`axis`, snapped."""
         a = AXES.index(self.axis)
         lo, hi = self.span
-        k0 = int(round((lo - grid.low[a]) / grid.dx))
-        k1 = int(round((hi - grid.low[a]) / grid.dx))
+        k0 = snap_to_cell_boundary(lo, grid.low[a], grid.dx)
+        k1 = snap_to_cell_boundary(hi, grid.low[a], grid.dx)
         k0 = min(max(k0, 0), grid.n[a])
         k1 = min(max(k1, 0), grid.n[a])
         if k1 <= k0:
@@ -607,7 +612,7 @@ class Region(Shape):
     **As a structure it is cell-snapped exactly like** :class:`Slab`, on every axis at once:
     each face lands on the nearest cell boundary,
 
-        i0 = round((x_lo - x_low) / dx),   i1 = round((x_hi - x_low) / dx)
+        i0 = snap(x_lo),   i1 = snap(x_hi)      (``Slab``'s rule: nearest, half cells up)
 
     clipped to ``[0, n]``, and the cells ``i0 .. i1 - 1`` (times the same on y and z) carry the
     material -- every component of them, with no subpixel averaging -- and **the edges are
@@ -647,8 +652,8 @@ class Region(Shape):
         out = []
         for a, axis in enumerate(AXES):
             lo, hi = self.low[a], self.high[a]
-            k0 = min(max(int(round((lo - grid.low[a]) / grid.dx)), 0), grid.n[a])
-            k1 = min(max(int(round((hi - grid.low[a]) / grid.dx)), 0), grid.n[a])
+            k0 = min(max(snap_to_cell_boundary(lo, grid.low[a], grid.dx), 0), grid.n[a])
+            k1 = min(max(snap_to_cell_boundary(hi, grid.low[a], grid.dx), 0), grid.n[a])
             if k1 <= k0:
                 snapped = (grid.low[a] + k0 * grid.dx, grid.low[a] + k1 * grid.dx)
                 raise ValueError(
