@@ -36,6 +36,8 @@ the average of the two H planes is the right pairing (the flux then closes exact
     a Flux / Diffraction plane or a Flux / FarField box that cuts a      _clear_of_sources, here
       Dipole's stamp, lies on (or a box around) a PlaneWave's sheet, or
       (Flux, Diffraction) cuts or lies on a TFSF surface
+    a FarField box that does not enclose a Dipole's stamp with one cell  _clear_of_sources, here
+      to spare (``monitor.source_outside``)
 
 **Why a flux surface must keep off every source.** The 2-cell face pairs E on the node plane
 with the mean of the two H half planes either side, so it reads one cell of the grid on each
@@ -437,12 +439,14 @@ def _nodes_text(lo, hi):
     return ', '.join(f'{AXES[a]} {lo[a]:g}..{hi[a]:g}' for a in range(3))
 
 
-def _clear_of_sources(where, scene, grid, lo, hi, closed, tfsf=True):
+def _clear_of_sources(where, scene, grid, lo, hi, closed, tfsf=True, enclose=None):
     """Refuse a flux surface (node ranges ``lo..hi`` per axis) that reads a source's cells.
 
     ``closed`` is a box (six faces; it may enclose a source) against a plane (one face; it must
-    stay clear). Positions are in cells from the grid's low corner: a node is an integer, a
-    half cell ``i + 1/2``. The module docstring gives the measurements behind each refusal.
+    stay clear). ``enclose``, a far-field monitor's name, also refuses a dipole the box keeps
+    clear of: the transform radiates only what the box encloses. Positions are in cells from
+    the grid's low corner: a node is an integer, a half cell ``i + 1/2``. The module docstring
+    gives the measurements behind each refusal.
     """
     from wavebit.fdtd._legacy_sources import Dipole
     from wavebit.fdtd._legacy_sources import PlaneWave
@@ -468,6 +472,16 @@ def _clear_of_sources(where, scene, grid, lo, hi, closed, tfsf=True):
                     f'{src.field}{"xyz"[src.index]} at cells {stamp} (two cells either side '
                     f'of its centre). The 2-cell face reads one cell each side of the surface, '
                     f'so it would count part of the source and miss part of its power; {keep}.')
+            if enclose is not None and not inside:
+                from wavebit.errors import ValidationError
+                stamp = ', '.join(f'{AXES[a]} {first[a]:g}..{last[a]:g}' for a in range(3))
+                raise ValidationError(
+                    f'{where}: the box (nodes {_nodes_text(lo, hi)}) does not enclose '
+                    f'CurrentDipole({src.name!r}), which writes its {src.field}{"xyz"[src.index]} '
+                    f'at cells {stamp}. The far field is the transform of the currents on the '
+                    f'box, so it holds only what the box encloses: a source outside it is not '
+                    f'radiated at all. Enclose every dipole with one cell to spare on every side.',
+                    code='monitor.source_outside', path=f'outputs.{enclose}.box')
         elif isinstance(src, PlaneWave):
             P = src.axis
             k = _node(grid, P, src.position)
@@ -579,7 +593,8 @@ def monitor_regions(scene, grid, dt):
                 # The convex-band condition covers every later ray direction.
                 modes(grid.dx, dt, freqs, eps, mu, 0., 0.)
             lo, hi = _box_nodes(where, grid, m.box)
-            _clear_of_sources(where, scene, grid, lo, hi, closed=True, tfsf=False)
+            _clear_of_sources(where, scene, grid, lo, hi, closed=True, tfsf=False,
+                              enclose=m.name)
             for face, _, layout in box_faces(where, grid, m.box):
                 _clear_layout(where, scene, grid, layout)
                 out.append(DFTRegion(name=m.name + FACE_SEP + face, monitor=m.name,

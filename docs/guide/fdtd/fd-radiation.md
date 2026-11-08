@@ -2,7 +2,10 @@
 
 Use `fdtd.FarFieldMonitor` for a closed measurement box in an open scene.
 The box must enclose every object and stay in a uniform isotropic background,
-clear of absorbing layers and source surfaces.
+clear of absorbing layers and source surfaces. Every structure and every
+`CurrentDipole` stamp must lie strictly inside it with one cell to spare: the
+transform radiates only what the box encloses, so `fdtd.check` and
+`fdtd.prepare` refuse a dipole outside the box (`monitor.source_outside`).
 
 ```python
 from wavebit import fdtd
