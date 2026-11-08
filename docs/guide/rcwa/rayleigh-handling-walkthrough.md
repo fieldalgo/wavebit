@@ -159,8 +159,8 @@ measurements.
 
 On the 2D and first-order paths the same patterned point produces nearly parallel eigenvectors
 at a nonzero root. Their builders replace each eligible pair with a regular basis and coupled
-generator (`rayleigh-points.md` §§8–9). Coincident exceptional points can exceed that pair construction;
-the eager cluster screen emits `ExceptionalPointWarning`, which does not trigger detuning.
+generator (`rayleigh-points.md` §§8–9). Coincident or nearly coincident exceptional points can exceed that pair construction;
+the eager screens emit `ExceptionalPointWarning`, which does not trigger detuning.
 The screen is silent under an abstract trace, so unresolved traced clusters can remain
 inaccurate. A traced layer with more eligible pairs than its static slots returns NaN.
 

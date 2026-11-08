@@ -88,6 +88,7 @@ from wavebit.rcwa._engine.solve_1d import _diag
 from wavebit.rcwa._engine.solve_1d import _is_backside
 from wavebit.rcwa._engine.solve_1d import _layer_mu
 from wavebit.rcwa._engine.solve_1d import _pack
+from wavebit.rcwa._engine.solve_1d import _run_k0_d
 from wavebit.rcwa._engine.solve_1d import layer_modes_1d
 from wavebit.rcwa._engine.solve_1d import layer_modes_1d_conical
 from wavebit.rcwa._engine.solve_1d import sp_efficiencies
@@ -1220,6 +1221,11 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
     Kx = _diag(xp, xp.reshape(kx_g, (-1,)))
     Ky = _diag(xp, xp.reshape(ky_g, (-1,)))
     F_c, F_s = xp.cos(varphi), xp.sin(varphi)
+    # The optical thickness the ETM reads (its run's), for the eager screen of nearly coincident
+    # exceptional-point pairs only: SMM takes no labels from it, so ETM and SMM screen alike.
+    screen_k0_ds, _ = _run_k0_d(xp, 2 * _PI / wavelength, thickness,
+                                (epx_conv_all, epy_conv_all, epz_conv_i_all,
+                                 epxy_conv_all, epyx_conv_all, *mu_all), dng)
 
     def layer_modes(layer_index):
         epxy_conv = O if epxy_conv_all is None else epxy_conv_all[layer_index]
@@ -1232,7 +1238,8 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                                           epy_conv_all[layer_index], epz_conv_i_all[layer_index],
                                           epxy_conv, epyx_conv, C, mu=layer_mu,
                                           dng=None if dng is None else dng[layer_index],
-                                          pair_cap=pair_cap, with_coupling=True)
+                                          pair_cap=pair_cap, with_coupling=True,
+                                          screen_k0_d=screen_k0_ds[layer_index])
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
         # A layer with rebuilt pairs (`solve_2d._rebuild_defective_pairs`): `'pairs'` asks the
         # coupled exponential for the cap and the field state to read both members of a pair

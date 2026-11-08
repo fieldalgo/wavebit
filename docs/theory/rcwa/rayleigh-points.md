@@ -49,7 +49,7 @@ hunt for a *configuration* that separates failing from working cases found none,
 | 1D conical (`psi`/pair), `ky == 0` | **fine since the reformulation** | `V` blocks now come from the eigensystem; they used to pass through `inv(A)` of an exactly singular `A` |
 | 1D conical at `kx_m**2 = eps*mu` with `ky != 0` (an x-cutoff, `kz = abs(ky)`) | **solved in a regular basis since 2026-10-10 (§7)**, eagerly and, since 2026-10-11, under every abstract trace (`jax.jit`, `jax.vmap`, a `jax.lax.map` or `scan` body, `jax.checkpoint`, `torch.func.vmap`) | the two mode families collapse onto one field there; the layer is rebuilt with an upper-triangular propagator, exact in a uniform layer and at a patterned layer's Jordan block alike; patterned double negatives at a complex `theta` too |
 | 2D graze | **correct or loud since the rebuild (§6)** | the grazing cluster is re-derived from the coupled first-order problem: representable clusters solve exactly, numerically defective ones refuse with the detune advice |
-| 2D or first order at a patterned EP (`q = abs(ky)`) | **rebuilt as a regular pair (§§8–9; design measured 2026-10-12)** | coincident EPs warn eagerly; under a trace the screen is silent, so this guarantee has limits |
+| 2D or first order at a patterned EP (`q = abs(ky)`) | **rebuilt as a regular pair (§§8–9; design measured 2026-10-12)** | coincident and nearly coincident EPs warn eagerly; under a trace the screens are silent, so this guarantee has limits |
 | any path, eigenvalue *exactly* `0.0` — and, on 2D, any cluster whose coupled rates split below ~1e-10 of the modal scale | refuses, unless the ladder clears it | the exponential mode basis is degenerate at the point itself (the limit basis is `{1, z}`) |
 
 `solve` handles the practical side by default: `auto_detune=True` retries a solve that
@@ -611,8 +611,12 @@ A pair is also skipped if an *unpaired* root is within `_EP_SEPARATION = 1e-7` t
 `max(1, |w|)` of either member. The Newton step divides a plain row by that separation:
 synthetic residuals were 2.0e-12 at 1e-8, 3.5e-13 at 2e-8, and at most 8.1e-14 from 5e-8 on.
 Members of another gated pair are exempt because their rows use the coupled Sylvester solve;
-that solve was accurate to 2.4e-14 down to a pair-to-pair spread of 1.5e-6. A 1e-4 guard on
-all third roots was rejected because it skipped pairs that could be rebuilt exactly.
+that solve was accurate to 2.4e-14 down to a pair-to-pair spread of 1.5e-6 for two distinct
+pairs. A 1e-4 guard on all third roots was rejected because it skipped pairs that could be
+rebuilt exactly. The solve is not accurate for two pairs that are copies of one problem in
+decoupled order rows (exceptional points that nearly coincide): their split is ill-posed, and
+at spreads up to 2.2e-6 (PL952, truncation 20) they came out silently up to 1.0e-9 off. Those
+layers are screened after the rebuild instead (*Nearly coincident pairs*, below).
 
 **The construction** (values only, inputs stopped):
 
@@ -724,9 +728,88 @@ threshold gave four false warnings in 60 complex64 uniform first-order layers; t
 threshold gave none. The screen changes no arithmetic, and `auto_detune` does not respond to
 `ExceptionalPointWarning`: its 1e-12 step cannot clear this wider band.
 
-At the measured coincidences the amended 2D path was exact (at most 6.0e-13) or warned:
-PA616 warned for `|dtheta| <= 1e-8`, PL952 for `|dtheta| <= 1e-7`, and points beyond were exact.
-There were no false warnings on 120 degenerate scenes or on the 200-scene census. Rebuilding
+**Nearly coincident pairs.** Just off a coincidence the cluster splits into two gated pairs a
+few 1e-8 .. 2e-6 apart. Both are rebuilt and their final columns are no longer nearly
+dependent, so the screen above passes them. The rebuild is not exact there. The two pairs are
+copies of one problem in two decoupled order rows, so how their joint four-dimensional subspace
+splits into two pairs is ill-posed: `eig` hands back pairs that mix the rows, and the one Newton
+step, whose Sylvester rows between the pairs divide by their gap, lands on a split chosen by
+rounding. On the scenes below the answer was silently off by up to 1.7e-10 at truncation 5 and
+1.0e-9 at truncation 20, in a band whose edges moved with the CPU's arithmetic path and widened
+with the truncation (PL952 out to `|dtheta| = 1.5e-6` at 20). On one GitHub runner the band
+reached `|dtheta| = 1e-7`, a point of the test grid.
+
+Eagerly, for each cluster holding two or more rebuilt pairs, `_crowded_pairs_imprecise`
+measures the backward error of the layer model its modes define,
+`||(A W_c - W Q^2[:, c]) W^-1[c, :]||_2` over the cluster's columns `c`, against the cluster's
+scale `max(1, |w|)`. It needs one solve with `W^T` for the rows `W^-1[c, :]` and a QR of that
+block for the norm. Above `_EP_BACKWARD = 3e-12` (scaled by `eps/eps64`) it warns with
+`ExceptionalPointWarning`. Where the cluster's propagation sensitivity
+`S = k0 d / (2 min|q|)` exceeds `_EP_SENSITIVITY = 3.5`, the threshold is divided by
+`S / 3.5`: a miss in `q**2` moves the phase across the layer by about `S` times as much. `k0 d`
+is the layer's run optical thickness, the one the ETM labels read; SMM, which takes no labels
+from it, computes the same value for the screen alone, so the two screen alike.
+
+Measurements (NumPy 2.5.4 with OpenBLAS 0.3.34; CPU arithmetic paths selected with
+`OPENBLAS_CORETYPE` and `NPY_DISABLE_CPU_FEATURES`):
+
+- *Candidates, truncation 5.* PL952 and PA616, 2D, ETM and SMM, 32 offsets of either sign,
+  seven paths; 710 two-pair layers. No candidate separates wrong from exact answers: each puts
+  exact answers among the wrong ones (PA616 was exact at gaps where PL952 was 7e-12 off). A
+  screen needs a quantity that bounds the wrong answers from below with room to spare, at one
+  threshold. The pairs' gap does so one-sidedly at truncation 5, every silent wrong answer
+  within 8.5e-7 (PA616's within 8.5e-8), but a threshold of 1e-6 leaves a margin of 1.2 and the
+  bound moves with the truncation (2.2e-6 at 20). The Sylvester separation, the Newton
+  correction, a second step's correction and the rebuilt cluster's smallest singular value each
+  failed even that on at least one path. The residual `||A W_c - W_c Q^2||` without `W^-1`
+  reached 7e-11 of `||A||_2` on an exact answer (`|dtheta| = 2e-6`). The backward error bounded
+  the wrong answers from below on every path; exact answers reached it too, which is why the
+  screen warns on many of them.
+- *Its scale, truncations 5 .. 20.* Each scene at its own exceptional-point wavelength at
+  truncations 5, 10, 15 and 20; 36 offsets, ETM and SMM, four paths; 2304 solves. Read
+  relative to `||A||_2`, which grows with the truncation through the evanescent orders
+  (11.6 .. 366 here), the threshold that separated them at truncation 5 left 14 answers up to
+  3.4e-12 off silent at 15 and 20. Against the cluster's scale, every answer more than 1e-12 off
+  that the cluster screen let through missed by at least 1.43e-11, at every truncation: a factor
+  4.8 above the threshold.
+- *Its sensitivity.* Those layers were 200 and 300 nm thick with cluster roots `|q| >= 0.44`,
+  `S <= 3.47`. PA616 thickened to 1, 3 and 10 um with the coincidence moved to `ky0` = 0.02 ..
+  0.1 (`|q|` down to 0.02, `S` up to 2.6e3) was up to 1.1e-11 off under a miss below 3e-12.
+- *With the screen.* Those 2304 solves, and at truncation 5 seven paths over 34 offsets that
+  include the test grid (952 solves): no answer more than 1e-12 off was silent, the worst quiet
+  answer was 1.01e-13, nothing warned at `|dtheta| >= 3e-4`, and ETM and SMM never disagreed on
+  loudness. The sensitivity scaling leaves every one of those decisions as it was.
+- *Beyond those scenes.* 74 scenes on two arithmetic paths (11,720 solves), each at its own
+  exceptional-point wavelength: PD574 at truncations 5, 6 and 10 and the magnetic MU614 at 5 and
+  10; y periods 500 .. 1300 nm; cluster roots above 1 (scale up to 12.25); thicknesses 30 nm ..
+  10 um; a two-layer stack; small roots (`ky0` 0.003 .. 0.3). No answer more than 1e-12 off was
+  silent (worst quiet 3.7e-13), none crashed, and ETM and SMM never disagreed on loudness. The
+  sensitivity scaling raised 696 of the 2904 new warnings on its own: 18 on answers more than
+  1e-12 off, 526 on answers within 1e-13.
+
+The price is warnings on exact answers: 512 of the 1060 new warnings in the truncation sweep
+fell on answers within 1e-13. Both scenes warn out to `|dtheta| = 1e-5` (PA616 at truncation 5
+to 2e-6). In the broad sweep's thick layers with small roots (`S` in the hundreds or
+thousands) it warned on every cluster holding two rebuilt pairs within `|dtheta| <= 1e-5` of the
+coincidence, exact or not, and on some out to `|dtheta| = 1e-3` (566 of 1186 such clusters over
+offsets out to 3e-2). Its advice, to move the angle or wavelength by a relative 1e-4 and
+compare, then still meets the warning on exact answers. The threshold is
+conservative on purpose. In these scenes the part of the backward error that couples the two
+order rows does not reach the answer, because the second row is not excited; a layer without
+that symmetry would not be so forgiving, and none was available to measure. Rounding alone
+contributes about `eps * ||A||_2` to the miss, so in a layer whose operator norm is many
+thousands of times the cluster's scale the screen may warn on an exact rebuild (not measured). Rebuilding the two pairs' subspace jointly removes the gap division and
+was exact (at most 1.7e-14, including the coincidence itself) in an eager NumPy prototype at
+truncation 5 on four arithmetic paths; it is not implemented.
+
+On the test grid (0, 1e-9 .. 1e-3) at truncation 5, on all seven paths, the 2D path was exact or
+warned. The cluster screen warned for `|dtheta| <= 1e-8` (PA616) and `<= 1e-7` (PL952). The
+backward-error screen warned at PA616 1e-7, which was up to 2.0e-12 off and silent without it,
+and at PL952 1e-6 and, on most paths, PA616 1e-6 and PL952 1e-5, which were exact. Every quiet
+grid point was within 1.7e-14. The cluster screen's earlier measurement found no false warnings
+on 120 degenerate scenes or on the 200-scene census. The backward-error screen reads only
+clusters holding two or more rebuilt pairs; across the RCWA test suite's 4,451 eager 2D layer
+solves, only the two exceptional-point test files held two or more gated pairs. Rebuilding
 can still select a diagonalizable pair with a poor eigenvector basis: across both paths,
 10 of 800 census solves moved by at most 1.2e-15 in `sum R` or `sum T`. This qualifies the
 digest claim: byte identity applies outside the gates, not to every non-exceptional layer.
@@ -770,9 +853,11 @@ coincident, multi-pair, NVF, anisotropic or grazing EPs.
 
 - Eagerly a layer with no gated pair keeps the product construction's arithmetic; the screen
   can add a warning. At unresolved coincidences, the old arithmetic was 2.0e-6..5.8e-4 off.
-- Under `jit`, `vmap` or `torch.func.vmap`, the screen cannot read concrete values, so coincident
-  clusters can remain silently at the old error level. No correct-or-loud guarantee covers
-  those traced clusters. More qualifying *pairs* than the trace cap do produce NaN.
+- Under `jit`, `vmap` or `torch.func.vmap`, the screens cannot read concrete values, so coincident
+  clusters can remain silently at the old error level, and nearly coincident pairs at the
+  eager path's unscreened level (up to 1.0e-9 measured). A `vmap` over the thickness alone
+  leaves SMM's modes concrete: its screen then runs with the calibrated threshold only, without
+  the thickness's sensitivity. No correct-or-loud guarantee covers those traced clusters. More qualifying *pairs* than the trace cap do produce NaN.
 - A root below `_EP_ROOT_FLOOR = 1e-9` stays with the grazing machinery or product construction.
   A layer that both grazes and holds an EP takes the grazing path; its EP pair is not rebuilt
   (not measured). The grazing refusal, `RayleighPointWarning` and `_require_separated` remain.

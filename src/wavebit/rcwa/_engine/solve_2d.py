@@ -237,7 +237,8 @@ _EP_ROOT_FLOOR = 1e-9
 #: max(1, |w|)) is not rebuilt: the Newton step divides that row by its distance to the pair.
 #: Measured on a Jordan pair beside a plain root at delta: the rebuilt pair's residual 2.0e-12
 #: at 1e-8, 3.5e-13 at 2e-8, <= 8.1e-14 from 5e-8 on (three random bases). Another gated pair
-#: is not counted: its rows take the 2x2 Sylvester closed form.
+#: is not counted: its rows take the 2x2 Sylvester closed form. That form also divides by the
+#: two pairs' gap, and close pairs are screened after the rebuild instead (:data:`_EP_BACKWARD`).
 _EP_SEPARATION = 1e-7
 
 #: The radius of the clusters _unresolved_defective_cluster reads.
@@ -314,6 +315,104 @@ _UNRESOLVED_2D = (
     'points that coincide, such as two order rows of a y-invariant layer at the same x-cutoff), '
     'which no pair rebuild spans: the eigenvector basis was kept, and the answer can be '
     'inaccurate. Move the angle or wavelength by more than a relative 1e-4 to check it.')
+
+#: A cluster (:data:`_EP_CLUSTER`) holding two or more rebuilt pairs warns when the layer model
+#: its modes define misses the operator by more than this, in units of the cluster's own scale
+#: ``max(1, |w|)`` and scaled by ``eps / eps64``: ``||(A W_c - W Q^2[:, c]) W^-1[c, :]||_2``,
+#: ``c`` the cluster's columns. Two pairs a few 1e-8 .. 2e-6 apart -- exceptional points that
+#: nearly coincide, such as two order rows of a y-invariant layer just off one x-cutoff -- leave
+#: the one Newton step outside its convergence region: the 2x2 Sylvester rows between the pairs
+#: divide by their gap, and which split of the pairs' joint subspace the step lands on depends
+#: on the rounding. Measured on the y-Littrow scenes PL952 and PA616 at truncations 5, 10, 15
+#: and 20, each at its own exceptional-point wavelength (2D, ETM and SMM, 36 offsets of either
+#: sign, four CPU arithmetic paths; 2304 solves): every answer more than 1e-12 off that the
+#: cluster screen let through missed by at least 1.43e-11, and every one at or below 3e-12 was
+#: within 1.0e-13. Not relative to ``||A||_2``: that grows with the truncation through the
+#: evanescent orders (11.6 .. 366 here) while the misses that matter do not, and a threshold
+#: that separated them at truncation 5 left answers up to 3.4e-12 off silent at 15 and 20. Nor
+#: the pairs' gap, which bounds the silent answers one-sidedly too but at a different spread per
+#: scene: PA616's band ended at a gap of 8.5e-8, PL952's at 8.5e-7.
+_EP_BACKWARD = 3e-12
+
+#: The propagation sensitivity the threshold above was calibrated at: ``S = k0 d / (2 min|q|)``
+#: over the cluster, the phase a miss in ``q**2`` buys across the layer. Every calibrated
+#: cluster had ``S <= 3.47`` (PA616, 300 nm). A thicker layer, or a cluster whose roots are
+#: small, turns the same miss into a larger error: a 10 um layer at ``|q| = 0.025``
+#: (``S = 2.0e3``) was 1.1e-11 off with a miss below 3e-12. Above this the threshold is divided
+#: by ``S / _EP_SENSITIVITY``, so the calibrated scenes read exactly as before.
+_EP_SENSITIVITY = 3.5
+
+_IMPRECISE_2D = (
+    'a 2D layer holds two or more exceptional-point pairs whose eigenvalues nearly coincide '
+    '(such as two order rows of a y-invariant layer just off the same x-cutoff), and the pair '
+    'rebuild could not separate them: the rebuilt modes miss the layer operator by more than the '
+    'layer can absorb, and the answer can be inaccurate. Move the angle or wavelength by more '
+    'than a relative 1e-4 and compare the answers; in a thick layer whose roots are small this '
+    'warning also fires on exact answers, out to angle moves of about a relative 1e-3.')
+
+
+def _crowded_pairs_imprecise(xp, w, A, W, Q, a, b, mask, k0_d=None):
+    """Eagerly, whether a cluster holding two or more rebuilt pairs has a backward error above
+    :data:`_EP_BACKWARD`; ``None`` under an abstract trace.
+
+    ``(W, Q, a, b, mask)`` is :func:`_rebuild_defective_pairs`' answer for the product operator
+    ``A``, with ``Q`` the ``2n x 2n`` matrix ``diag(q) + tau``. A cluster is a connected set of
+    eigenvalues ``w`` each within :data:`_EP_CLUSTER` of the next, as in
+    :func:`_unresolved_defective_cluster`. For its columns ``c`` the backward error of the layer
+    model is ``||(A W_c - W Q^2[:, c]) W^-1[c, :]||_2``, the part of ``A - W Q^2 W^-1`` those
+    columns carry, compared with the cluster's scale ``max(1, |w|)``. ``W^-1[c, :]`` comes from
+    one solve with ``W^T``, and the 2-norm of the rank-``k`` product from a QR of that block:
+    ``||R H||_2 = ||R S^H||_2`` for ``H^H = U S``. ``k0_d``, the layer's optical thickness
+    (its run's, as the ETM labels read it), tightens the threshold where the cluster's
+    propagation sensitivity exceeds :data:`_EP_SENSITIVITY`; ``None`` or an unreadable value
+    keeps the calibrated threshold.
+    """
+    several = _concrete(xp.sum(xp.astype(mask, xp.int32)) >= 2)
+    if not several:
+        return None if several is None else False
+    n2 = w.shape[0]
+    dev = getattr(W, 'device', None)
+    idx = xp.arange(n2, device=dev)
+    scale = xp.maximum(xp.ones_like(xp.abs(w)), xp.abs(w))
+    near = xp.abs(w[:, None] - w[None, :]) <= _EP_CLUSTER * xp.maximum(scale[:, None],
+                                                                          scale[None, :])
+    is_a = xp.any((idx[:, None] == a[None, :]) & mask[None, :], axis=1)
+    pending = is_a
+    eps = float(xp.finfo(xp.real(W).dtype).eps) / 2.220446049250313e-16
+    half_k0_d = None
+    if k0_d is not None:
+        try:
+            half_k0_d = checked_float(abs(k0_d)) / 2
+        except Exception:
+            half_k0_d = None
+    roots = xp.abs(xp.linalg.diagonal(Q))
+    while _concrete(xp.any(pending)):
+        # Graph membership stays array data; only Boolean reductions cross to Python.
+        comp = idx == xp.argmax(xp.astype(pending, xp.int32))
+        frontier = comp
+        while _concrete(xp.any(frontier)):
+            neighbors = xp.any(xp.take(near, xp.nonzero(frontier)[0], axis=0), axis=0)
+            frontier = neighbors & ~comp
+            comp = comp | frontier
+        pending = pending & ~comp
+        if not _concrete(xp.sum(xp.astype(comp & is_a, xp.int32)) >= 2):
+            continue
+        members = xp.nonzero(comp)[0]
+        Wc = xp.take(W, members, axis=1)
+        R = A @ Wc - W @ (Q @ xp.take(Q, members, axis=1))
+        E = xp.astype(idx[:, None] == members[None, :], W.dtype)
+        Hc = linear_solve(xp, xp.matrix_transpose(W), E)      # W^-1[c, :] transposed
+        _, S = xp.linalg.qr(xp.conj(Hc))
+        miss = xp.linalg.svdvals(R @ xp.matrix_transpose(xp.conj(S)))[0]
+        limit = _EP_BACKWARD * eps * xp.max(xp.take(scale, members))
+        loud = miss > limit
+        if half_k0_d is not None:
+            # miss * max(1, S / S0) > limit, with S = k0 d / (2 min|q|) over the cluster
+            loud = loud | (miss * half_k0_d
+                           > limit * _EP_SENSITIVITY * xp.min(xp.take(roots, members)))
+        if _concrete(loud):
+            return True
+    return False
 
 
 def _defective_pairs(xp, w, W, q, cap):
@@ -596,7 +695,8 @@ def _pair_inverse(xp, Q, a, b, mask):
 
 
 def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epyx_conv, C,
-                   mu=None, k0_d=None, dng=None, pair_cap=None, with_coupling=False, env=None):
+                   mu=None, k0_d=None, dng=None, pair_cap=None, with_coupling=False, env=None,
+                   screen_k0_d=None):
     """Raw (unrotated) eigenmodes ``(W, V, q)`` of one 2D layer.
 
     ``W`` is the ``[Ex; Ey]`` mode matrix and ``q`` the modal decay constants; without ``k0_d``
@@ -628,7 +728,10 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
 
     ``pair_cap`` bounds the number of exceptional-point pairs held under an abstract
     trace; callers with an order grid pass its larger axis count. An overflow poisons
-    the generator with NaN. Eagerly every eligible pair is rebuilt. ``with_coupling``
+    the generator with NaN. Eagerly every eligible pair is rebuilt. ``screen_k0_d`` is the
+    optical thickness the eager screen of nearly coincident pairs reads
+    (:func:`_crowded_pairs_imprecise`) and nothing else; it defaults to ``k0_d``, so SMM, which
+    takes no labels from a thickness, passes it on its own. ``with_coupling``
     requests a fourth return value describing that layout for propagation and field
     consumers. Without it the three-value interface is retained, but ``q`` at an
     exceptional point is a matrix generator, not a vector of independent roots.
@@ -786,12 +889,17 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
         B_, D_, Cc_, E_ = left_blocks()
         return _block(xp, [[-Cc_, B_], [-D_, E_]]) @ Omega_R
 
-    def _screen(W_final):
-        # coincident exceptional points the pair gate cannot see -- eagerly loud.
-        if _unresolved_defective_cluster(xp, _stop(w), _stop(W_final), _operator, _EP_SINE):
-            import warnings
-            from wavebit._common.backend import ExceptionalPointWarning
+    def _screen(W_final, operator=_operator, rebuilt=None):
+        # Eagerly loud: coincident exceptional points the pair gate cannot see, and nearly
+        # coincident ones whose pairs one rebuild cannot separate. One warning per layer.
+        import warnings
+        from wavebit._common.backend import ExceptionalPointWarning
+        if _unresolved_defective_cluster(xp, _stop(w), _stop(W_final), operator, _EP_SINE):
             warnings.warn(_UNRESOLVED_2D, ExceptionalPointWarning, stacklevel=4)
+        elif rebuilt is not None and _crowded_pairs_imprecise(
+                xp, _stop(w), operator(), *(_stop(x) for x in rebuilt),
+                k0_d=k0_d if screen_k0_d is None else screen_k0_d):
+            warnings.warn(_IMPRECISE_2D, ExceptionalPointWarning, stacklevel=4)
     if pairs is None:
         _screen(W)
     if pairs is not None:
@@ -805,8 +913,8 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
         if env is not None:
             env.Wi = None
         W, V, Q, a, b, mask = _rebuild_defective_pairs(xp, A, _stop(Omega_R), W, V, q, w, pairs)
+        _screen(W, lambda: A, (W, Q, a, b, mask))
         del A
-        _screen(W)
         if differentiated:
             Q = _pair_generator(xp, Omega2_LR, W, Q, a, b, mask)
             V = Omega_R @ W @ _pair_inverse(xp, Q, a, b, mask)
