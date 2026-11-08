@@ -732,3 +732,76 @@ def test_a_refused_structure_leaves_the_solver_exactly_as_it_was(backend):
     with pytest.raises(ValueError):
         solver.structure = np.ones((1, 4, 4), dtype=np.uint8)
     assert state(solver) == was
+
+
+# --- a concrete JAX array handed to a Torch run ------------------------------------------
+#
+# torch.asarray reads a foreign array through the buffer protocol and, asked for another
+# dtype, reinterprets its bytes: a JAX float32 [1.5, 2.25] read as float64 was [4.00000095].
+# The checks run in a fresh interpreter per JAX x64 setting, so the global flag is not
+# changed for the rest of the session.
+
+_JAX_INTO_TORCH = r'''
+import sys, jax
+jax.config.update('jax_enable_x64', sys.argv[1] == '1')
+import jax.numpy as jnp, numpy as np, torch
+from wavebit._common.backend import as_array
+from wavebit import rcwa
+from wavebit.units import Units
+
+values = np.array([1.5, 2.25, -.375])
+for source in ('float32', 'float64', 'complex64', 'complex128'):
+    j = jnp.asarray(values.astype(source))
+    host = np.asarray(j)                      # what JAX actually holds under this x64 setting
+    for target in (None, torch.float32, torch.float64, torch.complex64, torch.complex128):
+        got = as_array(torch, j, dtype=target)
+        want = torch.asarray(host, dtype=target)
+        assert got.dtype == want.dtype and torch.equal(got, want), (source, target, got, want)
+
+def problem(conv, which):
+    raster = np.array([[1., 1., 12.25, 12.25]])
+    return rcwa.Problem(units=Units(length='um'), stack=rcwa.Stack(period=(.6, .5), layers=(
+        rcwa.Layer(thickness=conv(np.float64(.2)) if which == 'thickness' else .2,
+                   epsilon=conv(raster) if which == 'epsilon' else raster),)),
+        excitation=rcwa.Excitation(
+            wavelength=conv(np.array([.65, .8])) if which == 'wavelength' else np.array([.65, .8]),
+            sources=(rcwa.PlaneWave(theta=conv(np.float64(.29)) if which == 'theta' else .29,
+                                    phi=.4, polarization='s'),)))
+
+for precision in ('single', 'double'):
+    for which in ('epsilon', 'wavelength', 'thickness', 'theta'):
+        for dtype in (jnp.float32, jnp.float64):
+            run = lambda conv: np.asarray(rcwa.run(problem(conv, which), numerics=rcwa.Numerics(orders=(3, 0)),
+                                                   backend='torch', precision=precision).R)
+            from_jax = run(lambda a: jnp.asarray(a, dtype=dtype))
+            from_numpy = run(lambda a: np.asarray(jnp.asarray(a, dtype=dtype)))
+            assert np.array_equal(from_jax, from_numpy), (precision, which, dtype, from_jax, from_numpy)
+print('ok')
+'''
+
+
+@pytest.mark.parametrize('x64', ['0', '1'])
+def test_a_concrete_jax_array_reaches_torch_by_value(x64):
+    """Against the same values as NumPy arrays, bit for bit, with JAX x64 on and off."""
+    pytest.importorskip('jax')
+    pytest.importorskip('torch')
+    import os, subprocess, sys, tempfile
+    from pathlib import Path
+    import wavebit
+    env = dict(os.environ, PYTHONPATH=str(Path(wavebit.__file__).parents[1]))
+    done = subprocess.run([sys.executable, '-W', 'ignore', '-c', _JAX_INTO_TORCH, x64], env=env,
+                          cwd=tempfile.gettempdir(), capture_output=True, text=True)
+    assert done.returncode == 0 and done.stdout.strip() == 'ok', done.stderr[-3000:]
+
+
+def test_a_traced_jax_value_is_refused_by_name_on_the_way_into_torch():
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+    from wavebit._common.backend import as_array
+    from wavebit.errors import ValidationError
+    def into_torch(v):
+        with pytest.raises(ValidationError) as caught:
+            as_array(torch, v)
+        assert caught.value.code == 'backend.foreign_array'
+        return v
+    jax.jit(into_torch)(jax.numpy.asarray(1.5))

@@ -32,6 +32,10 @@ x64를 켜지 않고 JAX double 정밀도를 요청하면 구조화된 오류가
 선택적 의존성은 필요할 때만 import합니다. Live 배열은 선택한 백엔드와 장치에
 두세요. 미분 가능한 입력을 NumPy를 거쳐 변환하면 미분 경로가 끊어집니다.
 
+`backend="torch"`에 입력값으로 준 구체적인 JAX 배열은 자기 dtype 그대로 NumPy를 거쳐 읽은 뒤
+변환하므로, JAX x64를 켜든 끄든 같은 값을 NumPy 배열로 준 것과 같은 결과를 냅니다. 이 값은
+PyTorch 미분을 지니지 않습니다. 추적 중인 JAX 값은 PyTorch 실행이 읽을 수 없으므로 거부합니다.
+
 준비와 tracing은 [자동 미분](autodiff.md), 이전 엔진의 성능 설명과 당시 비교
 측정은 [호환 backend 매뉴얼](../../migration/backends-v1.md)을 참고하세요.
 
