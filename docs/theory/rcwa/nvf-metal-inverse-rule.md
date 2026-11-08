@@ -365,12 +365,14 @@ replaces this one, the floor stays.
 - **The experimental passive closure**, `passive_nvf.passive_nvf_assemble`, which inverts
   `<1/eps>` itself, unfloored. No solve selects it; a caller who hands it a metal's matrices gets
   the unfloored inverse, pole included (table above).
-- **Tensor layers.** A scene with a tensor material anywhere in it — a shape, a background or a
-  tensor raster, on any layer — is built entirely by the Popov–Nevière route,
+- **Tensor layers.** A patterned layer holding a tensor material — a shape or a background,
+  or any layer of a tensor raster — is built by the Popov–Nevière route,
   `[[A]] @ inv([[B]])` (`tensor_shapes.build` for shapes, `pn_eps_conv_matrices` for rasters),
   or under `factorization='li'` by tensor Li, and neither reaches `_nvf_assemble`. So **no
-  layer of such a scene is floored**, a metal included. Whether that inverse carries the same
-  pole was not swept. At the one point checked,
-  the gold disks at 852 nm / 121 with the glass background spelled `diag(2.25, 2.25, 2.25)`, the
-  tensor route returns `R + T = 0.9682` where the floored scalar route returns 0.8158. That is
-  not gain, but it is not the same answer either.
+  such layer is floored**, a metal included. Whether that inverse carries the same
+  pole was not swept. Since 2026-11 an isotropic shape layer in a stack with a tensor
+  elsewhere, and a shape layer whose tensors are concrete `c*I`, take the scalar route and
+  its floor ([integrated anisotropic shapes](../../guide/rcwa/tensor-shape-integration.md#isotropic-layers-in-a-tensor-stack)).
+  Before that, the whole stack took the tensor route: at the one point checked, the gold
+  disks at 852 nm / 121 with the glass background spelled `diag(2.25, 2.25, 2.25)`, it
+  returned `R + T = 0.9682` where the floored scalar route returns 0.8158.
