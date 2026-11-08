@@ -40,15 +40,43 @@ def resolve_wave(solver, wave):
     return q, probe._incidence_pair(), 0. if azimuth is None else azimuth
 
 
+def _carries_derivative(value):
+    """Whether ``value`` is, or holds, a JAX tracer or a PyTorch tensor that requires grad."""
+    from wavebit.rcwa._engine.engine import _holds_tracer
+    stack = [value]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, (list, tuple)):
+            stack.extend(item)
+        elif _holds_tracer(item) or bool(getattr(item, 'requires_grad', False)):
+            return True
+    return False
+
+
 def gaussian_waves(solver, source):
     """Midpoint angular spectrum, with Maxwell-transverse vector components."""
     from wavebit.rcwa._engine.illumination import _host
     from wavebit.rcwa._engine.illumination import _plane_basis
     scene = solver._scene
     q, pair, azimuth = resolve_wave(solver, source)
-    q = _host(q).real
-    pair = np.array([complex(_host(p)) for p in pair])
     material = scene.top if source.side == 'top' else scene.bot
+    moving = [name for name, value in (
+        ('direction (theta, phi, kx, ky)', (q, azimuth)), ('wavelength', scene.wavelength),
+        (f'{source.side} half-space epsilon and mu', (material.epsilon, material.mu_value)))
+        if _carries_derivative(value)]
+    if moving:
+        # The quadrature directions, weights and transverse projections are built on the host
+        # from these values, so a derivative through them would be silently partial.
+        raise NotImplementedError(
+            'GaussianBeam builds its angular spectrum from concrete values; a derivative with '
+            f'respect to its {" or ".join(moving)} is not carried. Derivatives with respect to '
+            'its amplitude and polarization and to the layers are. Differentiate by finite '
+            'differences, or expand the beam into PlaneWave sources.')
+    q = _host(q).real
+    xp, C = scene.xp, scene.complex_dtype
+    # Every component is linear in the unit Jones pair, which stays a backend value; the
+    # directions, weights and transverse projections below are host constants.
+    jones = xp.stack([as_array(xp, a, dtype=C, device=scene._array_device) for a in pair])
     er, mu = complex(_host(material.epsilon)), complex(_host(material.mu_value))
     if er.real < 0 and mu.real < 0:
         # A negative-index medium's beam would be built from waves whose phase recedes from the
@@ -76,7 +104,7 @@ def gaussian_waves(solver, source):
     else:
         s = np.array([-q[1], q[0], 0.])/np.linalg.norm(q)
         p = -direction*np.cross(s, central_k/k)
-    e0 = s*pair[0] + p*pair[1]
+    e0 = np.stack([s, p], axis=1)
     axis = central_k/k
     nx, ny = source.sampling
     extent = source.spectral_extent/source.waist
@@ -90,15 +118,16 @@ def gaussian_waves(solver, source):
             kv = u*p + v*s + np.sqrt(k*k-u*u-v*v)*axis
             if direction*kv[2] <= 1e-12*k:
                 continue
-            electric = e0 - kv*np.dot(kv, e0)/(k*k)
+            electric = e0 - np.outer(kv, kv @ e0)/(k*k)
             weight = np.exp(-source.waist**2*(u*u+v*v)/4)*du*dv*source.waist**2/(4*np.pi)
             components.append((kv, electric, weight))
     if not components:
         raise ValueError('GaussianBeam quadrature contains no incoming propagating components.')
-    norm = np.linalg.norm(sum(e*w for _, e, w in components))
-    if not np.isfinite(norm) or norm == 0:
+    focal = as_array(xp, sum(e*w for _, e, w in components), dtype=C,
+                     device=scene._array_device) @ jones
+    norm = xp.sqrt(xp.sum(xp.real(focal*xp.conj(focal))))
+    if not np.isfinite(_host(norm)) or _host(norm) == 0:
         raise ValueError('GaussianBeam focal electric amplitude is zero or non-finite.')
-    xp, C = scene.xp, scene.complex_dtype
     # Each component is referenced at x=y=0 on its own face. The top face's height stays a
     # backend value: the focus is fixed in global z, so the phase a component gathers from the
     # focus to that face depends on every layer thickness, and so does its derivative.
@@ -114,14 +143,16 @@ def gaussian_waves(solver, source):
         eps_array = as_array(xp, er, dtype=C, device=scene._array_device)
         mu_array = as_array(xp, mu, dtype=C, device=scene._array_device)
         basis = _host(_plane_basis(xp, kx, ky, eps_array, mu_array, direction))[:3]
-        pair = np.conj(basis).T @ electric
-        size = np.linalg.norm(pair)
-        if size == 0:
+        pair = as_array(xp, np.conj(basis).T @ electric, dtype=C,
+                        device=scene._array_device) @ jones
+        size = xp.sqrt(xp.sum(xp.real(pair*xp.conj(pair))))
+        if _host(size) == 0:
             continue
+        pair = pair/as_array(xp, size, dtype=C, device=scene._array_device)
         phase = float(kv[0]*-focus[0] + kv[1]*-focus[1]) + float(kv[2])*height
         amplitude = source.amplitude*(weight*size/norm)*xp.exp(1j*phase)
         waves.append(PlaneWave(side=source.side, kx=kv[0], ky=kv[1],
-                               polarization=tuple(pair/size), amplitude=amplitude))
+                               polarization=(pair[0], pair[1]), amplitude=amplitude))
     return waves
 
 
@@ -172,24 +203,32 @@ def dipole_layers(solver, group, layers, k0, kxy):
     # converts the surface moment density and the z derivative together.
     scale = 1/(EPSILON_0*area*solver.length_unit**3)
     new_layers, jumps, new_edges = [], {}, [0.]
+    # The host edges above decide where each source sits; the segment thicknesses stay backend
+    # values. A layer without a source keeps its own thickness, and a host layer's segments
+    # are measured from its live lower face to the source planes, which are fixed in global z:
+    # every thickness at or below the host moves them, and its derivative has to see that.
+    start = 0.
     for li, (material, d) in enumerate(layers):
         heights = sorted(z for z, (index, _) in by_height.items() if index == li)
-        last = edges[li]
-        for z in heights + [edges[li+1]]:
+        top = start + d
+        last = start
+        for z in heights:
             new_layers.append((material, z-last))
             new_edges.append(z)
-            if z in by_height:
-                p = xp.zeros((kxy.shape[0], 3), dtype=C, device=scene._array_device)
-                for dipole, weight in by_height[z][1]:
-                    xy = as_array(xp, dipole.position[:2], dtype=C, device=scene._array_device)
-                    moment = as_array(xp, dipole.moment, dtype=C, device=scene._array_device)
-                    p = p + weight*scale*xp.exp(-1j*(kxy@xy))[:, None]*moment[None, :]
-                normal = material['ezz_i'] @ p[:, 2]
-                jumps[len(new_layers)] = xp.concat([
-                    -1j*kxy[:, 0]*normal,
-                    -1j*kxy[:, 1]*normal,
-                    -1j*k0*(p[:, 1]-material['eyz']@normal),
-                    1j*k0*(p[:, 0]-material['exz']@normal),
-                ])
+            p = xp.zeros((kxy.shape[0], 3), dtype=C, device=scene._array_device)
+            for dipole, weight in by_height[z][1]:
+                xy = as_array(xp, dipole.position[:2], dtype=C, device=scene._array_device)
+                moment = as_array(xp, dipole.moment, dtype=C, device=scene._array_device)
+                p = p + weight*scale*xp.exp(-1j*(kxy@xy))[:, None]*moment[None, :]
+            normal = material['ezz_i'] @ p[:, 2]
+            jumps[len(new_layers)] = xp.concat([
+                -1j*kxy[:, 0]*normal,
+                -1j*kxy[:, 1]*normal,
+                -1j*k0*(p[:, 1]-material['eyz']@normal),
+                1j*k0*(p[:, 0]-material['exz']@normal),
+            ])
             last = z
+        new_layers.append((material, top-last if heights else d))
+        new_edges.append(edges[li+1])
+        start = top
     return new_layers, jumps, np.asarray(new_edges), sorted(by_height)
