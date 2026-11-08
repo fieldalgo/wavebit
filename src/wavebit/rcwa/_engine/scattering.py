@@ -1241,9 +1241,9 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                                           pair_cap=pair_cap, with_coupling=True,
                                           screen_k0_d=screen_k0_ds[layer_index])
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
-        # A layer with rebuilt pairs (`solve_2d._rebuild_defective_pairs`): `'pairs'` asks the
-        # coupled exponential for the cap and the field state to read both members of a pair
-        # off the bottom face (`modal_gradient.two_face`).
+        # A layer with rebuilt pairs or clusters (`solve_2d._rebuild_defective_pairs`): `'pairs'`
+        # asks the coupled exponential for the cap and the field state to read every coupled
+        # row and column off the bottom face (`modal_gradient.two_face`).
         return big_W, big_V, q, W, V, (('pairs', pair_cap) if coupled else False)
 
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
