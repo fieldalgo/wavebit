@@ -98,10 +98,17 @@ def gaussian_waves(solver, source):
     norm = np.linalg.norm(sum(e*w for _, e, w in components))
     if not np.isfinite(norm) or norm == 0:
         raise ValueError('GaussianBeam focal electric amplitude is zero or non-finite.')
-    boundary_z = float(np.sum(_host(scene.thickness).real)) if source.side == 'top' else 0.
-    origin = np.array([0., 0., boundary_z]) - np.asarray(source.focus).real
-    waves = []
     xp, C = scene.xp, scene.complex_dtype
+    # Each component is referenced at x=y=0 on its own face. The top face's height stays a
+    # backend value: the focus is fixed in global z, so the phase a component gathers from the
+    # focus to that face depends on every layer thickness, and so does its derivative.
+    focus = np.asarray(source.focus).real
+    if source.side == 'top':
+        height = xp.sum(xp.real(as_array(xp, scene.thickness, dtype=C,
+                                         device=scene._array_device))) - focus[2]
+    else:
+        height = xp.real(as_array(xp, 0.-focus[2], dtype=C, device=scene._array_device))
+    waves = []
     for kv, electric, weight in components:
         kx, ky = [as_array(xp, v/k0, dtype=C, device=scene._array_device) for v in kv[:2]]
         eps_array = as_array(xp, er, dtype=C, device=scene._array_device)
@@ -111,7 +118,8 @@ def gaussian_waves(solver, source):
         size = np.linalg.norm(pair)
         if size == 0:
             continue
-        amplitude = source.amplitude*(weight*size/norm)*np.exp(1j*kv@origin)
+        phase = float(kv[0]*-focus[0] + kv[1]*-focus[1]) + float(kv[2])*height
+        amplitude = source.amplitude*(weight*size/norm)*xp.exp(1j*phase)
         waves.append(PlaneWave(side=source.side, kx=kv[0], ky=kv[1],
                                polarization=tuple(pair/size), amplitude=amplitude))
     return waves
