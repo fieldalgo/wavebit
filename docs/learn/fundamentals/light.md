@@ -85,7 +85,7 @@ Direct inputs must be finite real numbers. Evanescent incidence with zero incide
 
 A 1D grating solved for TE or TM alone uses `ky=0`. See the {ref}`polarization section <d-te-tm>` for conditions and inputs.
 
-Supplying `theta`·`phi` together with `kx`·`ky` raises an error (code `source.direction_ambiguous`). To change a source’s input form, clear the opposite pair in the same replacement: `source.replace(theta=None, phi=None, kx=..., ky=...)`. {ref}`Chapter 18 <jobs-and-sweeps>` explains sweeps over wavelength, angle and wavevector.
+Supplying `theta`·`phi` together with `kx`·`ky` raises an error (code `source.direction_ambiguous`). To change a source’s input form, clear the opposite pair in the same replacement: `source.replace(theta=None, phi=None, kx=..., ky=...)`. Each source takes one direction: an array or list of angles is refused (code `source.direction`) rather than read as one angle per order. {ref}`Chapter 18 <jobs-and-sweeps>` explains sweeps over wavelength, angle and wavevector.
 
 The calculated order wavevectors are in `result.reflection.k_parallel` and `result.transmission.k_parallel`, on a trailing `(kx, ky)` axis. They are **in the same inverse-length units as the direct inputs**, not divided by `k0`.
 

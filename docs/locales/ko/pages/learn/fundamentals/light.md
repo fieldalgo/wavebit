@@ -85,7 +85,7 @@ np.testing.assert_allclose(by_angle.T, by_k.T, atol=1e-12)
 
 1D 격자에서 TE 또는 TM만 풀 때는 `ky=0`을 씁니다. 조건과 입력 방법은 {ref}`편광 절 <d-te-tm>`에서 설명합니다.
 
-`theta`·`phi`와 `kx`·`ky`를 함께 넣으면 오류(코드 `source.direction_ambiguous`)입니다. 광원의 입력 방식을 바꿀 때에는 한 번의 교체에서 반대쪽 두 입력을 함께 비웁니다: `source.replace(theta=None, phi=None, kx=..., ky=...)`. 파장·각도·파수를 여러 값으로 바꾸어 계산하는 방법은 {ref}`18장 <jobs-and-sweeps>`에서 설명합니다.
+`theta`·`phi`와 `kx`·`ky`를 함께 넣으면 오류(코드 `source.direction_ambiguous`)입니다. 광원의 입력 방식을 바꿀 때에는 한 번의 교체에서 반대쪽 두 입력을 함께 비웁니다: `source.replace(theta=None, phi=None, kx=..., ky=...)`. 광원 하나는 방향 하나를 받습니다: 각도 배열이나 목록은 차수마다 다른 각으로 읽지 않고 오류(코드 `source.direction`)로 거부합니다. 파장·각도·파수를 여러 값으로 바꾸어 계산하는 방법은 {ref}`18장 <jobs-and-sweeps>`에서 설명합니다.
 
 계산된 차수별 파수는 `result.reflection.k_parallel`과 `result.transmission.k_parallel`의 마지막 `(kx, ky)` 축에 있습니다. **직접 입력과 같은 길이의 역수 단위**이며, `k0`로 나눈 값이 아닙니다.
 
