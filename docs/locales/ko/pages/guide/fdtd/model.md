@@ -630,6 +630,10 @@ Torch에서 `prepared.run`은 eager autograd와 `torch.func.grad`, `vjp`, `jacre
 `checkpoint_steps`가 있으면 `torch.func.grad`와 `vjp`는 지원되고, pullback을 `vmap`으로 묶는
 `jacrev`는 같은 코드와 경로 `numerics.checkpoint_steps`로 거부됩니다.
 
+JAX에서는 범위 지정 바디의 크기·반지름·중심을 `jax.grad`, `jacrev`, `jvp`, `jacfwd`, `vmap`으로
+eager 또는 `jax.jit` 안에서 미분하고 배치로 묶을 수 있습니다. 배치 결과는 실행을 하나씩 도는
+Python 루프와 일치하고, `jacfwd`는 `jacrev`와 일치합니다.
+
 ## 예제: 기판 위 코팅을 닫힌 꼴과 비교
 
 여기서는 모든 경계면이 셀 경계 위에 있어서 스냅되는 면이 없습니다. 기판은 아래쪽 PML 안으로

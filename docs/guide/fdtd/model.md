@@ -680,6 +680,10 @@ and `torch.func.jacfwd` and `hessian`, which batch the run through it, with
 `torch.func.grad` and `vjp` are supported; `jacrev`, which batches the pullback through `vmap`,
 is refused with the same code at path `numerics.checkpoint_steps`.
 
+On JAX, a ranged body's size, radius and centre are differentiated and batched by `jax.grad`,
+`jacrev`, `jvp`, `jacfwd` and `vmap`, eagerly or under `jax.jit`; a batch agrees with a Python
+loop of runs, and `jacfwd` with `jacrev`.
+
 ## Example: a coating on a substrate, against the closed form
 
 Every interface here lies on a cell boundary, so nothing snaps; the substrate continues into the
