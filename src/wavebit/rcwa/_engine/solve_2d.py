@@ -516,13 +516,68 @@ def _conj_t(xp, X):
     return xp.conj(xp.matrix_transpose(X))
 
 
+#: The joint rebuild reads balls of this radius first (relative to ``max(1, |w|)``), and the
+#: :data:`_EP_CLUSTER` balls only where no wider one is taken (:func:`_defective_clusters`).
+#: Off a symmetry coincidence -- a C4v pillar at normal incidence, where two exceptional points
+#: of one degenerate pair of orders coincide -- the two split into degenerate doublets whose
+#: spread grows like the square root of the offset, while their four columns stay nearly
+#: dependent: measured spread 1.6e-4 .. 2.6e-4 with a smallest singular value 4e-5 .. 7e-4 at
+#: relative offsets 1e-8 .. 1e-7. No pair is gated there (each mode's nearest eigenvalue is its
+#: degenerate partner, at a sine above :data:`_EP_SINE`), so outside the :data:`_EP_CLUSTER`
+#: ball the product construction was silent and up to 9.1e-12 off. With this radius every
+#: offset measured (0 .. 1e-5 either side of five coincidences, Laurent and NVF, and 1e-4, 1e-3
+#: above) was within
+#: 5.4e-14 of a Cauchy oracle and quiet; a radius of 1e-3 left up to 3.2e-13. A wider ball
+#: holding more than four modes is left to
+#: the narrower ones inside it, so clusters closer than this to other clusters or pairs keep
+#: the :data:`_EP_CLUSTER` rebuild.
+_EP_JOINT_RADIUS = 3e-3
+
+
+def _closed_balls(xp, d, span, radius, rows_of, k, idx, dev):
+    """The balls of ``radius`` (``d <= radius * span``) seeded at their lowest-index member:
+    ``(rows, nbr, valid, closed, count_r)`` -- the seed rows read (eagerly the seeds only, under
+    a trace every row), each ball's members nearest first with a lane mask, and whether the ball
+    is closed (every member's own ball is the same set) and holds three to ``k`` modes."""
+    near = d <= radius * span
+    count = xp.sum(xp.astype(near, xp.int32), axis=1)
+    lower = xp.any(near & (idx[None, :] < idx[:, None]), axis=1)
+    seed = (count >= 3) & (count <= k) & ~lower
+    rows = rows_of(seed)
+    if rows is None:
+        return None
+    m = rows.shape[0]
+    near_r = xp.take(near, rows, axis=0)
+    key = xp.where(near_r, xp.take(d, rows, axis=0), xp.full(near_r.shape, float('inf'),
+                                                               dtype=d.dtype, device=dev))
+    # The ball's members first, nearest first, ties by index: k argmin passes. A pass that finds
+    # no member left is a padded lane (its index is whatever argmin returns over infinities).
+    picks, found = [], []
+    for _ in range(k):
+        j = xp.argmin(key, axis=1)
+        picks.append(j)
+        found.append(xp.isfinite(xp.min(key, axis=1)))
+        key = xp.where(idx[None, :] == j[:, None], xp.full_like(key, float('inf')), key)
+    del key, near_r
+    nbr = xp.stack(picks, axis=1)                                         # (m, k)
+    valid = xp.stack(found, axis=1)
+    vv = valid[:, :, None] & valid[:, None, :]
+    clique = xp.all(~vv | _gather_pairs(xp, near, nbr[:, :, None], nbr[:, None, :]), axis=(1, 2))
+    count_r = xp.take(count, rows)
+    same_ball = xp.all(~valid | (xp.reshape(xp.take(count, xp.reshape(nbr, (-1,))), nbr.shape)
+                                 == count_r[:, None]), axis=1)
+    del m
+    return rows, nbr, valid, xp.take(seed, rows) & clique & same_ball, count_r
+
+
 def _defective_clusters(xp, w, W, q, pairs, operator, slots):
     """The defective clusters of a 2D layer the joint rebuild takes, or ``None`` when none is.
 
-    A cluster is a ball of the product operator's eigenvalues: the modes within
-    :data:`_EP_CLUSTER` of its lowest-index member (relative to ``max(1, |w|)``, as in
-    :func:`_unresolved_defective_cluster`). It is taken when the ball is closed -- every member's
-    own ball is the same set, so no chain runs out of it -- holds three to
+    A cluster is a ball of the product operator's eigenvalues: the modes within a radius of its
+    lowest-index member (relative to ``max(1, |w|)``), read at :data:`_EP_JOINT_RADIUS` and, where
+    no ball of that radius is taken, at :data:`_EP_CLUSTER` (the radius
+    :func:`_unresolved_defective_cluster` reads). It is taken when the ball is closed -- every
+    member's own ball is the same set, so no chain runs out of it -- holds three to
     :data:`_EP_CLUSTER_SIZE` modes with roots above :data:`_EP_ROOT_FLOOR`, its unit columns are
     nearly dependent (smallest singular value below :data:`_EP_SINE`), and its restriction
     ``T = Q^H A Q`` departs from normality (:data:`_DEFECT_NU`). That is what ``eig`` hands back
@@ -554,66 +609,70 @@ def _defective_clusters(xp, w, W, q, pairs, operator, slots):
     idx = xp.arange(n2, device=dev)
     scale = xp.maximum(xp.ones_like(xp.abs(w)), xp.abs(w))
     d = xp.abs(w[:, None] - w[None, :])
-    near = d <= _EP_CLUSTER * xp.maximum(scale[:, None], scale[None, :])
-    count = xp.sum(xp.astype(near, xp.int32), axis=1)
-    lower = xp.any(near & (idx[None, :] < idx[:, None]), axis=1)
-    seed = (count >= 3) & (count <= k) & ~lower
-    any_seed = _concrete(xp.any(seed))
-    if any_seed is False:
-        return None
-    # Eagerly only the seeds' rows are read; under a trace every row, masked by `seed`.
-    rows = xp.nonzero(seed)[0] if any_seed else idx
-    m = rows.shape[0]
-    near_r = xp.take(near, rows, axis=0)
-    key = xp.where(near_r, xp.take(d, rows, axis=0), xp.full(near_r.shape, float('inf'),
-                                                               dtype=d.dtype, device=dev))
-    # The ball's members first, nearest first, ties by index: k argmin passes. A pass that finds
-    # no member left is a padded lane (its index is whatever argmin returns over infinities).
-    picks, found = [], []
-    for _ in range(k):
-        j = xp.argmin(key, axis=1)
-        picks.append(j)
-        found.append(xp.isfinite(xp.min(key, axis=1)))
-        key = xp.where(idx[None, :] == j[:, None], xp.full_like(key, float('inf')), key)
-    del key, near_r
-    nbr = xp.stack(picks, axis=1)                                         # (m, k)
-    valid = xp.stack(found, axis=1)
-    vv = valid[:, :, None] & valid[:, None, :]
-    clique = xp.all(~vv | _gather_pairs(xp, near, nbr[:, :, None], nbr[:, None, :]), axis=(1, 2))
-    count_r = xp.take(count, rows)
-    same_ball = xp.all(~valid | (xp.reshape(xp.take(count, xp.reshape(nbr, (-1,))), nbr.shape)
-                                 == count_r[:, None]), axis=1)
-    qabs = xp.reshape(xp.abs(xp.take(q, xp.reshape(nbr, (-1,)))), nbr.shape)
-    floor_ok = xp.all(~valid | (qabs > _EP_ROOT_FLOOR), axis=1)
-    # The Gram matrix of the ball's unit columns, entry by entry: two n2-column gathers alive at
-    # a time, the pair gate's peak. Padded lanes read the identity.
+    span = xp.maximum(scale[:, None], scale[None, :])
     Wn = W / xp.linalg.vector_norm(W, axis=0)[None, :]
     C = W.dtype
     lane = xp.arange(k, device=dev)
     eye_k = xp.astype(lane[:, None] == lane[None, :], C)
-    G = xp.broadcast_to(eye_k[None], (m, k, k))
-    for i in range(k):
-        Wi = xp.conj(xp.take(Wn, nbr[:, i], axis=1))
-        for j in range(i + 1, k):
-            g = xp.sum(Wi * xp.take(Wn, nbr[:, j], axis=1), axis=0)
-            Eij = xp.astype((lane[:, None] == i) & (lane[None, :] == j), C)
-            G = G + g[:, None, None] * Eij[None] + xp.conj(g)[:, None, None] * xp.matrix_transpose(Eij)[None]
-        del Wi
-    G = xp.where(vv, G, eye_k[None])
-    # Rounding can leave a rank-deficient Gram's smallest eigenvalue below zero.
-    low = xp.linalg.eigvalsh(G)[:, 0]
-    sigma = xp.sqrt(xp.maximum(low, xp.zeros_like(low)))
     if pairs is not None:
         a, b, mask = pairs[:3]
         in_pair = xp.any(((idx[:, None] == a[None, :]) | (idx[:, None] == b[None, :]))
                          & mask[None, :], axis=1)
     else:
         in_pair = xp.zeros(n2, dtype=xp.bool, device=dev)
-    held = xp.sum(xp.astype(valid & xp.reshape(xp.take(in_pair, xp.reshape(nbr, (-1,))),
-                                               nbr.shape), xp.int32), axis=1)
-    lone_pair = (count_r == 3) & (held == 2)
-    cand = (xp.take(seed, rows) & clique & same_ball & floor_ok & (sigma < _EP_SINE)
-            & ~lone_pair)
+
+    def rows_of(seed):
+        # Eagerly only the seeds' rows are read; under a trace every row, masked by `seed`.
+        some = _concrete(xp.any(seed))
+        if some is False:
+            return None
+        return xp.nonzero(seed)[0] if some else idx
+
+    def candidates(ball):
+        rows, nbr, valid, closed, count_r = ball
+        m = rows.shape[0]
+        qabs = xp.reshape(xp.abs(xp.take(q, xp.reshape(nbr, (-1,)))), nbr.shape)
+        floor_ok = xp.all(~valid | (qabs > _EP_ROOT_FLOOR), axis=1)
+        # The Gram matrix of the ball's unit columns, entry by entry: two n2-column gathers alive
+        # at a time, the pair gate's peak. Padded lanes read the identity.
+        vv = valid[:, :, None] & valid[:, None, :]
+        G = xp.broadcast_to(eye_k[None], (m, k, k))
+        for i in range(k):
+            Wi = xp.conj(xp.take(Wn, nbr[:, i], axis=1))
+            for j in range(i + 1, k):
+                g = xp.sum(Wi * xp.take(Wn, nbr[:, j], axis=1), axis=0)
+                Eij = xp.astype((lane[:, None] == i) & (lane[None, :] == j), C)
+                G = (G + g[:, None, None] * Eij[None]
+                     + xp.conj(g)[:, None, None] * xp.matrix_transpose(Eij)[None])
+            del Wi
+        G = xp.where(vv, G, eye_k[None])
+        # Rounding can leave a rank-deficient Gram's smallest eigenvalue below zero.
+        low = xp.linalg.eigvalsh(G)[:, 0]
+        sigma = xp.sqrt(xp.maximum(low, xp.zeros_like(low)))
+        held = xp.sum(xp.astype(valid & xp.reshape(xp.take(in_pair, xp.reshape(nbr, (-1,))),
+                                                   nbr.shape), xp.int32), axis=1)
+        lone_pair = (count_r == 3) & (held == 2)
+        return nbr, valid, sigma, closed & floor_ok & (sigma < _EP_SINE) & ~lone_pair
+
+    # The wide balls first; a narrow ball inside a wide one the wide level takes is its business
+    # (a closed wide ball holds every mode within its radius of a member, so the narrow ball's
+    # seed among its members means the whole narrow ball is).
+    levels = []
+    for radius in (_EP_JOINT_RADIUS, _EP_CLUSTER):
+        ball = _closed_balls(xp, d, span, radius, rows_of, k, idx, dev)
+        if ball is not None:
+            levels.append((ball[0],) + candidates(ball))
+    if not levels:
+        return None
+    if len(levels) == 2:
+        (_, nbr_w, valid_w, _, cand_w), (rows_n, nbr_n, valid_n, sigma_n, cand_n) = levels
+        taken = xp.any((nbr_w[:, :, None] == idx[None, None, :])
+                       & (cand_w[:, None, None] & valid_w[:, :, None]), axis=(0, 1))
+        levels[1] = (rows_n, nbr_n, valid_n, sigma_n, cand_n & ~xp.take(taken, rows_n))
+    nbr = xp.concat([lv[1] for lv in levels], axis=0)
+    valid = xp.concat([lv[2] for lv in levels], axis=0)
+    sigma = xp.concat([lv[3] for lv in levels], axis=0)
+    cand = xp.concat([lv[4] for lv in levels], axis=0)
     decided = _concrete(xp.any(cand))
     if decided is False:
         return None
@@ -887,6 +946,12 @@ def _rebuild_defective_pairs(xp, A, Omega_R, W, V, q, w, pairs, clusters=None):
 #: misses that matter do not.
 _EP_RESIDUAL = 8.0
 
+#: The joint rebuild's second step is kept for a cluster only where it leaves at most this
+#: fraction of the one-step basis's miss of the check -- the larger of its subspace residual and
+#: its split's dropped part times ``cond(X)``, each over its threshold
+#: (:func:`_rebuild_defective_clusters`).
+_EP_STEP_GAIN = 0.5
+
 _JOINT_IMPRECISE_2D = (
     'a 2D layer holds a defective cluster of exceptional points (such as two order rows of a '
     'y-invariant layer at or near the same x-cutoff) whose joint rebuild failed its own check: '
@@ -916,8 +981,15 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
     (Golub and Van Loan, section 7.6.3), and the cluster's own rows zero. Two clusters, or a
     cluster and a pair, are at least :data:`_EP_CLUSTER` apart -- a cluster's ball is closed --
     so these systems are nonsingular; inside a cluster nothing is divided at all. The blocks are
-    not normal, so near that distance the one Newton step leaves a remainder of second order
-    over the gap, which the check below may read as a miss.
+    not normal, so one step leaves a remainder of second order in the start's error over the
+    gap: it reached the check's threshold where ``eig``'s start was poor (smallest singular value
+    2e-11) or another cluster 2e-4 away. A second step takes it out with no new solve, the chord
+    method's (the first step's correction applied to the new residual, which leaves third order;
+    C. T. Kelley, Iterative Methods for Linear and Nonlinear Equations, SIAM, 1995, ch. 5): in
+    ``W0``'s coordinates the cluster's subspace is ``E_c + Y`` and ``H = W0^-1 A W0`` is known
+    from the first step (diagonal on the plain columns; the pairs' and clusters' blocks plus their
+    residual expansions on theirs), so the residual ``H (E_c + Y) - (E_c + Y) T`` takes the same
+    correction again.
 
     **The modes.** With ``Q1`` the corrected orthonormal basis and ``T = Q1^H A Q1``,
     :func:`_cluster_split` gives ``X`` with ``X^-1 T X = L + B``: ``L`` diagonal and ``B`` on rows
@@ -1030,39 +1102,66 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
                                                     (S * k, npair)), pc, axis=0), Y1)
     zero = xp.zeros_like(Y0)
     Y0, Y1 = xp.where(own, zero, Y0), xp.where(own, zero, Y1)
-    # Each cluster's correction. Plain rows y_i (lambda_i - M_c) = -g_i (a pair's `a` row also
-    # takes -m01 y_b); member rows are set below.
-    Gs = xp.permute_dims(xp.reshape(Gc, (n2, S, k)), (1, 0, 2))               # (S, n2, k)
-    Mrow = lam[None, :, None, None] * eyek - padded(Mc, -F)[:, None]          # (S, n2, k, k)
-    Mrow = xp.matrix_transpose(xp.where(is_c[None, :, None, None], eyek * one(Mrow), Mrow))
-    Yc = linear_solve(xp, Mrow, -Gs[..., None])[..., 0]
-    rhs_a = -Gs - m01_row[None, :, None] * xp.take(Yc, partner, axis=1)
-    Yc = xp.where(is_a[None, :, None], linear_solve(xp, Mrow, rhs_a[..., None])[..., 0], Yc)
-    del Mrow, rhs_a
-    if S > 1:
-        # Another cluster's rows: M_r Y - Y M_s = -G, k*k unknowns (vec column-major), with
-        # stand-ins of opposite sign on padded lanes so that no pivot is zero.
-        Mr, Ms = padded(Mc, F), padded(Mc, -F)
-        Kt = (eyek[None, None, :, None, :, None] * Mr[:, None, None, :, None, :]
-              - xp.permute_dims(Ms, (0, 2, 1))[None, :, :, None, :, None]
-              * eyek[None, None, None, :, None, :])
-        Kt = xp.reshape(Kt, (S, S, k * k, k * k))
-        GG = xp.reshape(xp.take(Gc, mflat, axis=0), (S, k, S, k))             # [r, i, s, j]
-        rhs = -xp.reshape(xp.permute_dims(GG, (0, 2, 3, 1)), (S, S, k * k))
-        rv = xp.reshape(xp.broadcast_to(cvalid[:, None, None, :], (S, S, k, k)), (S, S, k * k))
-        same = xp.arange(S, device=dev)[:, None] == xp.arange(S, device=dev)[None, :]
-        lane2 = xp.arange(k * k, device=dev)
-        Kt = xp.where(same[:, :, None, None],
-                      xp.astype(lane2[:, None] == lane2[None, :], C) * one(Kt), Kt)
-        rhs = xp.where(rv & ~same[:, :, None], rhs, xp.zeros_like(rhs))
-        sol = linear_solve(xp, Kt, rhs[..., None])[..., 0]
-        Yrs = xp.reshape(xp.permute_dims(xp.reshape(sol, (S, S, k, k)), (0, 3, 1, 2)),
-                         (S * k, S, k))
-        Yc = xp.where(is_c[None, :, None], xp.permute_dims(xp.take(Yrs, pc, axis=0), (1, 0, 2)),
-                      Yc)
-        del Kt, GG, rhs, sol, Yrs
+    def _correct(Gc):
+        # A cluster's correction from the expansion Gc of its residual. Plain rows
+        # y_i (lambda_i - M_c) = -g_i (a pair's `a` row also takes -m01 y_b); member rows below.
+        Gs = xp.permute_dims(xp.reshape(Gc, (n2, S, k)), (1, 0, 2))               # (S, n2, k)
+        Mrow = lam[None, :, None, None] * eyek - padded(Mc, -F)[:, None]          # (S, n2, k, k)
+        Mrow = xp.matrix_transpose(xp.where(is_c[None, :, None, None], eyek * one(Mrow), Mrow))
+        Yc = linear_solve(xp, Mrow, -Gs[..., None])[..., 0]
+        rhs_a = -Gs - m01_row[None, :, None] * xp.take(Yc, partner, axis=1)
+        Yc = xp.where(is_a[None, :, None], linear_solve(xp, Mrow, rhs_a[..., None])[..., 0], Yc)
+        del Mrow, rhs_a
+        if S > 1:
+            # Another cluster's rows: M_r Y - Y M_s = -G, k*k unknowns (vec column-major), with
+            # stand-ins of opposite sign on padded lanes so that no pivot is zero.
+            Mr, Ms = padded(Mc, F), padded(Mc, -F)
+            Kt = (eyek[None, None, :, None, :, None] * Mr[:, None, None, :, None, :]
+                  - xp.permute_dims(Ms, (0, 2, 1))[None, :, :, None, :, None]
+                  * eyek[None, None, None, :, None, :])
+            Kt = xp.reshape(Kt, (S, S, k * k, k * k))
+            GG = xp.reshape(xp.take(Gc, mflat, axis=0), (S, k, S, k))             # [r, i, s, j]
+            rhs = -xp.reshape(xp.permute_dims(GG, (0, 2, 3, 1)), (S, S, k * k))
+            rv = xp.reshape(xp.broadcast_to(cvalid[:, None, None, :], (S, S, k, k)), (S, S, k * k))
+            same = xp.arange(S, device=dev)[:, None] == xp.arange(S, device=dev)[None, :]
+            lane2 = xp.arange(k * k, device=dev)
+            Kt = xp.where(same[:, :, None, None],
+                          xp.astype(lane2[:, None] == lane2[None, :], C) * one(Kt), Kt)
+            rhs = xp.where(rv & ~same[:, :, None], rhs, xp.zeros_like(rhs))
+            sol = linear_solve(xp, Kt, rhs[..., None])[..., 0]
+            Yrs = xp.reshape(xp.permute_dims(xp.reshape(sol, (S, S, k, k)), (0, 3, 1, 2)),
+                             (S * k, S, k))
+            Yc = xp.where(is_c[None, :, None], xp.permute_dims(xp.take(Yrs, pc, axis=0), (1, 0, 2)),
+                          Yc)
+            del Kt, GG, rhs, sol, Yrs
+        ownc = is_c[None, :] & (slot_of[None, :] == xp.arange(S, device=dev)[:, None])
+        Yc = xp.where(ownc[:, :, None] | ~cvalid[:, None, :], xp.zeros_like(Yc), Yc)
+        return Yc
+
+    Yc = _correct(Gc)
+    # A second step, in W0's coordinates and with no new solve. There a cluster's subspace is
+    # E_c + Y and H = W0^-1 A W0 is known from the first step: diagonal on the plain columns, the
+    # pairs' and clusters' blocks plus their residual expansions G and Gc on theirs. The residual
+    # H (E_c + Y) - (E_c + Y) T, T its own rows, takes the first step's correction again (the
+    # chord method, Kelley 1995, ch. 5): one step leaves a remainder of second order in the start's
+    # error over the gap, which reached the check's threshold where eig's start was poor or
+    # another block close; this one leaves third order. Its residual is read from the first
+    # step's expansions, so where the first step is already at rounding it only moves the basis
+    # by rounding: below, each cluster takes it only where it at least halves the check's miss.
     ownc = is_c[None, :] & (slot_of[None, :] == xp.arange(S, device=dev)[:, None])
-    Yc = xp.where(ownc[:, :, None] | ~cvalid[:, None, :], xp.zeros_like(Yc), Yc)
+    Ecs = xp.astype(ownc[:, :, None] & ((pc - slot_of * k)[None, :, None] == lane[None, None, :])
+                    & cvalid[:, None, :], C)                                  # (S, n2, k)
+    HZ = Ecs @ Mc + xp.permute_dims(xp.reshape(Gc, (n2, S, k)), (1, 0, 2))
+    HZ = HZ + lam[None, :, None] * Yc + xp.where(
+        is_a[None, :, None], m01_row[None, :, None] * xp.take(Yc, partner, axis=1), xp.zeros_like(Yc))
+    MY = xp.reshape(Mc[None] @ xp.reshape(xp.take(Yc, mflat, axis=1), (S, S, k, k)), (S, S * k, k))
+    HZ = xp.where(is_c[None, :, None], HZ - lam[None, :, None] * Yc + xp.take(MY, pc, axis=1), HZ)
+    pm = xp.astype(pmask, C)[None, :, None]
+    HZ = HZ + Ca @ (pm * xp.take(Yc, a, axis=1)) + Cb @ (pm * xp.take(Yc, b, axis=1))
+    HZ = HZ + Gc @ (xp.astype(xp.reshape(cvalid, (-1,)), C)[None, :, None] * xp.take(Yc, mflat, axis=1))
+    F2 = HZ - (Ecs + Yc) @ (xp.matrix_transpose(Ecs) @ HZ)
+    Yc2 = Yc + _correct(xp.reshape(xp.permute_dims(F2, (1, 0, 2)), (n2, S * k)))
+    del Ecs, HZ, MY, F2
     # The pairs, as in _rebuild_defective_pairs.
     v1 = v + W0 @ Y0
     x1 = x0 + W0 @ Y1
@@ -1083,20 +1182,53 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
     t = xp.where(pmask, T01 / (alpha + beta), xp.zeros_like(T01))
     Va = (Omega_R @ v1) / alpha[None, :]
     Vb = (Omega_R @ x1 - Va * t[None, :]) / beta[None, :]
-    # The clusters: the corrected bases, their restrictions, the disjoint split.
-    Q1, _ = xp.linalg.qr(Q0 + W0 @ Yc)
-    Q1 = xp.where(cvalid[:, None, :], Q1, Q0)
-    del W0, Yc
-    AQ1 = A @ Q1
-    T = xp.where(vv, _conj_t(xp, Q1) @ AQ1, xp.zeros_like(vv, dtype=C))
-    res1 = xp.linalg.matrix_norm(xp.where(cvalid[:, None, :], AQ1 - Q1 @ T, xp.zeros_like(AQ1)))
-    del AQ1
-    T = padded(T, F)
-    X, J, cond = _cluster_split(xp, T, cvalid, F)
-    Mx = linear_solve(xp, X, T @ X)
-    dg = xp.linalg.diagonal(Mx)
-    JK = J[:, :, None] & (~J & cvalid)[:, None, :]
-    dropped = xp.linalg.matrix_norm(xp.where(vv & ~(JK | (eyek != 0)), Mx, xp.zeros_like(Mx)))
+    # The clusters: the corrected bases, their restrictions, the disjoint split, and how far each
+    # misses the check below (under 1 it passes). Each cluster keeps the basis after two steps
+    # only where its miss is at most half the one-step basis's (sufficient decrease, as a line
+    # search asks of a step: Kelley 1995, ch. 8); elsewhere the one-step basis stays, bit for bit.
+    # The miss reads the split as well as the residual: at an exact coincidence eig(T)'s
+    # eigenvectors are sensitive to rounding in T, and a basis with a smaller residual once gave
+    # the split a cond(X) of 156 where the one-step basis gave 3.4.
+    rdt = xp.real(Q0).dtype
+    eps = float(xp.finfo(rdt).eps)
+    norm_A = xp.linalg.matrix_norm(A)
+
+    def corrected(Z):
+        Q1, _ = xp.linalg.qr(Z)
+        Q1 = xp.where(cvalid[:, None, :], Q1, Q0)
+        AQ1 = A @ Q1
+        T = xp.where(vv, _conj_t(xp, Q1) @ AQ1, xp.zeros_like(vv, dtype=C))
+        res1 = xp.linalg.matrix_norm(xp.where(cvalid[:, None, :], AQ1 - Q1 @ T, xp.zeros_like(AQ1)))
+        del AQ1
+        T = padded(T, F)
+        X, J, cond = _cluster_split(xp, T, cvalid, F)
+        Mx = linear_solve(xp, X, T @ X)
+        dg = xp.linalg.diagonal(Mx)
+        JK = J[:, :, None] & (~J & cvalid)[:, None, :]
+        dropped = xp.linalg.matrix_norm(xp.where(vv & ~(JK | (eyek != 0)), Mx, xp.zeros_like(Mx)))
+        # The check's thresholds, at the cluster's scale.
+        nvalid = xp.sum(xp.astype(cvalid, rdt), axis=1)
+        lam_c = (xp.sum(xp.where(cvalid, dg, xp.zeros_like(dg)), axis=1)
+                 / xp.maximum(nvalid, xp.ones_like(nvalid)))
+        tau = (_EP_BACKWARD * (eps / 2.220446049250313e-16)
+               * xp.maximum(xp.ones_like(xp.abs(lam_c)), xp.abs(lam_c)))
+        tau_res = xp.maximum(tau, _EP_RESIDUAL * eps * norm_A * xp.ones_like(tau))
+        finite = xp.isfinite(cond)
+        miss = xp.maximum(res1 / tau_res, xp.where(finite, cond, xp.zeros_like(cond)) * dropped / tau)
+        miss = xp.where(finite, miss, xp.full_like(miss, float('inf')))
+        return (Q1, X, Mx, dg, JK, res1, tau, tau_res, cond, dropped), miss
+
+    first, miss1 = corrected(Q0 + W0 @ Yc)
+    second, miss2 = corrected(Q0 + W0 @ Yc2)
+    two = miss2 <= _EP_STEP_GAIN * miss1
+    del W0, Yc, Yc2
+
+    def chosen(x1, x2):
+        return xp.where(xp.reshape(two, (S,) + (1,) * (len(x1.shape) - 1)), x2, x1)
+
+    Q1, X, Mx, dg, JK, res1, tau, tau_res, cond, dropped = (
+        chosen(x1, x2) for x1, x2 in zip(first, second))
+    del first, second, miss1, miss2
     # One side for the cluster: the root nearer the label of its most decaying member.
     qm = xp.reshape(xp.take(q, mflat), (S, k))
     key = xp.where(cvalid, xp.real(qm), xp.full_like(xp.real(qm), -float('inf')))
@@ -1123,15 +1255,7 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
     OcT = xp.matrix_transpose(Ocf)
     pos = (Ocf @ xp.astype(JKf, C) @ OcT) != 0
     Q = xp.where(pos, Ocf @ xp.where(JKf, Nf, xp.zeros_like(Nf)) @ OcT, Q)
-    # The check, at each cluster's scale.
-    rdt = xp.real(dg).dtype
-    eps = float(xp.finfo(rdt).eps)
-    nvalid = xp.sum(xp.astype(cvalid, rdt), axis=1)
-    lam_c = (xp.sum(xp.where(cvalid, dg, xp.zeros_like(dg)), axis=1)
-             / xp.maximum(nvalid, xp.ones_like(nvalid)))
-    tau = (_EP_BACKWARD * (eps / 2.220446049250313e-16)
-           * xp.maximum(xp.ones_like(xp.abs(lam_c)), xp.abs(lam_c)))
-    tau_res = xp.maximum(tau, _EP_RESIDUAL * eps * xp.linalg.matrix_norm(A) * xp.ones_like(tau))
+    # The check, at each cluster's scale (its thresholds from the kept basis).
     finite = xp.isfinite(cond)
     bad = xp.any(cvalid, axis=1) & (~finite | (res1 > tau_res)
                                     | (xp.where(finite, cond, xp.zeros_like(cond)) * dropped > tau))

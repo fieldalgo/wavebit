@@ -823,8 +823,13 @@ digest claim: byte identity applies outside the gates, not to every non-exceptio
 `solve_2d.py::_cluster_split` splits, `solve_2d.py::_rebuild_defective_clusters` rebuilds (called
 through `_rebuild_defective_pairs`). Tests: `tests/rcwa/test_exceptional_point_clusters.py`.
 
-*The gate.* A cluster is a ball of `Omega2`'s eigenvalues: the modes within `_EP_CLUSTER = 1e-4`
-(relative to `max(1, |w|)`) of its lowest-index member. It is taken when the ball is closed --
+*The gate.* A cluster is a ball of `Omega2`'s eigenvalues: the modes within a radius (relative to
+`max(1, |w|)`) of its lowest-index member, read at two radii. Balls of `_EP_JOINT_RADIUS = 3e-3`
+come first; where none of those is taken, balls of `_EP_CLUSTER = 1e-4`, the unresolved screen's
+radius, and a narrow ball inside a wide ball that is taken is left to the wide one. The wide level
+takes the degenerate doublets off a symmetric coincidence (the C4v pillar in *Measured*, below),
+which split by more than `_EP_CLUSTER`; the narrow level takes clusters closer than 3e-3 to other
+clusters or pairs, whose wide ball holds more than four modes. A ball is taken when it is closed --
 every member's own ball is the same set, so no chain runs out of it -- holds three or four modes
 (`_EP_CLUSTER_SIZE = 4`) with roots above `_EP_ROOT_FLOOR`, its unit columns are nearly dependent
 (smallest singular value below `_EP_SINE`, read from the Gram matrix's smallest eigenvalue
@@ -832,12 +837,13 @@ clamped at zero, since rounding leaves a rank-deficient Gram's below it), and it
 `T = Q^H Omega2 Q` is not normal (`nu > _DEFECT_NU`, the unresolved screen's measure). A ball
 of exactly three holding one gated pair stays with the pair rebuild, which is exact for a pair
 beside a root more than `_EP_SEPARATION` away. So the gate takes coincident exceptional points
-(the pair gate sees none there), two gated pairs a few 1e-8 .. 1e-6 apart, one gated pair beside
-two ungated modes, and a pair with an unpaired root within `_EP_SEPARATION`, which the pair gate
-refuses. Eagerly a layer with no ball of three or four returns after one quadratic comparison
-of its eigenvalues, its arithmetic untouched. Under an abstract trace,
-`max(1, min(pair_cap // 2, n2 // 3))` slots hold the qualifying balls with the smallest singular
-values, their masks as data; more qualifying balls than slots multiply the layer's `q` by NaN,
+(the pair gate sees none there), two gated pairs a few 1e-8 .. 1e-3 apart, one gated pair beside
+two ungated modes, a pair with an unpaired root within `_EP_SEPARATION`, which the pair gate
+refuses, and two degenerate doublets up to 3e-3 apart whose columns stay nearly dependent.
+Eagerly a layer with no ball of three or four at either radius returns after one quadratic
+table of its eigenvalues' distances, its arithmetic untouched. Under an abstract trace,
+`max(1, min(pair_cap // 2, n2 // 3))` slots hold the qualifying balls of both radii with the
+smallest singular values, their masks as data; more qualifying balls than slots multiply the layer's `q` by NaN,
 as a pair overflow does. The defect measure is read only on the slots, so a degenerate ball in a
 nearly dependent `eig` basis counts toward that overflow too: a trace can return NaN for a layer
 from which the eager solve takes no cluster (loud; not met on any layer measured, and the
@@ -853,6 +859,25 @@ own rows are zero. Inside a cluster nothing is divided, and between blocks the e
 least `_EP_CLUSTER` apart, since every cluster's ball is closed. The clusters' residual takes a
 solve of its own with `W0`, so the pairs' solve keeps exactly its right-hand sides (a solve's
 blocking, and with it its rounding, may depend on how many there are).
+
+The blocks are not normal, so one step leaves a remainder of second order in the start's error
+over the gap. A second step takes the first step's correction again with no new solve (the chord
+method, C. T. Kelley, Iterative Methods for Linear and Nonlinear Equations, SIAM, 1995, ch. 5),
+which leaves third order: in `W0`'s coordinates a cluster's corrected subspace is `E_c + Y`, and
+`H = W0^-1 Omega2 W0` is known from the first step -- diagonal on the plain columns, the pairs'
+and clusters' blocks plus their residual expansions on theirs -- so the residual
+`H (E_c + Y) - (E_c + Y) T` costs products with those blocks only. Each cluster keeps the
+two-step basis only where it misses the check below by at most `_EP_STEP_GAIN = 0.5` of the
+one-step basis's miss (each term over its threshold; sufficient decrease, as a line search asks of
+a step: Kelley 1995, ch. 8), and the one-step basis otherwise, bit for bit. The miss reads the
+split as well as the residual: where the first step already reaches rounding the second moves the
+basis by rounding, and at an exact coincidence `eig(T)`'s eigenvectors are sensitive to rounding in
+`T` -- on two CPU arithmetic paths a basis with a smaller residual turned the split's `cond(X)`
+from 1.9 to 2.6e3 and from 3.4 to 156, each loud. On a start whose subspace is off by 1e-6 ..
+3e-6 (a hand-built model of `eig`'s nearly dependent columns), one step left 8.0e-14 .. 1.5e-12
+of `||A||` and the check warned from 3e-6; two left <= 1.2e-14, quiet, on seven paths. Two
+clusters 2e-4 apart in a basis that couples them, where one step left up to 4.3e-13 and the
+check warned on one path, are within 1.8e-15 and quiet on seven paths and five bases.
 
 *The split.* With `Q1` the corrected orthonormal basis and `T = Q1^H Omega2 Q1`, `_cluster_split`
 takes `X = [E_J | C Y]`: `E_J` some of `eig(T)`'s unit eigenvectors, `C` the orthonormal complement
@@ -880,11 +905,12 @@ of `_EP_BACKWARD` at the cluster's scale and `_EP_RESIDUAL = 8` units of `eps ||
 rounding a product with `Omega2` leaves, at most 0.26 of that unit on the y-Littrow layers below at
 truncations 5 .. 20 (21 offsets each) -- and the part of `X^-1 T X` the split drops, times `cond(X)`, below
 `_EP_BACKWARD` at the cluster's scale. Eagerly a failure warns (`ExceptionalPointWarning`); under
-a trace it multiplies `q` by NaN. Two synthetic layers fail it: a Jordan pair and a plain root at
+a trace it multiplies `q` by NaN. Three synthetic layers fail it: a Jordan pair and a plain root at
 one eigenvalue whose three columns are nearly parallel (`eig` handed such a basis back on one CPU
 arithmetic path of eleven, smallest singular value 3.6e-15, and one Newton step left a backward
-error of 1.7e-5; built by hand, the start fails on every path, 3.7e-4 .. 6.1e-2), and a length-3
-Jordan chain handed to the joint rebuild. The pair gate takes two of the chain's three modes itself, and the
+error of 1.7e-5; built by hand, the start fails on every path, after the second step too, 9.7e-6 .. 1.9e-2
+on four), a start off by 1e-4 in its subspace (4.6e-11 .. 4.3e-10 after two steps), and a length-3 Jordan chain handed to
+the joint rebuild. The pair gate takes two of the chain's three modes itself, and the
 unresolved screen then warns. A cluster the joint rebuild takes reaches neither screen: scaled by
 the propagation sensitivity, the backward-error screen warned on exact answers there: 24 of 264
 solves of the thick layers below (NumPy, JAX and PyTorch, 10 and 3 um, 22 offsets out to 1e-5),
@@ -893,7 +919,10 @@ every one within 2e-8 of the coincidence.
 *Measured* (2026-11-08). Windows NumPy 2.5.1 with OpenBLAS 0.3.33, JAX 0.11.0, PyTorch 2.13.0;
 and NumPy 2.5.4 with OpenBLAS 0.3.34 on the CPU arithmetic paths of *Nearly coincident pairs*
 (seven at truncation 5, four beyond). Against the 1D rebuild, `v = 0` row, ETM and SMM, 39
-offsets of either sign from 0 to 1e-3 per scene:
+offsets of either sign from 0 to 1e-3 per scene. With the wide radius and the second step
+(2026-11-09) the Littrow rows at every truncation, the thick layers, the derivative, trace and
+field rows and the synthetic rows were measured again on the same paths: no bound rose (the
+thick layers' fell to 2.4e-13), and no answer warned that had not before.
 
 | case | screens alone (`ea57624b`) | joint rebuild |
 | --- | --- | --- |
@@ -906,16 +935,23 @@ offsets of either sign from 0 to 1e-3 per scene:
 | truncation `(5, 2)`, two clusters per layer, 9 offsets each | up to 2.5e-3 off | <= 8.1e-15 (both clusters' layer model <= 4.8e-15 of `||A||`), no warning |
 | genuinely 2D: a C4v square pillar at normal incidence, 11 exact coincidences (NVF at truncations 4 and 7, Laurent at 4), against a Cauchy circle in the pillar's permittivity (spread <= 5.7e-15) | loud, 1.6e-12 .. 9.3e-5 off | <= 3.1e-14 (two truncation-7 points 1.5e-13 .. 3.2e-13, that layer's floor off the point), no warning; JAX and PyTorch eager and traced values <= 1.3e-14, `jax.jvp` <= 1.2e-13 |
 | synthetic: Jordan pair beside a root at 0 .. 1e-7, six bases, eight paths (and 9e-8, 1e-7 on three more) | refused by the pair gate | <= 2.8e-15 of `||A||`; where `eig` collapsed one basis (one path, at 0) the check warned |
-| synthetic: two clusters and a pair, 2e-4 .. 1e-2 apart, basis of condition 10, eleven paths | -- | <= 2.5e-15 of `||A||` at 5e-4 (four paths), 1e-3 and 1e-2; at 2e-4 up to 4.3e-13, a second-order remainder over the small gap, which the check on one path read as a miss (residual 3.24e-12 against 3.00e-12) and warned |
+| synthetic: two clusters and a pair, 2e-4 .. 1e-2 apart, basis of condition 10, seven paths | -- | one step: <= 2.5e-15 of `||A||` at 5e-4 .. 1e-2, up to 4.3e-13 at 2e-4, where the check on one path read a miss and warned; with the second step <= 2.0e-15 at every gap (five bases), quiet on every path |
+| off a C4v coincidence: the pillar above at relative offsets 1e-9 .. 1e-5 either side (and 1e-4, 1e-3 above) of five coincidences, Laurent 641.11 and 623.60 nm, NVF 603.50, 614.90 and 634.19 nm, seven paths (1330 solves), against the Cauchy circle | the narrow radius alone: silent, up to 9.1e-12 off where the doublets leave it | <= 3.3e-14 where rebuilt jointly, no warning; the wide ball took the four out to a relative 3e-6 at least on every path, and beyond it `eig`'s own basis was within 1.5e-13 |
+| synthetic: two degenerate doublets `2 s` apart with nearly dependent columns, `s` 1e-6 .. 3e-4, seven paths | not taken beyond `s = 5e-5` | <= 2.4e-15 of `||A||`, quiet |
+| synthetic: a start off by 1e-7 .. 1e-4 in a cluster's subspace, seven paths | one step: 8.0e-14 .. 1.5e-12 at 1e-6 .. 3e-6, loud from 3e-6 | two steps: <= 1.2e-14 to 3e-6, quiet; at 1e-5 up to 4.3e-13, loud on one basis of three; loud at 1e-4 |
 
 *Byte identity.* 168 digests (`R`, `T`, `r_xyz`, `t_xyz`) on `test_conical_cutoff`'s uniform and
 patterned scenes, the Littrow scenes at 3e-4 and 1e-3, two near-degenerate uniform layers and six
 random 2D layers, NumPy, JAX and PyTorch eagerly: identical to `ea57624b`, the joint rebuild
-engaged on none. Under a trace every 2D layer runs the slots, dead where nothing qualifies; there
-the layer keeps its bits: 60 digests (`jit` values, `jit(grad)` and `torch.func.vmap` values) on
-ten of those scenes, ETM and SMM, identical to `ea57624b`. Layers the gate takes that the
-pair rebuild already got right -- PA616 out to `|dtheta| = 1e-4`, PL952 to 5e-5, the thick layer
-to 1e-3 -- moved: exact either way, and no longer warned.
+engaged on none, before the wide radius. Under a trace every 2D layer runs the slots, dead where
+nothing qualifies; there the layer keeps its bits: 60 digests (`jit` values, `jit(grad)` and
+`torch.func.vmap` values) on ten of those scenes, ETM and SMM, identical to `ea57624b`. Layers the
+gate takes that the pair rebuild already got right -- PA616 out to `|dtheta| = 1e-4`, PL952 to
+5e-5, the thick layer to 1e-3 -- moved: exact either way, and no longer warned. The wide radius
+and the second step moved exactly the Littrow digests at 3e-4 and 1e-3 (24 eager, 12 traced),
+whose two pairs it now takes as one cluster (<= 1.3e-14 off the 1D rebuild there on seven
+paths); the other 144 eager
+and 48 traced digests are identical.
 
 *Limits.*
 
@@ -927,20 +963,18 @@ to 1e-3 -- moved: exact either way, and no longer warned.
   complex64, where every screen's threshold scales with `eps` and stays silent too (a
   coincident cluster there is 6.9e-6 .. 5.6e-4 off, silently, at the float32 level); under a
   trace they are silent.
-- Just outside the radius: off a symmetry coincidence (the C4v pillar above), the two
-  exceptional points' degenerate doublets split by more than `_EP_CLUSTER` while their four
-  columns stay nearly dependent (smallest singular value 4e-5 .. 1e-3). The doublets split like
-  the square root of the offset, so that is already a relative 1e-8 in the wavelength. Each
-  mode's nearest eigenvalue is its exact degenerate partner, at a sine above `_EP_SINE`, so
-  neither gate and no screen engages: measured silent and up to 1.5e-11 off (SMM), as before
-  this rebuild. A joint radius of 1e-3 took those balls exactly in a probe (<= 8.6e-15), but it
-  also merges or declines clusters the radius of 1e-4 takes, and is not adopted here.
+- Off a symmetric coincidence the wide ball holds the doublets while their columns stay
+  dependent to within `_EP_SINE`; beyond that (relative offsets past about 3e-6 on the C4v
+  pillar) `eig`'s basis is left as it is, and was within 1.5e-13 of the oracle there. Where such
+  doublets sit within 3e-3 of another cluster or pair, their wide ball holds more than four modes
+  and only the narrow radius reads them: silent, as before the wide radius (not met on any layer
+  measured).
 - A length-3 Jordan chain is loud, not exact.
-- Two clusters about 2e-4 apart in a basis that couples them: one Newton step leaves up to
-  4.3e-13 of `||A||` (measured), above the 1e-15 elsewhere, and the check may warn on that
-  answer.
+- Where `eig`'s start is poorer than the second step can absorb (its subspace off by about
+  1e-4, or collapsed), the check warns; the answer is not exact.
 - Under a trace every 2D layer pays for its slots: one more solve with `W0`, a ranking of
-  `n2 x n2` distances, and small batched `eig`, QR and solves. Not timed. XLA's scratch memory
+  `n2 x n2` distances read at two radii (twice the gate's Gram and ranking work), small batched
+  `eig`, QR and solves, and the second step's products with the blocks. Not timed. XLA's scratch memory
   for one patterned layer rose 13 .. 28% under `jit` and 2 .. 4% under `jit(grad)` at
   truncations (6, 6) and (10, 10).
 - Not measured: GPU (batched `4 x 4` `eig` inside `jit` / `vmap`), `pmap`, anisotropic layers at
