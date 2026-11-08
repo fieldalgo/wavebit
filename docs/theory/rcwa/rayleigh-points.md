@@ -970,8 +970,12 @@ and 48 traced digests are identical.
   and only the narrow radius reads them: silent, as before the wide radius (not met on any layer
   measured).
 - A length-3 Jordan chain is loud, not exact.
-- Where `eig`'s start is poorer than the second step can absorb (its subspace off by about
-  1e-4, or collapsed), the check warns; the answer is not exact.
+- Where `eig`'s start is poorer than the second step can absorb, the check warns; the answer is
+  not exact. Two steps leave a remainder of third order in the start's error over the gap to
+  the nearest block, so how poor depends on that gap: off by about 1e-4 with every block 1e-2
+  away, or collapsed; off by 1e-6 beside a pair 5e-4 .. 1e-3 away (synthetic, eight bases, one
+  CPU arithmetic path: up to 3.7e-12, loud on 14 of 24; where quiet within 2.9e-13). Not met on
+  any layer measured.
 - Under a trace every 2D layer pays for its slots: one more solve with `W0`, a ranking of
   `n2 x n2` distances read at two radii (twice the gate's Gram and ranking work), small batched
   `eig`, QR and solves, and the second step's products with the blocks. Not timed. XLA's scratch memory
