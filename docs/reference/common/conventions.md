@@ -541,8 +541,9 @@ handedness labels flip with it.
 ## Diffraction orders
 
 The retained orders are `m = -half_width_u..half_width_u`, `n = -half_width_v..half_width_v`, with normalized in-plane
-wavevectors `kx_m/k0 = kx_inc/k0 + m*lambda/period_x` on an axis-aligned cell
-(and correspondingly for `ky_n`). The incident components follow
+wavevectors `kx_m/k0 = kx_inc/k0 + m*lambda/period_x` on an axis-aligned cell with positive sides
+(and correspondingly for `ky_n`); on any other basis, a diagonal one with a negative side
+included, order `(m, n)` carries `k_inc + m*b1 + n*b2` of the basis as spelled. The incident components follow
 [Real-angle incidence](#real-angle-incidence) using `top` for top incidence and `bot`
 for bottom incidence. For a lossless incidence medium this is the usual
 `kx_inc/k0 = n_inc*sin(theta)*cos(phi)`, with the signed `n_inc`. Per-order

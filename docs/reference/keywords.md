@@ -83,7 +83,7 @@ gives the unit square.
 | `top` | `Material(epsilon=1.)` | the material model of the upper half-space. A passive double negative (`Re(eps) < 0`, `Re(mu) < 0`) is solved on either side, lit or not; see [negative-index media](../theory/rcwa/negative-index-media.md) | a bare number: `material.type`; an active double negative that propagates (`Re(eps*mu) > 0`, and `Im(eps) < 0` or `Im(mu) < 0`): `rcwa.invalid`, both at check |
 | `bottom` | `Material(epsilon=1.)` | the lower half-space, read the same way | as `top` |
 | `period` | `(1., 1.)` when `lattice` is not given | `(Lx, Ly)`: two positive, finite, real lengths. The axis-aligned spelling of the cell | beside `lattice`: `stack.cell_ambiguous`, at construction; a scalar, a `dict` or a length that is not positive: `stack.period`, at check |
-| `lattice` | `None` | the two primitive vectors as the columns of a `(2, 2)` array, or a `wavebit.Lattice`. The only spelling of a non-rectangular cell | beside `period`: `stack.cell_ambiguous` |
+| `lattice` | `None` | the two primitive vectors as the columns of a `(2, 2)` array, or a `wavebit.Lattice`. The only spelling of a non-rectangular cell. A diagonal with a negative side is read as spelled: rasters and order names run along the reversed axis ([scene guide](../guide/rcwa/scene.md)) | beside `period`: `stack.cell_ambiguous` |
 
 Region geometry and `period` differentiate on PyTorch and under eager `jax.grad`; under
 `jax.jit` or `jax.vmap` the cell and every region geometry are refused with `prepared.host_topology`
