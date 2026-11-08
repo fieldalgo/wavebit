@@ -49,6 +49,7 @@ order, and ``Re`` first lets an evanescent order grow at any ``Im(k_par)``, howe
 Backend-agnostic: pass the array namespace as ``xp`` (``numpy`` / ``jax.numpy`` / ``torch``).
 """
 
+import math
 import warnings
 
 from typing import NamedTuple
@@ -1774,6 +1775,30 @@ def yee_longitudinal_phase(xp, q, step_frequency, spacing):
     exp(1j*phase) advances toward the outgoing half space without growth.
     """
     return 2*xp.asin(q*step_frequency*spacing/2+0j)
+
+
+#: How close, in cells, a cell-snapped face has to be to a half cell to count as one. Far
+#: above round-off in ``(x - x_lo) / dx`` (a few ulp of the cell index), far below any
+#: geometric distinction a scene could mean.
+SNAP_TIE_CELLS = 1e-9
+
+
+def snap_to_cell_boundary(coordinate, origin, spacing):
+    """The cell boundary a cell-snapped face lands on, as an integer index from ``origin``.
+
+    The nearest boundary, and **a face half way between two boundaries goes to the higher
+    one** (toward ``+axis``), with ``SNAP_TIE_CELLS`` of slack so that a half cell spelled
+    with representation error (``0.0125`` um against ``12.5`` nm) is still a tie::
+
+        i = floor((x - x_lo) / dx + 1/2 + SNAP_TIE_CELLS)
+
+    The rule commutes with a shift of the origin by whole cells, so the answer is the same
+    measured from the physical domain or from the grid padded with absorbing cells, whatever
+    their number; Python's ``round`` (half to even) did not, and a face at a tie moved by a cell
+    with the parity of the PML. Ties going one way also keep a span of a whole number of cells
+    that whole number: both faces of a one-cell slab on half cells move up together.
+    """
+    return math.floor((coordinate - origin) / spacing + 0.5 + SNAP_TIE_CELLS)
 
 
 def real_order_frame(xp, ky, kx, phi):

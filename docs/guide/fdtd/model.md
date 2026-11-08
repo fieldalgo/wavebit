@@ -146,17 +146,25 @@ most important accuracy decision in a scene.
 - `SnappedSlab(z=(lo, hi))` is a layer: one axis bounded, the other two filling the domain.
 - `SnappedBox(size=(sx, sy, sz), center=(cx, cy, cz))` is an axis-aligned block.
 
-Both fill **whole cells**. Each face moves to the nearest cell boundary, `i = round((x - x_lo) / dx)`,
-and every cell between the moved faces holds the material entirely, for all six components. So a
-face is moved by up to half a cell, which is a first-order error in `dx`, and any two spans that
-round to the same cells give identical results. At `dx = 0.025` µm, 0.317 µm and 0.325 µm films
-run bit for bit alike:
+Both fill **whole cells**. Each face moves to the nearest cell boundary,
+`i = floor((x - x_lo) / dx + 1/2)`, and every cell between the moved faces holds the material
+entirely, for all six components. So a face is moved by up to half a cell, which is a first-order
+error in `dx`, and any two spans that round to the same cells give identical results. At
+`dx = 0.025` µm, 0.317 µm and 0.325 µm films run bit for bit alike:
 
 ```
 cell boundaries (dx = 0.025):  0.275    0.300    0.325    0.350
                                  |--------|--------|--------|
 requested interface 0.317 ----------------------^  runs at 0.325
 ```
+
+A face exactly half way between two cell boundaries moves to the **higher** one (toward `+x`,
+`+y` or `+z`). "Exactly" allows 1e-9 of a cell, so the same coordinate written in µm or in nm, or
+with a different floating-point spelling, resolves the same way. The rule does not change when the
+grid's origin moves by whole cells, so the number of PML cells added outside the physical domain
+does not move a face either. Because both faces of a span move the same way at a tie, a span of a
+whole number of cells keeps that number: with cell boundaries on multiples of `dx = 0.025`,
+`SnappedSlab(z=(0.0125, 0.0375))` is one cell, from 0.025 to 0.05.
 
 `check` reports every moved face as a warning issue with code `geometry.cell_snapped`, the
 requested span in `expected` and the cell boundaries it runs at in `actual`; `report.ok` stays
