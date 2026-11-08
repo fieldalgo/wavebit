@@ -19,7 +19,7 @@ for the declaration API, see [domains, sources and observations](general-fdtd.md
 | `Box`, `Sphere`, `Cylinder`, `Prism` | **smoothed** bodies: each boundary cell gets a mix weighted by how much of it the body fills |
 | `Open()` face | a PML added **outside** the physical region, matched to the medium that reaches the face |
 | `Periodic()`, `Bloch(...)` | the cell repeats; `Bloch` adds a phase and makes the run complex |
-| `PEC()`, `PMC()`, `MirrorSymmetry(parity)`, `InvariantAxis(k, k_max)` | conducting walls, a mirror plane, and an exactly differentiated invariant axis |
+| `PEC()`, `PMC()`, `MirrorSymmetry(parity)`, `InvariantAxis(k, k_max)` | conducting walls, a mirror plane, and an exactly differentiated invariant axis; a PMC wall and a high-side mirror act half a cell from the declared face (`resolved["boundary_planes"]`) |
 | `Numerics(courant=0.5)` | time step `dt = courant · dx / (c·√3)` |
 | `TimeSeriesMonitor` | the time series of one component at its nearest Yee point |
 | `FieldMonitor`, `FluxMonitor`, `DiffractionMonitor`, `FarFieldMonitor` | running Fourier transforms of the fields, accumulated during the run |
@@ -358,9 +358,26 @@ type per axis or a `(low, high)` pair.
 | `Open()` | outgoing: a PML outside the physical domain, matched to the uniform medium that reaches the face. Only uniform media may reach it — the background, a `SnappedSlab` across that axis, an unturned `Box` that declares `Structure.continuation` and reaches more than one cell past both transverse faces, or a `SnappedBox` core that declares continuation through that face; any other finite body touching it, or a slab or continued `Box` crossing an orthogonal `Open()` face, is refused (see [General-scene limits](#general-scene-limits)). |
 | `Periodic()` | both faces wrap with no phase; normal incidence in a periodic cell. |
 | `Bloch(phase=φ)` or `Bloch(k=k)` | both faces wrap with a phase; the run becomes complex (twice the memory and work). `Bloch.from_source(source, units=...)` writes the faces an oblique `PlaneWave` needs. |
-| `PEC()` / `PMC()` | tangential E / tangential H vanishes on the wall. A structure reaching past one is clipped, with `GeometryClippedWarning`. |
-| `MirrorSymmetry(parity=±1)` | a mirror plane; `+1` makes tangential E even across it (a PMC-like plane), `-1` odd. |
+| `PEC()` / `PMC()` | tangential E / tangential H vanishes on the wall. A PEC wall is the declared face; a PMC wall is the half-cell plane next to it, half a cell **outside** a low face and half a cell **inside** a high face (below). A structure reaching past one is clipped, with `GeometryClippedWarning`. |
+| `MirrorSymmetry(parity=±1)` | a mirror plane; `+1` makes tangential E even across it (a PMC-like plane), `-1` odd. On a low face the plane is the face; on a high face it is half a cell **inside** it (below). |
 | `InvariantAxis(k=..., k_max=...)` | a one-cell invariant axis whose derivative is exactly `ik`: the uniform axis of a 2-D conical grating, without the one-cell difference's artificial dispersion. |
+
+**Where each wall acts.** Tangential E lives on node planes and tangential H on half planes,
+so a condition on tangential H, or a mirror that images the last E layer, sits on a half plane
+rather than on the declared face:
+
+| Face | Low face (`x-`) | High face (`x+`) |
+| --- | --- | --- |
+| `PEC()` | the face | the face |
+| `PMC()` | `dx/2` outside the face | `dx/2` inside the face |
+| `MirrorSymmetry(parity=±1)` | the face | `dx/2` inside the face |
+
+The domain is not resized to compensate: a cavity between a PEC face and a PMC face is
+`L - dx/2` long, not `L`, and a mode written from the declared faces is not a mode of the run.
+This is a first-order effect in `dx`; set the domain from the effective planes when it matters. `check(...).resolved["boundary_planes"]`
+reports, per face, `boundary` (the face type), `declared` (the declared face coordinate along
+its axis, in `Problem.units`), `effective` (where the condition acts; `None` for `Open`,
+`Periodic`, `Bloch` and `InvariantAxis` faces) and `offset_cells`, `(effective - declared) / dx`.
 
 `Numerics(absorber=PML(...))` sets every `Open()` face's layer: `cells=12` (fewer is refused
 unless `allow_thin=True`), `reflection=1e-8`, `wavelength` (the sources' shared centre wavelength
