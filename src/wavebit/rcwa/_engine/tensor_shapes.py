@@ -101,8 +101,56 @@ def _plan(layer, lattice, index):
     return ('painted' if overlap else 'disjoint', interfaces)
 
 
+def _isotropic(layer):
+    """The scalar view of a patterned isotropic layer (:func:`~.anisotropy.isotropic_layer`), or ``None``."""
+    from wavebit.rcwa._engine.anisotropy import isotropic_layer
+    return isotropic_layer(layer) if layer.get('shapes') else None
+
+
+def _scalar_plan(solver, view):
+    """The scalar shape freeze's two records for one isotropic layer (``_freeze_geometry``)."""
+    cell = solver._geometry_lattice_for(None)
+    basis = solver._geometry_lattice_for(None, freezing=True)
+    shapes = view['shapes']
+    boundary_plan = boundary.plan_layer(shapes,cell) if P.layer_needs_resolving(view,cell) else None
+    gamma = P.plan_gamma(shapes,basis)
+    if gamma is None:
+        raise ValueError('freeze_geometry() with concrete shape geometry before tracing')
+    return ('scalar', boundary_plan, gamma)
+
+
+def _check_scalar_plan(solver, view, plan, index):
+    """The scalar replay checks (``topology.check_shape_record``) on one isotropic layer."""
+    lattice = solver._geometry_lattice_for(None)
+    _, boundary_plan, gamma = plan
+    P.check_layer_spec(view,index)
+    P.check_layer_shapes(view,lattice,index)
+    if boundary_plan is None:
+        P.check_no_plan_still_fits(view,lattice,index)
+        P.check_gamma_plan_still_fits(view,lattice,gamma,index)
+    else:
+        boundary.check_plan_still_fits(view['shapes'],lattice,boundary_plan)
+
+
+def _scalar_slots(solver, layer, plan, quantity):
+    """Five slots of an isotropic layer from the scalar shape builder, as a scalar stack builds it."""
+    from wavebit.rcwa._engine.anisotropy import isotropic_layer
+    (_,hu),(_,hv) = solver.order_window
+    view = isotropic_layer(layer, quantity)
+    frozen = len(plan) == 3
+    conv = P.to_conv_mat_parametric_layers(
+        [view], hu, hv, solver._geometry_lattice_for(None),
+        shape_nvf_grid_size=solver._resolve_normal_grid(hu,hv),
+        complex_dtype=solver.complex_dtype, xp=solver.xp,
+        boundary_plans=[plan[1]] if frozen else None,
+        gamma_plans=[plan[2]] if frozen else None,
+        **({} if solver._projector is None else {'nvf_projector': solver.nvf_projector}))
+    return [c[0] for c in conv]
+
+
 def freeze(solver):
-    plans = tuple(_plan(_shifted(layer)[0],solver.lattice,i)
+    plans = tuple(_scalar_plan(solver,_isotropic(layer)) if _isotropic(layer) is not None
+                  else _plan(_shifted(layer)[0],solver.lattice,i)
                   for i,layer in enumerate(solver.structure))
     return StaticGeometry(tensor_geometry={'mode':'integrated', 'plans':plans,
                                           'settings':_settings(solver)})
@@ -466,7 +514,19 @@ def checked_layers(solver, geometry):
     for index,original in enumerate(solver.structure):
         layer,shift = _shifted(original)
         P.check_layer_shapes(layer,solver.lattice,index)
+        view = _isotropic(original)
+        if view is not None:
+            # An isotropic layer takes the scalar rule whatever the other layers hold.
+            plan = ('scalar',) if record is None else record['plans'][index]
+            if plan is None or plan[0] != 'scalar':
+                raise StaleGeometryError('tensor shape materials changed; freeze_geometry() again')
+            if record is not None:
+                _check_scalar_plan(solver,view,plan,index)
+            yield original, (0.,0.), plan
+            continue
         plan = _plan(layer,solver.lattice,index) if record is None else record['plans'][index]
+        if plan is not None and plan[0] == 'scalar':
+            raise StaleGeometryError('tensor shape materials changed; freeze_geometry() again')
         shapes = layer.get('shapes',[])
         if not shapes:
             if plan is not None:
@@ -507,6 +567,8 @@ def build(solver, geometry=None, quantity='epsilon'):
             e = as_tensor(xp,raw,dtype,dev)
             full = tensor_shape(raw)==(3,3) and full_tensor(xp,e)
             output.append(_uniform_slots(xp,e,count,full));continue
+        if plan[0] == 'scalar':
+            output.append(_scalar_slots(solver,layer,plan,quantity));continue
         A,B,zz = _layer(solver,layer,plan,quantity)
         ky = xp.arange(-2*hv,2*hv+1,dtype=solver.float_dtype,device=dev)[:,None]
         kx = xp.arange(-2*hu,2*hu+1,dtype=solver.float_dtype,device=dev)[None,:]
