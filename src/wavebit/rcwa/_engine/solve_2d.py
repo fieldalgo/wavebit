@@ -1021,8 +1021,8 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
     live_p = pmask[None, :, None, None]
     M0 = xp.where(live_p, Mp[:, None] - m00[None, :, None, None] * eyek, eyek * one(Mp[:, None]))
     M1 = xp.where(live_p, Mp[:, None] - m11[None, :, None, None] * eyek, eyek * one(Mp[:, None]))
-    y0c = xp.linalg.solve(M0, -xp.permute_dims(Ca_c, (0, 2, 1))[..., None])[..., 0]   # (S, P, k)
-    y1c = xp.linalg.solve(M1, (-xp.permute_dims(Cb_c, (0, 2, 1))
+    y0c = linear_solve(xp, M0, -xp.permute_dims(Ca_c, (0, 2, 1))[..., None])[..., 0]   # (S, P, k)
+    y1c = linear_solve(xp, M1, (-xp.permute_dims(Cb_c, (0, 2, 1))
                                + m01[None, :, None] * y0c)[..., None])[..., 0]
     Y0 = xp.where(is_c[:, None], xp.take(xp.reshape(xp.permute_dims(y0c, (0, 2, 1)),
                                                     (S * k, npair)), pc, axis=0), Y0)
@@ -1035,9 +1035,9 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
     Gs = xp.permute_dims(xp.reshape(Gc, (n2, S, k)), (1, 0, 2))               # (S, n2, k)
     Mrow = lam[None, :, None, None] * eyek - padded(Mc, -F)[:, None]          # (S, n2, k, k)
     Mrow = xp.matrix_transpose(xp.where(is_c[None, :, None, None], eyek * one(Mrow), Mrow))
-    Yc = xp.linalg.solve(Mrow, -Gs[..., None])[..., 0]
+    Yc = linear_solve(xp, Mrow, -Gs[..., None])[..., 0]
     rhs_a = -Gs - m01_row[None, :, None] * xp.take(Yc, partner, axis=1)
-    Yc = xp.where(is_a[None, :, None], xp.linalg.solve(Mrow, rhs_a[..., None])[..., 0], Yc)
+    Yc = xp.where(is_a[None, :, None], linear_solve(xp, Mrow, rhs_a[..., None])[..., 0], Yc)
     del Mrow, rhs_a
     if S > 1:
         # Another cluster's rows: M_r Y - Y M_s = -G, k*k unknowns (vec column-major), with
@@ -1055,7 +1055,7 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
         Kt = xp.where(same[:, :, None, None],
                       xp.astype(lane2[:, None] == lane2[None, :], C) * one(Kt), Kt)
         rhs = xp.where(rv & ~same[:, :, None], rhs, xp.zeros_like(rhs))
-        sol = xp.linalg.solve(Kt, rhs[..., None])[..., 0]
+        sol = linear_solve(xp, Kt, rhs[..., None])[..., 0]
         Yrs = xp.reshape(xp.permute_dims(xp.reshape(sol, (S, S, k, k)), (0, 3, 1, 2)),
                          (S * k, S, k))
         Yc = xp.where(is_c[None, :, None], xp.permute_dims(xp.take(Yrs, pc, axis=0), (1, 0, 2)),
@@ -1093,7 +1093,7 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
     del AQ1
     T = padded(T, F)
     X, J, cond = _cluster_split(xp, T, cvalid, F)
-    Mx = xp.linalg.solve(X, T @ X)
+    Mx = linear_solve(xp, X, T @ X)
     dg = xp.linalg.diagonal(Mx)
     JK = J[:, :, None] & (~J & cvalid)[:, None, :]
     dropped = xp.linalg.matrix_norm(xp.where(vv & ~(JK | (eyek != 0)), Mx, xp.zeros_like(Mx)))
