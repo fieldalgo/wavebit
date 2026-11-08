@@ -19,6 +19,11 @@ from wavebit import rcwa
 
 Requesting JAX double precision without x64 enabled raises a structured error. Optional dependencies are imported only when needed. Keep live arrays on the selected backend and device; converting differentiable inputs through NumPy severs their derivative path.
 
+A concrete JAX array given as an input value to `backend="torch"` is read through NumPy with its
+own dtype and then converted, so it gives the same result as the same values passed as a NumPy
+array, with JAX x64 on or off. It carries no PyTorch derivative. A traced JAX value cannot be read
+by a PyTorch run and is refused.
+
 See [automatic differentiation](autodiff.md) for preparation and tracing, and the [compatibility backend manual](../../migration/backends-v1.md) for prior-engine performance notes and historical measured comparisons.
 
 ## Shared materials under JAX transformations
