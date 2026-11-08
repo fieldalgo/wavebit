@@ -774,7 +774,26 @@ def _as(xp, value, like):
                 return value
         except Exception:                   # noqa: BLE001 - a NumPy scalar, say: convert it
             pass
-    return xp.asarray(value, dtype=like.dtype, device=getattr(like, 'device', None))
+    device = getattr(like, 'device', None)
+    try:
+        return xp.asarray(value, dtype=like.dtype, device=device)
+    except AttributeError:
+        if device is None or not _jax_tracer(value):
+            raise
+        # A tracer has no ``device`` (its trace places it), so the shortcut above missed it,
+        # and ``jnp.asarray(tracer, device=...)`` raises JAX's internal "'SingleDeviceSharding'
+        # object has no attribute 'spec'" when the value is batched: eager ``jax.vmap`` and
+        # ``jax.jacfwd`` of a ranged body's radius or centre failed with it. The dtype is still
+        # the points'; only the placement is left to the trace. Every tracer that converted
+        # with the device still does, so ``jax.grad`` and ``jax.jit`` keep their programs.
+        return xp.asarray(value, dtype=like.dtype)
+
+
+def _jax_tracer(value):
+    """Whether ``value`` is a JAX tracer, without importing JAX."""
+    import sys
+    jax = sys.modules.get('jax')
+    return jax is not None and isinstance(value, jax.core.Tracer)
 
 
 def _transverse(axis):
