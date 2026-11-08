@@ -3,7 +3,7 @@ from dataclasses import dataclass, fields, is_dataclass
 from collections.abc import Mapping
 import numpy as np
 from wavebit._common.execution import Execution, CheckReport, frozen_mapping
-from wavebit._common.backend import eager_under_torch_compile
+from wavebit._common.backend import eager_under_torch_compile, _functorch_active, _transform_modes
 from wavebit.errors import Issue, ValidationError, UnsupportedFeatureError, IncompatibleProblemError
 from wavebit.materials import Material, ConductiveMaterial, DispersiveMaterial
 from ._problem import Problem
@@ -447,6 +447,29 @@ def _reraise_public(exc):
     raise translated from exc
 
 
+def _refuse_torch_vmap():
+    """Refuse a Torch run under an active ``torch.func.vmap`` level, before any field moves.
+
+    The Torch time step writes slabs and CPML memories in place into state that is not
+    batched. A batched geometry value reaching one of those writes made PyTorch raise
+    ``vmap: inplace arithmetic ... is not possible`` from inside the loop, and a batched
+    material was refused while lowering with a message about real numbers; both get this
+    now. ``torch.func.jacfwd`` and ``hessian`` batch the forward run through ``vmap`` and are
+    refused with it. ``grad``, ``vjp``, ``jvp`` and ``jacrev`` (whose ``vmap`` batches only
+    the pullback) are not.
+    """
+    import sys
+    torch=sys.modules.get('torch')
+    if torch is None or not _functorch_active(torch):
+        return
+    if _transform_modes()[1]:
+        raise UnsupportedFeatureError(
+            'torch.func.vmap cannot batch a Torch FDTD run (nor can torch.func.jacfwd or '
+            'hessian, which batch it through vmap): the time step updates its fields in place, '
+            'which vmap cannot batch. Loop over the batch in Python, take torch.func.jvp per '
+            'direction, or use JAX with jax.vmap',code='fdtd.torch_transform',path='problem')
+
+
 @eager_under_torch_compile
 def check(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
     """Validate and estimate resources without advancing any field."""
@@ -504,6 +527,8 @@ class Prepared:
     @eager_under_torch_compile
     def run(self,problem):
         """Run the complete supplied live problem; never update this preparation."""
+        if self.execution.backend=='torch':
+            _refuse_torch_vmap()
         with self.execution._scope(),_public_spelling():
             try:scene,metadata=self._lower(problem)
             except (TypeError,ValueError,NotImplementedError) as exc:

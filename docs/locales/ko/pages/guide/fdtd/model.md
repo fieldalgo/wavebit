@@ -621,6 +621,15 @@ traced band를 읽지 못하므로 계획 단계 경고가 남을 수 있습니�
 아닙니다. 유한 차분과 비교하고 순방향 계산도 함께 다듬으세요. [영문 미분 가이드](fd-differentiation.md)가
 같은 엔진의 호환(compat) 표기로 측정을 다룹니다.
 
+Torch에서 `prepared.run`은 eager autograd와 `torch.func.grad`, `vjp`, `jacrev`, `jvp`로
+미분되며, 그 값은 `torch.autograd.grad`와 반올림 오차 안에서 일치합니다. 시간 스텝이 장을
+제자리(in place)에서 갱신하므로 `torch.func.vmap`은 실행을 배치로 묶을 수 없습니다.
+`prepared.run`은 이를 거부하고, 실행을 vmap으로 묶는 `torch.func.jacfwd`와 `hessian`도
+`UnsupportedFeatureError` 코드 `fdtd.torch_transform`으로 거부합니다. 배치는 Python 루프로
+돌리거나, 방향마다 `torch.func.jvp`를 쓰거나, JAX에서 `jax.vmap`으로 묶으세요.
+`checkpoint_steps`가 있으면 `torch.func.grad`와 `vjp`는 지원되고, pullback을 `vmap`으로 묶는
+`jacrev`는 같은 코드와 경로 `numerics.checkpoint_steps`로 거부됩니다.
+
 ## 예제: 기판 위 코팅을 닫힌 꼴과 비교
 
 여기서는 모든 경계면이 셀 경계 위에 있어서 스냅되는 면이 없습니다. 기판은 아래쪽 PML 안으로
