@@ -420,7 +420,14 @@ def _sampled_fields(solver, geometry, quantity):
     elif record is not None and record['snapshot'] is not None:
         raise StaleGeometryError('tensor shape geometry changed; freeze_geometry() again')
     structure = solver.structure if quantity == 'epsilon' or shaped else solver.mu
-    fields = _field(solver, structure, quantity, snapshot)
+    # Cut and lifted under `_eager`, so a raster that is a constant of a `jax.jit` trace keeps
+    # its values and its phases are labelled as they are eagerly. Staged, every layer of it was
+    # a tracer -- even with only the wavelength traced -- and the solve was refused below as if
+    # the raster itself were traced. A traced raster still stages, and still is.
+    with solver._eager():
+        fields = _field(solver, structure, quantity, snapshot)
+        layers = [(t, t.shape[:2] == (1, 1)) for t in fields]
+        layers = [(t if single else _at_floor(solver, t), single) for t, single in layers]
     if record is not None and len(fields) != len(record[quantity]):
         raise StaleGeometryError('tensor layer count changed; freeze_geometry() again')
     xp, dtype, dev = solver.xp, solver.complex_dtype, solver._array_device
@@ -431,9 +438,7 @@ def _sampled_fields(solver, geometry, quantity):
         raise StaleGeometryError('tensor lattice changed; freeze_geometry() again')
     same_geometry = same_basis
     prepared = []
-    for i,t in enumerate(fields):
-        single = t.shape[:2] == (1,1)
-        t = t if single else _at_floor(solver, t)
+    for i, (t, single) in enumerate(layers):
         stored = None if record is None else record[quantity][i]
         try:
             labels = _labels(t)
