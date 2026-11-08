@@ -1778,6 +1778,15 @@ def _piece_field(xp, X, Y, shapes, plan, slots, lattice, dtype, dyadic=False):
         pick_v = c_u & ~c_v
         axis_x = xp.where(pick_u, frame.cos * one, xp.where(pick_v, -frame.sin * one, axis_x))
         axis_y = xp.where(pick_u, frame.sin * one, xp.where(pick_v, frame.cos * one, axis_y))
+    # The axes are real and, once a complex material puts its seam phase in (3b), the sum is
+    # not. `where` promotes the forward value exactly, but PyTorch's backward then hands the
+    # complex cotangent to the real branch and raises, so a box `angle` under autograd failed
+    # on every complex multi-shape layer. Promote first: the same values, and a cast whose
+    # derivative is the real part, which is what JAX's promotion already did.
+    if axis_x.dtype != sx.dtype:
+        axis_x = xp.astype(axis_x, sx.dtype)
+    if axis_y.dtype != sy.dtype:
+        axis_y = xp.astype(axis_y, sy.dtype)
     sx = xp.where(tie, axis_x, sx)
     sy = xp.where(tie, axis_y, sy)
     norm = (_hypot_safe(xp, xp.abs(sx), xp.abs(sy))
