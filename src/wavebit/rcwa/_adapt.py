@@ -584,3 +584,66 @@ def _positive_real(value):
         return bool(np.isscalar(value) and np.isrealobj(value) and np.isfinite(value) and value > 0)
     except TypeError:
         return False
+
+
+def _in_plane_magnitude(epsilon, path):
+    """Largest ``|eps|`` among a permittivity's in-plane (x, y) entries, or None if traced."""
+    if opaque(epsilon):
+        return None
+    a = host(epsilon, path)
+    if a.shape[-2:] == (3, 3):
+        a = a[..., :2, :2]
+    elif a.shape[-1:] == (3,) and a.ndim in (1, 3):
+        a = a[..., :2]
+    return float(np.max(np.abs(a))) if a.size else None
+
+
+def _ky_free(problem):
+    """Whether every source is a plane wave whose in-plane wavevector has no y part."""
+    for source in problem.excitation.sources:
+        if not isinstance(source, PlaneWave):
+            return False
+        theta, phi = (0. if getattr(source, name, None) is None else getattr(source, name)
+                      for name in ('theta', 'phi'))
+        if opaque(theta) or opaque(phi):
+            return False
+        if np.sin(host(theta, 'theta')) * np.sin(host(phi, 'phi')) != 0:
+            return False
+    return True
+
+
+def refuse_near_zero_smm_layers(problem, numerics, execution, wavelength):
+    """Refuse a layer whose in-plane permittivity is nearly zero everywhere, under SMM at conical incidence.
+
+    SMM forms each layer's interface coefficients from ``inv(V_layer)``. Where the whole layer's
+    in-plane permittivity is ``|eps| << 1``, the p modes' magnetic columns of ``V`` are of order
+    ``eps`` and rounding of the s modes' order-one columns enters them, so the result loses a
+    factor of about ``1/|eps|`` in relative accuracy; it lost energy conservation (``R + T - 1``)
+    of 1e-6 at ``|eps| = 1e-13`` and 0.09 at 1e-16. With no y component in the incident
+    wavevector the two polarizations do not mix and SMM is exact; ETM does not invert ``V`` and
+    conserved energy to 4e-16 at either incidence down to ``|eps| = 1e-16`` in double precision. Below ``sqrt(machine epsilon)`` of the run's precision more
+    than half of the digits would be lost, so such a layer is refused there and ETM is named.
+    A traced permittivity cannot be read and is not refused.
+    """
+    if numerics.algorithm != 'smm' or _ky_free(problem):
+        return
+    floor = float(np.sqrt(np.finfo(np.float64 if execution.precision == 'double' else np.float32).eps))
+    for i, layer in enumerate(problem.stack.layers):
+        path = f'stack.layers[{i}]'
+        if layer.epsilon is not None:
+            values = [_in_plane_magnitude(layer.epsilon, f'{path}.epsilon')]
+        else:
+            materials = [layer.background] + [region.material for region in layer.regions]
+            values = [_in_plane_magnitude(physical_material(m, wavelength, problem.units).epsilon, path)
+                      for m in materials]
+        if values and all(v is not None for v in values) and max(values) < floor:
+            raise UnsupportedFeatureError(
+                f'Layer {i} has an in-plane permittivity of magnitude {max(values):.3g} everywhere, below '
+                f'{floor:.3g} (the square root of {execution.precision}-precision machine epsilon). '
+                'At an incidence with a y wavevector component, algorithm="smm" loses about 1/|eps| of '
+                'relative accuracy on such a layer and can return R + T > 1. Use '
+                'Numerics(algorithm="etm"), which does not invert the layer\'s magnetic modes and '
+                'conserves energy to rounding in this limit in double precision.',
+                code='rcwa.near_zero_permittivity_smm', path=path,
+                expected=f'|eps| >= {floor:.3g}, algorithm="etm", or no y wavevector component',
+                actual=max(values))
