@@ -10,7 +10,7 @@ from decimal import Decimal
 import math
 import sys
 import numpy as np
-from wavebit._common.backend import array_namespace, as_array, _concrete
+from wavebit._common.backend import array_namespace, as_array, in_namespace, _concrete
 from wavebit._common.declarations import Declaration
 from wavebit.units import C0, EPSILON0, require_units
 from wavebit.errors import ValidationError
@@ -18,12 +18,14 @@ from .response import Material, MaterialResponse
 from ._tabulated import TabulatedMaterial as LegacyTabulatedMaterial
 
 
+def _leaves(v):
+    if isinstance(v, (tuple, list)):
+        return [x for item in v for x in _leaves(item)]
+    return [v]
+
+
 def _namespace(*values):
-    def leaves(v):
-        if isinstance(v, (tuple, list)):
-            return [x for item in v for x in leaves(item)]
-        return [v]
-    arrays = [v for v in leaves(values) if hasattr(v, 'dtype') and hasattr(v, 'shape')]
+    arrays = [v for v in _leaves(values) if hasattr(v, 'dtype') and hasattr(v, 'shape')]
     live = [v for v in arrays if not isinstance(v, (np.ndarray, np.generic))]
     selected = live or arrays or [np.asarray(0.)]
     return array_namespace(*selected), selected[0]
@@ -83,6 +85,22 @@ def _array(xp, value, *, dtype, device):
     return as_array(xp, value, dtype=dtype, device=device)
 
 
+def _wide(value):
+    """Whether any leaf of ``value`` is a double-precision real or complex array."""
+    if isinstance(value, (tuple, list)):
+        return any(_wide(v) for v in value)
+    return str(getattr(value, 'dtype', '')) in (
+        'float64', 'complex128', 'torch.float64', 'torch.complex128')
+
+
+def _double_available(xp):
+    """JAX without x64 has no float64; asking for it would warn and narrow anyway."""
+    if 'jax' not in xp.__name__:
+        return True
+    jax = sys.modules.get('jax')
+    return bool(jax is not None and jax.config.jax_enable_x64)
+
+
 def _response(epsilon, mu, term, omega):
     """Add an isotropic response to scalar/diagonal/full constitutive data."""
     xp, ref = _namespace(epsilon, mu, term, omega)
@@ -90,12 +108,7 @@ def _response(epsilon, mu, term, omega):
     dtype = xp.complex64 if str(getattr(omega, 'dtype', '')) in ('float32', 'torch.float32') else xp.complex128
     # A Python wavelength may select Torch's float32 default. It must not narrow
     # a double material (or its backward cotangent) through a complex64 response.
-    def wide(value):
-        if isinstance(value, (tuple, list)):
-            return any(wide(v) for v in value)
-        return str(getattr(value, 'dtype', '')) in (
-            'float64', 'complex128', 'torch.float64', 'torch.complex128')
-    if wide(epsilon) or wide(mu) or wide(term):
+    if _wide(epsilon) or _wide(mu) or _wide(term):
         dtype = xp.complex128
     e = _array(xp, epsilon, dtype=dtype, device=device)
     spectral_shape = tuple(omega.shape)
@@ -126,6 +139,15 @@ def angular_frequency(wavelength, *, units, values=()):
     w = as_array(xp, wavelength, device=getattr(ref, 'device', None))
     if xp.isdtype(w.dtype, 'complex floating'):
         raise ValidationError('vacuum wavelength must be real', code='wavelength.value', path='wavelength')
+    # Form omega at the widest precision among the inputs. A Python wavelength
+    # takes Torch's float32 default; a double material must not see its
+    # frequency rounded to single precision. Convert the original value, not
+    # the float32 copy, so a Python float keeps all of its digits.
+    # Only the backend's own arrays count: a host NumPy constant beside a Torch
+    # wavelength tensor keeps the precision that wavelength asked for.
+    if (w.dtype != xp.float64 and _double_available(xp)
+            and _wide([v for v in _leaves(values) if in_namespace(xp, v)])):
+        w = as_array(xp, wavelength, dtype=xp.float64, device=getattr(ref, 'device', None))
     valid = xp.isfinite(w) & (w > 0)
     if _concrete(xp.all(valid)) is False:
         raise ValidationError('vacuum wavelength must be finite and positive', code='wavelength.value', path='wavelength')
