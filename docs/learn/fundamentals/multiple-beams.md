@@ -580,7 +580,7 @@ Use `ElectricDipole` for an electric dipole emitting from one point inside a lay
 | `position=(x,y,z)` | Position in global structure coordinates; it must lie inside a layer. |
 | `moment=(px,py,pz)` | Complex xyz electric dipole moment, in C·m. Each component includes magnitude and phase. |
 | `repetition="periodic"` | Dipole array repeated in every lattice cell. |
-| `bloch_k=(kx,ky)` | Sets phase between neighboring cells of a repeated array. A lattice translation R multiplies the moment by `exp(i k∥·R)`. Omission means equal phase. |
+| `bloch_k=(kx,ky)` | Sets phase between neighboring cells of a repeated array. A lattice translation R multiplies the moment by `exp(i k∥·R)`. Omission means equal phase. Adding a reciprocal lattice vector G gives the same array; the solver reduces `bloch_k` into the reciprocal cell centred on the origin and centres the dipole's Fourier orders there. |
 | `repetition="isolated"` | Approximates an isolated dipole by integration over several Bloch wavevectors. |
 | `sampling=(Nx,Ny)` | Bloch-wavevector integration grid for an isolated source. Default `(5,5)`; check convergence. |
 | `Problem(units=Units(length=...))` | Fixes the metres per structure-length unit, which an SI moment needs: `"nm"` or `"um"`. |

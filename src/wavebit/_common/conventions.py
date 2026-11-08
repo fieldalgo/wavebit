@@ -1204,6 +1204,22 @@ def incident_column(xp, C, lit, n_orders, specular):
     return xp.stack(column)
 
 
+def first_zone_offset(reciprocal, k_par, tol=1e-9):
+    """The reciprocal vector ``(m, n)`` that takes ``k_par`` into the first zone.
+
+    ``reciprocal`` holds ``b1, b2`` as columns. The zone is the reciprocal cell centred on the
+    origin, half-open in each reduced coordinate: ``c = B^-1 k_par`` reduces to
+    ``c - (m, n)`` in ``[-1/2, 1/2)``. It is the cell the isolated-dipole quadrature samples,
+    and on a rectangular lattice it is the first Brillouin zone. ``k_par`` and
+    ``k_par + m b1 + n b2`` give one periodic source, ``exp(i k_par . R)`` on every lattice
+    translation ``R``; the reduced one centres the retained orders on the propagating ones.
+    A point within ``tol`` (in reduced coordinates, the grouping tolerance) of a zone edge is
+    taken to the ``-1/2`` side, so ``+b/2`` and ``-b/2`` reduce alike whatever their rounding.
+    """
+    coordinates = np.linalg.solve(np.asarray(reciprocal, dtype=float), np.asarray(k_par, dtype=float))
+    return np.floor(coordinates + .5 + tol).astype(int)
+
+
 def centre_parity(window_u, window_v):
     """Which retained orders the cell centre negates: ``True`` where ``(-1)**(m + n) == -1``.
 

@@ -188,7 +188,7 @@ rectangle `power_region`, as a Gaussian beam does.
 | `position` | required | `(x, y, z)`, inside a uniform layer: no regions, or a raster of one material | not three components: `source.dimension`, at construction; a host layer that is not uniform: `rcwa.invalid`, at run |
 | `moment` | required | `(px, py, pz)`, complex, in C·m | not three components: `source.dimension` |
 | `repetition` | `'periodic'` | `'periodic'`, one dipole per cell; or `'isolated'`, one dipole, by Brillouin-zone quadrature | anything else: `source.repetition`, at construction |
-| `bloch_k` | `None`, zero | periodic only: `(kx, ky)`, the phase between copies | beside `repetition='isolated'`: `rcwa.invalid`, at check |
+| `bloch_k` | `None`, zero | periodic only: `(kx, ky)`, the phase between copies; reduced by reciprocal lattice vectors into the cell centred on the origin, since `bloch_k + G` is the same array | beside `repetition='isolated'`: `rcwa.invalid`, at check |
 | `sampling` | `(5, 5)` | isolated only: the quadrature grid. A finite grid is a larger repeated supercell and must be converged | |
 
 ## The numerics
