@@ -88,13 +88,13 @@ Current examples for [contact](../../../examples/rcwa/nvf_contact.py), [tangent 
 
 ### A held raster preparation under jit
 
-Raster values stay live, but some Fourier paths record which pixels share a phase when they are prepared. Under `jax.jit`, a run given a pattern whose phase partition differs from the prepared one returns NaN outputs, and `result.validity.checks['raster_partition']` is false. It does not return a stale answer. On PyTorch, the same run raises `IncompatibleProblemError`.
+Raster values stay live, but some Fourier paths record which pixels share a phase when they are prepared. Under `jax.jit`, a run given a traced pattern whose phase partition differs from the prepared one returns NaN outputs, and `result.validity.checks['raster_partition']` is false. It does not return a stale answer. On PyTorch, the same run raises `IncompatibleProblemError`. A pattern that is a constant of the trace, with only the wavelength, an angle or a thickness traced, is checked as an eager run checks it: on a recording path a moved one raises `IncompatibleProblemError` with code `prepared.topology`, the error an eager run gives.
 
 | `fourier_coefficients`, `factorization` | A moved pattern through one held preparation |
 | --- | --- |
 | `'sampled'`, `'li'` | correct; nothing is recorded |
-| `'sampled'`, `'nvf'` | NaN under jit; PyTorch raises |
-| `'integrated'`, `'li'` | NaN under jit; PyTorch raises |
+| `'sampled'`, `'nvf'` | traced: NaN under jit; constant of the trace, and PyTorch: raises |
+| `'integrated'`, `'li'` | traced: NaN under jit; constant of the trace, and PyTorch: raises |
 
 When a pattern moves every step under jit, use `('sampled', 'li')` or prepare each concrete pattern outside the transform. A recording path guards the partition under jit only up to 256 distinct phases; beyond that a traced raster is refused with `rcwa.raster_partition_transform`, while eager `jax.grad` and PyTorch check it on its values.
 

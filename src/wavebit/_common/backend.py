@@ -996,6 +996,30 @@ def _concrete(flag):
         return None
 
 
+def concrete_scope(xp):
+    """A context in which a concrete value stays concrete, even inside a ``jax.jit`` trace.
+
+    The namespace-level twin of the solver's ``_eager`` (``CoreSolveMixin._eager``), for code
+    that is handed ``xp`` rather than a solver. ``jax.ensure_compile_time_eval`` on JAX; a null
+    context on NumPy and PyTorch, which stage nothing.
+
+    It exists because inside ``jax.jit`` every ``jnp`` operation is staged -- an index into a
+    constant included. A raster that is a *constant* of the trace (only the wavelength, an
+    angle or a thickness traced) reaches a builder as a concrete array, and ``structure[i]``
+    hands back a tracer with no value. Every geometry decision read off that layer -- the NVF
+    interface mask, a raster's block compression, the passive-dielectric check of the inverse
+    rule's floor -- then fails or takes the branch for a value it cannot read, although the
+    value is right there. Under this context the same index returns the layer; a tracer -- a
+    raster the caller traces or differentiates -- still stages, and the decisions it cannot
+    serve are refused as before. Outside a trace nothing is staged, so nothing changes.
+    """
+    if 'jax' in getattr(xp, '__name__', ''):
+        import jax                              # local: jax is optional
+        return jax.ensure_compile_time_eval()
+    import contextlib
+    return contextlib.nullcontext()
+
+
 def check_finite(xp, **named):
     """Raise if any named result carries a NaN or an infinity.
 

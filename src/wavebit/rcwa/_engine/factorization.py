@@ -49,7 +49,11 @@ axis-aligned rectangular cell also take Li's rules, through :func:`fourier2d_int
 A recurring rule runs through this module: **discrete geometry decisions are computed eagerly
 and passed in as static inputs, while material values flow through differentiably.** The NVF
 normal field records where interfaces point; integrated compression records where equal-valued
-blocks end. Both decisions branch on values, so their planning cannot run inside ``jax.jit``.
+blocks end. Both decisions branch on values, so their planning cannot run on a raster that
+``jax.jit`` traces. A raster that is a *constant* of the trace -- only the wavelength, an angle or
+a thickness traced -- is planned as it is eagerly: its layers are cut under
+:func:`~wavebit._common.backend.concrete_scope`, because a staged ``structure[i]`` is a tracer even
+of a constant.
 
 Compression is lossless for values but a representative gather is not lossless for independent
 pixel derivatives. Integrated builds therefore use every original pixel edge whenever their
@@ -59,9 +63,9 @@ compression. Full pixel integration gives the same Fourier coefficients without 
 derivatives; it can cost more when many pixels have equal values.
 
 An eager ``jax.grad`` can read the primal for planning, including the normal field through the
-base raster's interface mask (:func:`_upsampled_interface_mask`). Under ``jax.jit`` explicit
-records are still required: the declared geometry is resolved or validated before choosing
-the derivative-safe grid. The normal-field derivative holds its interface decisions fixed.
+base raster's interface mask (:func:`_upsampled_interface_mask`). Under ``jax.jit`` a traced
+raster still needs explicit records: the declared geometry is resolved or validated before
+choosing the derivative-safe grid. The normal-field derivative holds its interface decisions fixed.
 
 A supplied record belongs to the structure it was taken on. Where values can be read, a stale
 record is refused by :func:`_check_normal_field_still_fits` or
@@ -111,6 +115,7 @@ from wavebit._common.backend import _concrete
 from wavebit._common.backend import array_namespace
 from wavebit._common.backend import as_array
 from wavebit._common.backend import carries_autodiff
+from wavebit._common.backend import concrete_scope
 from wavebit._common.backend import constant_array
 from wavebit._common.backend import forward_tangent
 from wavebit._common.backend import functorch_differentiates
@@ -824,16 +829,23 @@ def _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v):
     read whole, which is what lets NVF differentiate without a frozen geometry.
 
     Like :func:`_layer_eps` this only casts: the raster is permittivity already.
+
+    Both grids are cut and lifted under :func:`~wavebit._common.backend.concrete_scope`, so a
+    raster that is a constant of a ``jax.jit`` trace yields concrete layers, as it does eagerly.
+    Staged, ``structure[i]`` was a tracer even with only the wavelength traced, and every
+    reader of the layer's interfaces raised ``TracerBoolConversionError``.
     """
     for i in range(structure.shape[0]):
-        layer = structure[i]
-        base = xp.astype(layer, _complex_dtype(xp, layer))
-        repeat_v, repeat_u = _normal_field_floor(layer.shape, half_width_u, half_width_v)
-        if repeat_v > 1:
-            layer = xp.repeat(layer, repeat_v, axis=0)
-        if repeat_u > 1:
-            layer = xp.repeat(layer, repeat_u, axis=1)
-        yield xp.astype(layer, _complex_dtype(xp, layer)), base, repeat_v, repeat_u
+        with concrete_scope(xp):
+            layer = structure[i]
+            base = xp.astype(layer, _complex_dtype(xp, layer))
+            repeat_v, repeat_u = _normal_field_floor(layer.shape, half_width_u, half_width_v)
+            if repeat_v > 1:
+                layer = xp.repeat(layer, repeat_v, axis=0)
+            if repeat_u > 1:
+                layer = xp.repeat(layer, repeat_u, axis=1)
+            eps = xp.astype(layer, _complex_dtype(xp, layer))
+        yield eps, base, repeat_v, repeat_u
 
 
 def check_raster_records_still_fit(structure, half_width_u, half_width_v,
@@ -1415,7 +1427,9 @@ def _upsampled_interface_mask(xp, base_eps, repeat_v, repeat_u):
     step, which a tracer refuses; narrowing the base's comparisons one value at a time is
     something a grad tracer allows, and there are ``repeat_v * repeat_u`` times fewer of them —
     128x128 rather than 2688x2688 at ``truncation_order=5``. It is what lets NVF differentiate with no
-    frozen geometry. (Under ``jax.jit`` neither works: there is no primal to narrow.)
+    frozen geometry. (Under ``jax.jit`` neither works on a traced raster: there is no primal to
+    narrow. A raster that is a constant of the trace never gets here -- its layers are cut
+    concrete, see :func:`_layer_eps_for_normal_field`.)
 
     Note this is *not* the base's own mask repeated. Repeating ``[1, 2]`` twice gives
     ``[1, 1, 2, 2]``, whose border cells are the middle two, not all four.
@@ -1570,6 +1584,24 @@ def normal_field_source_for_raster(structure, half_width_u, half_width_v, lattic
             for eps, _, _, _ in _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v)]
 
 
+def _cell_has_no_value(lattice):
+    """Whether ``lattice`` is a basis held by a ``jax.jit`` or ``jax.vmap`` trace, with no value.
+
+    Asked through :func:`~wavebit._common.backend._concrete`, so a ``jax.grad`` tracer and a
+    tensor under autograd, which carry their values, are not such a cell. The reduction runs
+    under :func:`~wavebit._common.backend.concrete_scope`: a basis that is a constant of the
+    trace is read as the constant it is, not staged into a tracer that cannot be.
+    """
+    if lattice is None:
+        return False
+    cols = getattr(lattice, 'columns', lattice)
+    if not hasattr(cols, 'shape'):
+        return False
+    xp = array_namespace(cols)
+    with concrete_scope(xp):
+        return _concrete(xp.all(xp.isfinite(cols))) is None
+
+
 def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, method=None):
     """Refuse a frozen normal field sampled from interfaces that have since moved.
 
@@ -1585,10 +1617,20 @@ def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, meth
     every interface it had — a layer gone uniform, where no normal field is wrong because none
     is used. Re-freezing costs one call.
 
-    Only reachable eagerly. Under a trace the layer cannot be read at all, which is the point
-    of having frozen it — so a jitted call carries no check. JAX's ``fit`` prepares the current
-    geometry before every compiled step; its jitted ``solve_field`` runs this check on the live
-    solver before its compiled call (:func:`check_raster_records_still_fit`).
+    Only reachable where the layer has values: eagerly, and under ``jax.jit`` when the raster is
+    a constant of the trace (its layers are cut concrete, see
+    :func:`_layer_eps_for_normal_field`). A raster the trace carries cannot be read at all,
+    which is the point of having frozen it — so that jitted call carries no check. JAX's
+    ``fit`` prepares the current geometry before every compiled step; its jitted
+    ``solve_field`` runs this check on the live solver before its compiled call
+    (:func:`check_raster_records_still_fit`).
+
+    The cell is an input of the field too, and the same holds for it: a basis that ``jax.jit``
+    or ``jax.vmap`` traces has no value to compare with the record's, so a constant raster on a
+    traced cell is replayed on trust -- the rule the solver's own pre-check keeps for it
+    (``_refuse_a_stale_raster_record``). Until the layers of a constant raster were cut concrete
+    this check was never reached under a trace, so a jitted derivative in a skewed lattice
+    replayed its record; reading that basis here raised ``TracerArrayConversionError`` instead.
     """
     import numpy as np
     if source is None:
@@ -1596,6 +1638,8 @@ def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, meth
     try:
         eps = _to_numpy(eps_matrix)
     except Exception:                     # a tracer: nothing to compare, nothing to do
+        return
+    if _cell_has_no_value(lattice):       # a traced cell: nothing to compare it with either
         return
 
     entry = source[index]
@@ -2787,8 +2831,9 @@ def _as_bools(xp, flags):
     Whole-array in one step when the values are concrete, and element by element when that
     fails. The second path is not a fallback for tidiness: under ``jax.grad`` a tracer refuses
     a whole-array NumPy conversion, but each element still narrows, because a grad tracer
-    carries a concrete primal. Under ``jax.jit`` neither works — there is no primal to read,
-    which is exactly what a frozen geometry is for.
+    carries a concrete primal. Under ``jax.jit`` neither works on a traced raster — there is no
+    primal to read, which is exactly what a frozen geometry is for. (A raster that is a constant
+    of the trace is cut into concrete layers, so its flags convert whole.)
     """
     import numpy as np
     try:
@@ -2815,8 +2860,9 @@ def compression_indices(cell):
     The compressed layer ``cell[row_idx][:, col_idx]`` (:func:`compress_cell`) on those edges is
     the same staircase as the raster. The comparisons are narrowed to Python booleans with
     :func:`_as_bools`, so ``cell`` may be a torch tensor that requires grad or a ``jax.grad``
-    tracer. The output's shape depends on the values, so this does not run under ``jax.jit``;
-    a frozen record of its result is what a traced build replays. A gradient over a raster
+    tracer. The output's shape depends on the values, so this does not run on a raster that
+    ``jax.jit`` traces; a frozen record of its result is what that build replays. A raster that
+    is a constant of the trace is compressed here as it is eagerly (:func:`_compressed_layers`). A gradient over a raster
     whose pattern moves every step -- a binary topology optimization, say -- therefore needs no
     frozen geometry and cannot be served a stale one.
 
@@ -2875,7 +2921,7 @@ def _check_compression_still_fits(cell, record, index):
     blocks rejected none of them, and admitted nothing worse than a reordered summation:
     3.6e-15 across those 300 replays, 7.3e-15 on the transmitted efficiencies themselves.
 
-    Only reachable eagerly, as for :func:`_check_normal_field_still_fits`.
+    Only reachable where the layer has values, as for :func:`_check_normal_field_still_fits`.
     """
     import numpy as np
     try:
@@ -2956,6 +3002,10 @@ def _compressed_layers(xp, structure, compression):
     The loop both integrated Li and integrated Laurent builds run: a recorded compression is
     checked against the layer it is replayed onto (:func:`_check_compression_still_fits`), and a
     record for a different number of layers is refused outright.
+
+    Each layer is cut and planned under :func:`~wavebit._common.backend.concrete_scope`, as in
+    :func:`_layer_eps_for_normal_field`: a raster that is a constant of a ``jax.jit`` trace is
+    compressed as it is eagerly, rather than failing to read the layer it was just cut into.
     """
     if compression is not None and len(compression) != structure.shape[0]:
         raise StaleGeometryError(
@@ -2963,7 +3013,10 @@ def _compressed_layers(xp, structure, compression):
             f'{len(compression)} layers and this one has {structure.shape[0]}. Call '
             f'freeze_geometry() again, or drop geometry= to rebuild by comparison.')
     for i in range(structure.shape[0]):
-        yield _integrated_cell(xp, structure[i], None if compression is None else compression[i], i)
+        with concrete_scope(xp):
+            cell = _integrated_cell(xp, structure[i],
+                                    None if compression is None else compression[i], i)
+        yield cell
 
 
 def to_conv_mat_raster_integrated(structure, half_width_u, half_width_v, compression=None,
@@ -3073,9 +3126,10 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
             field = normal_field[i]
         normal_x, normal_y, magnitude = _unpack_normal_field(field, want_magnitude, i)
 
-        comp, x, y = _integrated_cell(xp, structure[i],
-                                     None if compression is None else compression[i], i)
-        eps_comp = xp.astype(comp, _complex_dtype(xp, comp))
+        with concrete_scope(xp):              # as in `_compressed_layers`
+            comp, x, y = _integrated_cell(xp, structure[i],
+                                         None if compression is None else compression[i], i)
+            eps_comp = xp.astype(comp, _complex_dtype(xp, comp))
 
         for slot, mat in zip(out, nvf_conv_matrices_integrated(
                 xp, eps_comp, x, y, normal_x, normal_y, half_width_u, half_width_v,

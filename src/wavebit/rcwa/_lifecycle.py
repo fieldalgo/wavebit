@@ -11,6 +11,7 @@ from ..errors import (ValidationError, UnsupportedFeatureError, IncompatibleProb
                       WavebitError, Issue)
 from .problem import Problem
 from .numerics import Numerics
+from ._engine.geometry import StaleGeometryError
 from . import _adapt
 
 
@@ -399,6 +400,13 @@ class Prepared:
                         result = solver.solve(geometry=geometry)
                 except _linalg_errors() as error:
                     raise NumericalError(_public(str(error)), code='rcwa.singular', path='problem') from error
+                except StaleGeometryError as error:
+                    # The builders compare a record with the layer wherever the layer has values.
+                    # Eagerly `_solvers` does it first; under `jax.jit` a raster that is a
+                    # constant of the trace reaches the builder's own check, and is refused
+                    # with the code the eager run gives.
+                    raise IncompatibleProblemError(_public(str(error)), code='prepared.topology',
+                                                   path='stack') from error
                 solved.append((solver, result))
             result = pack(problem, self.numerics, self.execution, solved, checks, self.report)
             finite = result.validity.checks['numerical_finite']
