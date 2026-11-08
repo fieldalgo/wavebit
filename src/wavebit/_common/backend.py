@@ -909,7 +909,7 @@ def _readable(v, xp):
     """
     if in_namespace(xp, v):
         return v
-    return xp.asarray(v)
+    return xp.asarray(host_foreign(xp, v))
 
 
 def checked_float(v):
@@ -1437,6 +1437,35 @@ def forward_strided(v):
     return v
 
 
+def host_foreign(xp, v):
+    """A concrete JAX array bound for PyTorch, as a NumPy array of its own dtype.
+
+    ``torch.asarray`` reads a foreign array through the buffer protocol. Asked for another
+    dtype, it reinterprets the bytes instead of converting the values: a JAX float32
+    ``[1.5, 2.25]`` read as float64 is ``[4.00000095]``, and a float64 one read as complex128
+    pairs its elements into ``1.5+2.25j``. Depending on JAX x64 and the run's precision, that
+    became a crash, a wrong shape, or a silently wrong number. Converting through NumPy
+    first keeps every value; ``asarray`` then casts. A JAX tracer has no value to convert and
+    is refused with a structured error. Other inputs are returned untouched.
+    """
+    if 'torch' not in getattr(xp, '__name__', ''):
+        return v
+    jax = sys.modules.get('jax')
+    if jax is None or not isinstance(v, (jax.Array, jax.core.Tracer)):
+        return v
+    if isinstance(v, jax.core.Tracer):
+        from wavebit.errors import ValidationError
+        raise ValidationError(
+            "a traced JAX value cannot be an input to backend='torch'; pass a Python number, "
+            "a NumPy array or a torch tensor, or run with backend='jax'",
+            code='backend.foreign_array', expected='Python number, NumPy array or torch tensor',
+            actual=type(v).__name__)
+    host = _np.asarray(v)
+    # A 0-d value reads as the NumPy scalar that indexing a NumPy array gives, so a JAX
+    # spectrum split into elements meets the solver as the same NumPy spectrum would.
+    return host[()] if host.ndim == 0 else host
+
+
 def as_array(xp, v, dtype=None, device=None, copy=False):
     """``v`` as an ``xp`` array, keeping any autograd graph intact.
 
@@ -1499,7 +1528,7 @@ def as_array(xp, v, dtype=None, device=None, copy=False):
     if in_namespace(xp, v):
         out = v if dtype is None or v.dtype == dtype else xp.astype(v, dtype)
         return out if device is None else ac.to_device(out, device)
-    v = forward_strided(v)
+    v = forward_strided(host_foreign(xp, v))
     if dtype is None:
         return xp.asarray(v, device=device)
     return xp.asarray(v, dtype=dtype, device=device)

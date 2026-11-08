@@ -26,6 +26,7 @@ import wavebit.lattice as _lattice
 from wavebit._common.backend import _concrete
 from wavebit._common.backend import _device_of
 from wavebit._common.backend import array_namespace
+from wavebit._common.backend import host_foreign
 from wavebit._common.backend import as_array
 from wavebit._common.backend import check_input_precision
 from wavebit._common.backend import checked_float
@@ -2315,7 +2316,13 @@ class CoreSolveMixin:
         A move, not a conversion: the dtype is kept and the move is differentiable. It is the
         identity on NumPy, for every Python number, and for an array already where it belongs,
         so a scene that holds no foreign array reaches the builders object for object as before.
+
+        A concrete JAX array handed to a Torch solver is first read through NumPy with its own
+        dtype (:func:`~wavebit._common.backend.host_foreign`); Torch would otherwise meet it
+        in arithmetic or reinterpret its bytes.
         """
+        if not isinstance(value, Material):
+            value = host_foreign(self.xp, value)
         if self._array_device is None:
             return value
         if isinstance(value, Material):
