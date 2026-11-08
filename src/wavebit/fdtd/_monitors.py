@@ -127,7 +127,8 @@ class FarFieldMonitor:
     is read back as ``result['ff']``, an :class:`fdtd.FarFieldSpectrum` whose
     ``intensity(theta, phi)`` is the two-sided pulse spectral energy per solid angle (angles in
     radians). Every face must be ``Open``, the box must sit in a uniform background, and no part
-    of the scene may lie outside it.
+    of the scene may lie outside it: every structure and every ``CurrentDipole`` stamp lies
+    strictly inside, one cell to spare, or the monitor is refused before the run.
     ``propagation='continuum'`` (the default) uses the continuum Green function;
     ``'yee'`` uses the grid's own dispersion.
     """
