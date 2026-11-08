@@ -170,3 +170,77 @@ def test_results_are_finite_and_non_negative_at_the_extreme():
         values = np.real(np.asarray(array))
         assert np.all(np.isfinite(values)), f'{name} went non-finite'
         assert values.min() > -1e-9, f'{name} went negative — negative power'
+
+
+# --- a layer whose permittivity is nearly zero everywhere ---------------------------------
+#
+# SMM inverts the layer's magnetic modes; the p modes' columns are of order eps, so with a y
+# wavevector component (s and p mixed) a uniform eps = 1e-13 layer returned R + T - 1 = -1e-6
+# and eps = 1e-16 returned +0.09. ETM inverts nothing of the kind and is the reference here.
+
+def _near_zero(eps, *, phi=.4, algorithm='smm', layer=None, precision='double', check=False):
+    from wavebit import rcwa
+    from wavebit.materials import Material
+    from wavebit.units import Units
+    layer = layer or rcwa.Layer(thickness=.2, background=Material(eps))
+    raster = layer.epsilon is not None
+    problem = rcwa.Problem(units=Units(length='um'),
+                           stack=rcwa.Stack(period=(.6, .5), layers=(layer,)),
+                           excitation=rcwa.Excitation(wavelength=.8, sources=(
+                               rcwa.PlaneWave(theta=.3, phi=phi, polarization=(1., .5j)),)))
+    numerics = rcwa.Numerics(orders=(2, 2) if raster and np.shape(layer.epsilon)[0] > 1 else (3, 0),
+                             algorithm=algorithm)
+    if check:
+        return rcwa.check(problem, numerics=numerics, precision=precision)
+    result = rcwa.run(problem, numerics=numerics, precision=precision,
+                      backend='torch' if precision == 'single' else 'numpy')
+    return float(np.sum(np.asarray(result.R))), float(np.sum(np.asarray(result.T)))
+
+
+def _near_zero_layers(eps):
+    from wavebit import rcwa
+    from wavebit.materials import Material
+    return {'uniform': rcwa.Layer(thickness=.2, background=Material(eps)),
+            'tensor': rcwa.Layer(thickness=.2, background=Material([eps, eps, eps])),
+            'raster_1d': rcwa.Layer(thickness=.2, epsilon=np.full((1, 4), eps)),
+            'raster_2d': rcwa.Layer(thickness=.2, epsilon=np.full((3, 4), eps))}
+
+
+@pytest.mark.parametrize('kind', ['uniform', 'tensor', 'raster_1d', 'raster_2d'])
+@pytest.mark.parametrize('eps', [1e-13, -1e-13, 1e-13 + 1e-14j, 1e-16])
+def test_smm_refuses_a_near_zero_permittivity_layer_at_conical_incidence(kind, eps):
+    from wavebit.errors import UnsupportedFeatureError
+    layer = _near_zero_layers(eps)[kind]
+    issues = _near_zero(eps, layer=layer, check=True).issues
+    assert [(i.code, i.path) for i in issues] == [('rcwa.near_zero_permittivity_smm', 'stack.layers[0]')]
+    with pytest.raises(UnsupportedFeatureError) as caught:
+        _near_zero(eps, layer=layer)
+    assert caught.value.code == 'rcwa.near_zero_permittivity_smm'
+    assert caught.value.path == 'stack.layers[0]' and 'algorithm="etm"' in caught.value.message
+
+
+def test_smm_floor_follows_the_run_precision():
+    from wavebit.errors import UnsupportedFeatureError
+    pytest.importorskip('torch')
+    R, T = _near_zero(1e-3, precision='single')       # above sqrt(float32 eps) = 3.5e-4
+    assert abs(R + T - 1) < 1e-5
+    for eps in (1e-4, 1e-7):
+        with pytest.raises(UnsupportedFeatureError):
+            _near_zero(eps, precision='single')
+
+
+def test_near_zero_layer_has_a_continuous_energy_conserving_limit():
+    """ETM approaches the eps -> 0 limit; SMM above the floor and SMM without y mixing agree."""
+    etm = {eps: _near_zero(eps, algorithm='etm') for eps in (1e-6, 1e-9, 1e-12, 1e-13, 1e-16)}
+    for R, T in etm.values():
+        assert abs(R + T - 1) < 1e-14
+    limit = etm[1e-16][0]
+    slopes = [(etm[eps][0] - limit)/eps for eps in (1e-6, 1e-9, 1e-12)]
+    # R moves linearly in eps (slope -0.548); the 1e-12 quotient carries 1e-16/1e-12 of rounding.
+    assert all(abs(slope - slopes[1]) < 1e-3 for slope in slopes) and abs(slopes[1]) < 1
+    R, T = _near_zero(1e-6)                                 # above the double floor 1.5e-8
+    assert abs(R - etm[1e-6][0]) < 1e-10 and abs(R + T - 1) < 1e-10
+    for eps in (1e-13, 1e-16):                              # no y component: not refused, exact
+        R, T = _near_zero(eps, phi=0.)
+        R_etm, T_etm = _near_zero(eps, phi=0., algorithm='etm')
+        assert abs(R + T - 1) < 1e-14 and abs(R - R_etm) < 1e-14
