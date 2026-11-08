@@ -671,6 +671,15 @@ A derivative of the discrete solver is not a statement about convergence; compar
 finite difference and refine the forward solve as well. The [differentiation guide](fd-differentiation.md)
 covers the measurements, using the compatibility spelling of the same engine.
 
+On Torch, `prepared.run` differentiates under eager autograd and under `torch.func.grad`,
+`vjp`, `jacrev` and `jvp`; they agree with `torch.autograd.grad` to rounding. `torch.func.vmap`
+cannot batch a run, because the time step updates its fields in place: `prepared.run` refuses it,
+and `torch.func.jacfwd` and `hessian`, which batch the run through it, with
+`UnsupportedFeatureError` code `fdtd.torch_transform`. Loop over a batch in Python, take
+`torch.func.jvp` per direction, or batch with `jax.vmap` on JAX. With `checkpoint_steps`,
+`torch.func.grad` and `vjp` are supported; `jacrev`, which batches the pullback through `vmap`,
+is refused with the same code at path `numerics.checkpoint_steps`.
+
 ## Example: a coating on a substrate, against the closed form
 
 Every interface here lies on a cell boundary, so nothing snaps; the substrate continues into the

@@ -668,12 +668,16 @@ def _torch_functions(torch):
 
     class SlabAdd(torch.autograd.Function):
         @staticmethod
-        def forward(ctx, a, v, slices):
+        def forward(a, v, slices):
+            a[slices].add_(v)
+            return a
+
+        @staticmethod
+        def setup_context(ctx, inputs, output):
+            a, v, slices = inputs
             ctx.slices = slices
             ctx.vshape = tuple(getattr(v, 'shape', ()))
-            a[slices].add_(v)
             ctx.mark_dirty(a)
-            return a
 
         @staticmethod
         def backward(ctx, g):
@@ -689,18 +693,61 @@ def _torch_functions(torch):
 
     class SlabMul(torch.autograd.Function):
         @staticmethod
-        def forward(ctx, a, m, slices):
+        def forward(a, m, slices):
+            a[slices].mul_(m)
+            return a
+
+        @staticmethod
+        def setup_context(ctx, inputs, output):
+            a, m, slices = inputs
             ctx.slices = slices
             ctx.m = m
-            a[slices].mul_(m)
             ctx.mark_dirty(a)
-            return a
 
         @staticmethod
         def backward(ctx, g):
             ga = g.clone()
             ga[ctx.slices] *= ctx.m
             return ga, None, None
+
+    def released(x):
+        """``x`` as a plain tensor: the wrappers of ``torch.func`` levels that have exited removed.
+
+        Inside a ``torch.func.vjp`` pullback (``jacrev``'s too) no transform is active, yet a
+        segment's saved inputs are still wrappers of the level the forward ran at, which has
+        exited: a view of one carries no graph, and handing one to a new transform trips a
+        PyTorch internal assert. Their values are the tensors beneath.
+        """
+        from wavebit._common.backend import _functorch
+        functorch = _functorch(torch)
+        while functorch.is_functorch_wrapped_tensor(x):
+            x = functorch.get_unwrapped(x)
+        return x
+
+    def pullback_replay(saved, need):
+        """The recompute inputs of ``Segment.backward`` inside a ``torch.func`` pullback.
+
+        ``Segment.backward`` comes here where an input whose gradient is needed is recorded at
+        no level the backward can see: grad mode is on but a view of the input carries no
+        graph. Viewing it anyway made the recompute a constant, every cotangent came back
+        None, and ``torch.func.vjp`` and ``jacrev`` read 0 with no error. With no transform
+        active -- ``vjp``'s pullback -- the segment is replayed as eager PyTorch replays it
+        without ``create_graph``, from fresh leaves of the plain values. Any active level --
+        the ``vmap`` of ``jacrev``, or a transform around the pullback -- is refused: the
+        replay would run the in-place time step under it.
+        """
+        from wavebit._common.backend import _functorch, _functorch_active
+        stack = _functorch_active(torch) and _functorch(
+            torch, ('get_interpreter_stack',)).get_interpreter_stack()
+        if stack:
+            from wavebit.errors import UnsupportedFeatureError
+            raise UnsupportedFeatureError(
+                'a checkpoint_steps segment cannot be recomputed inside this torch.func '
+                'transform of the pullback (torch.func.jacrev, a vmap over a vjp, or a '
+                'transform around one): its time step updates fields in place. Use '
+                'torch.func.grad or torch.func.vjp, or run without checkpoint_steps',
+                code='fdtd.torch_transform', path='numerics.checkpoint_steps')
+        return tuple(released(x).detach().requires_grad_(n) for x, n in zip(saved, need))
 
     class Segment(torch.autograd.Function):
         """One checkpointed segment: ``run(tensors)`` forward without a graph, again in backward.
@@ -717,19 +764,28 @@ def _torch_functions(torch):
         """
 
         @staticmethod
-        def forward(ctx, run, *tensors):
+        def forward(run, *tensors):
+            return run(tensors)
+
+        @staticmethod
+        def setup_context(ctx, inputs, output):
+            run, *tensors = inputs
             ctx.run = run
             ctx.save_for_backward(*tensors)
-            return run(tensors)
 
         @staticmethod
         def backward(ctx, *grads):
             saved = ctx.saved_tensors
             need = ctx.needs_input_grad[1:]
             higher = torch.is_grad_enabled()
+            replay = higher and any(n and not x.view_as(x).requires_grad
+                                    for x, n in zip(saved, need))
+            if replay:
+                higher = False
             with torch.enable_grad():
-                xs = tuple(x.view_as(x) for x in saved) if higher else tuple(
-                    x.detach().requires_grad_(n) for x, n in zip(saved, need))
+                xs = (pullback_replay(saved, need) if replay
+                      else tuple(x.view_as(x) for x in saved) if higher else tuple(
+                          x.detach().requires_grad_(n) for x, n in zip(saved, need)))
                 outs = ctx.run(xs)
             wanted = [i for i, n in enumerate(need) if n]
             pairs = [(o, g) for o, g in zip(outs, grads) if o.requires_grad and g is not None]

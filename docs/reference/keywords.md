@@ -347,7 +347,7 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 | `excitation` | `excitation.sources` | `rcwa`, `fdtd.periodic` |
 | `execution` | `execution.backend`, `execution.backend_unavailable`, `execution.device`, `execution.device_unavailable`, `execution.precision`, `execution.jax_x64`; `execution.cuda_scope` (outside the qualified FDTD CUDA route) | every solver; `fdtd` |
 | `experimental` | `experimental.orders` | `rcwa.experimental` |
-| `fdtd` | `fdtd.invalid`, `fdtd.unsupported`, `fdtd.padding_continuation` | `fdtd` |
+| `fdtd` | `fdtd.invalid`, `fdtd.unsupported`, `fdtd.padding_continuation`, `fdtd.torch_transform` (a Torch run under `torch.func.vmap`, `jacfwd` or `hessian`, or a checkpointed one under `jacrev`) | `fdtd` |
 | `field` | `field.coordinates` | `rcwa` |
 | `geometry` | `geometry.cell_snapped` (a warning) | `fdtd` |
 | `initial` | `initial.type` | `fdtd` |
