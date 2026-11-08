@@ -139,7 +139,10 @@ class Lattice:
     once at ingest where the answer is still readable. When it is not readable -- a basis handed
     in already traced -- it is ``False``, which is the *general* path and therefore always
     correct, merely not bit-identical to the rectangular shortcut. A ``period`` is diagonal by
-    construction, so that spelling stays ``True`` even under a tracer.
+    construction, so that spelling stays ``True`` even under a tracer. The constructor takes the
+    flag as given; :func:`as_lattice`, the solver's door, demotes a ``True`` that readable numbers
+    contradict, so a hand-written or edited declaration cannot send a skewed cell down the
+    rectangular path.
 
     Indexing delegates to ``columns``, so ``A[0][1]`` reads the same as it did when this was a
     bare array.
@@ -151,6 +154,35 @@ class Lattice:
 
     def __post_init__(self):
         _register_pytree_if_jax_loaded()
+
+    def _readable(self):
+        try:
+            return np.asarray(constant_array(self.columns))
+        except Exception:                   # noqa: BLE001 - a tracer: no number to compare
+            return None
+
+    def __eq__(self, other):
+        """The same two vectors and the same declaration; a traced cell equals only itself.
+
+        The generated comparison compared the arrays with ``==`` and raised NumPy's "truth value
+        of an array is ambiguous" on every pair of cells, equal or not.
+        """
+        if not isinstance(other, Lattice):
+            return NotImplemented
+        if self is other:
+            return True
+        a, b = self._readable(), other._readable()
+        if a is None or b is None:
+            return False
+        return bool(self.axis_aligned == other.axis_aligned and a.shape == b.shape
+                    and np.array_equal(a, b))
+
+    def __hash__(self):
+        """Hashable as its numbers and declaration, consistent with ``==``; a traced cell by identity."""
+        a = self._readable()
+        if a is None:
+            return id(self)
+        return hash((bool(self.axis_aligned), a.shape, tuple(a.ravel().tolist())))
 
     @property
     def columns(self):
@@ -477,7 +509,7 @@ def as_lattice(period=None, lattice=None):
     """
     if lattice is not None:
         if isinstance(lattice, Lattice):
-            return lattice
+            return _with_honest_flag(lattice)
         try:
             A = constant_array(lattice)
         except Exception:                       # noqa: BLE001 - a tracer, not a mistake
@@ -657,7 +689,9 @@ def reduced_basis(A, transform=None):
     -- which ``G`` is order ``(m, n)`` is the user's naming of the reciprocal set, and a window
     on a reduced spelling is a different set of retained orders.
     """
-    A = as_lattice(lattice=A)
+    # A Lattice is taken as it stands: it has passed the solver's door already, or it is a
+    # reduced basis whose sign-free flag (below) only the fold reads.
+    A = A if isinstance(A, Lattice) else as_lattice(lattice=A)
     T = reduction_transform(A) if transform is None else tuple(map(tuple, transform))
     if T == _IDENTITY:
         return A
@@ -725,6 +759,28 @@ def reverses_an_axis(A, tol=1e-12):
     if M.shape != (2, 2) or float(np.max(np.abs(M))) == 0:
         return False
     return _is_diagonal(M, tol) and bool(M[0, 0] < 0 or M[1, 1] < 0)
+
+
+def _with_honest_flag(A):
+    """``A``, or ``A`` declared general where its numbers are readable and not ``diag(+, +)``.
+
+    ``axis_aligned`` is a declaration, and the constructor takes it as given: a pytree rebuild
+    and a traced ``period`` both hand it over without numbers to read. Where the numbers *can*
+    be read, a ``True`` they contradict sent a skewed cell down the rectangular path -- written
+    by hand, or edited into a saved job -- and the answer moved (sum(T) 0.9925 -> 0.9911 on a
+    sheared cell) with nothing to say so. Such a cell is demoted to the general path, which is
+    always correct. A ``False`` on a rectangle is kept: it only forgoes the shortcut, and
+    forcing the general path that way is how the two paths are compared.
+    """
+    if not A.axis_aligned:
+        return A
+    try:
+        M = np.asarray(constant_array(A.columns), dtype=float)
+    except Exception:                       # noqa: BLE001 - a tracer: the declaration stands
+        return A
+    if M.shape != (2, 2) or not np.all(np.isfinite(M)) or is_axis_aligned(M):
+        return A
+    return Lattice(A.u, A.v, False)
 
 
 def periods_of(A):
