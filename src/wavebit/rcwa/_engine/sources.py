@@ -94,7 +94,8 @@ class ElectricDipole(Source):
 
     position is global xyz in scene lengths. A uniform host layer is required.
     repetition='periodic' uses bloch_k, in inverse scene lengths, for the phase
-    between copies. 'isolated' uses Brillouin-zone midpoint quadrature; sampling
+    between copies; bloch_k + G (G reciprocal) is the same array, and the solve
+    reduces bloch_k into the reciprocal cell centred on the origin. 'isolated' uses Brillouin-zone midpoint quadrature; sampling
     sets its grid. Finite quadrature approximates an isolated source by a larger
     repeated supercell and must be converged. rcwa requires length_unit (metres
     per scene length) when a dipole is present.

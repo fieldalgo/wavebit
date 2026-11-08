@@ -20,6 +20,7 @@ from wavebit._common.enums import backend_of
 from wavebit.observations._field_access import ResultFields
 from wavebit.rcwa._engine.field_result import source_state
 from wavebit._common.conventions import boundary_kz
+from wavebit._common.conventions import first_zone_offset
 from wavebit._common.conventions import gain_cutoff_band
 from wavebit._common.conventions import parse_excitation
 from wavebit._common.conventions import signed_index
@@ -564,13 +565,21 @@ class CoherentSolver:
                 grid = [(reciprocal_host @ np.array([(i+.5)/nx-.5, (j+.5)/ny-.5]), 1/(nx*ny))
                         for i in range(nx) for j in range(ny)]
             for q, weight in grid:
+                # A periodic source is the same at bloch_k and bloch_k + G. Its orders are
+                # centred on the reduced one, where its propagating orders are; a bloch_k
+                # outside the window otherwise kept only evanescent ones and was silent.
+                q = q - reciprocal_host @ first_zone_offset(reciprocal_host, q)
                 group = next((g for g in groups if np.allclose(
                     np.linalg.solve(reciprocal_host, q-_host(g['q']).real),
                     np.rint(np.linalg.solve(reciprocal_host, q-_host(g['q']).real)), atol=1e-9, rtol=0)), None)
                 if group is None:
                     group = dict(q=as_array(xp, q, dtype=C, device=scene._array_device), inputs=[], dipoles=[])
                     groups.append(group)
+                # Its offset from a sector an external wave opened widens that sector's window
+                # as a second wave's would, so its own centred orders are retained there too.
+                offset = np.rint(np.linalg.solve(reciprocal_host, q-_host(group['q']).real)).astype(int)
                 group['dipoles'].append((dipole, weight))
+                group.setdefault('dipole_offsets', []).append(offset)
 
         if len(groups) > 1 and self.power_region is None:
             raise ValueError("Different Bloch sectors require an explicit power_region: "
@@ -580,7 +589,8 @@ class CoherentSolver:
         keep = scene.answers.covers(Answers.FIELD)
         near_grazing = set()
         for group in groups:
-            offsets = np.array([b[1] for b in group['inputs']] or [[0, 0]])
+            offsets = np.array([b[1] for b in group['inputs']] + group.get('dipole_offsets', [])
+                               or [[0, 0]])
             low, high = offsets.min(axis=0)-half, offsets.max(axis=0)+half
             centre = (low+high)//2
             widths = np.maximum(centre-low, high-centre)

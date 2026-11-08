@@ -595,7 +595,13 @@ emission and supports several internal and external sources together. Fields on
 the singular source plane itself are rejected; sample above or below it.
 
 `repetition="periodic"` places a copy in every lattice cell with phase
-exp(i bloch_k dot R); omitted bloch_k is zero. `repetition="isolated"` instead
+exp(i bloch_k dot R); omitted bloch_k is zero. Because exp(i G dot R) = 1 for every
+reciprocal lattice vector G, bloch_k and bloch_k + G describe the same array: bloch_k is
+reduced by reciprocal lattice vectors into the reciprocal cell centred on the origin (each
+reduced coordinate in [-1/2, 1/2); the first Brillouin zone on a rectangular lattice), and the
+dipole's retained orders are centred there. A dipole sharing a Bloch sector with external
+waves widens that sector's order window to keep its own centred orders, as another wave
+would. `repetition="isolated"` instead
 uses Brillouin-zone midpoint quadrature with `sampling=(5,5)` by default. Do not
 supply bloch_k in that case. A finite observation rectangle is required. Finite
 quadrature is equivalent to a repeated larger supercell: converge the grid and
