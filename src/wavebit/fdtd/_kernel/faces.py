@@ -34,6 +34,11 @@ against a round-off tolerance):
                                 dead normal E with it; the E pad at x_N feeds only the
                                 masked components and is irrelevant
 
+So a PMC wall acts half a cell from the declared face: outside it on a low face, inside it
+on a high face; a high-side mirror (below) acts half a cell inside. The domain is not resized
+to compensate. ``FaceRule.position`` is that plane, and the public report publishes it per face
+as ``check(...).resolved['boundary_planes']`` (``declared``, ``effective``, ``offset_cells``).
+
 The masks run on the initial state as well as after every update (``step.py``), so an
 initial field that violates a wall is projected onto it at ``t = 0``.
 

@@ -406,12 +406,39 @@ def _graded_absorber(problem,numerics):
     return tuple(issues)
 
 
+#: Where each wall or mirror kind acts, in cells from its declared face (``_kernel.faces``):
+#: tangential E sits on node planes and tangential H on half planes, so a PMC wall (zero
+#: tangential H) and a high-side mirror (whose padded E images the last E layer) act on the
+#: half plane next to the face; a low PMC face half a cell outside, the other two half a cell
+#: inside. Faces without a wall (Open, Periodic, Bloch, InvariantAxis) have no plane.
+_PLANE_KINDS=('pec','pmc','symmetry')
+
+
+def _boundary_planes(problem,plan,metadata):
+    """``{face: {...}}``: the declared face and the plane its condition actually holds on.
+
+    Coordinates are in ``Problem.units`` along the face's axis; ``offset_cells`` is
+    ``(effective - declared) / spacing``. ``effective`` is None for a face with no wall.
+    """
+    low=metadata['physical_domain']['low'];size=metadata['physical_domain']['size']
+    out={}
+    for name,rule in plan.face_rules:
+        a='xyz'.index(name[0])
+        declared=float(low[a] if name[1]=='-' else low[a]+size[a])
+        effective=float(rule.position) if rule.kind in _PLANE_KINDS else None
+        out[name]=dict(boundary=type(problem.scene.boundaries.face(name)).__name__,
+                       declared=declared,effective=effective,
+                       offset_cells=None if effective is None else
+                       round(2*(effective-declared)/plan.dx)/2)
+    return out
+
+
 def _report(problem,numerics,execution,scene,plan,metadata):
     r=legacy_report(scene,plan)
     resolved=dict(metadata,numerical_policies=numerical_policies(problem,numerics,scene,plan),grid_shape=(plan.nx,plan.ny,plan.nz),spacing=plan.dx,
                   time_step_seconds=plan.dt*problem.units.time_unit_seconds,steps=plan.steps,
                   duration_seconds=plan.steps*plan.dt*problem.units.time_unit_seconds,dtype=plan.dtype,
-                  checkpoint_steps=plan.schedule,
+                  checkpoint_steps=plan.schedule,boundary_planes=_boundary_planes(problem,plan,metadata),
                   duration_policy='fixed' if numerics.stopping is None else 'hard cap with concrete state-decay stopping',
                   monitor_samples=tuple((o.name,getattr(o,'indices',None)) for o in plan.observers))
     return CheckReport(issues=_snapped(problem,scene,plan)+_graded_absorber(problem,numerics),
