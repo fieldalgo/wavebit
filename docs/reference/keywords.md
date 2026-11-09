@@ -98,8 +98,8 @@ A layer is either painted with regions over a background or sampled as a raster,
 | `thickness` | required | a finite, real, nonnegative length | negative, complex or not finite: `layer.thickness`, at check |
 | `background` | `Material(epsilon=1.)` on a region layer | the material model where no region paints | beside `epsilon`: `layer.ambiguous`, at construction; a bare number: `material.type`, at check |
 | `regions` | `()` | a tuple of `rcwa.Region`; a later region paints over an earlier one | anything but `Region`s: `layer.regions`; beside `epsilon`: `layer.ambiguous`, both at construction |
-| `epsilon` | `None` | a sampled relative-permittivity raster of shape `(Ny, Nx)`, complex allowed; one row is a 1D grating, and `(Ny, Nx, 3, 3)` holds a tensor per pixel. Every raster layer of a stack has the same shape | `Material` objects inside the array, or raster layers of different shapes: `rcwa.invalid`, at check; a zero `eps_zz` in any pixel, or one whose reciprocal overflows the run's precision (also for a background or region material): `rcwa.zero_permittivity`, at check |
-| `mu` | `None` | the relative-permeability raster beside `epsilon`, the same shape. On a region layer a permeability belongs to each `Material` | without `epsilon`: `layer.mu_without_raster`, at construction |
+| `epsilon` | `None` | a sampled relative-permittivity raster of shape `(Ny, Nx)`, complex allowed; one row is a 1D grating, and `(Ny, Nx, 3, 3)` holds a tensor per pixel. Every raster layer of a stack has the same shape | `Material` objects inside the array, or raster layers of different shapes: `rcwa.invalid`, at check; any other shape (a 1D, 3D, empty or 0-d array, or `(Ny, Nx, 2, 2)`): `layer.raster_shape`, with the expected and actual shape, at check; a NaN or infinite sample: `problem.nonfinite`, at check; a zero `eps_zz` in any pixel, or one whose reciprocal overflows the run's precision (also for a background or region material): `rcwa.zero_permittivity`, at check |
+| `mu` | `None` | the relative-permeability raster beside `epsilon`, the same shape. On a region layer a permeability belongs to each `Material` | without `epsilon`: `layer.mu_without_raster`, at construction; a shape other than `(Ny, Nx)` or `(Ny, Nx, 3, 3)`: `layer.raster_shape`, at check |
 
 ### `rcwa.Region`
 
@@ -116,12 +116,12 @@ refused at prepare with `rcwa.invalid`.
 
 | Declaration | Field | Default | Accepts | Refuses |
 | --- | --- | --- | --- | --- |
-| `rcwa.Rectangle` | `size` | required | full widths `(wx, wy)` | not two components: `shape.dimension`, at construction |
-| | `center` | `(0., 0.)` | `(x, y)` | not two components: `shape.dimension` |
-| | `angle` | `0.` | counterclockwise rotation, radians | |
-| `rcwa.Circle` | `radius` | required | a length | |
-| | `center` | `(0., 0.)` | `(x, y)` | not two components: `shape.dimension` |
-| `rcwa.Ellipse` | `radii` | required | principal semi-axes `(rx, ry)` | not two components: `shape.dimension` |
+| `rcwa.Rectangle` | `size` | required | full widths `(wx, wy)`, real numbers | not two components: `shape.dimension`, at construction; a complex or string entry: `shape.value`, at construction |
+| | `center` | `(0., 0.)` | `(x, y)` | not two components: `shape.dimension`; a complex or string entry: `shape.value` |
+| | `angle` | `0.` | counterclockwise rotation, radians | complex or a string: `shape.value` |
+| `rcwa.Circle` | `radius` | required | a length | complex or a string: `shape.value` |
+| | `center` | `(0., 0.)` | `(x, y)` | not two components: `shape.dimension`; a complex or string entry: `shape.value` |
+| `rcwa.Ellipse` | `radii` | required | principal semi-axes `(rx, ry)` | not two components: `shape.dimension`; a complex or string entry: `shape.value` |
 | | `center`, `angle` | `(0., 0.)`, `0.` | as on `Rectangle` | as on `Rectangle` |
 | `rcwa.Polygon` | `vertices` | required | `N >= 3` pairs `(x, y)`, or an `(N, 2)` array, in order around the boundary; either winding | fewer than three: `shape.vertices`; an outline that is not simple (a zero-length edge, two edges crossing or touching): `shape.outline`, both at construction; under `factorization='li'` or `nvf_projector='circular'`, or with a tensor material: `rcwa.unsupported`, at check |
 
@@ -352,7 +352,7 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 | `geometry` | `geometry.cell_snapped` (a warning) | `fdtd` |
 | `initial` | `initial.type` | `fdtd` |
 | `job`, `record` | `job.encoding`, `job.schema`, `record.format` | `wavebit.Job`, run records |
-| `layer` | `layer.ambiguous`, `layer.mu_without_raster`, `layer.regions`, `layer.thickness` | `rcwa` |
+| `layer` | `layer.ambiguous`, `layer.mu_without_raster`, `layer.raster_shape`, `layer.regions`, `layer.thickness` | `rcwa` |
 | `material` | `material.type`; `material.scalar`, `material.shape`, `material.poles`, `material.wavelength_range`, `material.unknown_field`; `material.engine_model`, `material.causal_model`, `material.pole_type`, `material.fdtd` (lowering a material to time domain) | `rcwa`, `fdtd.periodic`; `wavebit.materials`; `fdtd` |
 | `medium` | `medium.poles` | `fdtd.native` |
 | `migration` | `migration.shape`, `migration.shape_fields`, `migration.layer_fields`, `migration.layer_mu`, `migration.solver` | `wavebit.migration` |
@@ -369,7 +369,7 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 | `pulse` | `pulse.frequency_sigma_hz` | `fdtd.periodic` |
 | `rcwa` | `rcwa.invalid`, `rcwa.unsupported`, `rcwa.singular`, `rcwa.nonfinite`, `rcwa.host_geometry`, `rcwa.mixed_layer_encoding`, `rcwa.raster_partition_transform`, `rcwa.scattering_algorithm`, `rcwa.coherent_detuning`, `rcwa.coherent_diffraction`, `rcwa.coherent_half_space_merge`, `rcwa.coherent_scattering`, `rcwa.coherent_transform` | `rcwa` |
 | `scene` | `scene.type`, `scene.structure_name`, `scene.structure_name_duplicate` | `fdtd` |
-| `shape` | `shape.type`, `shape.dimension`, `shape.outline`, `shape.vertices` | `rcwa`, `fdtd` (`shape.type`) |
+| `shape` | `shape.type`, `shape.dimension`, `shape.value`, `shape.outline`, `shape.vertices` | `rcwa`, `fdtd` (`shape.type`) |
 | `snapshots` | `snapshots.every`, `snapshots.components`, `snapshots.slices` | `fdtd.native`, `fdtd.periodic` |
 | `source` | `source.type`, `source.name`, `source.name_duplicate`, `source.pulse`, `source.plane`, `source.plane_span`, `source.box`, `source.outside_domain`, `source.waveform_range`; `source.amplitude`, `source.direction`, `source.polarization_value`; `source.side`, `source.repetition`, `source.dimension`, `source.direction_ambiguous`, `source.polarization`, `source.polarization_shape`, `source.weights`, `source.weights_duplicate`, `source.angular_spectrum_extent` | `fdtd`; `rcwa` and `fdtd.periodic`; `rcwa` |
 | `stack` | `stack.layers`, `stack.period`, `stack.cell_ambiguous`, `stack.mixed_layer_encoding` | `rcwa`, `fdtd.periodic` |
