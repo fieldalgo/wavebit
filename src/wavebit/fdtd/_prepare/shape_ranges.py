@@ -365,16 +365,28 @@ def _seeded_materials(scene, plan, where, substitute=True):
                     f'traced {name} is one scalar, {name}=value, the same on all three axes.')
         if key < 0:
             matched = any(scene.boundaries.face(face).background is None for face in pml)
-            if (matched or any(isinstance(s, (PlaneWave, TFSF)) for s in scene.sources)
-                    or any(isinstance(m, FarField) and m.propagation == 'yee'
-                           for m in scene.monitors)):
+            # A face reference answers the PML match alone; the plane-wave column, the
+            # grazing survey and the lattice far-field map read the background itself.
+            readers = [label for label, reads in (
+                ('a PlaneWave or TFSF source',
+                 any(isinstance(s, (PlaneWave, TFSF)) for s in scene.sources)),
+                ("a FarFieldMonitor(propagation='yee')",
+                 any(isinstance(m, FarField) and m.propagation == 'yee'
+                     for m in scene.monitors))) if reads]
+            if matched or readers:
+                read = ' and '.join((['a PML matched to the background'] if matched else [])
+                                    + readers)
+                advice = ("Keep the background concrete and differentiate a structure's "
+                          'material instead; a concrete reference on the PML faces does not '
+                          f'lift this, since {" and ".join(readers)} reads the background '
+                          'itself.' if readers else
+                          'Give every PML face a concrete reference, fd.PML(background=...), '
+                          "or differentiate a structure's material instead.")
                 raise ValueError(
-                    f'Scene(background=) has a traced value in a scene {where}, and a PML '
-                    'matched to the background, a PlaneWave or TFSF source or a '
-                    'FarFieldMonitor(propagation=\'yee\') reads it: the PML match, the plane-wave '
-                    'column\'s transverse wavevector and drive, the grazing survey and the '
-                    'lattice far-field map are built from it on the host. Give each PML a '
-                    'concrete background=, or differentiate a structure\'s material instead.')
+                    f'Scene(background=) has a traced value in a scene {where}, and {read} '
+                    'reads it: the PML match, the plane-wave column\'s transverse wavevector '
+                    'and drive, the grazing survey and the lattice far-field map are built '
+                    f'from it on the host. {advice}')
         seed = seeds.get(key)
         if not substitute and seed is None:
             continue

@@ -1,9 +1,10 @@
 """A traced ``Scene(background=)`` beside a PlaneWave: where it differentiates and where it is refused.
 
 ``shape_ranges._seeded_materials`` refuses a traced background beside a PlaneWave in the scenes
-it serves (a traced geometry, or smoothed coupling), whatever the PML references. Elsewhere the
-background is lowered live: at normal incidence it differentiates once both Open z faces have a
-``PML(reference_media=...)`` entry, and without them the matched face is refused.
+it serves (a traced geometry, or smoothed coupling), whatever the PML references, and advises a
+traced structure material instead, which runs. Elsewhere the background is lowered live: at
+normal incidence it differentiates once both Open z faces have a ``PML(reference_media=...)``
+entry, and without them the matched face is refused.
 """
 import sys
 import pathlib
@@ -73,5 +74,24 @@ def test_a_traced_background_beside_a_plane_wave_is_refused_with_a_traced_geomet
     background = torch.tensor(1., dtype=torch.float64, requires_grad=True)
     radius = torch.tensor(.12, dtype=torch.float64, requires_grad=True)
     with pytest.raises(ValidationError, match=r'Scene\(background=\) has a traced value in a scene '
-                                              r'with a traced Cylinder.*a PlaneWave'):
+                                              r'with a traced Cylinder.*a PlaneWave') as caught:
         prepared.run(problem(background, radius))
+    # The advice is the one that runs: the face references above are already given and do not
+    # lift it, so it says so instead of asking for them.
+    message = caught.value.message
+    assert 'background=' not in message.split('host.')[-1]
+    assert 'does not lift this' in message
+    assert "Keep the background concrete and differentiate a structure's material" in message
+    # Followed: a concrete background, the pillar's own permittivity traced beside its radius.
+    epsilon = torch.tensor(2.25, dtype=torch.float64, requires_grad=True)
+    p = pillar.problem(radius=radius, epsilon=epsilon)
+    efficiency = prepared.run(p.replace(scene=p.scene.replace(background=Material(1.))))
+    gradient = torch.autograd.grad(efficiency['T'].efficiency[0, 0, 0], (radius, epsilon))
+    assert all(bool(torch.isfinite(g)) and float(g) != 0. for g in gradient)
+
+
+def test_a_matched_pml_reference_is_advised_in_public_spelling():
+    from wavebit.fdtd._spelling import to_public
+    advice = 'Give every PML face a concrete reference, fd.PML(background=...), or'
+    assert to_public(advice) == ('Give every PML face a concrete reference, '
+                                 'fdtd.PML(reference_media=...) with an entry for every Open face, or')
