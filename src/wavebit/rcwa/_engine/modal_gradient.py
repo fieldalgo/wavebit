@@ -381,7 +381,10 @@ def exponential(xp, q, scale, coupled=False):
         # no attribute 'spec'`. The values are the same either way.
         scale = xp.astype(scale, q.dtype)
     else:
-        scale = xp.asarray(scale, dtype=q.dtype, device=getattr(q, 'device', None))
+        # A Torch scale states requires_grad: unspecified, torch 2.14 follows the input (this
+        # same value) and warns that it does.
+        flag = {'requires_grad': scale.requires_grad} if hasattr(scale, 'requires_grad') else {}
+        scale = xp.asarray(scale, dtype=q.dtype, device=getattr(q, 'device', None), **flag)
     if q.ndim == 1:
         eye = xp.eye(q.shape[0], dtype=q.dtype, device=getattr(q, 'device', None))
         return eye*xp.exp(scale[..., None]*q)[..., None, :]
