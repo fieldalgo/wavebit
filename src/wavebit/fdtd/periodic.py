@@ -572,8 +572,14 @@ class Result:
         """
         from ._periodic.probes import sample_fdtd_fields
         ts=self.provenance['time_unit_seconds']
-        raw=_engine(sample_fdtd_fields,self._engine_diagnostics,x=x,y=y,z=z,
-                    t=None if times_seconds is None else np.asarray(times_seconds)/ts)
+        try:
+            raw=_engine(sample_fdtd_fields,self._engine_diagnostics,x=x,y=y,z=z,
+                        t=None if times_seconds is None else np.asarray(times_seconds)/ts)
+        except ValidationError as exc:
+            public=_sample_times_refusal(exc,ts)
+            if public is None:
+                raise
+            raise public from exc
         # A host copy: the drive may be a Torch leaf or a JAX array, and this is NumPy.
         amplitude=self.provenance['incident_amplitude']
         amplitude=complex(np.asarray(amplitude.detach().cpu() if hasattr(amplitude,'detach') else amplitude))
@@ -582,6 +588,33 @@ class Result:
             units=_component_units(('Ex','Ey','Ez','Hx','Hy','Hz'),self.provenance['length_units']),
             times_seconds=raw['t']*ts,sampling='linear space/time interpolation of Yee records',
             metadata={'region':raw['region'],'axis_order':('time','component')})
+
+
+def _sample_times_refusal(exc, time_unit_seconds):
+    """An engine refusal of ``Result.sample``'s times, in ``times_seconds`` and seconds; else ``None``.
+
+    The engine names its own argument ``t`` and quotes its interval in engine time units
+    (one length unit over c), which the caller never wrote.
+    """
+    import re
+    text = exc.message
+    if text == 't must contain real times.':
+        message = 'Result.sample(times_seconds=...) must hold real times, in seconds.'
+        expected = None
+    elif text == 't must be a finite increasing nonempty time vector within the common record interval.':
+        message = ('Result.sample(times_seconds=...) must be a nonempty vector of finite, strictly '
+                   'increasing times in seconds, inside the interval all six snapshot components '
+                   'recorded; omit times_seconds to sample at every recorded time in it.')
+        expected = None
+    else:
+        m = re.fullmatch(r't is outside the common record interval \[(\S+), (\S+)\]\.', text)
+        if m is None:
+            return None
+        expected = tuple(float(v)*time_unit_seconds for v in m.groups())
+        message = (f'Result.sample(times_seconds=...) is outside the interval all six snapshot '
+                   f'components recorded, [{expected[0]!r}, {expected[1]!r}] seconds; omit '
+                   f'times_seconds to sample at every recorded time in it.')
+    return ValidationError(message, code=exc.code, path='times_seconds', expected=expected)
 
 
 def _adapt(raw,diag,problem,numerics,execution):

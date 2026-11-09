@@ -126,7 +126,9 @@ length unit and requires shared stepping. Shared snapshots use a constant carrie
 calibration to retain a causal waveform, distinct from frequency-by-frequency
 plane calibration. `result.sample(x=..., y=..., z=..., times_seconds=...)` interpolates
 all six components offline at those SI times, so it needs the default `components`; it
-refuses source-discontinuity crossings and does not retain AD. Instantaneous
+refuses source-discontinuity crossings, and times outside the interval every component
+recorded (`periodic.invalid` at `times_seconds`, the interval quoted in seconds; omitted,
+`times_seconds` is every recorded time inside it), and does not retain AD. Instantaneous
 Poynting is `cross(E.real, H.real)`, without the phasor factor 1/2. See the
 [snapshot](../../../examples/fdtd/fdtd_record.py) and
 [Poynting](../../../examples/fdtd/fdtd_poynting.py) examples.

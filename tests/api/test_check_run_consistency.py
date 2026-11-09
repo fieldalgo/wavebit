@@ -482,3 +482,33 @@ def test_periodic_names_the_field_holding_a_nonfinite_value(where, value):
         with pytest.raises(ValidationError) as caught:
             door(problem, numerics=numerics)
         assert (caught.value.code, caught.value.path) == (issue.code, issue.path)
+
+
+# -- 11. periodic Result.sample names its times as times_seconds, in seconds ------------------
+
+def test_periodic_sample_times_are_refused_in_seconds_under_their_public_name():
+    q = periodic.Problem(units=Units(length='um'),
+        stack=periodic.Stack(period=(.2,), top=Material(1.), bottom=Material(1.),
+            layers=(periodic.Layer(thickness=.1, epsilon=np.full((1, 2), 2.25)),)),
+        excitation=periodic.Excitation(wavelength=(.85, .9, .95), sources=(periodic.PlaneWave(),)),
+        outputs=periodic.Outputs(snapshots=periodic.Snapshots(every=17)))
+    n = periodic.Numerics(spacing=1/30, duration_seconds=55*.9e-6/C0, orders=(0, 0))
+    result = periodic.run(q, numerics=n)
+    recorded = result.sample(z=.05).times_seconds
+    with pytest.raises(ValidationError) as caught:
+        result.sample(z=.05, times_seconds=[2*recorded[-1]])
+    error = caught.value
+    assert (error.code, error.path) == ('periodic.invalid', 'times_seconds')
+    assert error.message.startswith('Result.sample(times_seconds=...) is outside the interval')
+    assert 'common record interval' not in error.message and 't is' not in error.message
+    low, high = error.expected
+    # The interval is quoted in seconds: it holds every time the default sample returns.
+    assert low <= recorded[0] < recorded[-1] <= high < 2*recorded[-1]
+    assert f'[{low!r}, {high!r}] seconds' in error.message
+    # The advice: inside it, or with times_seconds omitted, the sample runs.
+    assert result.sample(z=.05, times_seconds=[(low + high)/2]).values.shape == (1, 6)
+    for bad, says in (([1j*recorded[1]], 'must hold real times'),
+                      ([recorded[2], recorded[1]], 'strictly increasing times in seconds')):
+        with pytest.raises(ValidationError) as caught:
+            result.sample(z=.05, times_seconds=bad)
+        assert caught.value.path == 'times_seconds' and says in caught.value.message
