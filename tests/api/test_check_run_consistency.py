@@ -399,3 +399,86 @@ def test_periodic_sample_outside_its_record_names_the_public_component():
     assert 'ex.' not in message and "'Ex'" in message
     assert 'Result.sample(z=50.0) is outside the interval' in message
     assert result.sample(z=.05).components == ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')
+
+
+# -- 10. FDTD and periodic name the field that holds a NaN or an infinity ---------------------
+
+def _fdtd_nonfinite(where, value):
+    problem, numerics = _absorbed()
+    if where == 'structure-material':
+        problem, numerics = _absorbed(material=Material(value))
+    elif where == 'structure-mu':
+        problem, numerics = _absorbed(material=Material(2.25, mu=value))
+    elif where == 'background':
+        problem = problem.replace(scene=problem.scene.replace(background=Material(value)))
+    elif where == 'shape':
+        (structure,) = problem.scene.structures
+        problem = problem.replace(scene=problem.scene.replace(structures=(
+            structure.replace(shape=fdtd.Cylinder(radius=value, height=1.4)),)))
+    elif where == 'pulse':
+        problem, numerics = _absorbed(source=fdtd.CurrentDipole(
+            'd', center=(0., 0., 0.), component='Ey',
+            pulse=fdtd.GaussianPulse(wavelength=value, frequency_sigma_hz=1e13)))
+    elif where == 'moment':
+        problem, numerics = _absorbed(source=fdtd.CurrentDipole(
+            'd', center=(0., 0., 0.), component='Ey', pulse=_PULSE, current_moment=value))
+    return problem, numerics
+
+
+FDTD_NONFINITE = {'structure-material': 'scene.structures.c.material.epsilon',
+                  'structure-mu': 'scene.structures.c.material.mu',
+                  'background': 'scene.background.epsilon',
+                  'shape': 'scene.structures.c.shape.radius',
+                  'pulse': 'sources.d.pulse.wavelength',
+                  'moment': 'sources.d.current_moment'}
+
+
+@pytest.mark.parametrize('value', [np.nan, np.inf], ids=['nan', 'inf'])
+@pytest.mark.parametrize('where', sorted(FDTD_NONFINITE))
+def test_fdtd_names_the_field_holding_a_nonfinite_value(where, value):
+    problem, numerics = _fdtd_nonfinite(where, value)
+    (issue,) = fdtd.check(problem, numerics=numerics).issues
+    assert (issue.code, issue.path) == ('problem.nonfinite', FDTD_NONFINITE[where])
+    assert 'non-finite' in issue.message
+    for door in (fdtd.prepare, fdtd.run):
+        with pytest.raises(ValidationError) as caught:
+            door(problem, numerics=numerics)
+        assert (caught.value.code, caught.value.path) == (issue.code, issue.path)
+
+
+def test_a_prepared_fdtd_run_names_the_nonfinite_live_material():
+    problem, numerics = _absorbed()
+    prepared = fdtd.prepare(problem, numerics=numerics)
+    live = _absorbed(material=Material(np.nan))[0]
+    (issue,) = prepared.validate(live).issues
+    assert (issue.code, issue.path) == ('problem.nonfinite', 'scene.structures.c.material.epsilon')
+    with pytest.raises(ValidationError) as caught:
+        prepared.run(live)
+    assert (caught.value.code, caught.value.path) == (issue.code, issue.path)
+
+
+def _periodic_nonfinite(where, value):
+    return periodic.Problem(units=Units(length='um'),
+        stack=periodic.Stack(period=(value,) if where == 'period' else (.2,),
+            top=Material(value) if where == 'top' else Material(1.), bottom=Material(1.),
+            layers=(periodic.Layer(thickness=value if where == 'thickness' else .1,
+                                   epsilon=np.where(np.arange(2) > 0, value, 2.25)[None]
+                                   if where == 'raster' else np.full((1, 2), 2.25)),)),
+        excitation=periodic.Excitation(wavelength=(.85, .9, .95), sources=(periodic.PlaneWave(),)))
+
+
+PERIODIC_NONFINITE = {'raster': 'stack.layers[0].epsilon', 'top': 'stack.top.epsilon',
+                      'thickness': 'stack.layers[0].thickness', 'period': 'stack.period[0]'}
+
+
+@pytest.mark.parametrize('value', [np.nan, np.inf], ids=['nan', 'inf'])
+@pytest.mark.parametrize('where', sorted(PERIODIC_NONFINITE))
+def test_periodic_names_the_field_holding_a_nonfinite_value(where, value):
+    problem = _periodic_nonfinite(where, value)
+    numerics = periodic.Numerics(spacing=1/30, duration_seconds=55*.9e-6/C0, orders=(0, 0))
+    (issue,) = periodic.check(problem, numerics=numerics).issues
+    assert (issue.code, issue.path) == ('problem.nonfinite', PERIODIC_NONFINITE[where])
+    for door in (periodic.prepare, periodic.run):
+        with pytest.raises(ValidationError) as caught:
+            door(problem, numerics=numerics)
+        assert (caught.value.code, caught.value.path) == (issue.code, issue.path)
