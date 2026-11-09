@@ -1280,20 +1280,28 @@ def test_the_entry_plane_sees_an_echo_through_a_layer_inside_the_box():
 
 
 def test_a_plane_waves_end_is_read_off_its_column_too():
-    """A PlaneWave sheet injects its column's field wherever it is, and an ``Absorber`` end of
-    the column returns 5% of it: the sheet drives past its envelope's end (4.73) until the
-    column's echoes have died: 17.7 (8.97 with ``PML(12)`` ends)."""
+    """A PlaneWave sheet injects its column's field wherever it is, so its end is read off the
+    column, not its envelope (4.73). Behind ``Absorber`` faces the column now ends in a PML of
+    its own past them (``_prepare.sources.column_pads``): the end is 9.62, against 8.97 for the
+    same scene with ``PML(12)`` ends -- that column's PML sits on the main grid's 12 absorber
+    cells' far side, so its small return comes back at most a 24-cell round trip (1.2) later.
+    Before, the column ended on the Absorber itself, whose 5% echo the sheet re-injected, and
+    the end outlived it: 17.7."""
     dx = 1 / 20
     pw = fd.PlaneWave('pw', z=0.8, direction='-z', polarization='s',
                       band=fd.Band(wavelength=1.0, df=0.25))
-    scene = fd.Scene(domain=fd.Domain(size=(dx, dx, 2.0 + 24 * dx)),
-                     boundaries=fd.Boundaries(**fd.Bloch.from_source(pw),
-                                              z=fd.Absorber(cells=12)),
-                     resolution=fd.Resolution(dx=dx), run=fd.Run(time=30.0), sources=(pw,),
-                     monitors=(fd.Record('r', at=(0, 0, 0), component='Ey'),))
-    res, _ = _run_collecting(scene)
-    end = _assemble.sources_end(scene, res.sources, runtime('numpy'))
-    assert end > _envelope_end(scene) + 5.0, end
+
+    def end_with(face):
+        scene = fd.Scene(domain=fd.Domain(size=(dx, dx, 2.0 + 24 * dx)),
+                         boundaries=fd.Boundaries(**fd.Bloch.from_source(pw), z=face),
+                         resolution=fd.Resolution(dx=dx), run=fd.Run(time=30.0), sources=(pw,),
+                         monitors=(fd.Record('r', at=(0, 0, 0), component='Ey'),))
+        res, _ = _run_collecting(scene)
+        return scene, _assemble.sources_end(scene, res.sources, runtime('numpy'))
+    scene, end = end_with(fd.Absorber(cells=12))
+    _, pml_end = end_with(fd.PML(cells=12, wavelength=1.0))
+    assert end > _envelope_end(scene) + 3.0, end             # read off the column: 9.62
+    assert pml_end <= end <= pml_end + 24 * dx, (end, pml_end)   # 8.97 <= 9.62 <= 10.17
 
 
 def test_a_column_source_without_values_has_no_end():
