@@ -202,7 +202,14 @@ def test_corrupt_archives_fail_with_structured_errors(tmp_path, solved, damage):
     elif damage == 'symlink':
         target = tmp_path/'arrays.npz'
         (path/'arrays.npz').rename(target)
-        (path/'arrays.npz').symlink_to(target)
+        try:
+            (path/'arrays.npz').symlink_to(target)
+        except OSError as error:
+            # Windows lets an account create symlinks only with the privilege (an administrator,
+            # or Developer Mode); without it this damage cannot be made here.
+            if getattr(error, 'winerror', None) != 1314:  # ERROR_PRIVILEGE_NOT_HELD
+                raise
+            pytest.skip('this account may not create symlinks (WinError 1314)')
     elif damage == 'single_npy':
         payload = io.BytesIO()
         np.save(payload, np.ones(1))
@@ -257,13 +264,14 @@ def test_source_snapshot_has_modified_and_untracked_code_but_no_unrelated_files(
     package = tmp_path/'src'/'wavebit'
     package.mkdir(parents=True)
     source = package/'__init__.py'
-    source.write_text('VERSION = 1\n')
+    # Bytes, not text: text mode writes '\r\n' on Windows, and the snapshot keeps the bytes it finds.
+    source.write_bytes(b'VERSION = 1\n')
     (package/'private.env').write_text('DO_NOT_CAPTURE_THIS=1')
     subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
     subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Record test', '-c', 'user.email=record@example.invalid',
                     '-c', 'commit.gpgsign=false', 'commit', '-qm', 'fixture'], check=True)
-    source.write_text('VERSION = 2\n')
-    (package/'new.py').write_text('VALUE = 3\n')
+    source.write_bytes(b'VERSION = 2\n')
+    (package/'new.py').write_bytes(b'VALUE = 3\n')
     (package/'private.env').write_text('DO_NOT_CAPTURE_THIS=2')
     (tmp_path/'notes.txt').write_text('unrelated research notes')
     info, blob, patch = capture_source(package)
@@ -273,7 +281,7 @@ def test_source_snapshot_has_modified_and_untracked_code_but_no_unrelated_files(
     assert set(info['files']) == {'wavebit/__init__.py', 'wavebit/new.py'}
     with zipfile.ZipFile(io.BytesIO(blob)) as archive:
         assert archive.read('wavebit/new.py') == b'VALUE = 3\n'
-    (package/'new.py').write_text('VALUE = 4\n')
+    (package/'new.py').write_bytes(b'VALUE = 4\n')
     assert capture_source(package, include_snapshot=False)[0]['identity'] != info['identity']
 
 
