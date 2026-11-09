@@ -6,6 +6,7 @@ Geometry is in declared length units; all times and material rates are SI.
 independent NumPy stepping formulation, useful for historical reproduction.
 """
 import os
+from contextlib import contextmanager
 from dataclasses import field
 from collections.abc import Mapping
 import numpy as np
@@ -22,7 +23,7 @@ from wavebit.rcwa import Stack, Layer, Region, Rectangle, Circle, Ellipse, Polyg
 from wavebit.units import require_units, Z0
 from ._public_names import removed as _removed
 from ._yee_outputs import (COMPONENTS, decay_check_fields, engine_components, public_refusal,
-                           refusals, snapshot_components, snapshot_every)
+                           snapshot_components, snapshot_every)
 
 
 @spec(renamed={'models': 'poles'})
@@ -374,6 +375,37 @@ def _public(exc):
                            path=getattr(exc, 'path', '') or 'problem')
 
 
+def _refusal(exc, problem):
+    """``exc`` as ``public_refusal`` names it, with a NaN or an infinity named where it is.
+
+    Every non-finite input the periodic engine refuses was already refused at ``check``, but
+    as ``periodic.invalid`` at ``problem``. Such a refusal becomes ``problem.nonfinite`` at the
+    field holding the value, as RCWA names it; no other refusal changes, so what is admitted
+    does not change.
+    """
+    from wavebit.rcwa._adapt import nonfinite_error, nonfinite_leaf
+    public = public_refusal(exc, 'periodic')
+    if (public.code, public.path) != ('periodic.invalid', 'problem') or not isinstance(problem, Problem):
+        return public
+    try:
+        found = nonfinite_leaf(problem, skip=())
+    except (TypeError, ValueError, RuntimeError):   # a value no host can read (torch.func.vmap)
+        return public
+    return public if found is None else nonfinite_error(*found)
+
+
+@contextmanager
+def _refusals(problem):
+    """``refusals('periodic')``, with a non-finite input named by :func:`_refusal`."""
+    try:
+        yield
+    except (TypeError, ValueError, NotImplementedError) as exc:
+        public = _refusal(exc, problem)
+        if public is exc:
+            raise
+        raise public from exc
+
+
 def _engine(call, *args, **kwargs):
     """Run an engine call, raising its refusals in the public spelling with a code."""
     try:
@@ -460,7 +492,7 @@ def check(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
         _signature(problem,numerics)
         return _validated(problem,numerics,execution)
     except (TypeError,ValueError,NotImplementedError) as exc:
-        return CheckReport(issues=(public_refusal(exc,'periodic').issue,))
+        return CheckReport(issues=(_refusal(exc,problem).issue,))
 
 
 @spec
@@ -476,17 +508,17 @@ class Prepared:
             _same_layout(problem, self.numerics, self._signature)
             return _validated(problem, self.numerics, self.execution)
         except (TypeError, ValueError, NotImplementedError) as exc:
-            return CheckReport(issues=(public_refusal(exc, 'periodic').issue,))
+            return CheckReport(issues=(_refusal(exc, problem).issue,))
 
     def run(self,problem):
-        with refusals('periodic'):
+        with _refusals(problem):
             _same_layout(problem,self.numerics,self._signature)
             return _run(problem,self.numerics,self.execution)
 
 
 @eager_under_torch_compile
 def prepare(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
-    with refusals('periodic'):
+    with _refusals(problem):
         execution=_execution(numerics,backend,device,precision)
         return Prepared(numerics=numerics,execution=execution,report=_validated(problem,numerics,execution),
                         _signature=_signature(problem,numerics))
@@ -745,7 +777,7 @@ def _run(problem,numerics,execution):
 
 @eager_under_torch_compile
 def run(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
-    with refusals('periodic'):
+    with _refusals(problem):
         return _run(problem,numerics,_execution(numerics,backend,device,precision))
 
 
