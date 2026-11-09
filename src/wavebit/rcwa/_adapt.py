@@ -32,6 +32,64 @@ def leaves(value):
         yield value
 
 
+def named_leaves(value, path='', skip=()):
+    """``(path, leaf)`` for every leaf :func:`leaves` yields, in the same order.
+
+    The path is the public field path (``stack.layers[0].regions[1].material.epsilon``), so a
+    refusal of one leaf names the field that holds it. Instances of the ``skip`` types are not
+    entered.
+    """
+    if isinstance(value, skip):
+        return
+    if dataclasses.is_dataclass(value):
+        for f in dataclasses.fields(value):
+            if not f.name.startswith('_'):
+                yield from named_leaves(getattr(value, f.name), f'{path}.{f.name}' if path else f.name, skip)
+    elif isinstance(value, Mapping):
+        for k, v in value.items():
+            yield from named_leaves(v, f'{path}[{k!r}]', skip)
+    elif isinstance(value, (list, tuple)):
+        for i, v in enumerate(value):
+            yield from named_leaves(v, f'{path}[{i}]', skip)
+    elif value is not None and not isinstance(value, (str, bool)):
+        yield path, value
+
+
+def nonfinite_leaf(problem):
+    """The first concrete numerical leaf holding a NaN or an infinity, as ``(path, value)``.
+
+    Region geometry is left to the layer geometry checks, which name a non-finite size or
+    angle in their own words; a traced leaf under ``jax.jit`` or ``jax.vmap`` cannot be read
+    and is left to the run's runtime guard. ``None`` when every readable leaf is finite.
+    """
+    for path, value in named_leaves(problem, skip=(Rectangle, Circle, Ellipse, Polygon)):
+        if opaque(value):
+            continue
+        try:
+            a = host(value, path)
+            finite = np.isfinite(a)
+        except (TypeError, ValueError):
+            continue
+        if not np.all(finite):
+            bad = a[~finite][0] if a.ndim else a
+            return path, bad.item()
+    return None
+
+
+def refuse_nonfinite(problem):
+    """Refuse a NaN or infinite input at ``check``/``prepare``, naming the field that holds it.
+
+    Without this, a non-finite material value or raster sample passed both and the run's
+    runtime guard refused it as ``prepared.finite_inputs`` at ``path='problem'``.
+    """
+    found = nonfinite_leaf(problem)
+    if found is not None:
+        path, value = found
+        raise ValidationError(f'{path} holds a non-finite value ({value!r}). Every numerical input '
+                              'must be finite: no NaN and no infinity.',
+                              code='problem.nonfinite', path=path, expected='finite values', actual=value)
+
+
 def abstract(value):
     """Structural detection; never obtains a primal or detaches a tangent."""
     import sys

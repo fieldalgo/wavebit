@@ -185,6 +185,7 @@ def check(problem, *, numerics, backend='numpy', device='cpu', precision='double
                                           code='check.concrete', path='problem')
         problem = _adapt.primal_problem(problem)
         solvers = _resolve(problem, numerics, execution)
+        _adapt.refuse_nonfinite(problem)
         # prepare refuses a layer whose regions cannot be built while it freezes their geometry,
         # which check does not do, so the freeze's layer refusals run here without its record.
         # Once: the solvers differ only in their materials, each evaluated at its wavelength.
@@ -268,6 +269,17 @@ def _runtime_checks(problem, execution, partitions):
     return {'finite_inputs': finite, 'positive_wavelength': positive_wavelength,
             'nonnegative_thickness': positive_thickness, 'nonzero_polarization': polarization,
             'raster_partition': partition}
+
+
+def _refuse_guard(problem, name):
+    """Raise the failed runtime guard ``name``, naming the non-finite field where one is readable."""
+    found = _adapt.nonfinite_leaf(problem) if name == 'finite_inputs' else None
+    if found is not None:
+        path, value = found
+        raise IncompatibleProblemError(f'The prepared runtime guard failed: {path} holds a non-finite '
+                                       f'value ({value!r}).', code=f'prepared.{name}', path=path,
+                                       expected='finite values', actual=value)
+    raise IncompatibleProblemError('The prepared runtime guard failed.', code=f'prepared.{name}', path='problem')
 
 
 @eager_under_torch_compile
@@ -380,8 +392,7 @@ class Prepared:
                 checks.update(self._topology_checks(problem))
                 for name, passed in checks.items():
                     if not bool(_adapt.host(passed, name)):
-                        raise IncompatibleProblemError('The prepared runtime guard failed.',
-                                                       code=f'prepared.{name}', path='problem')
+                        _refuse_guard(problem, name)
                 return _report(problem, self.numerics, self.execution, solvers)
         except (ValidationError, TypeError, ValueError, NotImplementedError, RuntimeError) as error:
             return CheckReport(issues=(_issue(error),))
@@ -395,7 +406,7 @@ class Prepared:
             checks.update(self._topology_checks(problem))
             for name, passed in checks.items():
                 if not _adapt.opaque(passed) and not bool(_adapt.host(passed, name)):
-                    raise IncompatibleProblemError('The prepared runtime guard failed.', code=f'prepared.{name}', path='problem')
+                    _refuse_guard(problem, name)
             solved = []
             for solver, geometry in zip(solvers, self._geometry):
                 try:
@@ -439,6 +450,7 @@ def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='doub
     problem = _adapt.primal_problem(problem)
     with execution._scope(), _normalize_errors():
         solvers = _resolve(problem, numerics, execution)
+        _adapt.refuse_nonfinite(problem)
         geometry = tuple(_engine_scene(solver).freeze_geometry() for solver in solvers)
         report = _report(problem, numerics, execution, solvers)
         partitions = _partition_guards(problem, solvers)
