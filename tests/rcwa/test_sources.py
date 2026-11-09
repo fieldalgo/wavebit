@@ -267,3 +267,43 @@ def test_dipole_one_reciprocal_vector_away_superposes_with_a_plane_wave(order):
     assert joint.group_count == 1
     expected = _outgoing(alone) + _outgoing(lit)
     np.testing.assert_allclose(_outgoing(joint), expected, rtol=0, atol=1e-13*np.max(np.abs(expected)))
+
+
+@pytest.mark.parametrize('host_structure', [np.full((1, 4, 4), 2.25),
+                                            [dict(background=2.25, shapes=[])]],
+                         ids=['raster', 'shapes'])
+@pytest.mark.parametrize('kw', [dict(bloch_k=(.21, .13)),
+                                dict(repetition='isolated', sampling=(3, 3))],
+                         ids=['bloch_k', 'isolated'])
+def test_single_precision_dipole_off_the_zero_bloch_k_tracks_double(host_structure, kw):
+    """Single precision accepts the uniform host double accepts, and agrees to float32 accuracy.
+
+    Off ``bloch_k = 0`` the centre-origin gauge leaves ``|phase|**2 = 1 +- 1e-8`` on a uniform
+    block's diagonal in complex64, and a float64 tolerance called that host patterned. The
+    isolated mode samples nonzero Bloch vectors itself, so it met the same refusal.
+    """
+    source = _legacy_wavebit_ElectricDipole(position=(.12, -.08, .31),
+                                            moment=(1e-29, 1e-29j, 1e-29), **kw)
+    box = ((-2., 2.), (-2., 2.))
+    fields = {}
+    for dtype in (np.complex128, np.complex64):
+        r = _legacy_wavebit_rcwa(**vacuum(structure=host_structure), excitation=source,
+                                 length_unit=1e-6, complex_dtype=dtype).solve(power_region=box)
+        fields[dtype] = np.stack([host(r.boundary_fields(side, [.07, -.3], [-.12, .2]))
+                                  for side in ('top', 'bottom')])
+    # Evaluation promotes the returned field; the solve itself ran in complex64.
+    assert not np.array_equal(fields[np.complex64], fields[np.complex128])
+    scale = np.abs(fields[np.complex128]).max()
+    # Measured 2.4e-7 of the field scale; float32 resolution is 1.2e-7.
+    np.testing.assert_allclose(fields[np.complex64], fields[np.complex128], rtol=0, atol=2e-6*scale)
+
+
+@pytest.mark.parametrize('contrast', [3., 1e-3])
+def test_single_precision_still_refuses_a_patterned_dipole_host(contrast):
+    raster = np.full((1, 1, 2), 1.)
+    raster[..., 1] += contrast
+    source = _legacy_wavebit_ElectricDipole(position=(.12, -.08, .31), moment=(1e-29, 0., 0.),
+                                            bloch_k=(.21, .13))
+    with pytest.raises(ValueError, match='uniform host'):
+        _legacy_wavebit_rcwa(**vacuum(structure=raster), excitation=source, length_unit=1e-6,
+                             complex_dtype=np.complex64).solve()
