@@ -1493,11 +1493,25 @@ def _lattice_key(lattice):
     out of the normalisation), so keying on absolute lengths would refuse replays that are in
     fact the same computation. Combined with the grid shape, which the key already carries,
     this pins the pixel geometry exactly.
+
+    The key is the basis's *value*, and a basis under differentiation still has one: an
+    un-jitted ``jax.grad`` tracer carries a concrete primal, and a ``requires_grad`` tensor
+    detaches. Both refuse the whole-array conversion, so they are read through
+    :func:`_no_gradient` instead -- the record check then compares the cell of an eager
+    gradient in the lattice basis, where it used to raise ``TracerArrayConversionError`` (or
+    torch's "Can't call numpy() on Tensor that requires grad") on every replay. The derivative
+    is not touched: the key only decides whether the record fits. A basis with no value at all
+    (``jax.jit``, ``jax.vmap``) still raises here, as it must -- ``None`` would be a key, the
+    one an unstated cell has. :func:`_check_normal_field_still_fits` does not ask for one
+    (:func:`_cell_has_no_value`).
     """
     if lattice is None:
         return None
     import numpy as np
-    A = np.asarray(lattice, dtype=float)
+    try:
+        A = np.asarray(lattice, dtype=float)
+    except Exception:                     # under autodiff: read the basis by its primal
+        A = np.asarray(_no_gradient(getattr(lattice, 'columns', lattice)), dtype=float)
     scale = float(np.hypot(A[0, 0], A[1, 0])) or 1.0
     return tuple((A / scale).reshape(-1).tolist())
 
