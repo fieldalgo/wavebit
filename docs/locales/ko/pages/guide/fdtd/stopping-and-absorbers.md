@@ -61,6 +61,16 @@ PML은 전도성·분산성 배경에 정합할 수 없으므로, 그런 배경�
 함께 쓰는 `PlaneWave`는 `check()`에서 `fdtd.unsupported`로 거절됩니다. 손실 매질은 시트에서
 떨어진 층으로 지정하세요. `TFSF` 보조 격자는 바뀌지 않았습니다.
 
+스무딩 구조(`Sphere`, `Cylinder`, `Box`, `Prism`)의 지지 영역이 `ConductiveAbsorber` 층에
+닿으면 구조가 그 층과 결합합니다. 이 결합은 무손실 등방성 일반 재료(양의 실수 `epsilon`
+하나, `mu` 없음), 전기 `CurrentDipole` 광원, 한 축에만 있는 Open 면(나머지는 `PEC`, `PMC`,
+`Periodic`, `Bloch`), `geometry_ranges` 없는 `Numerics(discretization='voxel')`, 고정 실행
+길이(`DecayStop` 없음), `InitialField` 없음, 추적·미분 값이 아닌 일반 숫자, CPU에서만
+허용됩니다. 그 밖의 경우는 `check()`에서 어느 조건인지 밝히는 메시지로 거절됩니다.
+스무딩 구조를 모든 Open 면에서 세 격자 셀 이상 떨어뜨리면 지지 영역이 층 밖에 머물러 이
+조건이 모두 풀립니다. 두 셀로는 충분하지 않은 경우가 있었습니다. 그런 구조의 재료를
+미분하려면 다른 경우와 같이 일반 숫자로 준비한 문제의 `Prepared.run`을 사용합니다.
+
 `wavelength=` 없이 선언한 `PML`은 광원들이 공유하는 대역 중심 파장에 복소 주파수 이동을
 맞추므로, `prepare`가 그 파장을 흡수층의 나머지와 함께 고정합니다. 준비된 계산을 다른
 `GaussianPulse.wavelength`로 재사용하면, 구체 값이든 추적 값이든(`jax.grad`, `jax.jit`,

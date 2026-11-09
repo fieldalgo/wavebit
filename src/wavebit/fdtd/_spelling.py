@@ -53,7 +53,91 @@ _SHARED = ('Plane', 'Box', 'Sphere', 'Cylinder', 'Prism', 'PlaneWave', 'TFSF', '
            'Boundaries', 'Periodic', 'PEC', 'PMC', 'InitialField', 'Domain', 'Shape', 'Structure',
            'PML', 'ModeMonitor', 'ModeSource', 'GaussianBeam')
 
-PHRASES = (
+#: The ConductiveAbsorber's coupling to a smoothed structure, as the public caller meets it. The
+#: engine names its own scopes (``ConstitutiveAbsorberScope: ...``), which a public caller cannot
+#: act on; each refusal is said here with the public names, and with advice that runs: moved three
+#: grid cells clear of the Open faces, a smoothed body's support stays out of the layer (two
+#: cells were not always enough, by rounding, in tests/api/test_check_run_consistency.py).
+_ABSORBER = ("A smoothed structure's support reaches into the ConductiveAbsorber "
+             '(Numerics(absorber=fdtd.ConductiveAbsorber(...)))')
+_CLEAR = ('move the smoothed structures (Sphere, Cylinder, Box, Prism) at least three grid cells, '
+          '3*UniformGrid(spacing), clear of every Open face, so their support stays out of the '
+          'absorbing layer')
+_ABSORBER_PHRASES = (
+    (r'ConstitutiveAbsorberScope: initial fields are not admitted\.',
+     f'{_ABSORBER}, where Problem(initial=...) is not supported. Excite the field with a source '
+     'instead of an fdtd.InitialField.'),
+    (r'ConstitutiveAbsorberScope: automatic stopping needs a separate state mapping; use a fixed '
+     r'duration for this new term\.',
+     f'{_ABSORBER}, where Numerics(stopping=fdtd.DecayStop(...)) is not supported. Remove stopping '
+     f'and run the fixed Numerics(duration=...), or {_CLEAR}.'),
+    (r'ConstitutiveAbsorberConcrete: this first route needs concrete inputs\.',
+     f'{_ABSORBER}, where material values and geometry must be plain numbers, not traced or '
+     f'differentiated ones. To differentiate them, {_CLEAR}, then prepare from plain numbers '
+     'and run the traced problem with Prepared.run.'),
+    (r'ConstitutiveAbsorberConcrete: finite concrete specification required\.',
+     f'{_ABSORBER}, where every declared value must be a finite plain number. Give finite plain '
+     f'numbers, or {_CLEAR}.'),
+    (r'ConstitutiveAbsorberConcrete: link certification requires concrete CPU coefficients, not an '
+     r'outer transformed solve\.',
+     f'{_ABSORBER}, which cannot run inside an outer jax.jit, jax.vmap or torch.func transform. '
+     f'Run it outside the transform, or {_CLEAR}.'),
+    (r'ConstitutiveAbsorberScope: only plain lossless Material is admitted\.',
+     f'{_ABSORBER}, where every material (the background and each structure) must be a plain '
+     'lossless Material, not a ConductiveMaterial, DispersiveMaterial or tabulated material. Use '
+     f'such materials, or {_CLEAR}.'),
+    (r'ConstitutiveAbsorberScope: positive isotropic eps and mu=1 required\.',
+     f'{_ABSORBER}, where every material must be isotropic, with one positive real epsilon and '
+     f'no mu (mu = 1). Use such materials, or {_CLEAR}.'),
+    (r'ConstitutiveAbsorberScope: only electric CurrentDipoles are admitted\.',
+     f"{_ABSORBER}, where every source must be an electric fdtd.CurrentDipole (kind='electric'): "
+     'no magnetic CurrentDipole, PlaneWave, TFSF, GaussianBeam or ModeSource. Use only electric '
+     f'CurrentDipoles, or {_CLEAR}.'),
+    (r'ConstitutiveAbsorberScope: CPML, mirrors and reduced axes are outside this first absorber '
+     r'route\.',
+     f'{_ABSORBER}, where every face that is not Open must be PEC, PMC, Periodic or Bloch: '
+     f'MirrorSymmetry and InvariantAxis are not supported. Use those faces, or {_CLEAR}.'),
+    (r'ConstitutiveAbsorberScope: one matched absorbing axis and an unchanged absorbing layout are '
+     r'required\.',
+     f'{_ABSORBER}, where the Open faces must all lie on one axis. Open the faces of one axis '
+     f'only, or {_CLEAR}.'),
+    (r'ConstitutiveAbsorberScope: ordinary concrete voxel shapes required\.',
+     f"{_ABSORBER}, where every structure must be a built-in shape under "
+     "Numerics(discretization='voxel') and not named in Numerics(geometry_ranges=...). Use "
+     f'those, or {_CLEAR}.'),
+    (r'ConstitutiveAbsorberScope: (?:only electric coupling is|magnetic coupling is not) '
+     r'admitted\.',
+     f'{_ABSORBER}, where only its electric-field smoothing is supported, not a magnetic one '
+     f'(mu != 1). Give it no mu, or {_CLEAR}.'),
+    (r'ConstitutiveAbsorberPlan: [^.]*\.',
+     f'{_ABSORBER}, and this problem no longer matches the absorber coupling it was prepared '
+     'with. Prepare it again with fdtd.prepare.'),
+    (r'ConstitutiveAbsorberRuntime: [^.]*\.',
+     f"{_ABSORBER}, which runs on the CPU only. Use device='cpu', or {_CLEAR}."),
+    (r'ConstitutiveAbsorberRange: ([^.]*)\.',
+     f'{_ABSORBER}, and the absorber coefficients there are out of range (\\1). Use plainer '
+     f'material values, or {_CLEAR}.'),
+    (r'ConstitutiveAbsorberCommutation: \S+ \S+ \w+ link at z/y/x=(\([^)]*\)) joins unequal '
+     r'absorber rates\. Keep this interpolation support outside the layer, or use an aligned '
+     r'extrusion\.',
+     f'{_ABSORBER} where two different absorber rates meet (at cell z/y/x=\\1), which its '
+     f'smoothing cannot cross. Use an extrusion aligned with the absorbing axis, or {_CLEAR}.'),
+)
+
+#: A traced CurrentDipole centre. The engine's advice, a ``range=`` box, has no public spelling:
+#: a public CurrentDipole's position is static (:data:`PUBLIC_LEAVES`), and its source terms are
+#: what differentiate.
+_DIPOLE_PHRASES = (
+    (r"CurrentDipole\(center=<traced>\): a position that is a gradient leaf needs "
+     r"range=\(\(x0, x1\), \(y0, y1\), \(z0, z1\)\), the static box it may move in -- the stamp "
+     r"writes a static set of cells, and without a box nothing says which\.",
+     'CurrentDipole(center=...) is traced or differentiated, and a CurrentDipole\'s position is '
+     'static: the cells its stamp writes are fixed when the problem is prepared. Give center '
+     'plain numbers; a dipole differentiates through its current_moment, phase and '
+     'delay_seconds, and through its GaussianPulse(wavelength=..., frequency_sigma_hz=...).'),
+)
+
+PHRASES = _ABSORBER_PHRASES + _DIPOLE_PHRASES + (
     # A static refusal ends with the engine's leaves; the public module has its own.
     (re.escape(_COMPAT_LEAVES), PUBLIC_LEAVES),
     # Bloch faces from a plane wave: the public call takes the source and the units.

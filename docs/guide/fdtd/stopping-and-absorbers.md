@@ -66,6 +66,18 @@ matched to a conductive or dispersive background, so a `PlaneWave` in such a bac
 behind a `ConductiveAbsorber` is refused at `check()` with `fdtd.unsupported`; give the
 lossy medium as a layer clear of the sheet instead. A `TFSF` column is unchanged.
 
+A smoothed structure (`Sphere`, `Cylinder`, `Box`, `Prism`) whose support reaches into a
+`ConductiveAbsorber` layer couples to it, and that coupling is admitted only with plain
+lossless isotropic materials (one positive real `epsilon`, no `mu`), electric
+`CurrentDipole` sources, Open faces on one axis with `PEC`, `PMC`, `Periodic` or `Bloch`
+elsewhere, `Numerics(discretization='voxel')` without `geometry_ranges`, a fixed duration
+(no `DecayStop`), no `InitialField`, plain numbers rather than traced or differentiated
+ones, and the CPU. Anything else is refused at `check()` with a message that names which
+of these it is. Moving the smoothed structures at least three grid cells clear of every
+Open face keeps their support out of the layer and lifts all of these; two cells were not
+always enough. Differentiating such a structure's material then goes through
+`Prepared.run` of a problem prepared from plain numbers, as everywhere else.
+
 A `PML` without `wavelength=` tunes its complex-frequency shift to the band centre its
 sources share, so `prepare` fixes that wavelength with the rest of the absorber. Reusing the
 preparation with another `GaussianPulse.wavelength`, concrete or traced (`jax.grad`,
