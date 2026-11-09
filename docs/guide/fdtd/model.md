@@ -511,12 +511,6 @@ not stored); a `FieldMonitor` span must contain a point of every requested compo
 Both refuse requested transverse intervals outside the physical domain, before
 clipping or snapping, with `monitor.extent` at `outputs.<name>.plane.<axis>`.
 Reversed or zero-width intervals are refused when constructing `Plane`.
-A `FieldMonitor` plane with no span along a transverse axis covers the physical domain along
-it: on an axis with an `Open()` face it stops where the absorbing layer begins, returning
-exactly the samples and values of the explicit span of the physical domain, because the
-stretched field inside the layer is not the physical one (a `FluxMonitor` plane across such an
-axis is refused for the same reason). Along `Periodic()`, `Bloch`, wall and mirror axes it
-keeps every point.
 
 | Monitor | Returns |
 | --- | --- |

@@ -395,7 +395,7 @@ def monitor_results(scene, plan, state, rt, sources, params=None):
                 out[m.name] = FluxResult(name=m.name, wavelengths=m.wavelengths, flux=flux,
                                          faces=None, accumulators=obs[m.name], layout=layout)
         elif isinstance(m, Field):
-            points = field_points(m, grid, scene)
+            points = field_points(m, grid)
             out[m.name] = FieldResult(
                 name=m.name, wavelengths=m.wavelengths,
                 fields={c: obs[m.name][c] for c in m.components},

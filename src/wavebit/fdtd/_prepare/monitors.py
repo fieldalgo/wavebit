@@ -228,32 +228,12 @@ def _plane_extents(plane):
 # Field
 # ---------------------------------------------------------------------------------------------
 
-def _physical_extent(scene, grid, a):
-    """``(lo, hi)`` along ``a`` without the absorbing layers, or None when no face absorbs.
-
-    An absorbing face's ``cells`` sit inside the grid; the physical domain ends where they
-    begin, the same indices ``_clear_of_absorbers`` admits for a flux monitor.
-    """
-    from wavebit.fdtd._legacy_boundaries import Absorbing
-    cells = []
-    for side in '-+':
-        face = scene.boundaries.face(AXES[a] + side)
-        cells.append(face.cells if isinstance(face, Absorbing) else 0)
-    if not any(cells):
-        return None
-    return (grid.low[a] + cells[0] * grid.dx, grid.high[a] - cells[1] * grid.dx)
-
-
-def field_points(monitor, grid, scene=None):
+def field_points(monitor, grid):
     """``{component: (Slab, (x, y, z) coordinate arrays)}`` of a Field monitor, per component.
 
     Every component on its own Yee points: on a plane, the plane of that component's points
     nearest the position; across it (or in a box), every point of the component inside the
-    extent, ends included. Nothing is interpolated. A plane with no extent along an axis
-    covers the physical domain there: with ``scene`` given, an axis whose faces absorb reads
-    as the extent from one layer's inner face to the other's, exactly as if that span had been
-    given, so no sample lies inside an absorbing layer (whose stretched field is not the
-    physical one). Without layers that is the whole axis.
+    extent, ends included. Nothing is interpolated.
     """
     out = {}
     for comp in monitor.components:
@@ -271,8 +251,6 @@ def field_points(monitor, grid, scene=None):
                     ext = (monitor.box.low[a], monitor.box.high[a])
                 else:
                     ext = monitor.plane.extent(a)
-                    if ext is None and scene is not None:
-                        ext = _physical_extent(scene, grid, a)
                 if ext is None:
                     lo, hi = 0, n
                 else:
@@ -641,7 +619,7 @@ def monitor_regions(scene, grid, dt):
                                      parts=layout.parts(), dt=dt))
         elif isinstance(m, Field):
             freqs = tuple(1.0 / w for w in m.wavelengths)
-            points = field_points(m, grid, scene)
+            points = field_points(m, grid)
             parts = tuple((comp, comp[0], slab) for comp, (slab, _) in points.items())
             out.append(DFTRegion(name=m.name, monitor=m.name, freqs=freqs, parts=parts, dt=dt))
         elif isinstance(m, Diffraction):
