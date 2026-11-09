@@ -16,10 +16,11 @@ fmmax
   https://github.com/facebookresearch/fmmax
   Copyright (c) 2023 Meta Research. MIT License, reproduced in LICENSE.fmmax.
   The eigendecomposition gradient in src/wavebit/_common/backend.py is a port
-  of _eig_bwd from that project. Its maintained fork,
-  https://github.com/invrs-io/fmmax, carries the same function under the same
-  MIT terms as "Copyright: 2025 invrs.io LLC"; which of the two the port was
-  taken from is not recorded, so both are named.
+  of _eig_bwd from that project. Development later moved to
+  https://github.com/invrs-io/fmmax, which carries the same function under the
+  same MIT terms as "Copyright: 2025 invrs.io LLC"; both repositories are now
+  archived. Which of the two the port was taken from is not recorded, so both
+  are named.
 
 RETICOLO
   RETICOLO, by J.P. Hugonin and P. Lalanne
