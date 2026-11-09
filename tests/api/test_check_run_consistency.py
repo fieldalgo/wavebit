@@ -234,3 +234,168 @@ def test_a_check_issue_is_raised_as_the_class_prepare_raises():
     with pytest.raises(ValidationError) as named:
         rcwa.check(problem, numerics=numerics).raise_if_invalid(ValidationError)
     assert type(named.value) is ValidationError
+
+
+# -- 6. A ConductiveAbsorber refusal speaks public names, and its advice runs -----------------
+
+_PULSE = fdtd.GaussianPulse(wavelength=2., frequency_sigma_hz=1e13)
+
+
+def _absorbed(*, clear=1., spacing=.1, material=None, source=None, xopen=False, initial=None):
+    """A cylinder whose ends stand ``clear`` grid cells inside the two Open z faces."""
+    top = .8 - clear*spacing
+    problem = fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(1., 1., 1.6)),
+        boundaries=fdtd.Boundaries(x=fdtd.Open() if xopen else fdtd.PEC(), y=fdtd.PEC(), z=fdtd.Open()),
+        structures=(fdtd.Structure('c', shape=fdtd.Cylinder(radius=.22, height=2*top),
+                                   material=material or Material(2.25)),)),
+        sources=(source or fdtd.CurrentDipole('d', center=(0., 0., 0.), component='Ey', pulse=_PULSE),),
+        outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('e', at=(0, 0, .1), component='Ey'),)),
+        initial=initial)
+    numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=spacing), duration=fdtd.Duration(steps=6),
+                             absorber=fdtd.ConductiveAbsorber(cells=3))
+    return problem, numerics
+
+
+ABSORBER_CASES = {
+    'magnetic-material': (dict(material=Material(2.25, mu=1.1)), 'no mu (mu = 1)'),
+    'magnetic-source': (dict(source=fdtd.CurrentDipole('m', center=(0., 0., 0.), component='Hx',
+                                                       kind='magnetic', pulse=_PULSE)),
+                        'every source must be an electric fdtd.CurrentDipole'),
+    'two-axes': (dict(xopen=True), 'the Open faces must all lie on one axis'),
+    'stopping': ('stopping', 'Remove stopping and run the fixed Numerics(duration=...)'),
+}
+
+
+def _absorber_case(name, **where):
+    changes, says = ABSORBER_CASES[name]
+    if changes == 'stopping':
+        problem, numerics = _absorbed(**where)
+        return problem, numerics.replace(stopping=fdtd.DecayStop(threshold=1e-5, window_seconds=1e-15)), says
+    problem, numerics = _absorbed(**changes, **where)
+    return problem, numerics, says
+
+
+def _public_absorber_words(message):
+    assert 'ConstitutiveAbsorber' not in message and 'first' not in message and 'new term' not in message
+    assert 'ConductiveAbsorber' in message
+
+
+@pytest.mark.parametrize('spacing', [.1, .05, .04])
+@pytest.mark.parametrize('name', sorted(ABSORBER_CASES))
+def test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs(name, spacing):
+    problem, numerics, says = _absorber_case(name, spacing=spacing)
+    (issue,) = fdtd.check(problem, numerics=numerics).issues
+    _public_absorber_words(issue.message)
+    assert says in issue.message
+    assert 'at least three grid cells, 3*UniformGrid(spacing), clear of every Open face' in issue.message
+    with pytest.raises(ValidationError) as caught:
+        fdtd.run(problem, numerics=numerics)
+    assert caught.value.message == issue.message
+    # The advice: the same structure three grid cells clear of the Open faces passes.
+    problem, numerics, _ = _absorber_case(name, clear=3., spacing=spacing)
+    assert fdtd.check(problem, numerics=numerics).ok
+
+
+def test_the_other_absorber_advice_runs():
+    # Removing stopping, as advised, runs the same structure where it stands.
+    problem, numerics, _ = _absorber_case('stopping')
+    assert fdtd.check(problem, numerics=numerics.replace(stopping=None)).ok
+    # An InitialField is refused there; a source in its place, as advised, runs.
+    problem, numerics = _absorbed(initial=fdtd.InitialField(E=(None, lambda x, y, z: x*0 + 1, None)))
+    (issue,) = fdtd.check(problem, numerics=numerics).issues
+    _public_absorber_words(issue.message)
+    assert 'Excite the field with a source instead of an fdtd.InitialField' in issue.message
+    assert fdtd.check(problem.replace(initial=None), numerics=numerics).ok
+
+
+def test_a_differentiated_material_beside_the_absorber_runs_once_moved_clear():
+    torch = pytest.importorskip('torch')
+    leaf = torch.tensor(2.25, dtype=torch.float64, requires_grad=True)
+    problem, numerics = _absorbed()
+    prepared = fdtd.prepare(problem, numerics=numerics, backend='torch')
+    with pytest.raises(ValidationError) as caught:
+        prepared.run(_absorbed(material=Material(leaf))[0])
+    _public_absorber_words(caught.value.message)
+    assert 'To differentiate them, move the smoothed structures' in caught.value.message
+    assert 'run the traced problem with Prepared.run' in caught.value.message
+    problem, numerics = _absorbed(clear=3.)
+    prepared = fdtd.prepare(problem, numerics=numerics, backend='torch')
+    prepared.run(_absorbed(material=Material(leaf), clear=3.)[0])['e'].values.real.sum().backward()
+    assert leaf.grad is not None and bool(torch.isfinite(leaf.grad))
+
+
+def test_every_absorber_coupling_refusal_the_engine_holds_has_public_words():
+    import ast
+    import pathlib
+    import re
+    from wavebit.fdtd._spelling import to_public
+    root = pathlib.Path(fdtd.__file__).parent
+    said = 0
+    for path in (root/'_prepare'/'constitutive_absorber.py', root/'_kernel'/'constitutive_absorber.py'):
+        tree = ast.parse(path.read_text(encoding='utf-8'))
+        inside = {id(v) for node in ast.walk(tree) if isinstance(node, ast.JoinedStr) for v in node.values}
+        for node in ast.walk(tree):
+            if id(node) in inside:
+                continue
+            if isinstance(node, ast.JoinedStr):
+                text = ''.join(v.value if isinstance(v, ast.Constant) else '{' + ast.unparse(v.value) + '}'
+                               for v in node.values)
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                text = node.value
+            else:
+                continue
+            if not text.startswith('ConstitutiveAbsorber'):
+                continue
+            sample = re.sub(r'\{[^}]*\}', 'x', text.replace('{node}', '(1, 2, 3)'))
+            out = to_public(sample)
+            said += 1
+            assert 'ConstitutiveAbsorber' not in out, (path.name, text)
+            for name in re.findall(r'(?<![\w.])fdtd\.(\w+)', out):
+                assert hasattr(fdtd, name), name
+    assert said >= 15, said
+
+
+# -- 8. A differentiated CurrentDipole centre is refused with advice the public API can take ---
+
+def test_a_traced_dipole_centre_names_what_differentiates_instead():
+    torch = pytest.importorskip('torch')
+
+    def problem(**dipole):
+        return fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
+            domain=fdtd.Domain(size=(1., 1., 1.)),
+            boundaries=fdtd.Boundaries(x=fdtd.PEC(), y=fdtd.PEC(), z=fdtd.Open())),
+            sources=(fdtd.CurrentDipole('d', component='Ey', pulse=_PULSE, **dipole),),
+            outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('e', at=(0, 0, .2), component='Ey'),)))
+    numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.1), duration=fdtd.Duration(steps=10))
+    x = torch.tensor(.01, dtype=torch.float64, requires_grad=True)
+    with pytest.raises(ValidationError) as caught:
+        fdtd.run(problem(center=(x, 0., 0.)), numerics=numerics, backend='torch')
+    message = caught.value.message
+    assert 'range=' not in message                   # public CurrentDipole has no range field
+    assert 'CurrentDipole(center=...)' in message and 'current_moment' in message
+    import inspect
+    assert 'range' not in inspect.signature(fdtd.CurrentDipole).parameters
+    # The advice: a plain centre, with the source's own terms differentiated.
+    moment = torch.tensor(1e-9, dtype=torch.float64, requires_grad=True)
+    fdtd.run(problem(center=(.01, 0., 0.), current_moment=moment), numerics=numerics,
+             backend='torch')['e'].values.real.sum().backward()
+    assert moment.grad is not None and float(moment.grad) != 0.
+
+
+# -- 9. periodic Result.sample names the public field component ------------------------------
+
+def test_periodic_sample_outside_its_record_names_the_public_component():
+    q = periodic.Problem(units=Units(length='um'),
+        stack=periodic.Stack(period=(.2,), top=Material(1.), bottom=Material(1.),
+            layers=(periodic.Layer(thickness=.1, epsilon=np.full((1, 2), 2.25)),)),
+        excitation=periodic.Excitation(wavelength=(.85, .9, .95), sources=(periodic.PlaneWave(),)),
+        outputs=periodic.Outputs(snapshots=periodic.Snapshots(every=17)))
+    n = periodic.Numerics(spacing=1/30, duration_seconds=55*.9e-6/C0, orders=(0, 0))
+    result = periodic.run(q, numerics=n)
+    with pytest.raises(ValidationError) as caught:
+        result.sample(z=50.)
+    message = caught.value.message
+    assert 'ex.' not in message and "'Ex'" in message
+    assert 'Result.sample(z=50.0) is outside the interval' in message
+    assert result.sample(z=.05).components == ('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz')
