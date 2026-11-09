@@ -144,6 +144,10 @@ class Result:
         Shape is (wavelength,z,y,x,component); E is V/m and H is A/m.
         Coordinates use the Problem's declared length unit. Interfaces select
         the upper layer, matching the engine's explicit-coordinate convention.
+        An integer count samples uniformly instead; the returned ``coordinates``
+        then hold the points sampled, not the count: 1-D ``x``/``y`` on an
+        axis-aligned cell, 2-D ``(y, x)`` arrays on a skewed one, and a ``z``
+        that repeats each internal face, once per layer.
         """
         records = self._fields()
         if any(getattr(state, 'bare_interface', False) for state in records):
@@ -166,7 +170,9 @@ class Result:
                                device=getattr(a, 'device', None))
             values.append(a * factors)
         data = array_namespace(values[0]).stack(values)
-        return FieldSamples(coordinates={'x': x, 'y': y, 'z': z, 'wavelength': self.wavelengths},
+        with _public_sampling():
+            points = records[0].sample_points(x, y, z)
+        return FieldSamples(coordinates={**points, 'wavelength': self.wavelengths},
                             values=data, components=('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'),
                             units=_component_units(_COMPONENTS, self.provenance['length_units']),
                             sampling='collocated Cartesian phasor',
@@ -187,7 +193,9 @@ class Result:
                                device=getattr(a, 'device', None))
             values.append(a * factors)
         data = array_namespace(values[0]).stack(values)
-        return FieldSamples(coordinates={'x': x, 'y': y, 'wavelength': self.wavelengths},
+        with _public_sampling():
+            points = records[0].sample_points(x, y)
+        return FieldSamples(coordinates={**points, 'wavelength': self.wavelengths},
                             values=data, components=('Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz'),
                             units=_component_units(_COMPONENTS, self.provenance['length_units']),
                             sampling='collocated boundary phasor',
