@@ -462,6 +462,36 @@ def test_fdtd_names_the_field_holding_a_nonfinite_value(where, value):
         assert (caught.value.code, caught.value.path) == (issue.code, issue.path)
 
 
+def _placed(where, value):
+    """A source or monitor coordinate set to ``value``, with the path its refusal names."""
+    problem, numerics = _absorbed()
+    if where == 'dipole':
+        return (_absorbed(source=fdtd.CurrentDipole('d', center=(0., value, 0.), component='Ey',
+                                                    pulse=_PULSE))[0], numerics,
+                'source.outside_domain', 'sources.d.center')
+    if where == 'monitor':
+        return (problem.replace(outputs=fdtd.Outputs(monitors=(
+                    fdtd.TimeSeriesMonitor('e', at=(0, 0, value), component='Ey'),))), numerics,
+                'monitor.outside_domain', 'outputs.e')
+    source = (fdtd.PlaneWave if where == 'plane-wave' else fdtd.ModeSource)(
+        's', plane=fdtd.Plane(z=value), pulse=_PULSE)
+    return problem.replace(sources=(source,)), numerics, 'source.outside_domain', 'sources.s.plane'
+
+
+@pytest.mark.parametrize('value', [np.nan, np.inf, -np.inf, 5.], ids=['nan', 'inf', '-inf', 'outside'])
+@pytest.mark.parametrize('where', ['dipole', 'monitor', 'plane-wave', 'mode-source'])
+def test_a_nonfinite_position_is_not_reported_as_outside_the_domain(where, value):
+    problem, numerics, outside, path = _placed(where, value)
+    code = outside if np.isfinite(value) else 'problem.nonfinite'
+    (issue,) = fdtd.check(problem, numerics=numerics).issues
+    assert (issue.code, issue.path) == (code, path)
+    assert ('outside' in issue.message) == bool(np.isfinite(value))
+    for door in (fdtd.prepare, fdtd.run):
+        with pytest.raises(ValidationError) as caught:
+            door(problem, numerics=numerics)
+        assert (caught.value.code, caught.value.path) == (code, path)
+
+
 def test_a_prepared_fdtd_run_names_the_nonfinite_live_material():
     problem, numerics = _absorbed()
     prepared = fdtd.prepare(problem, numerics=numerics)

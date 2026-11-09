@@ -248,6 +248,23 @@ def _monitor(m, problem, numerics=None):
     raise UnsupportedFeatureError('unsupported monitor', code='monitor.type', path='outputs.monitors', actual=type(m).__name__)
 
 
+def _outside_domain(what, code, path, values):
+    """The refusal of a point or plane ``values`` outside the physical domain.
+
+    A NaN or an infinity fails the same bounds test but is not outside the domain: it is
+    refused as ``problem.nonfinite`` at the same ``path``, as other non-finite inputs are.
+    """
+    from wavebit.rcwa._adapt import nonfinite_error
+    for value in values:
+        try:
+            finite = math.isfinite(float(value))
+        except (TypeError, ValueError, RuntimeError):
+            continue
+        if not finite:
+            return nonfinite_error(path, value)
+    return ValidationError(what+' is outside the physical domain', code=code, path=path)
+
+
 def _monitor_plane_bounds(monitor, low, high):
     """Refuse requested apertures outside the physical box before grid clipping/snapping."""
     if not isinstance(monitor, (old_monitors.Field, old_monitors.Flux)) or monitor.plane is None:
@@ -497,7 +514,7 @@ def lower_problem(problem, numerics, *, plan=None):
         _monitor_plane_bounds(m, physical_low, physical_high)
         if isinstance(m,old_monitors.Record):
             if any(not(a<=p<=b) for a,p,b in zip(physical_low,m.at,physical_high)):
-                raise ValidationError('monitor is outside the physical domain',code='monitor.outside_domain',path='outputs.'+m.name)
+                raise _outside_domain('monitor','monitor.outside_domain','outputs.'+m.name,m.at)
         else:old_scene._monitor_inside(m,physical_low,physical_high)
     for source in problem.sources:
         if isinstance(source,(sources.ModeSource,sources.GaussianBeam)):
@@ -505,16 +522,16 @@ def lower_problem(problem, numerics, *, plan=None):
                 raise ValidationError('expected Plane', code='source.plane', path='sources.'+source.name+'.plane')
             axis=source.plane.axis
             if not physical_low[axis]<=source.plane.position<=physical_high[axis]:
-                raise ValidationError('source is outside the physical domain',code='source.outside_domain',path='sources.'+source.name+'.plane')
+                raise _outside_domain('source','source.outside_domain','sources.'+source.name+'.plane',(source.plane.position,))
         elif isinstance(source,sources.PlaneWave):
             if not isinstance(source.plane, geometry.Plane):
                 raise ValidationError('expected Plane', code='source.plane', path='sources.'+source.name+'.plane')
             axis=source.plane.axis
             if not physical_low[axis]<=source.plane.position<=physical_high[axis]:
-                raise ValidationError('source is outside the physical domain',code='source.outside_domain',path='sources.'+source.name+'.plane')
+                raise _outside_domain('source','source.outside_domain','sources.'+source.name+'.plane',(source.plane.position,))
         elif isinstance(source,sources.CurrentDipole):
             if any(not a<=p<=b for a,p,b in zip(physical_low,source.center,physical_high)):
-                raise ValidationError('source is outside the physical domain',code='source.outside_domain',path='sources.'+source.name+'.center')
+                raise _outside_domain('source','source.outside_domain','sources.'+source.name+'.center',source.center)
         elif isinstance(source,sources.TFSF):
             if any(a<low or b>high for a,b,low,high in zip(source.box.low,source.box.high,physical_low,physical_high)):
                 raise ValidationError('source is outside the physical domain',code='source.outside_domain',path='sources.'+source.name+'.box')
