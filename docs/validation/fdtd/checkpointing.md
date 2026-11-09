@@ -86,6 +86,15 @@ homogeneous Lorentz and Drude media (17 steps, closed-form references at `2e-12`
 a CPU case with `K = 3`. That case uses a nested segment of 9 steps with remainders of 6 and
 2, for both the final-field loss and the record loss.
 
+A traced ranged body is covered too. With a `Sphere` radius as the differentiated input
+(`Numerics(geometry_ranges=...)`, 120 steps, eager `torch.autograd` and `jax.grad`), `K = 7`
+and `K = 1000` reproduce the plain scan's loss exactly and its radius derivative within
+`1e-12` (observed `1.3e-15`); the plain derivative matches a NumPy central difference
+(step `1e-4`) within `1e-4` (observed `6e-7`). The traced-geometry preflight compares the
+prepared plan with one rebuilt from the concrete scene, and the checkpoint block is part of
+the plan's skeleton, so the rebuilt plan takes the block from the prepared one; any other
+difference is still refused (`tests/fdtd/test_ranged_shape_checkpoint_grad.py`).
+
 ## Memory
 
 Two run lengths, 128 and 1,024 steps (8x), with `K = 8` and without checkpointing. The
