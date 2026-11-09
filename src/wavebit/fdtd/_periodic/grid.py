@@ -15,6 +15,23 @@ from wavebit.fdtd._periodic.runtime import Step
 from wavebit.fdtd._periodic.runtime import time_loop_backend
 
 
+def refuse_invariant_v_orders(half_u, half_v, why):
+    """Refuse ``v`` orders where a y-invariant cell cannot return them, naming the window to use.
+
+    Every ``n != 0`` order of a raster with one row is identically zero, so ``(M, 0)`` is its
+    window (``periodic.Numerics(orders=)``). Two engines could not say so: the shared grid keeps
+    two y cells for such a cell under a one-dimensional period or in-plane incidence and
+    refused ``(M, 1)`` as a spatial-Nyquist violation no resolution fixes, and the reference
+    engine's window for it has no ``v`` axis and dropped the half-width without a word. Where
+    the shared grid does resolve y (a two-dimensional period at a nonzero or array azimuth) it
+    computes the ``v`` orders, and this is not called. ``why`` says which case this is.
+    """
+    raise ValueError(
+        f'Numerics(orders=({half_u}, {half_v})) asks for v diffraction orders, but this cell '
+        f'is invariant along y (a raster with one row) and {why}. Every n != 0 order of such a '
+        f'cell is identically zero: use Numerics(orders=({half_u}, 0)).')
+
+
 def _validate_pml_reflection(value):
     """Keep CPML profile selection static and independent of material graphs."""
     value = np.asarray(value)
