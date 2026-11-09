@@ -353,7 +353,7 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 | `initial` | `initial.type` | `fdtd` |
 | `job`, `record` | `job.encoding`, `job.schema`, `record.format` | `wavebit.Job`, run records |
 | `layer` | `layer.ambiguous`, `layer.mu_without_raster`, `layer.regions`, `layer.thickness` | `rcwa` |
-| `material` | `material.type`; `material.scalar`, `material.shape`, `material.poles`, `material.wavelength_range`, `material.unknown_field`; `material.engine_model`, `material.causal_model`, `material.pole_type`, `material.fdtd` (lowering a material to time domain) | `rcwa`, `fdtd.periodic`; `wavebit.materials`; `fdtd` |
+| `material` | `material.type`; `material.scalar`, `material.shape`, `material.poles`, `material.wavelength_range`, `material.unknown_field` (`material.scalar`, `material.shape` and `material.poles` at construction; see [the materials guide](../guide/common/materials.md)); `material.engine_model`, `material.causal_model`, `material.pole_type`, `material.fdtd` (lowering a material to time domain) | `rcwa`, `fdtd.periodic`; `wavebit.materials`; `fdtd` |
 | `medium` | `medium.poles` | `fdtd.native` |
 | `migration` | `migration.shape`, `migration.shape_fields`, `migration.layer_fields`, `migration.layer_mu`, `migration.solver` | `wavebit.migration` |
 | `monitor` | `monitor.type`, `monitor.geometry`, `monitor.plane`, `monitor.plane_span`, `monitor.extent`, `monitor.outside_domain`, `monitor.source`, `monitor.orders` | `fdtd` |
@@ -375,7 +375,7 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 | `stack` | `stack.layers`, `stack.period`, `stack.cell_ambiguous`, `stack.mixed_layer_encoding` | `rcwa`, `fdtd.periodic` |
 | `structure` | `structure.concrete`, `structure.layer`, `structure.nonfinite`, `structure.quantity`, `structure.samples`, `structure.wavelength` | `rcwa.sample_structure` |
 | `units` | `units.type`, `units.length` | every solver |
-| `wavelength` | `wavelength.value`, `wavelength.empty`, `wavelength.shape` | `rcwa`, `fdtd.periodic`, `wavebit.materials` |
+| `wavelength` | `wavelength.value`, `wavelength.empty`, `wavelength.shape` | `rcwa`, `fdtd.periodic`, `wavebit.materials` (a `TabulatedMaterial`'s `wavelengths`, at construction) |
 
 ## Earlier spellings
 

@@ -8,6 +8,7 @@ from wavebit._common.backend import eager_under_torch_compile
 from dataclasses import dataclass
 from decimal import Decimal
 import math
+import numbers
 import sys
 import numpy as np
 from wavebit._common.backend import array_namespace, as_array, in_namespace, _concrete
@@ -32,19 +33,64 @@ def _namespace(*values):
 
 
 def _scalar(value, name, *, positive=False, nonnegative=False):
-    if getattr(value, 'shape', ()) != () or isinstance(value, (list, tuple, dict, str, bytes, bool)):
-        raise ValidationError('expected a real scalar', code='material.scalar', path=name)
+    def refuse(rule=None):
+        field = name.rsplit('.', 1)[-1]
+        detail = f'a finite {rule} number' if rule else f'one real number, not {type(value).__name__}'
+        return ValidationError(f'expected a real scalar: {field} must be {detail}',
+                               code='material.scalar', path=name)
+    if (value is None or getattr(value, 'shape', ()) != ()
+            or isinstance(value, (list, tuple, dict, str, bytes, bool))):
+        raise refuse()
     xp, ref = _namespace(value)
-    a = as_array(xp, value, device=getattr(ref, 'device', None))
+    try:
+        a = as_array(xp, value, device=getattr(ref, 'device', None))
+    except (TypeError, ValueError) as exc:
+        raise refuse() from exc
+    # NumPy reads any object as a zero-dimensional object array; only a number is a rate.
+    if isinstance(a, (np.ndarray, np.generic)) and a.dtype.kind not in 'iufc':
+        raise refuse()
     if xp.isdtype(a.dtype, 'complex floating'):
-        raise ValidationError('expected a real scalar', code='material.scalar', path=name)
+        raise refuse()
     valid = xp.isfinite(a)
     if positive: valid = valid & (a > 0)
     if nonnegative: valid = valid & (a >= 0)
     if _concrete(valid) is False:
-        rule = 'positive' if positive else 'nonnegative' if nonnegative else 'finite'
-        raise ValidationError(f'expected a finite {rule} scalar', code='material.scalar', path=name)
+        raise refuse('positive' if positive else 'nonnegative' if nonnegative else 'real')
     return valid
+
+
+def _constitutive_shape(value):
+    """The shape of a permittivity or permeability spelling, or ``None`` if it holds a non-number.
+
+    A nested list or tuple is read as the tensor it spells; a ragged one has no shape. Only
+    structure is read, never a value, so a traced leaf passes through.
+    """
+    if isinstance(value, (list, tuple)):
+        inner = [_constitutive_shape(v) for v in value]
+        if not inner or any(s is None for s in inner) or len(set(inner)) > 1:
+            return None
+        return (len(value),) + inner[0]
+    if value is None or isinstance(value, (str, bytes, dict)):
+        return None
+    if isinstance(value, numbers.Number):
+        return ()
+    shape, dtype = getattr(value, 'shape', None), getattr(value, 'dtype', None)
+    if shape is None or dtype is None:
+        return None
+    if isinstance(value, (np.ndarray, np.generic)) and value.dtype.kind not in 'biufc':
+        return None
+    return tuple(shape)
+
+
+def _constitutive(value, name, *, optional=False):
+    """Refuse a permittivity or permeability that is not a number, a diagonal or a 3x3 tensor."""
+    if optional and value is None:
+        return
+    if _constitutive_shape(value) not in ((), (3,), (3, 3)):
+        raise ValidationError(
+            f'{name.rsplit(".", 1)[-1]} must be a number, three diagonal values [xx, yy, zz] or a '
+            f'3x3 tensor{" (or None when non-magnetic)" if optional else ""}; got '
+            f'{type(value).__name__}.', code='material.shape', path=name)
 
 
 def _guard_response(value, *checks):
@@ -238,7 +284,9 @@ class ConductiveMaterial(Declaration):
     mu: object = None
 
     def __post_init__(self):
+        _constitutive(self.epsilon, 'material.epsilon')
         _scalar(self.conductivity, 'material.conductivity')
+        _constitutive(self.mu, 'material.mu', optional=True)
         _register(type(self), ('epsilon', 'conductivity', 'mu'))
 
     def at(self, wavelength, *, units):
@@ -254,9 +302,19 @@ class DispersiveMaterial(Declaration):
     mu: object = None
 
     def __post_init__(self):
-        object.__setattr__(self, 'poles', tuple(self.poles))
+        _constitutive(self.epsilon_inf, 'material.epsilon_inf')
+        _constitutive(self.mu, 'material.mu', optional=True)
+        message = 'poles must be a nonempty sequence of Drude, Lorentz, or Debye models'
+        if isinstance(self.poles, (Drude, Lorentz, Debye)):
+            raise ValidationError(message + f'; wrap a single pole as poles=({type(self.poles).__name__}(...),).',
+                                  code='material.poles', path='material.poles')
+        try:
+            object.__setattr__(self, 'poles', tuple(self.poles))
+        except TypeError as exc:
+            raise ValidationError(message + f'; got {type(self.poles).__name__}.',
+                                  code='material.poles', path='material.poles') from exc
         if not self.poles or any(not isinstance(p, (Drude, Lorentz, Debye)) for p in self.poles):
-            raise ValidationError('poles must be a nonempty sequence of Drude, Lorentz, or Debye models', code='material.poles', path='material.poles')
+            raise ValidationError(message, code='material.poles', path='material.poles')
         _register(type(self), ('epsilon_inf', 'poles', 'mu'))
 
     def at(self, wavelength, *, units):

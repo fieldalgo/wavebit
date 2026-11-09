@@ -54,22 +54,34 @@ class TabulatedMaterial:
         self._initialize(wavelengths, epsilon, mu, 'epsilon')
 
     def _initialize(self, wavelengths, values, mu, quantity):
-        x = np.asarray(wavelengths)
-        if x.ndim != 1 or len(x) < 2 or np.iscomplexobj(x):
-            raise ValueError('wavelengths must be a real, one-dimensional table of at least two samples')
-        x = np.asarray(x, dtype=float)
+        from wavebit.errors import ValidationError
+        table = 'a real, one-dimensional table of at least two samples'
+        try:
+            x = np.asarray(wavelengths)
+            if x.ndim != 1 or len(x) < 2 or np.iscomplexobj(x):
+                raise ValueError(table)
+            x = np.asarray(x, dtype=float)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(f'wavelengths must be {table}', code='wavelength.shape',
+                                  path='material.wavelengths') from exc
         if not np.all(np.isfinite(x)) or np.any(x <= 0) or np.any(np.diff(x) <= 0):
-            raise ValueError('wavelengths must be finite, positive and strictly increasing')
+            raise ValidationError('wavelengths must be finite, positive and strictly increasing',
+                                  code='wavelength.value', path='material.wavelengths')
 
         def samples(value, name):
-            a = np.asarray(value, dtype=complex)
+            detail = (' for isotropic index conversion' if quantity == 'index' else
+                      ', or one three-value diagonal / 3x3 tensor')
+            message = f'{name} must contain one finite scalar per wavelength' + detail
+            try:
+                a = np.asarray(value, dtype=complex)
+            except (TypeError, ValueError) as exc:
+                raise ValidationError(message, code='material.shape', path=f'material.{name}') from exc
             shapes = (x.shape,) if quantity == 'index' else (x.shape, x.shape+(3,), x.shape+(3,3))
             if a.shape not in shapes or not np.all(np.isfinite(a)):
-                detail = (' for isotropic index conversion' if quantity == 'index' else
-                          ', or one three-value diagonal / 3x3 tensor')
-                raise ValueError(f'{name} must contain one finite scalar per wavelength' + detail)
+                raise ValidationError(message, code='material.shape', path=f'material.{name}')
             if quantity == 'index' and name == 'mu' and np.any(a == 0):
-                raise ValueError('index conversion requires nonzero relative permeability mu')
+                raise ValidationError('index conversion requires nonzero relative permeability mu',
+                                      code='material.shape', path='material.mu')
             def immutable(v):
                 return complex(v) if np.ndim(v)==0 else tuple(immutable(e) for e in v)
             return immutable(a)
