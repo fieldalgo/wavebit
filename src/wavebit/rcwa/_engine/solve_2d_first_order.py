@@ -325,6 +325,32 @@ def _regular_pair(xp, M, values, psi, a, b, engaged):
     return unit * diagonal + coupling, psi
 
 
+def _refuse_a_grazing_split(xp, lam, n_f, n_orders):
+    """Refuse a miscounted split as the exact graze it is, when a mode sits on the light line.
+
+    An order exactly on the layer's light line has ``lam = 0``: neither direction, and the two
+    plane waves coincide (the ``{1, z}`` limit basis of ``docs/theory/rcwa/rayleigh-points.md``),
+    so no exponential basis of this layer exists there and more Fourier orders change nothing.
+    That is a ``FloatingPointError``, the refusal every other exact-graze layer gives, rather
+    than advice to refine the truncation. The band is the 2D solve's (``_COUPLED_REL``).
+    """
+    from wavebit.rcwa._engine.solve_2d import _COUPLED_REL
+    try:
+        a = np.abs(np.asarray(_stop(lam)))
+    except Exception:
+        return
+    if not (a.size and np.all(np.isfinite(a)) and a.min() < _COUPLED_REL * a.max()):
+        return
+    raise FloatingPointError(
+        f'mode split found {n_f} forward modes, expected {2 * n_orders}: a retained order sits '
+        'exactly on this layer\'s light line (a Rayleigh point, kz = 0), where its two plane '
+        'waves coincide and no exponential mode basis exists. More Fourier orders do not help. '
+        'Where the layer is made of a half-space\'s own medium, a single PlaneWave solve merges '
+        'it into the half-space and answers exactly; a coherent multi-source solve cannot merge '
+        'it. Otherwise move the wavelength or angle off the point, e.g. '
+        'Numerics(detuning=1e-12).')
+
+
 def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1):
     """``(lam_f, psi_f, lam_b, psi_b, coupled)``: split modes into propagation towards +z and -z.
 
@@ -376,6 +402,7 @@ def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1):
     key = xp.astype(forward, flux.dtype)
     n_f = _forward_count(xp, key)
     if n_f is not None and n_f != 2 * n_orders:
+        _refuse_a_grazing_split(xp, lam, n_f, n_orders)
         raise ValueError(
             f'mode split found {n_f} forward modes, expected {2 * n_orders}. A degenerate layer can '
             'leave an ambiguous direction; a poorly resolved patterned tensor can also '

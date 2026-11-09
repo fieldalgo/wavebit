@@ -45,6 +45,7 @@ hunt for a *configuration* that separates failing from working cases found none,
 | Path | At the exact point | Why |
 | --- | --- | --- |
 | half-space graze (any path) | always fine | no mode matrix is built for a half-space |
+| a layer of a half-space's own medium, or an empty stack, at that half-space's graze | **one plane wave: merged into the half-space and exact since 2026-11-09 (§10)**; a coherent multi-source solve refuses (`rcwa.singular`) | the layer holds the `q = 0` cluster no exponential basis represents; the interface it shares with its medium reflects nothing, so removing it is the exact answer |
 | 1D pure TE/TM (`tetm=`) | always fine | `V = W*q` — nothing singular is ever inverted |
 | 1D conical (`psi`/pair), `ky == 0` | **fine since the reformulation** | `V` blocks now come from the eigensystem; they used to pass through `inv(A)` of an exactly singular `A` |
 | 1D conical at `kx_m**2 = eps*mu` with `ky != 0` (an x-cutoff, `kz = abs(ky)`) | **solved in a regular basis since 2026-10-10 (§7)**, eagerly and, since 2026-10-11, under every abstract trace (`jax.jit`, `jax.vmap`, a `jax.lax.map` or `scan` body, `jax.checkpoint`, `torch.func.vmap`) | the two mode families collapse onto one field there; the layer is rebuilt with an upper-triangular propagator, exact in a uniform layer and at a patterned layer's Jordan block alike; patterned double negatives at a complex `theta` too |
@@ -1054,3 +1055,33 @@ cases. This covers those measured cases, not every possible opposite-label pair.
 - Not measured: GPU, `pmap`, `shard_map`, second derivatives through a rebuilt layer, NVF or
   anisotropic layers at an EP, and source-field gradients at the point. The existing
   modal-operator restrictions remain.
+
+## 10. A layer of a half-space's medium at that medium's graze
+
+Recorded 2026-11-09, NumPy / OpenBLAS, float64.
+
+**The graze.** An empty stack reaches the engine as a zero-width layer of the top medium, and a
+stack may hold layers of either half-space's medium. At a real `k_par` those layers are solved
+as layers so that their bits stay where they were (the merge of
+[connecting algorithms §10](connecting-algorithms.md#10-etms-labels-at-a-complex-in-plane-wavevector)
+runs at a complex `k_par` or under `half_space_merge_tolerance`). On the 2D path that left the
+first row of the table above false in practice: at `wavelength == period`, normal incidence,
+cover `eps = 1`, every such layer held the exact `q = 0` cluster and refused with
+`rcwa.singular`, though the single interface has a closed-form answer. A run of layers equal to
+a half-space is now merged into it whenever a retained order lies inside the band where the 2D
+solve leaves its ordinary path (`min|kx**2 + ky**2 - eps*mu| < 1e-9 * max`, on that medium,
+`solve_2d._COUPLED_REL`). The merged solve is the bare interface: `R` and `T` equal the
+Fresnel values to 1e-12 for both polarizations, lit from either side, on SMM, ETM and the
+first-order formulation, and agree with the stack one ULP of wavelength off the point to 1e-10
+(`tests/rcwa/test_half_space_graze.py`). `result.diagnostics['half_space_merge']` names the
+merged layers. Off that band nothing changes: 72 ordinary scenes (uniform, patterned and lossy
+layers; layers of either half-space's medium at ordinary angles and 1e-6 off a graze; both
+algorithms, both formulations, both polarizations and sides) returned byte-identical `R`, `T`
+and amplitudes before and after. The 1D paths solve their graze in place and are not changed.
+
+A coherent multi-source solve cannot merge a layer (its cascade carries every source, and the
+face shift carries one incident order), so it still cannot solve a layer of a half-space's
+medium exactly at the graze. It used to refuse with `rcwa.invalid` and advice to raise the
+Fourier order, which cannot help; it now refuses with `rcwa.singular` and names the light-line
+order. One step off the point solves.
+
