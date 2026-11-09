@@ -170,16 +170,20 @@ class FieldState:
     """
 
     def __init__(self, data, kind, mirrored=False, names=('incident',), window=None,
-                 merged=None):
+                 merged=None, bare_interface=False):
         self.data, self.kind, self.mirrored, self.names = data, kind, mirrored, tuple(names)
         self.window = window
+        #: The stack declared no layers: the engine solved the bare interface through one
+        #: zero-thickness layer of the top medium, which is not a layer to sample. Static.
+        self.bare_interface = bare_interface
         #: ``(bottom, top, lit side)`` of a solve that merged layers into its half-spaces
         #: (:mod:`~wavebit.rcwa._engine.half_space_merge`), else ``None``. Static, like
         #: ``window``: it fixes which heights the kernels' records answer.
         self.merged = merged
 
     def tree_flatten(self):
-        return (self.data,), (self.kind, self.mirrored, self.names, self.window, self.merged)
+        return (self.data,), (self.kind, self.mirrored, self.names, self.window, self.merged,
+                              self.bare_interface)
 
     @classmethod
     def tree_unflatten(cls, meta, children):
