@@ -72,6 +72,15 @@ def _normalize_errors():
         raise ValidationError(_public(str(error)), code='rcwa.invalid', path='problem') from error
 
 
+def _linalg_errors():
+    """A singular or nonconvergent factorization, on every backend: PyTorch's own error is a
+    ``RuntimeError``, which reached the caller raw where NumPy's became ``rcwa.singular``."""
+    import sys
+    torch = sys.modules.get('torch')
+    extra = (torch.linalg.LinAlgError,) if torch is not None else ()
+    return (np.linalg.LinAlgError, FloatingPointError) + extra
+
+
 def _engine_scene(solver):
     return getattr(solver, '_scene', solver)
 
@@ -105,6 +114,7 @@ def _resolve(problem, numerics, execution):
     solvers = []
     with execution._scope():
         for wavelength in _adapt.wavelengths(problem):
+            _adapt.refuse_zero_permittivity_layers(problem, execution, wavelength)
             _adapt.refuse_near_zero_smm_layers(problem, numerics, execution, wavelength)
             solver = _adapt.build_solver(problem, numerics, execution, wavelength)
             scene = _engine_scene(solver)
@@ -387,7 +397,7 @@ class Prepared:
                         result = solver.solve(geometry=geometry, auto_detune=self.numerics.detuning or False)
                     else:
                         result = solver.solve(geometry=geometry)
-                except (np.linalg.LinAlgError, FloatingPointError) as error:
+                except _linalg_errors() as error:
                     raise NumericalError(_public(str(error)), code='rcwa.singular', path='problem') from error
                 solved.append((solver, result))
             result = pack(problem, self.numerics, self.execution, solved, checks, self.report)

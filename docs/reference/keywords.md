@@ -98,7 +98,7 @@ A layer is either painted with regions over a background or sampled as a raster,
 | `thickness` | required | a finite, real, nonnegative length | negative, complex or not finite: `layer.thickness`, at check |
 | `background` | `Material(epsilon=1.)` on a region layer | the material model where no region paints | beside `epsilon`: `layer.ambiguous`, at construction; a bare number: `material.type`, at check |
 | `regions` | `()` | a tuple of `rcwa.Region`; a later region paints over an earlier one | anything but `Region`s: `layer.regions`; beside `epsilon`: `layer.ambiguous`, both at construction |
-| `epsilon` | `None` | a sampled relative-permittivity raster of shape `(Ny, Nx)`, complex allowed; one row is a 1D grating, and `(Ny, Nx, 3, 3)` holds a tensor per pixel. Every raster layer of a stack has the same shape | `Material` objects inside the array, or raster layers of different shapes: `rcwa.invalid`, at check |
+| `epsilon` | `None` | a sampled relative-permittivity raster of shape `(Ny, Nx)`, complex allowed; one row is a 1D grating, and `(Ny, Nx, 3, 3)` holds a tensor per pixel. Every raster layer of a stack has the same shape | `Material` objects inside the array, or raster layers of different shapes: `rcwa.invalid`, at check; a zero `eps_zz` in any pixel, or one whose reciprocal overflows the run's precision (also for a background or region material): `rcwa.zero_permittivity`, at check |
 | `mu` | `None` | the relative-permeability raster beside `epsilon`, the same shape. On a region layer a permeability belongs to each `Material` | without `epsilon`: `layer.mu_without_raster`, at construction |
 
 ### `rcwa.Region`

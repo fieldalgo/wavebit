@@ -148,6 +148,17 @@ precision it conserved energy to 4e-16 down to `eps = 1e-16`, and its `R` approa
 `eps -> 0` limit linearly. Without a y wavevector component SMM is exact and nothing is refused.
 A traced permittivity cannot be read and is not refused.
 
+Every algorithm refuses at check, with `rcwa.zero_permittivity`, a layer with a sample whose
+`eps_zz` is exactly zero, or so small that its reciprocal overflows the run's floating type (a
+uniform layer, a tensor's zz entry, a raster pixel or a region). RCWA inverts `eps_zz` and, by the
+inverse rule, each sample, so such a layer has no modes to compute: it raised "SVD did not
+converge" or "Singular matrix" on NumPy and JAX and a raw linear-algebra error on PyTorch. A small
+nonzero value is not refused: a uniform layer at `eps = 1e-18` in double precision conserves
+energy and agrees with the `eps -> 0` limit. In single precision a uniform layer below about 1e-9
+can fail by rounding (ETM at `phi = 0.4` failed at 1e-9, 1e-12 and 1e-13 and solved at 3e-12 and
+1e-16); a factorization that fails during a solve is reported as `rcwa.singular` on every
+backend, and double precision avoids it.
+
 ## Sampling the normal field
 
 `shape_nvf_grid_size` is the grid the normal field is read off, per axis, and it is the one number here
