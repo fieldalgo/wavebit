@@ -539,12 +539,7 @@ def as_lattice(period=None, lattice=None):
             raise ValueError(
                 f'lattice: expected a 2x2 matrix whose columns are the basis vectors a1, a2; '
                 f'got shape {A.shape}')
-        if not np.all(np.isfinite(A)):
-            raise ValueError('lattice: entries must be finite')
-        if abs(float(np.linalg.det(A))) < 1e-12 * float(np.linalg.norm(A)) ** 2:
-            raise ValueError(
-                'lattice: a1 and a2 are parallel (zero cell area), so the cell has no '
-                'reciprocal basis')
+        _check_cell(A)
         return Lattice(A[:, 0], A[:, 1], is_axis_aligned(A))
 
     if period is None:
@@ -582,7 +577,24 @@ def as_lattice(period=None, lattice=None):
     if p.size != 2:
         raise ValueError(f'period: expected 1 or 2 lengths, got {p.size}')
     D = np.diag(p)
+    _check_cell(D, 'period: lengths must be finite', 'period: a length of zero leaves the cell no area, '
+                'so it has no reciprocal basis')
     return Lattice(D[:, 0], D[:, 1], is_axis_aligned(D))
+
+
+def _check_cell(M, not_finite='lattice: entries must be finite',
+                no_area='lattice: a1 and a2 are parallel (zero cell area), so the cell has no '
+                        'reciprocal basis'):
+    """Refuse a readable basis that is not finite or spans no area.
+
+    The area test is relative to the basis's own size, and a basis of zeros spans none: it
+    used to pass (``0 < 1e-12 * 0``), clear `check`, and divide by zero in the solve.
+    """
+    if not np.all(np.isfinite(M)):
+        raise ValueError(not_finite)
+    norm = float(np.linalg.norm(M))
+    if norm == 0 or abs(float(np.linalg.det(M))) < 1e-12 * norm ** 2:
+        raise ValueError(no_area)
 
 
 #: How far past the Lagrange condition a basis may sit and still be its own reduction. The
@@ -772,13 +784,17 @@ def _with_honest_flag(A):
     always correct. A ``False`` on a rectangle is kept: it only forgoes the shortcut, and
     forcing the general path that way is how the two paths are compared.
     """
-    if not A.axis_aligned:
-        return A
     try:
         M = np.asarray(constant_array(A.columns), dtype=float)
     except Exception:                       # noqa: BLE001 - a tracer: the declaration stands
         return A
-    if M.shape != (2, 2) or not np.all(np.isfinite(M)) or is_axis_aligned(M):
+    if M.shape != (2, 2):
+        return A
+    # A Lattice built directly skipped the matrix spelling's checks: a cell of zeros, a
+    # parallel pair or a NaN cleared `check` and failed in the solve with a ZeroDivisionError
+    # or the runtime guard. The door holds every readable cell to the same test.
+    _check_cell(M)
+    if not A.axis_aligned or is_axis_aligned(M):
         return A
     return Lattice(A.u, A.v, False)
 
