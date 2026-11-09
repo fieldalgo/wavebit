@@ -590,6 +590,8 @@ def validate_values(problem):
             if a.shape or not np.isrealobj(a) or not np.isfinite(a) or a < 0:
                 raise ValidationError('Layer thickness must be finite and nonnegative.',
                                       code='layer.thickness', path=f'stack.layers[{i}].thickness')
+        for name in ('epsilon', 'mu'):
+            _refuse_raster_shape(getattr(layer, name), name, f'stack.layers[{i}].{name}')
     for i, source in enumerate(problem.excitation.sources):
         if hasattr(source, 'polarization') and not isinstance(source.polarization, str) and not opaque(source.polarization):
             pair = host(source.polarization, 'excitation.sources.polarization')
@@ -634,6 +636,30 @@ def validate_values(problem):
                                   'number: the half-width of the angular-spectrum quadrature, in 1/waist.',
                                   code='source.angular_spectrum_extent',
                                   path=f'excitation.sources[{i}].angular_spectrum_extent')
+
+
+def _raster_shape(value, path):
+    """The shape of a raster without reading a traced value: a tracer still knows its shape."""
+    shape = getattr(value, 'shape', None)
+    return tuple(shape) if shape is not None else np.shape(host(value, path))
+
+
+def _refuse_raster_shape(value, name, path):
+    """Refuse a raster that is neither ``(Ny, Nx)`` nor ``(Ny, Nx, 3, 3)``.
+
+    The engine stacks the layers' rasters and reads them by axis; any other shape reached it
+    and failed there with NumPy's own words ("axes don't match array"), or, for a 0-d value,
+    made ``check`` itself raise.
+    """
+    if value is None:
+        return
+    shape = _raster_shape(value, path)
+    if (len(shape) == 2 or (len(shape) == 4 and shape[2:] == (3, 3))) and all(shape[:2]):
+        return
+    raise ValidationError(f'Layer({name}=...) has shape {shape}. A raster is (Ny, Nx), one sample per '
+                          'pixel with Ny, Nx >= 1 (one row for a 1D grating), or (Ny, Nx, 3, 3) for a '
+                          'tensor per pixel.', code='layer.raster_shape', path=path,
+                          expected='(Ny, Nx) or (Ny, Nx, 3, 3)', actual=shape)
 
 
 def _finite_scalar(value, path):

@@ -83,3 +83,44 @@ def test_a_prepared_run_names_the_nonfinite_field_its_guard_refuses():
         prepared.run(live)
     assert (caught.value.code, caught.value.path) == ('prepared.finite_inputs', path)
 
+
+
+# -- 2. A raster of the wrong shape is refused with its expected and actual shape -------------
+
+def _raster(epsilon, mu=None):
+    return _rcwa(layer=rcwa.Layer(thickness=.2, epsilon=epsilon, mu=mu))
+
+
+@pytest.mark.parametrize('epsilon', [np.full(8, 2.), np.full((4, 5, 2), 2.), np.full((8, 8, 3), 2.),
+                                     np.full((8, 8, 2, 2), 2.), np.full((0, 8), 2.), 2.],
+                         ids=['1d', '3d', 'diagonal', 'tensor-2x2', 'empty', 'scalar'])
+def test_a_wrongly_shaped_raster_is_refused_with_its_shape(epsilon):
+    issue = _refused_alike(_raster(epsilon))
+    assert (issue.code, issue.path) == ('layer.raster_shape', 'stack.layers[0].epsilon')
+    assert issue.actual == np.shape(epsilon)
+    assert issue.expected == '(Ny, Nx) or (Ny, Nx, 3, 3)'
+    assert f'has shape {np.shape(epsilon)}' in issue.message
+
+
+def test_a_wrongly_shaped_permeability_raster_is_refused_at_its_own_path():
+    issue = _refused_alike(_raster(np.full((8, 8), 2.), mu=np.ones((8, 8, 3))))
+    assert (issue.code, issue.path, issue.actual) == ('layer.raster_shape', 'stack.layers[0].mu', (8, 8, 3))
+
+
+# -- 3. A complex or string shape size is refused when the shape is written -------------------
+
+@pytest.mark.parametrize('build, path', [
+    (lambda v: rcwa.Rectangle(size=(v, .3)), 'geometry.size'),
+    (lambda v: rcwa.Rectangle(size=(.3, .3), center=(v, 0.)), 'geometry.center'),
+    (lambda v: rcwa.Rectangle(size=(.3, .3), angle=v), 'geometry.angle'),
+    (lambda v: rcwa.Circle(radius=v), 'geometry.radius'),
+    (lambda v: rcwa.Ellipse(radii=(.2, v)), 'geometry.radii'),
+], ids=['rectangle-size', 'rectangle-center', 'rectangle-angle', 'circle-radius', 'ellipse-radii'])
+@pytest.mark.parametrize('value', [.3j, np.complex128(.3), '.3', np.asarray(.3 + 0j)],
+                         ids=['complex', 'numpy-complex', 'string', 'complex-array'])
+def test_a_complex_or_string_shape_entry_is_refused_at_construction(build, path, value):
+    with pytest.raises(ValidationError) as caught:
+        build(value)
+    assert (caught.value.code, caught.value.path) == ('shape.value', path)
+    assert 'is a real number' in caught.value.message
+    assert 'tracer' not in caught.value.message
