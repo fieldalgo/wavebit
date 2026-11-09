@@ -57,6 +57,17 @@ The runner loads its own recorder and xdist explicitly, without auto-loading
 unrelated installed pytest plugins. Existing repository conftest hooks and
 pytest configuration still apply. It sets unspecified BLAS thread counts to one.
 
+That matters because several tests compare two results bit for bit, and a threaded BLAS
+may split a reduction differently between two calls. When running `pytest` directly, set
+`OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS` and `MKL_NUM_THREADS` to 1 as CI does (CI also
+sets `XLA_FLAGS=--xla_cpu_multi_thread_eigen=false`). A few tests skip, with the reason
+in the report, where the machine cannot run them: the symlinked-record case on an account
+that may not create symlinks (Windows without Developer Mode or administrator rights),
+the installed-metadata comparison when the metadata found was built from another
+checkout (a `PYTHONPATH` run), and the `torch.compile` cases whose graphs need
+Inductor's C++ compiler (on Windows, MSVC's `cl`, found only inside a Visual Studio
+developer environment such as `vcvars64.bat`).
+
 The optional `--slow` filter narrows a profile without changing its research policy:
 `include` (the default) keeps the profile's existing selection, `exclude` removes
 slow cases, and `only` selects its slow cases. `quick --slow only` is refused.

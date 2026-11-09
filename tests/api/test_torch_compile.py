@@ -79,6 +79,24 @@ def _f64(value, grad=False):
     return torch.tensor(value, dtype=torch.float64, requires_grad=grad)
 
 
+def _needs_inductors_compiler(test):
+    """Skip when Inductor, ``torch.compile``'s default backend, has no C++ compiler for its
+    kernels: on Windows that is MSVC's ``cl``, found only inside a Visual Studio developer
+    environment (``vcvars64.bat``). Inductor then fails at the first graph that holds a kernel,
+    and what the test compares cannot be computed. A case whose graph holds none still runs."""
+    @functools.wraps(test)
+    def run(*args, **kwargs):
+        try:
+            return test(*args, **kwargs)
+        except Exception as error:
+            from torch._inductor.exc import InvalidCxxCompiler
+            inner = getattr(error, 'inner_exception', error)
+            if isinstance(inner, InvalidCxxCompiler):
+                pytest.skip(f'Inductor has no C++ compiler here: {inner}')
+            raise
+    return run
+
+
 # ---------------------------------------------------------------------------- the surface
 def _is_door(f):
     return hasattr(f, '_wavebit_eager_door')
@@ -255,6 +273,7 @@ CASES['2d Li pixel with fields, solver outside'] = (_outside_2d, 0.0)
 
 
 @pytest.mark.parametrize('name', sorted(CASES))
+@_needs_inductors_compiler
 def test_a_compiled_solve_is_the_eager_solve(name):
     read_out, at = CASES[name]
     x = _f64(at, grad=True)
@@ -269,6 +288,7 @@ def test_a_compiled_solve_is_the_eager_solve(name):
     np.testing.assert_allclose(float(gg), float(gw), rtol=1e-12)
 
 
+@_needs_inductors_compiler
 def test_a_compiled_forward_called_from_inside_a_door_stays_eager():
     """``solver.grad`` is a door that calls the caller's ``forward``. Compiled, that callable sets
     Dynamo's frame hook back inside the door, so the ``solve`` door it calls must take its
@@ -327,6 +347,7 @@ def _create_graph_twice(g):
 
 
 @pytest.mark.parametrize('route', ['jvp(jvp)', 'create_graph x2', 'vmap(jacfwd)'])
+@_needs_inductors_compiler
 def test_compiling_around_a_second_order_route_is_exact(route, thickness_scene):
     """``torch.compile`` around ``torch.func`` and double backward: wavebit runs eagerly inside,
     so the compiled derivative is the eager one -- checked against NumPy, which shares no
@@ -470,6 +491,7 @@ def _eye_then_read(q):
     return eye * q.exp() + (q - eye * q)
 
 
+@_needs_inductors_compiler
 def test_canary_inductor_compiles_the_eye_write_in_order():
     """Fails if a torch miscompiles the five-line ``f`` again: then the doors are the only thing
     between a compiled caller and wrong numbers, and docs/development/torch-compile.md §6 needs
