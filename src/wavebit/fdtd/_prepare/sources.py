@@ -577,19 +577,23 @@ def _tfsf_term(scene, plan, src, row):
     # which the E face on the entry side reads. In a layered column that half cell is
     # upstream of the column's own sheet, so the incident field there is column + driver.
     outside_H = lo[P] - 1 if src.sign > 0 else hi[P]
+    # Column indices are the main grid's plus the column's low padding (a PML the column
+    # carries behind a ConductiveAbsorber face, :func:`column_pads`); 0 under a PML.
+    off = column_pads(scene, src)[0]
     out = []
     for slot, slab, s, a, read, sign in box_corrections(lo, hi, (pol,), (h,), n):
         if a == P:
             p0, p1 = read, read + 1
         else:
             p0, p1 = {0: slab.x, 1: slab.y, 2: slab.z}[P]
-        out.append(Correction(slot=slot, slab=slab, src=s, p0=p0, p1=p1, sign=sign,
+        out.append(Correction(slot=slot, slab=slab, src=s, p0=p0 + off, p1=p1 + off, sign=sign,
                               driver=layered and slot == 'E' and a == P and read == outside_H))
     if src.sign > 0:
         ks, entry_E, entry_H = lo[P] - 1, lo[P], lo[P]
     else:
         ks, entry_E, entry_H = hi[P] + 1, hi[P], hi[P] - 1
     plane = grid.low[P] + entry_E * grid.dx
+    _check_column_end(scene, src, grid)
     sub = _column_plan(scene, src, plan)
     if layered:
         _tfsf_driver(scene, src, grid)                  # refuses a non-uniform incident side
@@ -598,16 +602,16 @@ def _tfsf_term(scene, plan, src, row):
         # box's side -- the PlaneWave construction on the column's 1 x 1 cross-section.
         clo, chi = [0, 0, 0], list(sub.grid.n)
         if src.sign > 0:
-            clo[P], side = lo[P], '-'
+            clo[P], side = lo[P] + off, '-'
         else:
-            chi[P], side = hi[P], '+'
+            chi[P], side = hi[P] + off, '+'
         sheet = tuple(
             Correction(slot=slot, slab=slab, src=s, p0=read, p1=read + 1, sign=sign)
             for slot, slab, s, a, read, sign in box_corrections(
                 clo, chi, (pol,), (h,), sub.grid.n, faces=((P, side),)))
     return ColumnTerm(name=src.name, kind='TFSF', row=row, axis=P, sub=sub,
-                      drive=((pol, 1.0),), ks=ks, corrections=tuple(out), entry_E=entry_E,
-                      entry_H=entry_H, plane_E=plane,
+                      drive=((pol, 1.0),), ks=ks + off, corrections=tuple(out),
+                      entry_E=entry_E + off, entry_H=entry_H + off, plane_E=plane,
                       plane_H=plane + src.sign * 0.5 * grid.dx, driver=driver, sheet=sheet)
 
 
@@ -706,7 +710,7 @@ def column_pads(scene, src):
     counted as incident, and the sheet cancelled it -- no reflection ever appeared above the
     sheet. The main grid keeps its own face, so the mirror's reflection is scattered field and
     crosses the sheet. A ``TFSF`` already refuses a non-absorbing face on its axis, so its
-    column is never padded.
+    column is padded only behind a ``ConductiveAbsorber``, below.
 
     A ``ConductiveAbsorber`` face (``Absorber``) is padded the same way: its PEC-backed graded
     layer returns a normally incident wave with round-trip amplitude ``~exp(-3) = 5e-2`` in
@@ -718,10 +722,22 @@ def column_pads(scene, src):
     reflection is scattered field, crosses the sheet and is measured -- the absorber's own
     documented reflection, and no more (``tests/fdtd/test_fd_absorber_planewave.py``). A
     background a PML cannot be matched to is refused for it (:func:`_check_column_end`).
+
+    A ``TFSF`` column (and a layered one's driver) is padded the same way behind an
+    ``Absorber`` face, for the same echo: its hard drive (``r = -1``) sent the absorber's
+    return down again, and the box injected it. In an empty 3-D box (vacuum, 0.03 um cells,
+    12-cell faces) the measured incident spectrum moved by -3.0 % .. +3.2 % against the PML
+    scene and the scattered flux of a glass cube by -8.9 % .. +16.7 %
+    (``tests/fdtd/test_fd_absorber_tfsf.py``). Its layers that reach the face continue
+    through the padded cells (:func:`column_scene`), and the padded PML is matched to the
+    medium at that face.
     """
+    P = AXES[src.axis]
+    if isinstance(src, TFSF):
+        return tuple(PML_CELLS if isinstance(scene.boundaries.face(P + side), Absorber) else 0
+                     for side in ('-', '+'))
     if not isinstance(src, PlaneWave):
         return 0, 0
-    P = AXES[src.axis]
     return tuple(0 if _column_absorbs(scene.boundaries.face(P + side)) else PML_CELLS
                  for side in ('-', '+'))
 
@@ -741,7 +757,7 @@ def _column_wavelength(scene, src):
         graded = any(isinstance(scene.boundaries.face(P + side), Absorber) for side in '-+')
         said = ('a ConductiveAbsorber face along' if graded else 'a non-absorbing face along')
         raise ValueError(
-            f'PlaneWave({src.name!r}) has {said} {P}, so its '
+            f'{_kind(src)}({src.name!r}) has {said} {P}, so its '
             f'incident column carries a PML of its own past that face (the column must not '
             f'reflect), and that PML needs a concrete wavelength; the band centre is traced '
             f'here. Give the scene fd.Resolution(wavelength=...), or a concrete '
@@ -749,18 +765,42 @@ def _column_wavelength(scene, src):
     return wavelength
 
 
-def _check_column_end(scene, src):
-    """Refuse a PlaneWave whose column must end in a PML that its background cannot take.
+def _kind(src):
+    return 'TFSF' if isinstance(src, TFSF) else 'PlaneWave'
+
+
+def _face_layer(scene, src, grid, side):
+    """The index of the layer filling a TFSF column's end cell on ``side``, or ``None``.
+
+    The column's cells are the main grid's along the axis, so its end cell there is cell 0
+    (``'-'``) or ``n - 1`` (``'+'``) -- under the main grid's own absorber -- and a later
+    layer overwrites an earlier one, as in :func:`_tfsf_driver`.
+    """
+    P = src.axis
+    j = 0 if side == '-' else grid.n[P] - 1
+    owner = None
+    for i, s in enumerate(scene.structures):
+        if s.shape.layer_axis() == P and s.shape.uniform_along(P, (j, j + 1), grid):
+            owner = i
+    return owner
+
+
+def _check_column_end(scene, src, grid=None):
+    """Refuse a column that must end in a PML that the medium at its end cannot take.
 
     Behind a ``ConductiveAbsorber`` face the column ends in a ``PML`` of its own
-    (:func:`column_pads`), matched to the scene's background. A ``Conductor`` or
-    ``Dispersive`` background has no real ``(eps, mu)`` to match, the reason the scene chose
+    (:func:`column_pads`), matched to the medium there: a PlaneWave's background, or for a
+    TFSF the layer (or background) filling the face's cell. A ``Conductor`` or
+    ``Dispersive`` medium has no real ``(eps, mu)`` to match, the reason the scene chose
     that absorber, and keeping the absorber in the column re-injects its reflection as a
     second incident wave. So the combination is refused, not run wrong.
     """
     P = AXES[src.axis]
     sides = [P + side for side in '-+' if isinstance(scene.boundaries.face(P + side), Absorber)]
     if not sides:
+        return
+    if isinstance(src, TFSF):
+        _check_tfsf_column_end(scene, src, grid, sides)
         return
     background = as_material(scene.background, 'Scene(background=)')
     if not isinstance(background, (Conductor, Dispersive)):
@@ -775,6 +815,27 @@ def _check_column_end(scene, src):
         f'dispersive one, which has no single real (eps, mu). Make the background a lossless '
         f'Material and give the lossy medium as a layer clear of the sheet (it may run into '
         f'the absorber), or launch with another source.')
+
+
+def _check_tfsf_column_end(scene, src, grid, sides):
+    """:func:`_check_column_end` for a TFSF: the medium at each padded face of its column."""
+    for name in sides:
+        owner = _face_layer(scene, src, grid, name[1])
+        material = scene.background if owner is None else scene.structures[owner].material
+        material = as_material(material, 'Scene(background=)')
+        if not isinstance(material, (Conductor, Dispersive)):
+            continue
+        what = 'the background' if owner is None else f'structures[{owner}]'
+        raise NotImplementedError(
+            f'TFSF({src.name!r}) with fdtd.ConductiveAbsorber on {name!r}, where the medium is '
+            f'{what}, an fd.{type(material).__name__}. The incident field is computed in a 1-D '
+            f'column along {name[0]}, and that column must not reflect: the absorber returns '
+            f'a round trip of up to ~exp(-3) = 5e-2 in amplitude, which the source sends back '
+            f'down as a second incident wave (the scattered flux of a glass cube off by up to '
+            f'~17 %). A PML ends the column without that echo in a lossless medium, but cannot '
+            f'be matched to a lossy or dispersive one, which has no single real (eps, mu). '
+            f'Keep the lossy medium clear of the {name!r} face, or use a PlaneWave in a '
+            f'periodic cell.')
 
 
 def column_scene(scene, src, plan, role='column'):
@@ -806,6 +867,11 @@ def column_scene(scene, src, plan, role='column'):
                 face = scene.boundaries.face(axis + side)
                 if pad:
                     face = PML(cells=pad, wavelength=_column_wavelength(scene, src))
+                    owner = (_face_layer(scene, src, grid, side)
+                             if isinstance(src, TFSF) and role != 'driver' else None)
+                    if owner is not None:
+                        # Matched to the layer that runs into the face (a substrate).
+                        face = face.replace(background=scene.structures[owner].material)
                 elif isinstance(face, PML) and face.wavelength is None:
                     face = face.replace(wavelength=face_wavelength(face, scene, axis + side))
                 pair.append(face)
@@ -828,12 +894,38 @@ def column_scene(scene, src, plan, role='column'):
     if role == 'driver':
         background = _tfsf_driver(scene, src, grid)
     elif isinstance(src, TFSF):
-        structures = tuple(s for s in scene.structures if s.shape.layer_axis() == P)
+        structures = tuple(_continued(s, scene, src, grid, pads)
+                           for s in scene.structures if s.shape.layer_axis() == P)
     return scene_module.Scene(
         domain=scene_module.Domain(size=tuple(size), center=tuple(center)),
         boundaries=Boundaries(**faces), resolution=scene_module.Resolution(dx=grid.dx),
         run=scene_module.Run(steps=plan.steps, courant=scene.run.courant),
         background=background, structures=structures)
+
+
+def _continued(structure, scene, src, grid, pads):
+    """A TFSF column's layer, continued through the column's padded cells where it reaches.
+
+    A layer that fills the column's end cell on a padded side runs on through the PML the
+    column carries there (:func:`column_pads`), as it runs through the main grid's absorber:
+    stopping at the old face would leave an interface in front of the PML.
+    """
+    P = src.axis
+    lo, hi = structure.shape.span
+    changed = False
+    for side, pad in zip(('-', '+'), pads):
+        if not pad:
+            continue
+        j = 0 if side == '-' else grid.n[P] - 1
+        if not structure.shape.uniform_along(P, (j, j + 1), grid):
+            continue
+        if side == '-':
+            lo, changed = min(lo, grid.low[P] - (pad + 1) * grid.dx), True
+        else:
+            hi, changed = max(hi, grid.low[P] + (grid.n[P] + pad + 1) * grid.dx), True
+    if not changed:
+        return structure
+    return structure.replace(shape=structure.shape.replace(**{AXES[P]: (lo, hi)}))
 
 
 def _column_plan(scene, src, plan, role='column'):

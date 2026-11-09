@@ -398,7 +398,7 @@ def _boundary_planes(problem,plan,metadata):
 
 
 def _graded_absorber(problem,numerics):
-    """A warning for each PlaneWave whose propagation axis ends in a ConductiveAbsorber.
+    """A warning for each PlaneWave or TFSF whose propagation axis ends in a ConductiveAbsorber.
 
     The layer is PEC-backed and returns a normally incident wave with a round-trip amplitude
     near exp(-3) = 5e-2 in vacuum, exp(-3 n) in a filling medium of index n, whatever its
@@ -406,20 +406,36 @@ def _graded_absorber(problem,numerics):
     measurement sees: the returned wave is coherent with the scene's own reflections, so a
     reflectance or transmittance moves at first order, by up to ~2 * 5e-2 * |r| per face --
     6 % on a glass slab between two such faces (``tests/fdtd/test_fd_absorber_planewave.py``),
-    where the default PML stays within the grid's dispersion of the closed form.
+    where the default PML stays within the grid's dispersion of the closed form. A TFSF's
+    scattered field meets the same faces; its incident column ends in a PML of its own, as a
+    PlaneWave's does, so what is left is that return (``tests/fdtd/test_fd_absorber_tfsf.py``:
+    a glass cube's scattered flux within 1 % of the PML scene's).
     """
     from ._numerics import ConductiveAbsorber
-    from ._sources import PlaneWave
+    from ._sources import PlaneWave, TFSF
     from ._boundaries import Open
     if not isinstance(numerics.absorber,ConductiveAbsorber):
         return ()
     issues=[]
     for source in problem.sources:
-        if not isinstance(source,PlaneWave):
+        if not isinstance(source,(PlaneWave,TFSF)):
             continue
         axis=str(source.direction)[-1]
         faces=[axis+side for side in '-+' if isinstance(problem.scene.boundaries.face(axis+side),Open)]
         if not faces:
+            continue
+        if isinstance(source,TFSF):
+            issues.append(Issue(code='numerics.absorber_reflection',severity='warning',
+                path='numerics.absorber',actual=tuple(faces),
+                message=f'TFSF({source.name!r}) propagates along {axis}, and its Open faces '
+                        f'{", ".join(map(repr,faces))} end in a fdtd.ConductiveAbsorber, which returns a '
+                        f'normally incident wave with a round-trip amplitude near exp(-3) = 5e-2 in '
+                        f'vacuum (exp(-3 n) in a medium of index n) at any cell count. The incident '
+                        f'column ends in a PML of its own, but the scattered field and anything a '
+                        f'layer transmits meet the absorber, and their return comes back coherent '
+                        f'with the scatterer\'s own field. Use the default fdtd.PML where the media at '
+                        f'the faces allow it, or treat the absorber\'s return as part of the error '
+                        f'budget.'))
             continue
         issues.append(Issue(code='numerics.absorber_reflection',severity='warning',
             path='numerics.absorber',actual=tuple(faces),

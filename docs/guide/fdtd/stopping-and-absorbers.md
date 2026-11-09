@@ -55,7 +55,7 @@ reflectance or transmittance moves at first order, by up to about `2 × 0.05 × 
 face, not by the 2.5e-3 of its power. On a glass slab (`eps = 2.25`) between two such
 faces at normal incidence, the transmitted flux moves by up to 6 % against the PML run,
 which stays within the grid's dispersion of the closed form. `fdtd.check()` warns
-(`numerics.absorber_reflection`) when a `PlaneWave` propagates into these faces.
+(`numerics.absorber_reflection`) when a `PlaneWave` or a `TFSF` propagates into these faces.
 
 A `PlaneWave` computes its incident wave in a 1-D column of the background. Behind a
 `ConductiveAbsorber` face that column ends in a PML of its own, so the source does not
@@ -64,7 +64,16 @@ measured as scattered field. (Before this, the echo was sent back down as a seco
 incident wave: up to ±10 % in the transmitted flux of an empty cell.) A PML cannot be
 matched to a conductive or dispersive background, so a `PlaneWave` in such a background
 behind a `ConductiveAbsorber` is refused at `check()` with `fdtd.unsupported`; give the
-lossy medium as a layer clear of the sheet instead. A `TFSF` column is unchanged.
+lossy medium as a layer clear of the sheet instead.
+
+A `TFSF` box takes its incident field from the same kind of column (and, over a layered
+background, from a uniform driver column), and behind a `ConductiveAbsorber` it now ends
+in a PML of its own as well. A layer that reaches the face, such as a substrate, continues
+through that PML, which is matched to it. An empty box never showed the echo, because it
+cancels whatever its column holds. A scatterer did: the measured incident spectrum moved
+by up to ±3 % and a glass cube's scattered flux by up to +17 %, and over a glass substrate
+the reflected amplitude moved by up to ±17 %. A conductive or dispersive medium at such a
+face of a `TFSF` is refused at `check()` with `fdtd.unsupported`.
 
 A `PML` without `wavelength=` tunes its complex-frequency shift to the band centre its
 sources share, so `prepare` fixes that wavelength with the rest of the absorber. Reusing the
