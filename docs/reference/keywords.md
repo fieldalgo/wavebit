@@ -340,14 +340,14 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 
 | Area | Codes | Raised by |
 | --- | --- | --- |
-| `boundaries` | `boundaries.face` | `fdtd` |
+| `boundaries` | `boundaries.face` (also a `MirrorSymmetry` or `InvariantAxis` its constructor refuses) | `fdtd` |
 | `check`, `validate`, `prepare` | `check.concrete`, `validate.concrete`, `prepare.concrete` | `rcwa` |
 | `decay_check` | `decay_check.threshold`, `decay_check.window_seconds` | `fdtd.native`, `fdtd.periodic` |
 | `dispersion` | `dispersion.poles` | `fdtd.periodic` |
 | `excitation` | `excitation.sources` | `rcwa`, `fdtd.periodic` |
 | `execution` | `execution.backend`, `execution.backend_unavailable`, `execution.device`, `execution.device_unavailable`, `execution.precision`, `execution.jax_x64`; `execution.cuda_scope` (outside the qualified FDTD CUDA route) | every solver; `fdtd` |
 | `experimental` | `experimental.orders` | `rcwa.experimental` |
-| `fdtd` | `fdtd.invalid`, `fdtd.unsupported`, `fdtd.padding_continuation`, `fdtd.torch_transform` (a Torch run under `torch.func.vmap`, `jacfwd` or `hessian`, or a checkpointed one under `jacrev`) | `fdtd` |
+| `fdtd` | `fdtd.invalid` (also a `Domain`, `Plane` or `TimeSeriesMonitor` name or component its constructor refuses), `fdtd.unsupported`, `fdtd.padding_continuation`, `fdtd.torch_transform` (a Torch run under `torch.func.vmap`, `jacfwd` or `hessian`, or a checkpointed one under `jacrev`) | `fdtd` |
 | `field` | `field.coordinates` | `rcwa` |
 | `geometry` | `geometry.cell_snapped` (a warning) | `fdtd` |
 | `initial` | `initial.type` | `fdtd` |
@@ -356,10 +356,10 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 | `material` | `material.type`; `material.scalar`, `material.shape`, `material.poles`, `material.wavelength_range`, `material.unknown_field` (`material.scalar`, `material.shape` and `material.poles` at construction; see [the materials guide](../guide/common/materials.md)); `material.engine_model`, `material.causal_model`, `material.pole_type`, `material.fdtd` (lowering a material to time domain) | `rcwa`, `fdtd.periodic`; `wavebit.materials`; `fdtd` |
 | `medium` | `medium.poles` | `fdtd.native` |
 | `migration` | `migration.shape`, `migration.shape_fields`, `migration.layer_fields`, `migration.layer_mu`, `migration.solver` | `wavebit.migration` |
-| `monitor` | `monitor.type`, `monitor.geometry`, `monitor.plane`, `monitor.plane_span`, `monitor.extent`, `monitor.outside_domain`, `monitor.source`, `monitor.orders` | `fdtd` |
+| `monitor` | `monitor.type`, `monitor.geometry`, `monitor.plane`, `monitor.plane_span`, `monitor.extent`, `monitor.outside_domain`, `monitor.source`, `monitor.orders` (`monitor.geometry` also a `TimeSeriesMonitor(at=...)` that is not a point) | `fdtd` |
 | `native` | `native.invalid`, `native.unsupported` | `fdtd.native` |
 | `numerics` | `numerics.type`, `numerics.choice`, `numerics.orders`, `numerics.grid`, `numerics.detuning`, `numerics.half_space_merge_tolerance` | `rcwa` (`numerics.type`, `numerics.choice` and `numerics.orders` also FDTD) |
-| `numerics` (FDTD) | `numerics.absorber`, `numerics.absorber_reflection` (a warning), `numerics.checkpoint_steps`, `numerics.checkpoint_scope`, `numerics.discretization`, `numerics.duration`, `numerics.geometry_ranges`, `numerics.junction`, `numerics.memory_bound`, `numerics.stopping`; `numerics.time_step_seconds`; `numerics.spacing`, `numerics.duration_seconds`, `numerics.transverse_spacing`, `numerics.reference_scope` | `fdtd`; `fdtd.native`; `fdtd.periodic` |
+| `numerics` (FDTD) | `numerics.absorber` (also a `PML(reference_media=...)` that is not a mapping), `numerics.absorber_reflection` (a warning), `numerics.checkpoint_steps`, `numerics.checkpoint_scope`, `numerics.discretization`, `numerics.duration`, `numerics.geometry_ranges`, `numerics.junction`, `numerics.memory_bound`, `numerics.stopping`; `numerics.time_step_seconds`; `numerics.spacing`, `numerics.duration_seconds`, `numerics.transverse_spacing`, `numerics.reference_scope` | `fdtd`; `fdtd.native`; `fdtd.periodic` |
 | `observation` | `observation.empty`, `observation.order_labels`, `observation.shape`, `observation.wavelength_axis`; `observation.amplitude_units`, `observation.reference_key` | `wavebit.DiffractionOrders`, `wavebit.RawDiffractionSpectrum`; the same, and their one-order records `wavebit.observations.DiffractionOrder` and `RawDiffractionOrder` |
 | `operators` | `operators.type`, `operators.shape`, `operators.slots`, `operators.spectral_shape`, `operators.source_groups`, `operators.detuning`, `operators.execution`, `operators.physical_contract`, `operators.physical_transform` | `rcwa.operators` |
 | `outputs` | `outputs.boolean`, `outputs.unavailable` | `rcwa` |
@@ -369,7 +369,7 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 | `pulse` | `pulse.frequency_sigma_hz` | `fdtd.periodic` |
 | `rcwa` | `rcwa.invalid`, `rcwa.unsupported`, `rcwa.singular`, `rcwa.nonfinite`, `rcwa.host_geometry`, `rcwa.mixed_layer_encoding`, `rcwa.raster_partition_transform`, `rcwa.scattering_algorithm`, `rcwa.coherent_detuning`, `rcwa.coherent_diffraction`, `rcwa.coherent_half_space_merge`, `rcwa.coherent_scattering`, `rcwa.coherent_transform` | `rcwa` |
 | `scene` | `scene.type`, `scene.structure_name`, `scene.structure_name_duplicate` | `fdtd` |
-| `shape` | `shape.type`, `shape.dimension`, `shape.outline`, `shape.vertices` | `rcwa`, `fdtd` (`shape.type`) |
+| `shape` | `shape.type`, `shape.dimension`, `shape.outline`, `shape.vertices` | `rcwa`, `fdtd` (`shape.type`; `shape.dimension` for a `SnappedSlab` span or `SnappedBox` size its constructor refuses) |
 | `snapshots` | `snapshots.every`, `snapshots.components`, `snapshots.slices` | `fdtd.native`, `fdtd.periodic` |
 | `source` | `source.type`, `source.name`, `source.name_duplicate`, `source.pulse`, `source.plane`, `source.plane_span`, `source.box`, `source.outside_domain`, `source.waveform_range`; `source.amplitude`, `source.direction`, `source.polarization_value`; `source.side`, `source.repetition`, `source.dimension`, `source.direction_ambiguous`, `source.polarization`, `source.polarization_shape`, `source.weights`, `source.weights_duplicate`, `source.angular_spectrum_extent` | `fdtd`; `rcwa` and `fdtd.periodic`; `rcwa` |
 | `stack` | `stack.layers`, `stack.period`, `stack.cell_ambiguous`, `stack.mixed_layer_encoding` | `rcwa`, `fdtd.periodic` |

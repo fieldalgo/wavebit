@@ -543,6 +543,16 @@ s 편광과 정확한 수직 입사는 hard 전기장 구동을 유지합니다.
 있을 때만 거짓), `resolved`(격자 모양, 간격, 도메인, 패딩, `time_step_seconds`, 스텝 수),
 `capabilities`(백엔드, 경고), `estimates`(주요 장과 재료 배열의 메모리)가 들어 있습니다.
 
+선언은 잘못된 값을 `check`보다 먼저, 만들어질 때 거절합니다. 이때 `ValidationError`의 `.path`는
+해당 필드를, 메시지는 무엇을 받는지를 알려 줍니다. `Domain`은 `scene.domain.size`나
+`scene.domain.center`에서 `fdtd.invalid`, `SnappedSlab`과 `SnappedBox`는 `shape.<axis>`,
+`shape.size`, `shape.center`에서 `shape.dimension`, `Plane`은 `plane.<axis>`에서 `fdtd.invalid`,
+`TimeSeriesMonitor`는 `outputs.<name>.at`에서 `monitor.geometry`(`name`과 `component`는
+`fdtd.invalid`), `MirrorSymmetry`와 `InvariantAxis`는 `MirrorSymmetry.parity`, `InvariantAxis.k`에서
+`boundaries.face`, 매핑이 아닌 `PML(reference_media=...)`은 `numerics.absorber`입니다. 정적인 수가
+필요한 곳의 추적된 값은 `prepared.static_input`입니다. 두 축을 지정한 `SnappedSlab`은 여전히
+Python의 `NotImplementedError`, 알 수 없는 키워드는 `TypeError`입니다.
+
 `prepare(problem, numerics=...)`는 계산 구조를 고정하고, `prepared.run(problem)`은 완전한 문제를
 그 구조에 대해 실행합니다. 재료 값, 소스의 진폭·위상·지연·펄스 파라미터, 초기장 진폭, 예약된
 범위가 있는 바디의 기하는 **살아 있는(live)** 입력이라 실행마다 바꿀 수 있습니다(단, 고정된
