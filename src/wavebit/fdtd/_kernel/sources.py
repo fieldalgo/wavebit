@@ -105,9 +105,10 @@ drive's to round-off and elsewhere in the band it differs by ``G(w)/G(w0)``
 (``src/wavebit/fdtd/_prepare/sources.py::plane_wave_current_gain``). The reference series is
 the column's own field either way, so nothing downstream reads ``G``.
 
-For ``TFSF`` the column has the scene's own (absorbing) faces on that axis and every structure
-that is a slab across it (the layered background). For ``PlaneWave`` it has the uniform
-background, so waves reflected back through the sheet by the scene's layers pass it as
+For ``TFSF`` the column has the scene's own (absorbing) faces on that axis -- a PML on padded
+cells in place of a ``ConductiveAbsorber``, whose echo the hard drive would send down again
+(``column_pads``) -- and every structure that is a slab across it (the layered background).
+For ``PlaneWave`` it has the uniform background, so waves reflected back through the sheet by the scene's layers pass it as
 scattered field, and its two ends absorb whatever the scene's do: a PEC, PMC, Symmetry or
 periodic face along the axis is replaced in the column by a PML on cells padded past the
 scene's (``src/wavebit/fdtd/_prepare/sources.py::column_pads``), because a column that reflects
