@@ -129,16 +129,18 @@ they never reach a user's installation.
 | --- | --- | --- | --- |
 | `numpy`, `scipy` | OpenBLAS (BSD-3-Clause), libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1), libquadmath (LGPL-2.1-or-later) | OpenBLAS before macOS 14, libgfortran, libgcc_s, libquadmath | OpenBLAS DLL with the GCC runtime linked in; numpy also msvcp140 |
 | `pillow` | 18 image, font and compression libraries, all permissive; FreeType used under FTL | the same as `.dylib` | none (linked into the extension modules) |
-| `jaxlib` | jaxlib's own compiled modules (Apache-2.0) | not checked | not checked |
-| `torch` | torch's own libraries, and GNU libgomp (GPL-3.0-or-later WITH GCC-exception-3.1) | not checked | not checked |
+| `jaxlib` | jaxlib's own compiled modules (Apache-2.0) | not checked | jaxlib's own `jax_common.dll` (Apache-2.0) |
+| `ml-dtypes` | none | not checked | msvcp140, as numpy |
+| `torch` | torch's own libraries, and GNU libgomp (GPL-3.0-or-later WITH GCC-exception-3.1) | not checked | torch's own DLLs, libuv (MIT), and Intel's OpenMP runtime (proprietary Intel license, reviewed) |
 
 Where they are checked: the full backends CI environment on Linux (every
 distribution above), and the `distribution` CI job on Linux, macOS and Windows,
 which installs `wavebit[plot]` from the built wheel (numpy, scipy, matplotlib,
 pillow and their dependencies). No CI job installs `jax` or `torch` on macOS or
-Windows, so their native files there have not been checked; the records name
-Linux only, and running the check in such an environment fails until someone
-reviews and records them. Code linked statically into a library or extension
+Windows. Their Windows records were reviewed by hand on one machine (jaxlib 0.11.0,
+ml-dtypes 0.6.0, torch 2.14.1+cpu); their macOS files have not been checked, and
+running the check there fails until someone reviews and records them, as it does on
+Windows for a later wheel that adds a library. Code linked statically into a library or extension
 module is not visible this way; the inventory's `bundled` notes describe what
 is known of it.
 

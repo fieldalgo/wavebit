@@ -119,14 +119,17 @@ GPL 라이브러리를 담을 수 있는데, 위 정책은 그런 것을 Wavebit
 | --- | --- | --- | --- |
 | `numpy`, `scipy` | OpenBLAS(BSD-3-Clause), libgfortran(GPL-3.0-or-later WITH GCC-exception-3.1), libquadmath(LGPL-2.1-or-later) | macOS 14 전에는 OpenBLAS, 그리고 libgfortran, libgcc_s, libquadmath | GCC 런타임을 링크한 OpenBLAS DLL. numpy는 msvcp140도 |
 | `pillow` | 이미지·글꼴·압축 라이브러리 18개, 모두 허용형. FreeType은 FTL로 사용 | 같은 것을 `.dylib`로 | 없음(확장 모듈에 링크됨) |
-| `jaxlib` | jaxlib 자체 컴파일 모듈(Apache-2.0) | 확인 안 함 | 확인 안 함 |
-| `torch` | torch 자체 라이브러리와 GNU libgomp(GPL-3.0-or-later WITH GCC-exception-3.1) | 확인 안 함 | 확인 안 함 |
+| `jaxlib` | jaxlib 자체 컴파일 모듈(Apache-2.0) | 확인 안 함 | jaxlib 자체 `jax_common.dll`(Apache-2.0) |
+| `ml-dtypes` | 없음 | 확인 안 함 | numpy와 같은 msvcp140 |
+| `torch` | torch 자체 라이브러리와 GNU libgomp(GPL-3.0-or-later WITH GCC-exception-3.1) | 확인 안 함 | torch 자체 DLL, libuv(MIT), Intel OpenMP 런타임(Intel 독점 라이선스, 검토함) |
 
 확인하는 곳: Linux의 full backends CI 환경(위 모든 배포 패키지), 그리고 Linux·macOS·
 Windows의 `distribution` CI 작업. 이 작업은 빌드한 휠에서 `wavebit[plot]`(numpy, scipy,
 matplotlib, pillow와 그 의존성)을 설치합니다. macOS나 Windows에 `jax`·`torch`를 설치하는
-CI 작업은 없어 그 OS에서의 네이티브 파일은 확인하지 않았습니다. 기록은 Linux만 적으며,
-그런 환경에서 검사를 돌리면 누군가 검토해 기록할 때까지 실패합니다. 라이브러리나 확장
+CI 작업은 없습니다. Windows 기록은 한 기계에서 손으로 검토했습니다(jaxlib 0.11.0,
+ml-dtypes 0.6.0, torch 2.14.1+cpu). macOS 파일은 확인하지 않았으므로 그곳에서 검사를
+돌리면 누군가 검토해 기록할 때까지 실패하며, Windows에서도 라이브러리를 새로 더한 이후
+휠은 마찬가지입니다. 라이브러리나 확장
 모듈에 정적으로 링크된 코드는 이 방법으로 보이지 않으며, 목록의 `bundled` 메모가 알려진
 내용을 적습니다.
 
