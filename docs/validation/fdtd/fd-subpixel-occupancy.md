@@ -1097,7 +1097,7 @@ messages read the same plane.
 the state at their dates.* The default rule's inverse-material operator on a constitutive region,
 `Xi = diag(e) + C` -- the edge diagonal `build` paints and the node cross coefficients `lower`
 paints, `c/4` for each pair of edges that share a node -- is the operator Werner, Bauer and Cary
-call wc07 (J. Comput. Phys. 247, 2013, Eq. 11). Nothing in the rule keeps it positive definite,
+call wc07 (J. Comput. Phys. 255, 436, 2013, Eq. 11). Nothing in the rule keeps it positive definite,
 and at a high-contrast surface it is not: the 16^3 test cavity's `eps = 100` sphere reads
 `lambda_min * eps = -1.55`, and a seeded run with that operator grows x1.9e7 in 300 steps while
 its discrete energy stays flat -- leapfrog conserves the indefinite form exactly, so the energy
