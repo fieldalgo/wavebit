@@ -330,10 +330,12 @@ def test_a_traced_cell_crosses_the_jitted_door(name, basis, value, transform):
     ``period=`` on a solver built with ``lattice=``, whose setter re-derives the basis. The
     basis is a pytree child now. The value under ``jit`` is compared with ``solve_field_eager``'s
     on a second solver over the same frozen geometry (they agreed to 1e-15, measured
-    2026-09-24); the derivative under ``grad`` with a central difference of the same door under
-    ``jax.jit``, where the frozen record is replayed as frozen -- the function the gradient is
-    of. Concretely, both doors re-check the record against every perturbed cell and refuse it.
-    Measured: 3e-9 for the shear entry of the basis, 9e-10 for a period.
+    2026-09-24). The derivative under ``grad`` is compared with a central difference of the eager
+    door with no record, which rebuilds the normal field at every cell: a replay carries the
+    field's own change with the cell (``normal_plans``) where it used to hold the field, and the
+    difference of a held replay -- this test's oracle until 2026-11-10 -- is now 3.4% off it in
+    the shear entries. So the record is taken on the cell the derivative is taken at; a record
+    from another cell describes a different field, which the eager door refuses.
     """
     import jax
     import jax.numpy as jnp
@@ -356,19 +358,20 @@ def test_a_traced_cell_crosses_the_jitted_door(name, basis, value, transform):
         assert abs(got - want) < 1e-10 * abs(want)
         assert np.array_equal(np.asarray(solver.lattice), basis), 'a traced cell stayed'
     else:
-        got = np.asarray(jax.grad(total)(jnp.asarray(value)))
+        cell = np.diag(value) if name == 'period' else value
+        geometry = _cell_solver(cell).freeze_geometry()
+        got = np.asarray(jax.grad(through(solver, 'solve_field'))(jnp.asarray(value)))
         assert np.array_equal(np.asarray(solver.lattice), basis), 'a traced cell stayed'
-        # The difference quotient is taken under `jax.jit` too: there the cell is traced and
-        # the frozen record is replayed as frozen, which is the function the gradient is of.
-        # Called concretely, each perturbed cell would be refused as a stale record by the
-        # door's own check, as `solve()` refuses it -- the normal field depends on the cell.
+        # The difference quotient is of the eager door with no record: every perturbed cell
+        # rebuilds its own normal field, which is the answer the replay's derivative is of.
+        def rebuilt(x):
+            result, field = _cell_solver(basis).solve_field_eager(3, 3, 2, **{name: x})
+            return float(jnp.sum(result.T).real + 1e-3 * jnp.sum(jnp.abs(field) ** 2))
         h, want = 1e-3, np.zeros(value.shape)
-        replayed = jax.jit(total)
         for i in np.ndindex(value.shape):
             step = np.zeros(value.shape)
             step[i] = h
-            want[i] = (float(replayed(jnp.asarray(value + step)))
-                       - float(replayed(jnp.asarray(value - step)))) / (2 * h)
+            want[i] = (rebuilt(jnp.asarray(value + step)) - rebuilt(jnp.asarray(value - step))) / (2 * h)
         assert np.abs(want).max() > 0
         np.testing.assert_allclose(got, want, rtol=0, atol=1e-6 * np.abs(want).max())
 

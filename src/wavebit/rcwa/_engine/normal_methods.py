@@ -106,12 +106,16 @@ def _metric(lattice, shape):
     return M / (float(np.hypot(M[0, 0], M[1, 0])) or 1.0)
 
 
-#: What a cell under autodiff meets in a construction that reads its metric in NumPy.
+#: What a cell under autodiff meets in a construction that reads its metric in NumPy. Reached by
+#: ``'contour'`` with any traced cell, and by ``'spectral'`` and ``'smooth'`` only where the cell
+#: has no value and there is no record to replay -- ``jax.jit`` or ``jax.vmap`` without
+#: ``freeze_geometry()`` (:mod:`~wavebit.rcwa._engine.normal_plans`).
 _TRACED_CELL = (
-    "raster_normal_method='contour', 'spectral' and 'smooth' build the normal field in NumPy "
-    "from the cell's metric, so a derivative with respect to the cell (period or lattice) "
-    "cannot pass through them. raster_normal_method='distance' carries it, on JAX and PyTorch "
-    "alike.")
+    "raster_normal_method='contour' builds its normal field from a contour traced in NumPy, so a "
+    "derivative with respect to the cell (period or lattice) cannot pass through it, from a "
+    "frozen record or without one. 'spectral' and 'smooth' carry one where the cell has a value "
+    "(jax.grad, PyTorch) or through a record taken with freeze_geometry() (jax.jit and jax.vmap "
+    "too); raster_normal_method='distance' carries it everywhere, on JAX and PyTorch alike.")
 
 
 def _steps(M):
@@ -298,6 +302,58 @@ def _periodic_signed_distance(inside, M):
     # Each phase measures to the other one; a pixel's distance to its OWN phase is zero and is
     # what the sign selects away, exactly as the pair of transforms above does.
     return np.where(inside, -nearest(~inside), nearest(inside))
+
+
+def _signed_distance_offsets(inside, M):
+    """``(d_v, d_u)``: the index offset from every pixel to its nearest pixel of the other phase.
+
+    The choice :func:`_periodic_signed_distance` makes without reporting it, made by the same
+    tool on the same tiling -- the distance transform on an axis-aligned cell, the kd-tree on a
+    skewed one -- so the distance it measured is the length of this offset in the cell's metric.
+    Offsets may point into a neighbouring copy of the cell, which is what the tiling is for.
+    Where two pixels of the other phase are equally near, the tool's own pick is kept: the
+    distance is the same either way and only its derivative tells them apart.
+    """
+    n_v, n_u = inside.shape
+    if _separable(M):
+        from scipy.ndimage import distance_transform_edt
+        step_v, step_u = _steps(M)
+        sampling = None if step_v == step_u == 1.0 else (step_v, step_u)
+        t = np.tile(inside, (3, 3))
+        # Each transform measures to the zeros of its input: `~t`'s are the inside pixels, which
+        # is what an outside pixel is nearest to, and `t`'s the outside ones.
+        to_inside = distance_transform_edt(~t, sampling=sampling, return_distances=False,
+                                           return_indices=True)
+        to_outside = distance_transform_edt(t, sampling=sampling, return_distances=False,
+                                            return_indices=True)
+        jj, ii = np.meshgrid(np.arange(3 * n_v), np.arange(3 * n_u), indexing='ij')
+        core = (slice(n_v, 2 * n_v), slice(n_u, 2 * n_u))
+        d_v = np.where(t, to_outside[0] - jj, to_inside[0] - jj)[core]
+        d_u = np.where(t, to_outside[1] - ii, to_inside[1] - ii)[core]
+        return d_v.astype(np.int64), d_u.astype(np.int64)
+
+    from scipy.spatial import cKDTree
+    Ii, Jj = np.meshgrid(np.arange(n_u, dtype=float), np.arange(n_v, dtype=float))
+    P = np.column_stack([Ii.ravel(), Jj.ravel()]) @ M.T
+
+    def nearest(phase):
+        jj, ii = np.nonzero(phase)
+        tiled = np.vstack([np.column_stack([ii + dx * n_u, jj + dy * n_v]).astype(float)
+                           for dy in (-1, 0, 1) for dx in (-1, 0, 1)])
+        return tiled[cKDTree(tiled @ M.T).query(P, workers=-1)[1]]
+
+    flat = inside.ravel()[:, None]
+    target = np.where(flat, nearest(~inside), nearest(inside))
+    d_u = np.rint(target[:, 0] - Ii.ravel()).astype(np.int64).reshape(n_v, n_u)
+    d_v = np.rint(target[:, 1] - Jj.ravel()).astype(np.int64).reshape(n_v, n_u)
+    return d_v, d_u
+
+
+def _decided(decisions, kind, **detail):
+    """Tell a caller's ``decisions`` which construction answered, and with what choices."""
+    if decisions is not None:
+        decisions['kind'] = kind
+        decisions['detail'] = detail or None
 
 
 def _repeats(shape, base_shape):
@@ -761,7 +817,7 @@ def _tile_rings(M, points, n_v, n_u):
     return int(np.ceil(stray)) + int(np.ceil(covering / shortest))
 
 
-def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None):
+def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None, decisions=None):
     """Subpixel level-set contour, then the exact direction of grad(distance-to-curve).
 
     The construction: smooth the two-phase indicator with a periodic Gaussian, extract its
@@ -801,13 +857,23 @@ def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     sample grid was sheared. There is no index-space difference anywhere in it, so there is
     no pullback to get wrong. The basis reaches one other thing, the Gaussian that locates
     the level set, and that stays physically isotropic (:func:`_isotropic_blur`).
+
+    **No derivative with respect to the cell passes through it, recorded or not.** The curve
+    moves in index space when the cell's shape changes the blur, and following that needs the
+    contour extraction and its resampling differentiated. Holding the curve in index space and
+    carrying only the map to Cartesian coordinates is not the answer either: it was measured
+    further from the true derivative than holding the whole field (``normal_plans``).
+    ``decisions``, when given, is told which construction answered: ``'distance'`` for the
+    delegation, ``'constant'`` where no curve survived, ``'contour'`` otherwise.
     """
     shape = eps.shape
     values = np.unique(eps)
     if values.size > 2:
         from wavebit.rcwa._engine.factorization import normal_vector_field
+        _decided(decisions, 'distance')
         return normal_vector_field(eps, interface_mask, lattice)
     if values.size < 2 or not interface_mask.any():
+        _decided(decisions, 'constant')
         return _constant_along_x(shape)
 
     M = _metric(lattice, shape)
@@ -836,7 +902,9 @@ def contour_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     asm = _assemble(polylines, _CONTOUR_RESAMPLE_H)
     if asm is None:
         # No 0.5 crossing survived the smoothing (a feature thinner than the kernel).
+        _decided(decisions, 'constant')
         return _constant_along_x(shape)
+    _decided(decisions, 'contour')
     points, prev, nxt, links = asm
 
     n_v, n_u = shape
@@ -937,7 +1005,7 @@ _SPECTRAL_REL_MAG_TOL = 1e-3   # band pixels below this fraction of the band max
                                # no usable direction and are dropped from the band
 
 
-def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None):
+def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None, decisions=None):
     """Band-limited spectral gradient on the interface band, copied into the bulk.
 
     The construction: FFT the layer's scalar source field (the two-phase indicator when
@@ -972,14 +1040,21 @@ def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None):
     ``base_shape`` is accepted for the shared signature and deliberately unread: the
     cutoff is stated in physical orders per period, which a block-repeat of the raster
     does not change.
+
+    ``decisions``, when given, receives the choices the cell's metric does not move smoothly --
+    the indicator, the band, every pixel's donor, which cell edge is the longer -- so that
+    :mod:`~wavebit.rcwa._engine.normal_plans` can rebuild the rest in a live cell and carry its
+    derivative. Everything after them is a transform and a normalisation.
     """
     del base_shape
     shape = eps.shape
     values = np.unique(eps)
     if values.size > 2:
         from wavebit.rcwa._engine.factorization import normal_vector_field
+        _decided(decisions, 'distance')
         return normal_vector_field(eps, interface_mask, lattice)
     if values.size < 2 or not interface_mask.any():
+        _decided(decisions, 'constant')
         return _constant_along_x(shape)
 
     M = _metric(lattice, shape)
@@ -1028,6 +1103,7 @@ def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None):
         # No usable spectral contrast (e.g. phases differing only in Im(eps) inside a
         # 3+-phase layer): the 'distance' construction reads the mask alone and can.
         from wavebit.rcwa._engine.factorization import normal_vector_field
+        _decided(decisions, 'distance')
         return normal_vector_field(eps, mask, lattice)
 
     safe = np.where(mag == 0.0, 1.0, mag)
@@ -1051,6 +1127,9 @@ def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None):
                                  sampling=sampling)[1]
     iy = idx[0][n_v:2 * n_v, n_u:2 * n_u] % n_v
     ix = idx[1][n_v:2 * n_v, n_u:2 * n_u] % n_u
+    # `max` keeps its first argument on a tie, and so does the record.
+    _decided(decisions, 'spectral', indicator=chi.astype(bool), band=valid, donor_v=iy,
+             donor_u=ix, longer_u=bool(n_u * step_u >= n_v * step_v))
     return nx_band[iy, ix], ny_band[iy, ix]
 
 
@@ -1069,7 +1148,8 @@ _SMOOTH_SIGMA_DIVISOR = 16.0
 _SMOOTH_SIGMA_FLOOR = 1.0
 
 
-def smoothed_distance_normal_field(eps, interface_mask, lattice=None, base_shape=None):
+def smoothed_distance_normal_field(eps, interface_mask, lattice=None, base_shape=None,
+                                   decisions=None):
     """Derivative-of-Gaussian of the periodic *signed* distance field.
 
     The nearest construction to ``'distance'`` that removes the quantization: label
@@ -1104,20 +1184,27 @@ def smoothed_distance_normal_field(eps, interface_mask, lattice=None, base_shape
     features, where the kernel is widest relative to the shape — against 0.07 to 0.13 with
     both repaired, and neither repair alone gets there
     (``docs/theory/rcwa/nvf-normal-methods.md`` has the 2x2).
+
+    ``decisions``, when given, receives what the cell's metric does not move smoothly -- the
+    phase of every pixel, the nearest pixel of the other phase, which branch ran and, on the
+    separable one, the kernels' radii -- for :mod:`~wavebit.rcwa._engine.normal_plans`.
     """
     shape = eps.shape
     values = np.unique(eps)
     if values.size > 2:
         from wavebit.rcwa._engine.factorization import normal_vector_field
+        _decided(decisions, 'distance')
         return normal_vector_field(eps, interface_mask, lattice)
     if values.size < 2 or not interface_mask.any():
+        _decided(decisions, 'constant')
         return _constant_along_x(shape)
 
     M = _metric(lattice, shape)
     repeat_v, repeat_u = _repeats(shape, base_shape)
     base_shape = base_shape or shape
 
-    sd = _periodic_signed_distance(_two_phase_indicator(eps).astype(bool), M)
+    inside = _two_phase_indicator(eps).astype(bool)
+    sd = _periodic_signed_distance(inside, M)
 
     # Sigma on the BASE grid, carried to the lifted one: 1/16 of the cell's linear size,
     # floored at one base pixel. A *length*, and one isotropic number rather than one per
@@ -1125,6 +1212,16 @@ def smoothed_distance_normal_field(eps, interface_mask, lattice=None, base_shape
     sigma_base = max(_SMOOTH_SIGMA_FLOOR,
                      float(np.sqrt(base_shape[0] * base_shape[1])) / _SMOOTH_SIGMA_DIVISOR)
     sigma = sigma_base * float(np.sqrt(repeat_v * repeat_u)) * _pixel_size(M)
+    if decisions is not None:
+        separable = bool(_separable(M))
+        step_v, step_u = _steps(M)
+        # scipy's own radius for its 4-sigma truncation, per axis, as `gaussian_filter1d`
+        # computes it -- a whole number, so a decision rather than a function of the cell.
+        radii = ((int(4.0 * float(sigma / step_v) + 0.5), int(4.0 * float(sigma / step_u) + 0.5))
+                 if separable else None)
+        _decided(decisions, 'smooth', inside=inside,
+                 nearest=_signed_distance_offsets(inside, M), separable=separable,
+                 sigma_per_pixel=sigma_base * float(np.sqrt(repeat_v * repeat_u)), radii=radii)
     gx, gy = _isotropic_blur_gradient(sd, sigma, M)
 
     norm = np.hypot(gx, gy)

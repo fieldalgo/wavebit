@@ -804,7 +804,7 @@ def test_a_magnetic_cell_on_a_skewed_lattice_obeys_the_eps_mu_duality():
 
     Both the live build and the frozen replay are checked, because the basis reaches the
     permeability pass at two separate call sites. Losing it at the freeze site alone is already
-    caught -- ``_recorded_lattice`` compares what was recorded against what the build is using
+    caught -- ``_check_normal_field_still_fits`` compares what was recorded against what the build is using
     and raises ``StaleGeometryError`` -- so the live build is the site where it can go quiet,
     and the live assertion is the one that has to carry a number.
     """

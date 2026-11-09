@@ -406,10 +406,20 @@ _CELL_CASES = {
     'one row, oblique angle': (_ONE_ROW, lambda p, lift: dict(lattice=wavebit.Lattice.oblique(0.77, 0.61, p)),
                                np.radians(100.0), [3, 0]),
 }
+#: An oblique cell whose sides differ. On ``'oblique angle'``'s equal sides the two pixel steps of
+#: ``'spectral'``'s bulk copy are equal in exact arithmetic, so its nearest-donor ties are settled
+#: by the last bit of the metric: at 100 degrees the step along ``v`` rounds to 1 - 2**-53, and
+#: 1e-7 rad away to 1 exactly, where 12 bulk pixels copy another donor and the read-out itself
+#: jumps by ~3e-4. That is the construction's forward answer, with or without a derivative.
+_UNEQUAL_SIDES = {
+    'oblique angle, unequal sides': (
+        _SQUARE_ROD, lambda p, lift: dict(lattice=wavebit.Lattice.oblique(0.77, 0.69, p)),
+        np.radians(100.0), [2, 2]),
+}
 
 
 def _nvf_raster_read_out(backend, case, p, **options):
-    raster, cell, _, truncation = _CELL_CASES[case]
+    raster, cell, _, truncation = {**_CELL_CASES, **_UNEQUAL_SIDES}[case]
     if backend == 'jax':
         import jax.numpy as xp
     elif backend == 'torch':
@@ -466,15 +476,55 @@ def test_the_raster_normal_field_carries_the_cell_on_both_backends(case, backend
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch', 'forward_ad'], ids=['jax', 'torch', 'torch, forward_ad'])
-@pytest.mark.parametrize('method', ['contour', 'spectral', 'smooth'])
+@pytest.mark.parametrize('case', ['period', 'oblique angle, unequal sides'])
+@pytest.mark.parametrize('method', ['spectral', 'smooth'])
+def test_spectral_and_smooth_carry_the_cell_where_it_has_a_value(method, case, backend):
+    """``'spectral'`` and ``'smooth'`` read the cell's metric in NumPy, and refused a traced cell
+    until 2026-11-10 (before that, PyTorch detached a ``period`` and lost the field's share, 6%
+    and 0.09% of this derivative). Where the cell has a value -- ``jax.grad``, PyTorch reverse
+    and forward mode -- they take their choices on it and rebuild the rest in the traced metric
+    (``normal_plans``), so the derivative is the central difference of the field rebuilt at each
+    cell. The oblique cell has unequal sides, for the reason ``_UNEQUAL_SIDES`` gives."""
+    if backend == 'jax':
+        jax = pytest.importorskip('jax')
+        import jax.numpy as jnp
+        _legacy_wavebit_enable_x64()
+    else:
+        torch = pytest.importorskip('torch')
+        from torch.autograd import forward_ad
+    _, _, at, _ = {**_CELL_CASES, **_UNEQUAL_SIDES}[case]
+    options = dict(raster_normal_method=method)
+
+    def numpy(p):
+        return _nvf_raster_read_out('numpy', case, p, **options)
+    h = 1e-6
+    near = (numpy(at + h) - numpy(at - h)) / (2 * h)
+    far = (numpy(at + 2 * h) - numpy(at - 2 * h)) / (4 * h)
+    finite = (4 * near - far) / 3
+    if backend == 'jax':
+        got = float(jax.grad(lambda p: _nvf_raster_read_out('jax', case, p, **options))(
+            jnp.asarray(at)))
+    elif backend == 'torch':
+        x = torch.tensor(at, dtype=torch.float64, requires_grad=True)
+        got = float(torch.autograd.grad(_nvf_raster_read_out('torch', case, x, **options), x)[0])
+    else:
+        with forward_ad.dual_level():
+            dual = forward_ad.make_dual(torch.tensor(at, dtype=torch.float64),
+                                        torch.tensor(1.0, dtype=torch.float64))
+            got = float(forward_ad.unpack_dual(
+                _nvf_raster_read_out('torch', case, dual, **options)).tangent)
+    assert got == pytest.approx(finite, rel=1e-6), (got, finite)
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch', 'forward_ad'], ids=['jax', 'torch', 'torch, forward_ad'])
+@pytest.mark.parametrize('method', ['contour'])
 def test_a_normal_field_built_in_numpy_refuses_a_traced_cell_by_name(method, backend):
-    """``'contour'``, ``'spectral'`` and ``'smooth'`` read the cell's metric in NumPy, so a cell
-    derivative cannot pass through them. JAX raised ``TracerArrayConversionError`` there; PyTorch
-    detached a ``period`` and returned the derivative without the field's share, 15%, 6% and
-    0.09% off a central difference on this raster. Both now name the limit and the method that
-    carries it."""
-    if method == 'contour':
-        pytest.importorskip('contourpy', reason="raster_normal_method='contour' needs the optional dependency")
+    """``'contour'`` reads the cell's metric in NumPy and follows a curve whose place in the
+    raster moves with it, so a cell derivative cannot pass through it. JAX raised
+    ``TracerArrayConversionError`` there; PyTorch detached a ``period`` and returned the
+    derivative without the field's share, 15% off a central difference on this raster. Both now
+    name the limit and the methods that carry it."""
+    pytest.importorskip('contourpy', reason="raster_normal_method='contour' needs the optional dependency")
     if backend == 'jax':
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp

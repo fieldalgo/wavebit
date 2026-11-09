@@ -1149,21 +1149,15 @@ def _distance_gradient(interface_mask, shape, lattice=None):
             # oblique cell, and a `period`, which the solver detached for this field, came back
             # with the normal field's dependence on it dropped -- 22% off a central difference
             # in a period derivative on a 0.77 x 0.61 cell, where JAX agreed with it.
+            #
+            # A frozen record replays the same rebuild from offsets it took at the freeze
+            # (`normal_plans`), so a cell derivative is one number with or without a record.
+            from functools import partial
+            from wavebit.rcwa._engine.normal_plans import distance_gradient_from_offsets
+            from wavebit.rcwa._engine.normal_plans import nearest_interface_offsets
             xp_ = array_namespace(J)
-
-            def _index_offsets(Jc):
-                """``(dj, di)`` to the nearest interface pixel, on the 3x3 periodic tiling."""
-                Jc = np.asarray(Jc, dtype=float)
-                Jc = Jc / (float(np.hypot(Jc[0, 0], Jc[1, 0])) or 1.0)
-                sj = float(np.hypot(Jc[0, 1], Jc[1, 1]))
-                si = float(np.hypot(Jc[0, 0], Jc[1, 0]))
-                tiled = np.tile(~interface_mask, (3, 3))
-                _, idx = distance_transform_edt(tiled, sampling=(sj, si),
-                                                return_indices=True)
-                jj, ii = np.meshgrid(np.arange(3 * ny_), np.arange(3 * nx_), indexing='ij')
-                core = (slice(ny_, 2 * ny_), slice(nx_, 2 * nx_))
-                return ((idx[0] - jj)[core].astype(float),
-                        (idx[1] - ii)[core].astype(float))
+            # ``(dj, di)`` to the nearest interface pixel, on the 3x3 periodic tiling.
+            _index_offsets = partial(nearest_interface_offsets, interface_mask)
 
             if 'jax' in xp_.__name__:
                 import jax
@@ -1174,25 +1168,12 @@ def _distance_gradient(interface_mask, shape, lattice=None):
             else:
                 dj, di = (as_array(xp_, offset, dtype=J.dtype, device=_device(xp_, J))
                           for offset in _index_offsets(_to_numpy(J)))
-            scale_ = xp_.sqrt(J[0, 0] ** 2 + J[1, 0] ** 2)
-            a_, b_ = J[0, 0] / scale_, J[0, 1] / scale_
-            c_, d_ = J[1, 0] / scale_, J[1, 1] / scale_
-            step_j_ = xp_.sqrt(b_ ** 2 + d_ ** 2)
-            step_i_ = xp_.sqrt(a_ ** 2 + c_ ** 2)
-            # Guard inside the sqrt: an on-interface pixel has zero displacement, and
-            # `d(sqrt)/dx` at zero is infinite whatever a `where` outside it says.
-            sq_ = (step_j_ * dj) ** 2 + (step_i_ * di) ** 2
-            dmap_ = xp_.sqrt(xp_.where(sq_ != 0, sq_, xp_.ones_like(sq_)))
-            dmap_ = xp_.where(sq_ != 0, dmap_, xp_.zeros_like(dmap_))
-            g_j = (xp_.roll(dmap_, -1, axis=0) - xp_.roll(dmap_, 1, axis=0)) / 2.0
-            g_i = (xp_.roll(dmap_, -1, axis=1) - xp_.roll(dmap_, 1, axis=1)) / 2.0
-            det_ = a_ * d_ - b_ * c_
-            g_i, g_j = ((d_ * g_i - c_ * g_j) / det_, (-b_ * g_i + a_ * g_j) / det_)
+            g_i, g_j = distance_gradient_from_offsets(xp_, dj, di, J)
     return g_i, g_j
 
 
 def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=None,
-                        base_shape=None, with_magnitude=False):
+                        base_shape=None, with_magnitude=False, plan=None):
     """Unit normal vector field ``(normal_x, normal_y)`` of a raster layer.
 
     This is a **geometry** quantity — it depends on where the material interfaces sit, not on
@@ -1200,8 +1181,15 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     and then held fixed while gradients flow through the permittivity. That holds for every
     ``method``: the field is a constant to the permittivity, whatever the backend. Not to the
     cell: ``'distance'`` rebuilds its distances in a traced ``lattice`` and carries the
-    cell's derivative (on JAX and PyTorch alike), and the other three, which read the cell
-    in NumPy, refuse a traced one by name (``normal_methods._TRACED_CELL``).
+    cell's derivative (on JAX and PyTorch alike). ``'spectral'`` and ``'smooth'`` take their
+    choices on the cell's value and rebuild the rest in the traced cell
+    (:mod:`~wavebit.rcwa._engine.normal_plans`), which needs a value to read -- ``jax.grad``
+    and PyTorch have one, ``jax.jit`` replays a record instead. ``'contour'`` refuses a traced
+    cell by name (``normal_methods._TRACED_CELL``).
+
+    ``plan``, a dict, is filled with what a frozen record needs to rebuild the field in another
+    cell -- which construction answered and the choices it made -- for
+    :func:`~wavebit.rcwa._engine.normal_plans.plan_for`.
 
     ``method`` selects the construction (:class:`~wavebit.rcwa._engine.enums.NormalMethod`;
     ``None`` means ``'distance'``, the original). The default body below is ``'distance'``:
@@ -1307,6 +1295,8 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
     # (`tests/rcwa/test_oblique_lattice.py::test_a_one_row_skewed_cell_is_the_grating_it_draws`).
     # An axis-aligned cell gives back exactly (1.0, 0.0) / (0.0, 1.0), to the bit.
     if 1 in shape:
+        if plan is not None:
+            plan.update(kind='axis', detail=None)
         cols = None if lattice is None else getattr(lattice, 'columns', lattice)
         try:
             A = None if cols is None else constant_array(cols)
@@ -1352,7 +1342,15 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
                 f"whose mask-only path a trace can take.") from None
         mask = (_interface_mask(eps) if interface_mask is None
                 else np.asarray(interface_mask, dtype=bool))
-        field = tuple(DISPATCH[method.value](eps, mask, lattice, base_shape))
+        field = None
+        if method in (NormalMethod.SPECTRAL, NormalMethod.SMOOTH):
+            field = _carried_construction(eps, mask, lattice, method, base_shape)
+        if field is None:
+            decisions = None if plan is None else {}
+            field = tuple(DISPATCH[method.value](eps, mask, lattice, base_shape,
+                                                 decisions=decisions))
+            if plan is not None:
+                plan.update(decisions)
         if not with_magnitude:
             return field
         # Beside the construction, not out of it: every builder here returns a *unit* field,
@@ -1362,6 +1360,8 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
 
     if interface_mask is None:
         interface_mask = _interface_mask(_to_numpy(eps_matrix))
+    if plan is not None:
+        plan.update(kind='distance', detail=None)
 
     gx, gy = _distance_gradient(interface_mask, shape, lattice)
     # Off the *raw* gradient, before the flat-pixel floor below rewrites it: the floor's whole
@@ -1397,6 +1397,31 @@ def normal_vector_field(eps_matrix, interface_mask=None, lattice=None, method=No
         gy = _xp.where(nz, gy, _xp.zeros_like(gy))
     unit = (gx / norm, gy / norm)
     return unit + (magnitude,) if with_magnitude else unit
+
+
+def _carried_construction(eps, mask, lattice, method, base_shape):
+    """``'spectral'`` or ``'smooth'`` on a cell a derivative reaches, carrying it -- or ``None``.
+
+    The choices are taken on the cell's value, as a freeze would take them, and the rest is
+    rebuilt in the traced cell (:func:`~wavebit.rcwa._engine.normal_plans.replayed`), so the
+    derivative is the one a frozen record replays. ``None`` hands the call back to the
+    construction itself: a constant cell (nothing to carry), a cell with no value under
+    ``jax.jit`` (which the construction refuses by name, pointing at ``freeze_geometry()``), and
+    a layer the construction delegates or answers with a constant, which never reads the cell.
+    """
+    from wavebit.rcwa._engine import normal_plans
+    from wavebit.rcwa._engine.normal_methods import DISPATCH
+    if not normal_plans.cell_carries_derivative(lattice):
+        return None
+    primal = normal_plans.primal_cell(lattice)
+    if primal is None:
+        return None
+    decisions = {}
+    field = tuple(DISPATCH[method.value](eps, mask, primal, base_shape, decisions=decisions))
+    if decisions['kind'] != method.value:
+        return None
+    plan = normal_plans.NormalFieldPlan(decisions['kind'], None, decisions['detail'])
+    return normal_plans.replayed(field, plan, lattice, tuple(eps.shape), False)
 
 
 def _field_magnitude(gx, gy):
@@ -1602,7 +1627,7 @@ def _normal_field_source(eps, lattice=None, method=None):
 
 
 def normal_field_for_raster(structure, half_width_u, half_width_v, lattice=None, method=None,
-                            nvf_projector=None):
+                            nvf_projector=None, plans=None):
     """Per-layer ``(normal_x, normal_y)`` normal fields for ``structure``, on the grid the NVF build uses.
 
     Precompute this once from the concrete geometry and hand it to
@@ -1614,12 +1639,27 @@ def normal_field_for_raster(structure, half_width_u, half_width_v, lattice=None,
     entry a **triple** — the magnitude the complex-basis projector reads is part of the field
     the solve is handed, so it has to be part of what is frozen; a record without it is
     refused rather than served with the other projector (:func:`_unpack_normal_field`).
+
+    ``plans``, a list, receives one :class:`~wavebit.rcwa._engine.normal_plans.NormalFieldPlan`
+    per layer -- the choices each field was built from, which a replay needs to carry a
+    derivative with respect to the cell. Hand it to the builder as ``normal_field_plan=``.
     """
+    from wavebit.rcwa._engine.normal_plans import plan_for
     xp = array_namespace(structure)
     want = _wants_magnitude(nvf_projector)
-    return [normal_vector_field(eps, lattice=lattice, method=method,
-                                base_shape=tuple(base.shape), with_magnitude=want)
-            for eps, base, _, _ in _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v)]
+    fields = []
+    for eps, base, _, _ in _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v):
+        if plans is None:
+            fields.append(normal_vector_field(eps, lattice=lattice, method=method,
+                                              base_shape=tuple(base.shape), with_magnitude=want))
+            continue
+        mask = _interface_mask(_to_numpy(eps))
+        decisions = {}
+        fields.append(normal_vector_field(eps, mask, lattice=lattice, method=method,
+                                          base_shape=tuple(base.shape), with_magnitude=want,
+                                          plan=decisions))
+        plans.append(plan_for(decisions, mask, lattice, tuple(eps.shape), want))
+    return fields
 
 
 def normal_field_source_for_raster(structure, half_width_u, half_width_v, lattice=None, method=None):
@@ -1684,11 +1724,18 @@ def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, meth
     (:func:`check_raster_records_still_fit`).
 
     The cell is an input of the field too, and the same holds for it: a basis that ``jax.jit``
-    or ``jax.vmap`` traces has no value to compare with the record's, so a constant raster on a
-    traced cell is replayed on trust -- the rule the solver's own pre-check keeps for it
+    or ``jax.vmap`` traces has no value to compare with the record's, so on a traced cell the
+    record's cell is taken on trust -- the rule the solver's own pre-check keeps for it
     (``_refuse_a_stale_raster_record``). Until the layers of a constant raster were cut concrete
     this check was never reached under a trace, so a jitted derivative in a skewed lattice
     replayed its record; reading that basis here raised ``TracerArrayConversionError`` instead.
+
+    **Only the cell is trusted**, not the rest of the record: the pattern, its shape, the
+    construction and the phase count are compared whenever the raster has values. A traced
+    ``period`` used to reach this check as the record's own cell, recovered from the record
+    (``_geometry_lattice_for``), so a moved pattern under a jitted ``period`` derivative was
+    refused; the builder gets the live cell now, which carries the field's derivative
+    (:mod:`~wavebit.rcwa._engine.normal_plans`), and the pattern is still compared.
     """
     import numpy as np
     if source is None:
@@ -1697,8 +1744,7 @@ def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, meth
         eps = _to_numpy(eps_matrix)
     except Exception:                     # a tracer: nothing to compare, nothing to do
         return
-    if _cell_has_no_value(lattice):       # a traced cell: nothing to compare it with either
-        return
+    trusted = _cell_has_no_value(lattice)   # a traced cell: nothing to compare it with
 
     entry = source[index]
     shape, mask = entry[0], entry[1]
@@ -1706,12 +1752,12 @@ def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, meth
     meth = entry[3] if len(entry) > 3 else 'distance'   # ... or before the method was one
     phases = entry[4] if len(entry) > 4 else None       # ... or before the count was one
     now_shape, now_mask, now_lat, now_meth, now_phases = _normal_field_source(
-        eps, lattice, method)
+        eps, None if trusted else lattice, method)
     # The phase count only decides anything off the 'distance' construction, and old
     # records carry none — compare it exactly when both sides have one and it matters.
     phases_agree = (phases is None or now_phases is None or meth != now_meth
                     or meth == 'distance' or phases == now_phases)
-    same_cell = _same_cell_shape(lat, now_lat)
+    same_cell = trusted or _same_cell_shape(lat, now_lat)
     if (shape == now_shape and same_cell and meth == now_meth and phases_agree
             and (mask is None or np.array_equal(mask, now_mask))):
         return                            # equal shapes agree on whether a mask exists at all
@@ -1881,7 +1927,10 @@ def _nvf_projector(xp, normal_x, normal_y, half_width_u, half_width_v, dtype, de
     as the third".
     """
     def series(field):
-        return fourier2d_pointwise(xp, xp.asarray(field, dtype=dtype, device=device),
+        # `_lift`, not `asarray`: a replayed field can carry the cell's derivative
+        # (`normal_plans`), and a tracer under `jax.vmap` refuses a `device=`. A NumPy field
+        # takes `asarray` there as before.
+        return fourier2d_pointwise(xp, _lift(xp, field, dtype, device),
                                    half_width_u, half_width_v)
 
     if magnitude is None:
@@ -2766,7 +2815,7 @@ def nvf_conv_matrices_integrated(xp, eps_comp, x, y, normal_x, normal_y, half_wi
 
 def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=None,
                            normal_field_source=None, lattice=None, raster_normal_method=None,
-                           nvf_projector=None):
+                           nvf_projector=None, normal_field_plan=None):
     """Per-layer NVF convolution matrices for a raster ``structure``.
 
     Args:
@@ -2788,6 +2837,11 @@ def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=N
             A separate axis from ``raster_normal_method`` rather than a fifth value of it: this
             chooses what is done with the field, so it composes with all four constructions
             instead of doubling the list.
+        normal_field_plan: the choices ``normal_field`` was built from, per layer
+            (:func:`normal_field_for_raster`'s ``plans``). A replay whose ``lattice`` carries a
+            derivative rebuilds the field from them in the live cell and passes on that
+            derivative, the recorded value unchanged (:mod:`~wavebit.rcwa._engine.normal_plans`).
+            Without them such a derivative is refused; a constant cell never reads them.
 
     The normal field is taken on the raster as given, lifted only to the floor its transform
     needs (:func:`_normal_field_floor`). Lifting it further used to be offered and is not: the
@@ -2808,6 +2862,7 @@ def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=N
                 f'the frozen geometry no longer fits this structure: it holds a {name} for '
                 f'{len(record)} layers and this one has {structure.shape[0]}. Call '
                 f'freeze_geometry() again, or drop geometry= to rebuild by comparison.')
+    _check_record_lengths(structure.shape[0], normal_field_plan=normal_field_plan)
 
     out = [[], [], [], [], []]
 
@@ -2821,7 +2876,8 @@ def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=N
         else:
             _check_normal_field_still_fits(eps_matrix, normal_field_source, i, lattice,
                                            raster_normal_method)
-            field = normal_field[i]
+            field = _replayed_normal_field(normal_field[i], normal_field_plan, i, lattice,
+                                           tuple(eps_matrix.shape), want_magnitude)
         normal_x, normal_y, magnitude = _unpack_normal_field(field, want_magnitude, i)
 
         for slot, mat in zip(out, nvf_conv_matrices(
@@ -2830,6 +2886,27 @@ def to_conv_mat_raster_nvf(structure, half_width_u, half_width_v, normal_field=N
             slot.append(mat)
 
     return ConvMatrices(*(xp.stack(slot) for slot in out))
+
+
+def _check_record_lengths(n_layers, **records):
+    """Refuse a frozen per-layer record that holds a different number of layers."""
+    for name, record in records.items():
+        if record is not None and len(record) != n_layers:
+            raise StaleGeometryError(
+                f'the frozen geometry no longer fits this structure: it holds a '
+                f"{name.replace('_', ' ')} for {len(record)} layers and this one has {n_layers}. "
+                f'Call freeze_geometry() again, or drop geometry= to rebuild by comparison.')
+
+
+def _replayed_normal_field(entry, plans, index, lattice, shape, want_magnitude):
+    """Layer ``index``'s recorded field, carrying the cell's derivative where one is taken.
+
+    :func:`~wavebit.rcwa._engine.normal_plans.replayed` does the work; a cell no derivative
+    reaches gets ``entry`` back as it is.
+    """
+    from wavebit.rcwa._engine.normal_plans import replayed
+    return replayed(entry, None if plans is None else plans[index], lattice, shape,
+                    want_magnitude)
 
 
 # ============================================ integrated Fourier series (closed form, analytic)
@@ -3133,7 +3210,8 @@ def to_conv_mat_raster_integrated_laurent(structure, half_width_u, half_width_v,
 
 def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, normal_field=None,
                                       normal_field_source=None, compression=None,
-                                      lattice=None, raster_normal_method=None, nvf_projector=None):
+                                      lattice=None, raster_normal_method=None, nvf_projector=None,
+                                      normal_field_plan=None):
     """Per-layer convolution matrices for a raster ``structure`` via closed-form Fourier + NVF.
 
     The pairing that needs both axes named independently. It buys the staircase-free
@@ -3153,6 +3231,8 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
         lattice: the cell basis, as in :func:`to_conv_mat_raster_nvf`.
         raster_normal_method: the construction, as in :func:`to_conv_mat_raster_nvf`.
         projector: how ``P`` is formed from the field, as in :func:`to_conv_mat_raster_nvf`.
+        normal_field_plan: the field's choices, as in :func:`to_conv_mat_raster_nvf`: what
+            carries a ``period`` derivative through a replay.
 
     Both ``normal_field`` and ``compression`` are static geometry; supply both to keep the
     build traceable under JAX (this path is the only one that needs both).
@@ -3168,6 +3248,7 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
     """
     xp = array_namespace(structure)
     want_magnitude = _wants_magnitude(nvf_projector)
+    _check_record_lengths(structure.shape[0], normal_field_plan=normal_field_plan)
 
     out = [[], [], [], [], []]
     eps_grids = _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v)
@@ -3181,7 +3262,8 @@ def to_conv_mat_raster_integrated_nvf(structure, half_width_u, half_width_v, nor
         else:
             _check_normal_field_still_fits(eps_grid, normal_field_source, i, lattice,
                                            raster_normal_method)
-            field = normal_field[i]
+            field = _replayed_normal_field(normal_field[i], normal_field_plan, i, lattice,
+                                           tuple(eps_grid.shape), want_magnitude)
         normal_x, normal_y, magnitude = _unpack_normal_field(field, want_magnitude, i)
 
         with concrete_scope(xp):              # as in `_compressed_layers`

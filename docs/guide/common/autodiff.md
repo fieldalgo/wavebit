@@ -116,6 +116,17 @@ Raster values stay live, but some Fourier paths record which pixels share a phas
 
 When a pattern moves every step under jit, use `('sampled', 'li')` or prepare each concrete pattern outside the transform. A recording path guards the partition under jit only up to 256 distinct phases; beyond that a traced raster is refused with `rcwa.raster_partition_transform`, while eager `jax.grad` and PyTorch check it on its values.
 
+### A raster's normal field under a cell derivative
+
+Under `factorization='nvf'` a raster's normal field depends on the cell's shape, so a derivative with respect to `Stack.period` or `Stack.lattice` includes the field's own change. `rcwa.prepare` records the field and the choices it was built from (which interface pixel is nearest, for example). `prepared.run` uses the recorded field and rebuilds its derivative in the cell being differentiated, so the derivative is the one of the answer the run returns.
+
+| `Numerics(raster_normal_method=...)` | A cell derivative through `prepared.run` |
+| --- | --- |
+| `'distance'` (the default), `'spectral'`, `'smooth'` | supported on PyTorch and under eager `jax.grad` |
+| `'contour'` | refused when the derivative is taken, with `ValidationError` code `rcwa.invalid`; a run that does not differentiate the cell is unaffected |
+
+Until 2026-11-10 the recorded field was held fixed, and a cell derivative through a preparation left the field's share out: as much as 106% of a derivative on an 8 x 8 raster in a skewed cell, and up to 27% of a `period` derivative. A derivative with respect to the raster's values, a thickness or the wavelength never involved the field and is unchanged. `'contour'` cannot rebuild its field in another cell, and is refused rather than held. See [NVF normal methods](../../theory/rcwa/nvf-normal-methods.md#the-cell-derivative-through-a-record) for the measurements.
+
 ### Backend speed
 
 The measurements in [backend choice](../../validation/rcwa/backend-choice.md), including its recommendation of jitted JAX for fits on shapes, were taken through the earlier solver interface (`freeze_geometry()` and `solve(geometry=...)`, retired with `wavebit.compat` on 2026-10-15; a historical checkout runs them). They are not measurements of this lifecycle or its Cartesian Li runtime guard or host callback policy. Backend speed through `prepared.run` is measured below.
