@@ -504,6 +504,41 @@ _SIGNATURE_PATHS={'units':'units.length','domain':'scene.domain','boundaries':'s
                   'sources':'sources','outputs':'outputs','initial':'initial'}
 
 
+def _check_pml_tuning(problem,numerics,plan):
+    """Refuse a pulse wavelength that moves a PML tuned from the sources' band centre.
+
+    A ``PML`` without ``wavelength=`` sets its complex-frequency shift from the band centre
+    the sources share (``src/wavebit/fdtd/_prepare/checks.py::face_wavelength``), so that
+    wavelength is part of the prepared plan. A changed concrete centre would plan another
+    absorber, and a traced one leaves the layer nothing to be tuned to. Both are refused here
+    by the source that moved; ``PML(wavelength=...)`` makes the pulse wavelength live. Called
+    only where the generic refusals stood, so every more specific one (a period-counted
+    ``Duration``, a static field) keeps its own code and path.
+    """
+    from ._numerics import PML
+    from ._legacy_sources import concrete_or_none
+    absorber=numerics.absorber
+    tuned=dict(plan.pml_wavelengths)
+    if not isinstance(absorber,PML) or absorber.wavelength is not None or not tuned:
+        return
+    tuned=next(iter(tuned.values()))
+    for s in problem.sources:
+        pulse=getattr(s,'pulse',None)
+        if pulse is None:
+            continue
+        value=concrete_or_none(pulse.wavelength)
+        if value is not None and abs(value-tuned)<=1e-12*tuned:
+            continue
+        live='a traced value' if value is None else repr(value)
+        raise IncompatibleProblemError(
+            f'the PML takes its tuning wavelength from the sources\' pulse, prepared at '
+            f'{tuned!r}, and sources.{s.name}.pulse.wavelength is now {live}: the absorber '
+            f'is part of the prepared plan. Give the absorber a fixed wavelength, '
+            f'Numerics(absorber=fdtd.PML(..., wavelength={tuned!r})), to vary the pulse '
+            f'wavelength under one preparation, or prepare this problem again',
+            code='prepared.pml_wavelength',path='sources.'+s.name+'.pulse.wavelength')
+
+
 def _reraise_public(exc):
     """Raise ``exc`` again, spelled for a public caller; its type is kept."""
     translated=public_error(exc)
@@ -582,10 +617,18 @@ class Prepared:
         scene,metadata=lower_problem(problem,self.numerics,plan=self._plan)
         schedule=_checkpoint(self.numerics,self.execution)
         _cuda_scope(problem,self.numerics,self.execution,scene=scene)
-        plan,_=_planned(scene,reuse=self._plan,schedule=schedule,
-                        compact_poles=_compact_poles(problem,self.execution))
+        try:
+            plan,_=_planned(scene,reuse=self._plan,schedule=schedule,
+                            compact_poles=_compact_poles(problem,self.execution))
+        except (TypeError,ValueError,NotImplementedError) as exc:
+            # A traced pulse wavelength reaches the PML's own refusal here; name it instead.
+            if not isinstance(exc,ValidationError):
+                _check_pml_tuning(problem,self.numerics,self._plan)
+            raise
         if plan.skeleton!=self._plan.skeleton:
             path='numerics.duration' if (plan.steps,plan.dt)!=(self._plan.steps,self._plan.dt) else 'problem'
+            if path=='problem':
+                _check_pml_tuning(problem,self.numerics,self._plan)
             raise IncompatibleProblemError('resolved numerical dependencies changed; prepare this problem again',code='prepared.dependencies',path=path)
         return scene,metadata
 
