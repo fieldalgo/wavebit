@@ -89,8 +89,21 @@ def test_conical_and_2d_full_result_matches_legacy(case):
     _assert_all_fields(legacy, legacy.p_inc, got['p_inc'])
 
 
+#: The tolerance ``tests/api/test_answers_declaration.py`` gives the same seam.
+_ACROSS_THE_COLUMN_CHANGE = 1e-12
+
+
 def test_amplitude_rung_is_consistent_with_efficiency_rung():
-    """Climbing the ladder must not perturb the numbers the rung below returns."""
+    """Climbing the ladder must not perturb the numbers the rung below returns.
+
+    ``'efficiency'`` solves for one incidence column and ``'amplitude'`` and ``'field'`` for
+    three, of the same matrix. Whether one right-hand side and three land on the same last bit
+    in the column they share belongs to the BLAS (gemv against gemm, how a threaded kernel
+    splits the reduction), not to this code: on Windows/OpenBLAS with two threads they differ by
+    up to 4.7e-16, and single-threaded they agree exactly.
+    ``test_the_rungs_agree_on_what_they_share`` draws the same line, so the comparison across
+    that change takes its tolerance and the one between the two three-column rungs stays exact.
+    """
     kw = dict(top=2.25, bot=1.0, theta=0.2, phi=0.3, psi=0.7, truncation_order=[2, 2],
               period=[1.0, 1.0], wavelength=0.9, thickness=[0.2],
               structure=np.random.default_rng(2).uniform(1, 4, (1, 5, 5)) ** 2)
@@ -101,7 +114,11 @@ def test_amplitude_rung_is_consistent_with_efficiency_rung():
     core_kw = dict(phi=solver.phi, incidence_side=solver._kernel_incidence_side,
                    eps_top=kw['bot'], eps_bot=kw['top'])
     R, T, _ = solve_2d(*args, **core_kw)
-    for rung in ('amplitude', 'field'):
-        up = solve_2d(*args, answers=rung, **core_kw)
-        assert np.array_equal(np.array(R), np.array(up['incident']['R'])), rung
-        assert np.array_equal(np.array(T), np.array(up['incident']['T'])), rung
+    up = {rung: solve_2d(*args, answers=rung, **core_kw) for rung in ('amplitude', 'field')}
+    for rung, out in up.items():
+        for name, low in (('R', R), ('T', T)):
+            worst = float(np.abs(np.array(out['incident'][name]) - np.array(low)).max())
+            assert worst <= _ACROSS_THE_COLUMN_CHANGE, (rung, name, f'{worst:.3e}')
+    for name in ('R', 'T'):
+        assert np.array_equal(np.array(up['amplitude']['incident'][name]),
+                              np.array(up['field']['incident'][name])), name
