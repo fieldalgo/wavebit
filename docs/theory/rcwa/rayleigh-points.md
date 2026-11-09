@@ -1056,7 +1056,7 @@ cases. This covers those measured cases, not every possible opposite-label pair.
   anisotropic layers at an EP, and source-field gradients at the point. The existing
   modal-operator restrictions remain.
 
-## 10. A layer of a half-space's medium at that medium's graze
+## 10. A layer of a half-space's medium at that medium's graze, and a uniform layer `eig` cannot diagonalise
 
 Recorded 2026-11-09, NumPy / OpenBLAS, float64.
 
@@ -1085,3 +1085,14 @@ medium exactly at the graze. It used to refuse with `rcwa.invalid` and advice to
 Fourier order, which cannot help; it now refuses with `rcwa.singular` and names the light-line
 order. One step off the point solves.
 
+**The non-converging `eig`.** A uniform isotropic layer's `Omega2` is
+`diag(kx**2 + ky**2 - eps*mu)` twice over in exact arithmetic; computed, its off-diagonal
+blocks keep a few ULPs of `kx*ky - ky*kx`. On a matrix of exactly repeated eigenvalues with that
+noise LAPACK's `geev` can fail to converge: measured on an empty interface (cover `eps = 1.5`,
+substrate `eps = 2`, period `(1.49414428555847, 1.775182937114707)`, `theta =
+0.16079553455782242`, `orders=(3, 3)`), `info = 30` on the 98 x 98 operator, SciPy's driver too,
+while one ULP of `theta` either side converges. Where `eig` fails and the operator is diagonal
+to round-off (`max|off-diagonal| <= 4 n eps max|A|`), the layer takes `(diag(A), I)`: the exact
+eigensystem of `A` without those entries, which is the nearby-problem criterion of §1. The
+answer is the bare interface's Fresnel value to 1e-11 and is continuous in `theta`. A converged
+`eig` is never replaced, and a matrix coupled beyond round-off still raises.
