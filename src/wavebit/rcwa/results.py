@@ -176,6 +176,12 @@ class Result:
     def boundary_fields(self, *, side, x, y, part='total'):
         """Collocated boundary phasors from this result's requested field state."""
         records = self._fields()
+        for name, value, allowed in (('side', side, ('top', 'bottom')),
+                                     ('part', part, ('incoming', 'outgoing', 'total'))):
+            if not isinstance(value, str) or value not in allowed:
+                raise ValidationError(
+                    f'{name} is one of {", ".join(map(repr, allowed))}; got {value!r}.',
+                    code=f'field.{name}', path=name)
         for name, value in (('x', x), ('y', y)):
             _coordinates(name, value)
         values = []

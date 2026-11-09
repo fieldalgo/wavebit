@@ -110,6 +110,8 @@ z derivative at such a height is kept. A height really outside the stack is refu
   `field.coordinates`, whatever `z` is. Its `z = 0` is the interface between the two
   half-spaces, and `boundary_fields(side='top', ...)` and `boundary_fields(side='bottom', ...)`
   give the two half-spaces' fields there. A declared layer of zero thickness is still sampled.
+- `boundary_fields` takes `side='top'` or `'bottom'` and `part='incoming'`, `'outgoing'` or
+  `'total'`; any other value is refused with `field.side` or `field.part`, at that path.
 
 ## Components and shape
 
