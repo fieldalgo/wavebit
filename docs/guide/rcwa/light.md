@@ -135,6 +135,11 @@ k_par / k0 = s * N * sin(theta) * (cos(phi), sin(phi))
   [negative-index media](../../theory/rcwa/negative-index-media.md) §7). Absorbing real-angle incidence
   requires `abs(theta) < pi/2`.
 
+A real `theta` of any medium lies in `[-pi/2, pi/2]`. `check` and `run` refuse one past either
+end (beyond `float32(pi/2)`, so a single-precision grazing angle passes) with
+`source.direction`; to light the structure from the other side of the normal, use `-theta`, or
+`phi + pi`. A complex `theta` is not bounded this way.
+
 ```python
 import numpy as np
 from wavebit import Material, Units, rcwa
