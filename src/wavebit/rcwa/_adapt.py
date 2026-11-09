@@ -618,6 +618,7 @@ def validate_values(problem):
                                       code='layer.thickness', path=f'stack.layers[{i}].thickness')
         for name in ('epsilon', 'mu'):
             _refuse_raster_shape(getattr(layer, name), name, f'stack.layers[{i}].{name}')
+        _refuse_raster_pair(layer, f'stack.layers[{i}]')
     for i, source in enumerate(problem.excitation.sources):
         if hasattr(source, 'polarization') and not isinstance(source.polarization, str) and not opaque(source.polarization):
             pair = host(source.polarization, 'excitation.sources.polarization')
@@ -686,6 +687,27 @@ def _refuse_raster_shape(value, name, path):
                           'pixel with Ny, Nx >= 1 (one row for a 1D grating), or (Ny, Nx, 3, 3) for a '
                           'tensor per pixel.', code='layer.raster_shape', path=path,
                           expected='(Ny, Nx) or (Ny, Nx, 3, 3)', actual=shape)
+
+
+def _refuse_raster_pair(layer, path):
+    """Refuse a ``mu`` raster sampled on another pixel grid than ``epsilon``.
+
+    The two are fields on one raster, so their ``(Ny, Nx)`` agree; either may hold a tensor
+    per pixel. The engine refused a mismatch as ``rcwa.invalid`` at ``problem``, quoting its
+    own stacked shapes (a leading layer axis) and calling the permittivity "structure".
+    """
+    if layer.epsilon is None or layer.mu is None:
+        return
+    pixels = _raster_shape(layer.epsilon, f'{path}.epsilon')[:2]
+    shape = _raster_shape(layer.mu, f'{path}.mu')
+    if shape[:2] == pixels:
+        return
+    raise ValidationError(f'Layer(mu=...) has shape {shape} and Layer(epsilon=...) is sampled on '
+                          f'{pixels[0]} x {pixels[1]} pixels: the permittivity and the permeability '
+                          'are two fields on one raster, so their (Ny, Nx) agree (either may hold a '
+                          '3x3 tensor per pixel). Resample whichever is coarser, or write the uniform '
+                          'one as a full grid.', code='layer.raster_shape', path=f'{path}.mu',
+                          expected=f'{pixels} or {pixels + (3, 3)}', actual=shape)
 
 
 def _finite_scalar(value, path):
