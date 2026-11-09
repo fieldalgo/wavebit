@@ -10,6 +10,7 @@ from collections.abc import Mapping
 import numpy as np
 
 from .._common.backend import as_array
+from .._common.conventions import REAL_THETA_LIMIT
 from ..materials import Material, TabulatedMaterial
 from ..errors import ValidationError, UnsupportedFeatureError, IncompatibleProblemError
 from .problem import Rectangle, Circle, Ellipse, Polygon
@@ -552,6 +553,22 @@ def validate_values(problem):
                                       '(real, or complex for formal evanescent incidence), not a sequence or '
                                       'array. Run one problem per direction to sweep angles.',
                                       code='source.direction', path=f'excitation.sources[{i}].{name}')
+        theta = getattr(source, 'theta', None)
+        if theta is not None and not opaque(theta):
+            a = host(theta, 'excitation.sources.theta')
+            # A real theta is measured from the inward normal of the lit face, so it lies in
+            # [-pi/2, pi/2]; the engine's grazing clamp starts at float32(pi/2), which a
+            # single-precision pi/2 rounds up to. Beyond that, a negative angle was folded by
+            # sin (theta = -2 lit as -(pi - 2)) and a positive one held at grazing.
+            if np.imag(a) == 0 and abs(float(np.real(a))) > REAL_THETA_LIMIT:
+                raise ValidationError(
+                    f'{type(source).__name__}(theta={float(np.real(a))!r}): a real theta is the '
+                    'angle of the incident light from the inward normal of the lit face, in '
+                    'radians, so it lies in [-pi/2, pi/2]; outside that range the light would '
+                    'travel away from the structure. To turn the plane of incidence, change '
+                    'phi (theta=-t at phi is the wavevector of theta=t at phi+pi); for formal '
+                    'evanescent incidence use a complex theta, pi/2 + 1j*alpha.',
+                    code='source.direction', path=f'excitation.sources[{i}].theta')
         if isinstance(source, GaussianBeam) and not _positive_real(source.angular_spectrum_extent):
             # The engine refuses the same values under its own keyword name; the public
             # declaration is named here, at check, before the engine ever sees them.

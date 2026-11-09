@@ -342,6 +342,16 @@ the table). The absorbing real-angle definition requires `abs(theta) < pi/2`; it
 diverges at grazing. A lit medium that carries no wave at all (`b = 0`, `a <= 0`) has no real
 angle, and one is refused.
 
+**Range.** A real `theta` is measured from the inward normal, so it lies in `[-pi/2, pi/2]`:
+past a right angle the light would travel away from the structure. The check refuses a real
+`theta` with `abs(theta) > float32(pi/2)` (the bound admits a single-precision grazing angle)
+with `source.direction`; `theta = -t` at `phi` is the wavevector of `theta = t` at `phi + pi`.
+At `abs(Re(theta)) >= float32(pi/2)` the engine holds `sin(theta)` at grazing on both sides of
+the normal, which is also what a traced angle the check cannot read gets. Until 2026-11-09 a
+negative angle past `-pi/2` was folded by `sin` instead (`theta = -2` lit as `-(pi - 2)`),
+while a positive one was held at grazing. The bound is `REAL_THETA_LIMIT` in
+`src/wavebit/_common/conventions.py`.
+
 **Negative-index lit side.** A half-space with `Re(eps) < 0`, `Re(mu) < 0` and
 `Re(eps*mu) > 0` is solved lit or not: its root is the mirror of Maystre's cut (the decaying
 one, `Re(kz) < 0` on a lossless propagating order) and its index Veselago's negative one

@@ -448,7 +448,7 @@ For a lossy incident medium, wavevectors are chosen to **preserve the phase-prop
 </div>
 ```
 
-For both lossless and absorbing media, **reflection and transmission efficiencies require `theta` strictly between −90° and 90°**. In radians, `abs(theta) < π/2`. Zero degrees means normal phase propagation; approaching either endpoint makes propagation increasingly parallel to the surface.
+For both lossless and absorbing media, **reflection and transmission efficiencies require `theta` strictly between −90° and 90°**. In radians, `abs(theta) < π/2`. Zero degrees means normal phase propagation; approaching either endpoint makes propagation increasingly parallel to the surface. A real `theta` beyond ±90° would point away from the structure, so `check` and `run` refuse it with the code `source.direction`.
 
 The reason for excluding exactly ±90° differs between the two cases.
 

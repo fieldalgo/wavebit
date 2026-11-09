@@ -72,6 +72,14 @@ _FLAT = 1e-12
 _PI = 3.141592653589793
 _HALF_PI = 1.5707963267948966
 
+#: The largest real incidence angle, ``float32(pi/2)``, and the clamp below it. A real ``theta``
+#: is measured from the inward normal of the lit face, so it lies in ``[-pi/2, pi/2]``; the bound
+#: is ``pi/2`` rounded up to single precision so that a ``float32`` grazing angle is admitted. At
+#: ``|Re(theta)| >= REAL_THETA_LIMIT`` the engine evaluates ``sin`` at ``+-GRAZING_THETA``, on
+#: both sides of the normal; the public check refuses a real angle beyond the bound.
+REAL_THETA_LIMIT = float(np.float32(_HALF_PI))
+GRAZING_THETA = float(np.nextafter(np.float32(_HALF_PI), np.float32(0)))
+
 
 def incident_phase_index(xp, epsilon_mu, theta):
     """Return ``|Re(k)| / k0`` for a real incidence angle and real transverse k.
