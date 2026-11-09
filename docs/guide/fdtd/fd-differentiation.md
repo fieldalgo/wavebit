@@ -289,6 +289,15 @@ substrate's. Two caveats:
   classification switches (a cylinder's nearest face changes from its wall to its cap, a
   cap sits exactly on a grid plane), and the value jumps by about `1e-5` of `T`. The
   gradient is right on either side; a finite difference that straddles the jump is not.
+  Just outside a cylinder's cap rim the gradient is also steep without being wrong. The
+  rim's moment is the tangent plane's, whose normal turns through 90 degrees within the
+  distance `delta` to the rim, so the slope grows as `1/delta`: measured as
+  `0.33 / delta` for one rim voxel (`dx = 0.25`), 3e4 at `delta = 1e-5` and above 1e15
+  within a few ulp. JAX and Torch match a central difference with step `delta / 100`.
+  A tie-break or a few-ulp blend cannot remove it, because both leave the values outside
+  their band, and those values fix the slope there. Only an exact rim moment would.
+  `tests/fdtd/test_fd_shapes.py::test_the_cap_rims_steep_gradient_is_the_planes_own_derivative`
+  pins the slope, the finite values at the tie, and the tie going to the cap normal.
 * **A derivative is not a convergence statement.** The cell above uses thin PMLs and a
   short run to be quick, and there the lossless cell's `T + R` misses 1 by about `5e-4`.
   With 24-cell PMLs, a `.05` band and 6000 steps it is 1 to `1.1e-6`, and the
