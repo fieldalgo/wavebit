@@ -790,3 +790,31 @@ def test_check_passes_what_only_touches_its_images():
     for problem, numerics in legal:
         assert rcwa.check(problem, numerics=numerics).ok
         rcwa.prepare(problem, numerics=numerics)
+
+
+def test_resolved_normal_grid_is_none_where_shape_nvf_does_not_read_it():
+    """``resolved`` reported ``shape_nvf_grid_size=1024`` on a raster under NVF, where the raster
+    builds its normal field at its own resolution and the same check refuses an explicit grid."""
+    raster = np.full((8, 8), 4.)
+    raster[2:6, 2:6] = 12.25
+    def problem(layer):
+        return rcwa.Problem(units=Units(length='um'),
+            stack=rcwa.Stack(period=(.3, .3), layers=(layer,)),
+            excitation=rcwa.Excitation(wavelength=.9, sources=(rcwa.PlaneWave(),)))
+    rasters = (rcwa.Layer(thickness=.2, epsilon=raster),
+               rcwa.Layer(thickness=.2, epsilon=np.einsum('ij,kl->ijkl', raster, np.diag([1., 1.1, 1.2]))))
+    for layer in rasters:
+        report = rcwa.check(problem(layer), numerics=rcwa.Numerics(orders=(2, 2), factorization='nvf'))
+        assert report.ok and report.resolved['factorization'] == 'nvf'
+        assert report.resolved['shape_nvf_grid_size'] is None
+        refused = rcwa.check(problem(layer), numerics=rcwa.Numerics(
+            orders=(2, 2), factorization='nvf', shape_nvf_grid_size=64))
+        assert 'rcwa.unsupported' in {issue.code for issue in refused.issues}
+    circle = rcwa.Layer(thickness=.2, regions=(rcwa.Region(
+        geometry=rcwa.Circle(radius=.1), material=Material(epsilon=12.25)),))
+    assert rcwa.check(problem(circle), numerics=rcwa.Numerics(
+        orders=(2, 2))).resolved['shape_nvf_grid_size'] == 1024
+    assert rcwa.check(problem(circle), numerics=rcwa.Numerics(
+        orders=(2, 2), shape_nvf_grid_size=64)).resolved['shape_nvf_grid_size'] == 64
+    assert rcwa.check(problem(circle), numerics=rcwa.Numerics(
+        orders=(2, 2), factorization='laurent')).resolved['shape_nvf_grid_size'] is None
