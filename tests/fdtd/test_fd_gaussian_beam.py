@@ -343,7 +343,7 @@ G7_POINT = {'amplitude': 1.3, 'phase': .4, 'delay': 2e-15, 'scatterer': 2.0}
 G7_STEPS = {'amplitude': 1e-3, 'phase': 1e-3, 'delay': 1e-17, 'scatterer': 3e-4}
 
 
-def _g7_outputs(point, backend):
+def _g7_outputs(point, backend, checkpoint_steps=None):
     """G7 as amended before computing (the record): a truncated run in a 9 um x 3 um domain,
     so that reverse mode, which keeps every step, fits in memory. The derivatives and the
     central differences are of this same function."""
@@ -365,6 +365,7 @@ def _g7_outputs(point, backend):
             fdtd.FieldMonitor('probe', wavelengths=(1.,), plane=fdtd.Plane(z=1., x=(-.05, .05)),
                               components=('Ey',)))))
     numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=dx), duration=fdtd.Duration(steps=1000),
+                             checkpoint_steps=checkpoint_steps,
                              absorber=fdtd.PML(cells=12, wavelength=1.))
     result = fdtd.run(problem, numerics=numerics, backend=backend)
     probe = result['probe']
@@ -407,6 +408,32 @@ def test_g7_derivatives_match_central_differences():
         print(f'G7 {name}: jax {by_jax:.10e}, torch {by_torch:.10e}, central {reference:.10e}')
         for got in (by_jax, by_torch):
             assert abs(got - reference) <= 1e-6 * abs(reference), (name, got, reference)
+
+
+@pytest.mark.slow
+def test_g7_derivatives_are_unchanged_by_checkpoint_segments():
+    """Reverse mode with ``Numerics(checkpoint_steps=7)`` -- three nested levels of 343, 49 and
+    7 steps over this run -- gives each G7 derivative of the ordinary scan to 1e-12 relative,
+    on JAX and on Torch CPU (the acceptance of ``docs/validation/fdtd/checkpointing.md``).
+    The source's amplitude, phase and delay reach the step through the waveform table, which
+    a Torch segment must take as an input to return their gradients (fd-gaussian-beam.md)."""
+    _quiet()
+    import jax
+    import torch
+    jax.config.update('jax_enable_x64', True)
+    for name, which in G7_CASES:
+        by = {}
+        for steps in (None, 7):
+            def f(x, backend, name=name, which=which, steps=steps):
+                point = dict(G7_POINT)
+                point[name] = x
+                return _g7_outputs(point, backend, checkpoint_steps=steps)[which]
+            x = torch.tensor(G7_POINT[name], dtype=torch.float64, requires_grad=True)
+            f(x, 'torch').backward()
+            by[steps] = (float(jax.grad(lambda x: f(x, 'jax'))(G7_POINT[name])), float(x.grad))
+        for plain, segmented in zip(by[None], by[7]):
+            assert plain != 0.0, name
+            assert abs(segmented - plain) <= 1e-12 * abs(plain), (name, segmented, plain)
 
 
 # ---------------------------------------------------------------------------------------------

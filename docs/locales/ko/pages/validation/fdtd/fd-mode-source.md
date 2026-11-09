@@ -73,7 +73,7 @@ z = -2 µm의 `ModeSource('src')`, 방향 `+z`, 모드 0(TE0), 진폭 1(미터�
 S7 수정(어떤 미분도 계산하기 전): 등록한 대로(설정 S, 약 1만 2천 스텝)라면 역방향 미분이 모든
 스텝을 저장해 여기 JAX에서 스텝당 약 8 MB가 필요합니다. 전체 실행 시도 두 번은 끝나지 않고 멈췄고,
 같은 설정의 15주기 시험 실행은 13 GB가 필요해 메모리 부족으로 종료되었습니다. 미분은 하나도 계산되지
-않았습니다. `Numerics(checkpoint_steps=)`는 Torch CUDA에서만 허용됩니다. 그래서
+않았습니다. `Numerics(checkpoint_steps=)`는 그때 Torch CUDA에서만 허용되었습니다. 그래서
 모드 솔버 기록의 MM4b처럼, 미분과 중앙 차분을 같은 잘린 실행에 대해 구합니다: 같은 슬래브를 담은
 5 µm × 4 µm 물리 영역(x, z `Open`, 12칸 `PML`), z = -1 µm의 광원, 1.55 µm를 읽는 z = +0.5 µm의
 `p2`, `cutoff = 1e-3`·`frequency_sigma_hz = 2e13`인 설정 S의 펄스, `Duration(steps=1200)`, 그리고
@@ -119,15 +119,21 @@ S5의 모드 정합 기준값은 쓰기 전에 자기 이산화에 대해 수렴
 H 행의 반 칸 군지연은 중심 밖 누설만 바꾸는데, S2는 그것을 제한하지 않고 보고하며 정확한 예측도
 그것을 따라갑니다.
 
-### 알려진 한계: JAX 역방향 미분의 메모리
+### JAX 역방향 미분의 메모리
 
 2026-11-06에 결과를 본 뒤 기록하며, 위의 어떤 판정도 바꾸지 않습니다. CPU의 JAX 백엔드에서 실행을
 역방향으로 미분하면 모든 스텝을 저장하므로 메모리가 스텝 수에 따라 늘어납니다. 등록한 S7 실행은
-메모리에 들어가지 않았고, 15주기 시험 실행은 13 GB가 필요했습니다(위 S7 수정). 블록을 다시 계산하는
-`Numerics(checkpoint_steps=)`는 Torch CUDA에서만 허용됩니다. 이것은 `ModeSource`가 아니라 시간 진행
-엔진의 알려진 한계이며, 여기서는 별도 작업으로 남겨 둡니다.
-[`ModeSource`](../../guide/fdtd/waveguide-modes.md)와 [`GaussianBeam`](../../guide/fdtd/gaussian-beam.md)
-안내서는 미분을 설명하는 곳에 이를 적어 둡니다.
+메모리에 들어가지 않았고, 15주기 시험 실행은 13 GB가 필요했습니다(위 S7 수정). 구간을 다시 계산하는
+`Numerics(checkpoint_steps=)`는 그때 Torch CUDA에서만 허용되었습니다. 이것은 `ModeSource`가 아니라
+시간 진행 엔진의 한계였고, 여기서는 별도 작업으로 남겨 두었습니다.
+
+2026-11-09 추가: 그 작업이 반영되었습니다. 이제 `checkpoint_steps`는 JAX와 Torch, CPU와 CUDA 모두에서
+허용되며, 메모리가 스텝 수의 로그에 따라 늘어나는 중첩 일정을 씁니다([체크포인트 기록](checkpointing.md)).
+이를 거쳐 잘린 실행의 S7 미분 네 가지는 `checkpoint_steps = 7`(343, 49, 7 스텝의 중첩 구간)에서 JAX와
+Torch CPU 모두 일반 실행의 값과 상대 1e-12까지 같습니다
+(`test_s7_derivatives_are_unchanged_by_checkpoint_segments`). 등록한 전체 길이 S7 실행은 다시 하지
+않았고, S7 수정과 판정은 그대로입니다. [`ModeSource`](../../guide/fdtd/waveguide-modes.md)와
+[`GaussianBeam`](../../guide/fdtd/gaussian-beam.md) 안내서는 미분을 설명하는 곳에서 이 설정을 안내합니다.
 
 ## Meep·FDTDX와의 비교
 

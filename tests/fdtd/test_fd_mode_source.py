@@ -327,7 +327,7 @@ S7_POINT = {'amplitude': 1.3, 'phase': .4, 'delay': 2e-15, 'scatterer': 3.0}
 S7_STEPS = {'amplitude': 1e-3, 'phase': 1e-3, 'delay': 1e-17, 'scatterer': 3e-4}
 
 
-def _s7_outputs(point, backend):
+def _s7_outputs(point, backend, checkpoint_steps=None):
     """S7 as amended before computing (the record): a truncated run in a 5 um x 4 um domain,
     so that reverse mode, which keeps every step, fits in memory. The derivatives and the
     central differences are of this same function."""
@@ -348,6 +348,7 @@ def _s7_outputs(point, backend):
         outputs=fdtd.Outputs(monitors=(fdtd.ModeMonitor('p2', plane=fdtd.Plane(z=.5), wavelengths=(1.55,),
                                                         source='src'),)))
     numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=dx), duration=fdtd.Duration(steps=1200),
+                             checkpoint_steps=checkpoint_steps,
                              absorber=fdtd.PML(cells=12, wavelength=1.55))
     p2 = fdtd.run(problem, numerics=numerics, backend=backend)['p2']
     return p2.forward_energy[0, 0], p2.forward[0, 0].real
@@ -390,6 +391,32 @@ def test_s7_derivatives_match_central_differences():
         for got in (by_jax, by_torch):
             assert abs(got - reference) <= 1e-6 * abs(reference), (name, got, reference)
     assert names == ['amplitude', 'phase', 'delay', 'scatterer']
+
+
+@pytest.mark.slow
+def test_s7_derivatives_are_unchanged_by_checkpoint_segments():
+    """Reverse mode with ``Numerics(checkpoint_steps=7)`` -- three nested levels of 343, 49 and
+    7 steps over this run -- gives each S7 derivative of the ordinary scan to 1e-12 relative,
+    on JAX and on Torch CPU (the acceptance of ``docs/validation/fdtd/checkpointing.md``).
+    The source's amplitude, phase and delay reach the step through the waveform table, which
+    a Torch segment must take as an input to return their gradients (fd-mode-source.md)."""
+    _quiet()
+    import jax
+    import torch
+    jax.config.update('jax_enable_x64', True)
+    for name, which in S7_CASES:
+        by = {}
+        for steps in (None, 7):
+            def f(x, backend, name=name, which=which, steps=steps):
+                point = dict(S7_POINT)
+                point[name] = x
+                return _s7_outputs(point, backend, checkpoint_steps=steps)[which]
+            x = torch.tensor(S7_POINT[name], dtype=torch.float64, requires_grad=True)
+            f(x, 'torch').backward()
+            by[steps] = (float(jax.grad(lambda x: f(x, 'jax'))(S7_POINT[name])), float(x.grad))
+        for plain, segmented in zip(by[None], by[7]):
+            assert plain != 0.0, name
+            assert abs(segmented - plain) <= 1e-12 * abs(plain), (name, segmented, plain)
 
 
 # ---------------------------------------------------------------------------------------------

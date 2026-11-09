@@ -56,9 +56,11 @@ beam = fdtd.GaussianBeam('b', plane=fdtd.Plane(z=-4.), direction='+z', waist=1.5
 
 JAX와 Torch 백엔드에서 빔의 `amplitude`, `phase`, `delay_seconds`나 다른 곳의 추적된 구조에
 대한 실행의 미분은 실행 전체의 역방향 미분으로 구합니다
-({ref}`실행 미분하기 <fdtd-model-differentiating>` 참고). 여기에는 알려진 한계가 있습니다.
-역방향 미분은 모든 시간 스텝을 저장하므로 메모리가 스텝 수에 따라 늘어납니다. CPU의 JAX
-백엔드에서는 검증 설정만큼 긴 실행(약 1만 2천 스텝)이 메모리에 들어가지 않았습니다. 블록을
-저장하지 않고 다시 계산하는 `Numerics(checkpoint_steps=)`는 Torch CUDA에서만 허용됩니다. 이
-한계가 해결되기 전까지는 JAX에서 미분할 실행의 스텝 수를 메모리를 생각해 정하세요. 측정한
-내용은 [검증 기록](../../validation/fdtd/fd-mode-source.md)에 있습니다.
+({ref}`실행 미분하기 <fdtd-model-differentiating>` 참고). 기본 설정에서 역방향 미분은 모든 시간
+스텝을 저장하므로 메모리가 스텝 수에 따라 늘어납니다. CPU의 JAX 백엔드에서는 검증 설정만큼 긴
+실행(약 1만 2천 스텝)이 메모리에 들어가지 않았습니다. 긴 실행에는 `Numerics(checkpoint_steps=K)`를
+설정하세요. `K` 스텝 구간을 저장하지 않고 다시 계산하며, JAX와 Torch, CPU와 CUDA 모두에서 쓸 수
+있습니다. `K**L` 스텝 실행은 약 `L * K`개 상태만 저장합니다. 고정 `Duration`이 필요하며
+`DecayStop`과는 함께 쓸 수 없습니다. 구간 일정과 측정한 메모리는
+[체크포인트 기록](../../validation/fdtd/checkpointing.md)에 있고, 이를 거쳐도 이 빔의 미분은
+일반 실행의 값과 1e-12까지 같습니다([검증 기록](../../validation/fdtd/fd-gaussian-beam.md)).

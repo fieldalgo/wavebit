@@ -160,8 +160,13 @@ Recorded after the support decision and kept apart from the verdicts, which stan
 stage-7 work (mode solver, `ModeMonitor`, `ModeSource`, the waveguide door through `PML` and
 `GaussianBeam`) is complete as measured. G2 stays recorded as failed: its test stays a strict
 expected failure and its 2e-3 rad limit is unchanged. Nothing is added to meet it. The
-reverse-mode memory growth on JAX that S7 and G7 met is a known limitation, stated in
-`fd-mode-source.md`, and is separate work.
+reverse-mode memory growth on JAX that S7 and G7 met was a limitation, stated in
+`fd-mode-source.md`, and separate work. Added 2026-11-09: that work has landed
+(`checkpoint_steps` on JAX and Torch CPU, [checkpointing record](checkpointing.md)), and the
+four G7 derivatives of the truncated run with `checkpoint_steps = 7` equal the ordinary
+scan's to 1e-12 relative on JAX and on Torch CPU
+(`test_g7_derivatives_are_unchanged_by_checkpoint_segments`). The registered full-length G7
+run was not repeated; G7's amendment and verdict stand.
 
 Two details of the runs, neither a change to a limit. G3's half-space crosses the x faces,
 so it declares `continuation=('x-', 'x+')`, the slab door of `fd-waveguide-through-pml.md`.
