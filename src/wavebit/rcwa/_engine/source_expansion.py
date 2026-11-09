@@ -62,7 +62,8 @@ def gaussian_waves(solver, source):
     material = scene.top if source.side == 'top' else scene.bot
     moving = [name for name, value in (
         ('direction (theta, phi, kx, ky)', (q, azimuth)), ('wavelength', scene.wavelength),
-        (f'{source.side} half-space epsilon and mu', (material.epsilon, material.mu_value)))
+        (f'{source.side} half-space epsilon and mu', (material.epsilon, material.mu_value)),
+        ('waist', source.waist))
         if _carries_derivative(value)]
     if moving:
         # The quadrature directions, weights and transverse projections are built on the host
@@ -70,7 +71,7 @@ def gaussian_waves(solver, source):
         raise NotImplementedError(
             'GaussianBeam builds its angular spectrum from concrete values; a derivative with '
             f'respect to its {" or ".join(moving)} is not carried. Derivatives with respect to '
-            'its amplitude and polarization and to the layers are. Differentiate by finite '
+            'its amplitude, polarization and focus and to the layers are. Differentiate by finite '
             'differences, or expand the beam into PlaneWave sources.')
     q = _host(q).real
     xp, C = scene.xp, scene.complex_dtype
@@ -107,7 +108,9 @@ def gaussian_waves(solver, source):
     e0 = np.stack([s, p], axis=1)
     axis = central_k/k
     nx, ny = source.sampling
-    extent = source.spectral_extent/source.waist
+    # A 0-d array or tensor waist is read as the number it holds; it sets the quadrature.
+    waist = source.waist if np.isscalar(source.waist) else float(_host(source.waist))
+    extent = source.spectral_extent/waist
     du, dv = 2*extent/nx, 2*extent/ny
     components = []
     for i in range(nx):
@@ -119,7 +122,7 @@ def gaussian_waves(solver, source):
             if direction*kv[2] <= 1e-12*k:
                 continue
             electric = e0 - np.outer(kv, kv @ e0)/(k*k)
-            weight = np.exp(-source.waist**2*(u*u+v*v)/4)*du*dv*source.waist**2/(4*np.pi)
+            weight = np.exp(-waist**2*(u*u+v*v)/4)*du*dv*waist**2/(4*np.pi)
             components.append((kv, electric, weight))
     if not components:
         raise ValueError('GaussianBeam quadrature contains no incoming propagating components.')
@@ -131,10 +134,18 @@ def gaussian_waves(solver, source):
     # Each component is referenced at x=y=0 on its own face. The top face's height stays a
     # backend value: the focus is fixed in global z, so the phase a component gathers from the
     # focus to that face depends on every layer thickness, and so does its derivative.
-    focus = np.asarray(source.focus).real
+    # A focus that carries a derivative stays a backend value; it enters only these phases.
+    live = _carries_derivative(source.focus)
+    if live:
+        focus = [xp.real(as_array(xp, source.focus[i], dtype=C, device=scene._array_device))
+                 for i in range(3)]
+    else:
+        focus = np.asarray(source.focus).real
     if source.side == 'top':
         height = xp.sum(xp.real(as_array(xp, scene.thickness, dtype=C,
                                          device=scene._array_device))) - focus[2]
+    elif live:
+        height = 0.-focus[2]
     else:
         height = xp.real(as_array(xp, 0.-focus[2], dtype=C, device=scene._array_device))
     waves = []
@@ -149,7 +160,10 @@ def gaussian_waves(solver, source):
         if _host(size) == 0:
             continue
         pair = pair/as_array(xp, size, dtype=C, device=scene._array_device)
-        phase = float(kv[0]*-focus[0] + kv[1]*-focus[1]) + float(kv[2])*height
+        if live:
+            phase = (float(-kv[0])*focus[0] + float(-kv[1])*focus[1]) + float(kv[2])*height
+        else:
+            phase = float(kv[0]*-focus[0] + kv[1]*-focus[1]) + float(kv[2])*height
         amplitude = source.amplitude*(weight*size/norm)*xp.exp(1j*phase)
         waves.append(PlaneWave(side=source.side, kx=kv[0], ky=kv[1],
                                polarization=(pair[0], pair[1]), amplitude=amplitude))
@@ -173,7 +187,10 @@ def dipole_layers(solver, group, layers, k0, kxy):
     tol = 1e-12*max(1., edges[-1])
     by_height = {}
     for dipole, weight in group['dipoles']:
-        z = float(np.asarray(dipole.position)[2].real)
+        # The host value of z chooses the host layer; a z that carries a derivative also
+        # stays live in the segment thicknesses below. Choosing the layer is discrete.
+        z = (float(_host(dipole.position[2]).real) if _carries_derivative(dipole.position)
+             else float(np.asarray(dipole.position)[2].real))
         if z <= 0 or z >= edges[-1] or np.any(np.abs(edges-z) <= tol):
             raise ValueError('ElectricDipole must be strictly inside a layer, away from its interfaces.')
         li = int(np.searchsorted(edges, z)-1)
@@ -197,6 +214,18 @@ def dipole_layers(solver, group, layers, k0, kxy):
                 raise ValueError('ElectricDipole currently requires a spatially uniform host layer; '
                                  'other layers may be patterned.')
         by_height.setdefault(z, (li, []))[1].append((dipole, weight))
+    # A plane's position stays live when one of its sources' z carries a derivative. Two
+    # dipoles on one plane would share that single position, so a derivative with respect to
+    # the z of one of them is refused there rather than returned as the plane's.
+    planes = {}
+    for z, (_, entries) in by_height.items():
+        live = [d.position[2] for d, _ in entries if _carries_derivative(d.position[2])]
+        if live and len(entries) > 1:
+            raise NotImplementedError(
+                'Two ElectricDipole sources share the source plane z = '
+                f'{z:g} and a derivative with respect to the z position of one of them is '
+                'requested; one plane has one position. Offset them in z.')
+        planes[z] = live[0] if live else None
     lattice = _host(scene.lattice.columns).real
     area = abs(np.linalg.det(lattice))
     # k0 is per scene length and p is SI: division by length_unit**3
@@ -213,12 +242,22 @@ def dipole_layers(solver, group, layers, k0, kxy):
         top = start + d
         last = start
         for z in heights:
-            new_layers.append((material, z-last))
+            plane = z if planes[z] is None else xp.real(
+                as_array(xp, planes[z], dtype=C, device=scene._array_device))
+            new_layers.append((material, plane-last))
             new_edges.append(z)
             p = xp.zeros((kxy.shape[0], 3), dtype=C, device=scene._array_device)
             for dipole, weight in by_height[z][1]:
-                xy = as_array(xp, dipole.position[:2], dtype=C, device=scene._array_device)
-                moment = as_array(xp, dipole.moment, dtype=C, device=scene._array_device)
+                if _carries_derivative(dipole.position):
+                    xy = xp.stack([as_array(xp, dipole.position[i], dtype=C,
+                                            device=scene._array_device) for i in range(2)])
+                else:
+                    xy = as_array(xp, dipole.position[:2], dtype=C, device=scene._array_device)
+                if _carries_derivative(dipole.moment):
+                    moment = xp.stack([as_array(xp, dipole.moment[i], dtype=C,
+                                                device=scene._array_device) for i in range(3)])
+                else:
+                    moment = as_array(xp, dipole.moment, dtype=C, device=scene._array_device)
                 p = p + weight*scale*xp.exp(-1j*(kxy@xy))[:, None]*moment[None, :]
             normal = material['ezz_i'] @ p[:, 2]
             jumps[len(new_layers)] = xp.concat([
@@ -227,7 +266,7 @@ def dipole_layers(solver, group, layers, k0, kxy):
                 -1j*k0*(p[:, 1]-material['eyz']@normal),
                 1j*k0*(p[:, 0]-material['exz']@normal),
             ])
-            last = z
+            last = plane
         new_layers.append((material, top-last if heights else d))
         new_edges.append(edges[li+1])
         start = top
