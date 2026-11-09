@@ -106,6 +106,10 @@ z derivative at such a height is kept. A height really outside the stack is refu
 - An explicit z at an internal interface selects the upper layer. At the two
   outside interfaces, internal reconstruction returns the finite-layer limit.
 - A dipole's source plane is singular and must be excluded from the sample heights.
+- A stack declared with no layers has no interior to sample: `field` refuses it with
+  `field.coordinates`, whatever `z` is. Its `z = 0` is the interface between the two
+  half-spaces, and `boundary_fields(side='top', ...)` and `boundary_fields(side='bottom', ...)`
+  give the two half-spaces' fields there. A declared layer of zero thickness is still sampled.
 
 ## Components and shape
 

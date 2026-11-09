@@ -146,6 +146,15 @@ class Result:
         the upper layer, matching the engine's explicit-coordinate convention.
         """
         records = self._fields()
+        if any(getattr(state, 'bare_interface', False) for state in records):
+            # The engine solves a bare interface through one zero-thickness layer of the top
+            # medium; sampling it returned that layer's face value at every requested z.
+            raise ValidationError(
+                'This stack has no layers, so field() has nothing to sample: it reconstructs '
+                'inside finite layers only, and here z = 0 is the interface between the two '
+                "half-spaces. Read the two half-spaces' fields at that interface with "
+                "boundary_fields(side='top' or 'bottom', x=..., y=..., part='total'), or add a "
+                'layer to sample inside it.', code='field.coordinates', path='z')
         for name, value in (('x', x), ('y', y), ('z', z)):
             _coordinates(name, value)
         values = []
@@ -202,6 +211,13 @@ def _sum_power(field, xp, sign, area, amplitude):
     return (sign * .5/Z0 * xp.real(field[..., 0] * xp.conj(field[..., 4])
                                   - field[..., 1] * xp.conj(field[..., 3]))
             * area * xp.abs(amplitude)**2)
+
+
+def _bare(state, problem):
+    """``state``, marked when the stack has no layers (see :meth:`Result.field`)."""
+    if not problem.stack.layers:
+        state.bare_interface = True
+    return state
 
 
 def pack(problem, numerics, execution, solves, checks, report):
@@ -281,7 +297,7 @@ def pack(problem, numerics, execution, solves, checks, report):
                                            reference_z=xp.sum(solver.thickness) if port == 'top' else 0.,
                                            area=area))
             if problem.outputs.fields:
-                records.append(state)
+                records.append(_bare(state, problem))
                 amplitudes.append(amplitude)
             if problem.outputs.scattering:
                 scattering.append(solver.scattering)
@@ -339,7 +355,7 @@ def pack(problem, numerics, execution, solves, checks, report):
                                        getattr(result.power, 'outgoing_'+port)*scale))
             absorption.append(result.absorption)
             if problem.outputs.fields:
-                records.append(result._field_state)
+                records.append(_bare(result._field_state, problem))
                 amplitudes.append(1.)
         for port, pairs in boundary.items():
             outputs[port] = BoundaryPower(incoming=_stack([p[0] for p in pairs]),
