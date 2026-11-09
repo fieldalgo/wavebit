@@ -1550,8 +1550,8 @@ def as_array(xp, v, dtype=None, device=None, copy=False):
 # not a universal guarantee for arbitrary repeated or defective eigenvalues.
 #
 # `_eig_grad` below is a PORT of `_eig_bwd` from fmmax (MIT, Copyright (c) 2023 Meta
-# Research, facebookresearch/fmmax, in its `utils.py`; the maintained fork invrs-io/fmmax
-# carries it in `eig.py`). The broadening and every term of `rhs` are theirs; our
+# Research, facebookresearch/fmmax, in its `utils.py`; invrs-io/fmmax, where development
+# later moved and which is now archived like the original, carries it in `eig.py`). The broadening and every term of `rhs` are theirs; our
 # changes generalize it to the array API and PyTorch's conjugate convention, and
 # replace its two epsilon constants with a dtype/dimension-relative guard. See LICENSE.fmmax — the
 # MIT terms require that notice to travel with this code.
