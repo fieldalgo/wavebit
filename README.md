@@ -121,8 +121,10 @@ The prose is split by who is reading, the way NumPy's manual is:
 The same pages build as a site (`pip install -e '.[docs]'`, then
 `sphinx-build -b html docs docs/_build/html`); a hosted copy is coming. Every link in `docs/` is a
 relative link to a real file, and a test checks that every path a page cites exists.
-`python -m wavebit.manifest` prints every option, refusal and constraint as one JSON document for
-programs that need to know without reading the source
+`python -m wavebit.manifest` prints, as one JSON document for programs that need to know without
+reading the source, the public solver entry points and, as internal diagnostic tables, the
+normalized engines' options, refused combinations and constraints. It does not list every
+refusal a solver's `check` can report; `check` decides whether a problem is admitted
 ([capability manifest](docs/reference/common/capability-manifest.md)).
 
 ## Contributing

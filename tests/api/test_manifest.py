@@ -445,6 +445,39 @@ def test_the_published_material_quantity_is_the_one_the_solver_takes():
     assert abs(want - other) > 0.15
 
 
+def test_the_published_scalar_shorthand_is_where_the_public_doors_take_it():
+    """``scalar_shorthand`` once said a bare number means Material(epsilon=x) everywhere; the
+    public RCWA and periodic-FDTD doors refuse one, and only the general FDTD scene coerces it."""
+    from wavebit import Material, Units, fdtd, rcwa
+    from wavebit.fdtd import periodic
+    text = MATERIAL_QUANTITY['scalar_shorthand']
+    assert 'wavebit.rcwa and wavebit.fdtd.periodic refuse' in text and 'material.type' in text
+    units = Units(length='um')
+    layer = rcwa.Layer(thickness=.1, background=Material(4.))
+    excitation = rcwa.Excitation(wavelength=.6, sources=(rcwa.PlaneWave(polarization=(1., 0.)),))
+    def codes(report):
+        return {issue.code for issue in report.issues}
+    for bare in (dict(top=2.25), dict(layers=(rcwa.Layer(thickness=.1, background=4.),))):
+        stack = rcwa.Stack(**{'period': (.5, .5), 'layers': (layer,), **bare})
+        problem = rcwa.Problem(units=units, stack=stack, excitation=excitation)
+        assert 'material.type' in codes(rcwa.check(problem, numerics=rcwa.Numerics()))
+    raster = periodic.Layer(thickness=.3, epsilon=np.array([[1., 1., 12.25, 12.25]]))
+    problem = periodic.Problem(units=units, stack=periodic.Stack(period=(.7,), bottom=2.25, layers=(raster,)),
+        excitation=periodic.Excitation(wavelength=.9, sources=(periodic.PlaneWave(theta=.2),)))
+    numerics = periodic.Numerics(spacing=1/20, duration_seconds=1e-14, orders=(1, 0))
+    assert 'material.type' in codes(periodic.check(problem, numerics=numerics))
+    structure = fdtd.Structure('s', shape=fdtd.Box(center=(0., 0., 0.), size=(.3, .3, .3)), material=2.25)
+    scene = fdtd.Scene(domain=fdtd.Domain(size=(.8, .8, 1.6)), background=2.25,
+                       boundaries=fdtd.Boundaries.periodic(z=fdtd.Open()), structures=(structure,))
+    problem = fdtd.Problem(units=units, scene=scene,
+        sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=.5),
+                 pulse=fdtd.GaussianPulse(wavelength=.8, frequency_sigma_hz=2e13)),),
+        outputs=fdtd.Outputs(final_fields=True))
+    report = fdtd.check(problem, numerics=fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05),
+                                                        duration=fdtd.Duration(steps=6)))
+    assert report.issues == ()
+
+
 def test_the_published_conversions_exist_and_invert_each_other():
     """``conversions`` names the way out of the flip; a name that is not exported is no way out."""
     for name in MATERIAL_QUANTITY['conversions']:

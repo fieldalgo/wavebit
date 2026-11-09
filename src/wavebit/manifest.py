@@ -274,7 +274,12 @@ MATERIAL_QUANTITY = {
     'loss_sign': 'Im(epsilon) > 0',
     'time_convention': 'exp(-i*omega*t)',
     'type': 'wavebit.Material(epsilon, mu=None)',
-    'scalar_shorthand': 'a bare number means Material(epsilon=x)',
+    # Not universal: the public periodic doors refuse an untyped number, because it would not
+    # say whether it is a permittivity or an index; the general FDTD scene coerces it.
+    'scalar_shorthand': ('wavebit.rcwa and wavebit.fdtd.periodic refuse a bare number in a '
+                         'material slot (check issue material.type); the general wavebit.fdtd '
+                         'scene and the internal engine tables read a bare number x as '
+                         'Material(epsilon=x)'),
     'magnetic_slot': 'mu',
     # Absence and the value one are different inputs, and a consumer generating scenes has to
     # know which it is writing: mu=None (the default, and what the scalar shorthand produces)
