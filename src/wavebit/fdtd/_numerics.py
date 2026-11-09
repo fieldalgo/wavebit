@@ -75,8 +75,9 @@ class ConductiveAbsorber:
     """A graded matched conductivity behind every Open face, for media a PML cannot match.
 
     This is an explicit fallback, not a PML. Its fixed cubic profile has a normal-incidence
-    round-trip amplitude near exp(-3); more cells do not remove that attenuation floor. Check
-    absorber and spatial convergence separately.
+    round-trip amplitude near exp(-3 n), where n is the refractive index of the medium filling
+    the layer: exp(-3), about 0.05, in vacuum and about 0.011 at n = 1.5. More cells do not
+    remove that attenuation floor. Check absorber and spatial convergence separately.
     """
     cells: int = 12
 
