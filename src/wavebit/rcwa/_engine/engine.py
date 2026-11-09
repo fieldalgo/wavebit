@@ -41,6 +41,8 @@ from wavebit._common.conventions import centre_parity
 from wavebit._common.conventions import corner_column
 from wavebit._common.conventions import swap_fourier_origin
 from wavebit._common.conventions import incident_phase_index
+from wavebit._common.conventions import GRAZING_THETA
+from wavebit._common.conventions import REAL_THETA_LIMIT
 from wavebit._common.conventions import incident_sp_amplitudes
 from wavebit._common.conventions import lit_orders
 from wavebit._common.conventions import order_window
@@ -814,8 +816,9 @@ _MU_ON_A_SHAPE_PATH = (
 #: `nextafter(float32(pi/2), 0)` and `float32(pi/2)`, as plain Python floats. They are the
 #: clamp and the threshold `_incident_kxy` uses, and they are constants: computing them in each
 #: backend's own namespace was the reason the method looked as though it had to live there.
-_HALF_PI_F32 = float(_np.float32(_np.pi / 2))
-_HALF_PI_F32_BELOW = float(_np.nextafter(_np.float32(_np.pi / 2), _np.float32(0)))
+#: Defined with the other angle conventions (`conventions.REAL_THETA_LIMIT`).
+_HALF_PI_F32 = REAL_THETA_LIMIT
+_HALF_PI_F32_BELOW = GRAZING_THETA
 
 
 def device_scoped(func):
@@ -2750,8 +2753,15 @@ class CoreSolveMixin:
             phase_index = xp.where(negative, -phase_index, phase_index)
         index = xp.where(real_angles, phase_index, self.n_inc)
         index = xp.where(invalid, xp.full_like(index, float('nan')), index)
-        clamped = xp.asarray(_HALF_PI_F32_BELOW, dtype=C) + xp.imag(theta) * 1j
-        sin_theta = xp.sin(xp.where(xp.real(theta) >= _HALF_PI_F32, clamped, theta))
+        # Grazing on both sides of the normal. The negative side was not held: sin folded a
+        # theta below -pi/2 back in front of the face (-2 lit as -(pi - 2)), where the positive
+        # side stayed at grazing. The public check refuses a real angle past either bound; a
+        # traced one is held at grazing here rather than folded.
+        above = xp.asarray(_HALF_PI_F32_BELOW, dtype=C) + xp.imag(theta) * 1j
+        below = xp.asarray(-_HALF_PI_F32_BELOW, dtype=C) + xp.imag(theta) * 1j
+        held = xp.where(xp.real(theta) >= _HALF_PI_F32, above,
+                        xp.where(xp.real(theta) <= -_HALF_PI_F32, below, theta))
+        sin_theta = xp.sin(held)
         return (xp.astype(index * sin_theta * xp.cos(phi), C),
                 xp.astype(index * sin_theta * xp.sin(phi), C))
 
