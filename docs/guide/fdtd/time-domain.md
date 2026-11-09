@@ -825,8 +825,9 @@ Here `T` is 0.9849 and its derivative 0.0470 per unit permittivity, against 0.98
 from the closed form (current module, 2026-10-15; the earlier adapter gave 0.9866 and 0.0405 on
 its own grid). On JAX, prepare once with concrete values and differentiate
 `prepared.run(problem)` with the traced value placed in the problem; the two backends agree to
-1e-15 here. A material that reaches an `Open()` face is the exception: its PML is built once
-from concrete values, so a half-space is not differentiable in the current module (see
+1e-15 here. A material that reaches an `Open()` face needs one more declaration: its PML is
+built once from concrete values, so a half-space differentiates only when
+`PML(reference_media=...)` fixes that face's profile (see
 [half-space material derivatives](#half-space-material-derivatives)).
 {ref}`Differentiating a run <fdtd-model-differentiating>` lists what is live.
 
@@ -1848,10 +1849,17 @@ diffraction result unchanged.
 
 ### Half-space material derivatives
 
-The current module refuses this derivative: a half-space reaches an `Open()` face, and the
-PML there is built once from the material's concrete values, so a traced permittivity or
-permeability in it raises `ValueError` before any time step. These examples keep the earlier
-route.
+A half-space reaches an `Open()` face, and the PML there is built once from concrete values.
+The current module takes this derivative once `fdtd.PML(reference_media={face: Material(...)})`
+fixes the profile of every face the traced medium reaches; without that entry, a traced
+permittivity or permeability there raises `ValidationError` ("PML on 'z-' is matched to a
+background whose permittivity or permeability is traced") before any time step. A traced medium
+filling a stabilized PML (`stabilizing_loss`) is refused even with the entry. The
+[smoothed-substrate guide](substrate-gradients.md) gives the full example. Measured on main
+(2026-11-09, normal incidence, `dx = 0.05`, 10 PML cells), the transmitted (0, 0) efficiency's
+derivative agrees with a central difference on JAX and PyTorch: to 6e-9 for a `SnappedSlab`
+substrate, to 2e-8 for a continued `Box` substrate, and to 3e-8 for the lit-side
+`Scene(background=)`, with both z faces fixed. The examples below keep the earlier route.
 
 :::{admonition} Earlier interface
 :class: earlier-interface
@@ -1871,7 +1879,7 @@ evaluation. Recomputing the nominal pair from each perturbation changes the
 experiment being compared.
 
 ```python
-# Earlier interface: half-space material derivatives are not in the current API yet.
+# Earlier interface; the current route is fdtd.PML(reference_media=...), described above.
 import jax
 import jax.numpy as jnp
 from wavebit.compat import legacy as wavebit
