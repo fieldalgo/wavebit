@@ -1,4 +1,5 @@
 """Physical geometry and material oracles for current-API inspection."""
+from pathlib import Path
 import subprocess
 import sys
 
@@ -71,9 +72,18 @@ def test_tensor_components_are_physical_and_default_mu_is_scalar():
 
 
 def test_layer_selection_and_no_scattering_or_compat_import():
-    # A fresh process also catches accidental import-time precision/backend effects.
-    code = '''
+    # A fresh process also catches accidental import-time precision/backend effects. `-I` keeps
+    # the environment out of it, PYTHONPATH included, so the child is told where this process
+    # found wavebit: it must test this code, not whichever copy is installed (or none).
+    import wavebit
+    package = Path(wavebit.__file__).resolve()
+    code = f'''
 import sys
+from pathlib import Path
+sys.path.insert(0, {str(package.parents[1])!r})
+import wavebit
+assert Path(wavebit.__file__).resolve() == Path({str(package)!r}), wavebit.__file__
+''' + '''
 import numpy as np
 from wavebit import rcwa, Material, Units
 from wavebit.rcwa._engine.engine import CoreFactorizationMixin
@@ -91,7 +101,8 @@ np.testing.assert_array_equal(rcwa.sample_structure(p,layer=1,samples=8),np.full
 assert not any(m.startswith('wavebit.compat') for m in sys.modules)
 assert 'jax' not in sys.modules and 'torch' not in sys.modules
 '''
-    subprocess.run([sys.executable, '-I', '-c', code], check=True, capture_output=True, text=True)
+    child = subprocess.run([sys.executable, '-I', '-c', code], capture_output=True, text=True)
+    assert child.returncode == 0, child.stderr
 
 
 @pytest.mark.parametrize('kwargs,code', [
