@@ -6951,7 +6951,8 @@ class CoreFactorizationMixin:
         real_k = _concrete(transverse_k_is_real(self.xp, *self.order_kxy()))
         if real_k is None:
             real_k = False
-        if real_k and tolerance == 0:
+        grazed = self._grazed_half_spaces() if real_k else frozenset()
+        if real_k and tolerance == 0 and not grazed:
             return None
         if live:
             # The public adapter proved equality of dependencies, not just values.
@@ -6964,7 +6965,7 @@ class CoreFactorizationMixin:
         def medium(material):
             return _host_material(material.epsilon), _host_material(material.mu_value)
 
-        def run(indices, material):
+        def run(indices, material, side):
             verdicts = []
             for i in indices:
                 verdict = material_match(self._layer_regions(i), medium(material), tolerance,
@@ -6972,13 +6973,13 @@ class CoreFactorizationMixin:
                 if verdict is None:
                     break
                 verdicts.append((i, verdict))
-            if real_k and all(v == 'equal' for _, v in verdicts):
+            if real_k and side not in grazed and all(v == 'equal' for _, v in verdicts):
                 return []
             return verdicts
 
         try:
-            bottom = run(range(n), self._bot)
-            top = run(range(n - 1, len(bottom) - 1, -1), self._top)
+            bottom = run(range(n), self._bot, 'bot')
+            top = run(range(n - 1, len(bottom) - 1, -1), self._top, 'top')
         except _UnreadableMaterial:
             if tolerance:
                 raise NotImplementedError(
@@ -6990,6 +6991,39 @@ class CoreFactorizationMixin:
             return None
         return MergePlan(len(bottom), len(top),
                          tuple(sorted(i for i, v in bottom + top if v == 'near')))
+
+    def _grazed_half_spaces(self):
+        """The half-spaces (``'top'`` / ``'bot'``) a retained order grazes, as the 2D path sees it.
+
+        A layer of a half-space's own medium has that medium's ``kz`` for every order, so where
+        an order sits on the medium's light line the layer holds the exact ``q = 0`` cluster the
+        2D solve cannot represent (the ``{1, z}`` limit basis) and refuses -- though the
+        half-space beside it builds no mode matrix and is fine. Such a run is merged, which is
+        the exact answer there: the plane between the layer and its medium reflects nothing.
+        The band is the one in which the 2D solve leaves its ordinary path
+        (``solve_2d._COUPLED_REL`` on the layer eigenvalues ``kx**2 + ky**2 - eps*mu``), so a
+        layer off that band keeps its bits. The 1D paths solve the graze in place
+        (``docs/theory/rcwa/rayleigh-points.md``) and merge nothing here. Empty on anything not
+        concrete: the caller already takes a traced ``k_par`` as complex.
+        """
+        from wavebit.rcwa._engine.solve_2d import _COUPLED_REL, order_grid_kxy
+        try:
+            if self._routed_grating_type() != 2:
+                return frozenset()
+            kx, ky = (_host_material(k) for k in order_grid_kxy(self.xp, *self.order_kxy()))
+            k2 = kx * kx + ky * ky
+            grazed = set()
+            for side, material in (('top', self._top), ('bot', self._bot)):
+                eps = _host_material(material.epsilon)
+                mu = _host_material(material.mu_value)
+                if eps.ndim or mu.ndim:
+                    continue
+                w = _np.abs(k2 - eps * mu)
+                if w.size and w.min() < _COUPLED_REL * w.max():
+                    grazed.add(side)
+        except (_UnreadableMaterial, TypeError, ValueError):
+            return frozenset()
+        return frozenset(grazed)
 
     def _mu_structure(self):
         """The current structure with every material's ``mu`` where its ``epsilon`` was.
