@@ -362,6 +362,12 @@ def _public(exc):
             public = public.replace(engine, declared)
         # A snapshot refusal names an engine component ('for ex;'); the public name is 'Ex'.
         public = re.sub(r"\bfor ([eh][xyz])\b", lambda m: f"for '{m.group(1).capitalize()}'", public)
+        # Result.sample names the record it reads by the engine's key ('ex.z=5.0 is outside...').
+        public = re.sub(r"\b([eh][xyz])\.([xyz])=(\S+) is outside the recorded interval",
+                        lambda m: f"Result.sample({m.group(2)}={m.group(3)}) is outside the interval "
+                                  f"the '{m.group(1).capitalize()}' snapshots recorded,", public)
+        public = re.sub(r"(?<![\w.'])([eh][xyz])(?=\.[txyz]\b| axes\b| values\b| contains\b)",
+                        lambda m: f"'{m.group(1).capitalize()}'", public)
     if public == text:
         return exc
     return ValidationError(public, code=getattr(exc, 'code', None) or 'periodic.invalid',
