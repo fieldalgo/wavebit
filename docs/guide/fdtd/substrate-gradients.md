@@ -18,6 +18,9 @@ profile. This matters when differentiating a substrate material: its physical
 permittivity may vary while the absorber reference remains concrete. Omitting
 the entry follows the boundary medium and therefore cannot provide a static
 profile for a traced material. Reference media do not replace physical materials.
+An entry is a `Material` or a bare permittivity: the stretch is graded for one static
+`eps * mu`, so a `DispersiveMaterial` or `ConductiveMaterial` entry is refused (code
+`numerics.absorber`) rather than graded for its `epsilon_inf` or without its conductivity.
 The engine's stability, PML incidence and junction checks continue to apply.
 For a PlaneWave with `DiffractionMonitor` outputs, a traced physical medium in a pure-stretch
 PML is checked against the same grazing-order rule as an eager run, including scenes

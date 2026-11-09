@@ -124,6 +124,24 @@ def test_reference_media_cannot_silently_name_a_closed_or_unknown_face():
             fdtd.prepare(p, numerics=n.replace(absorber=n.absorber.replace(reference_media={face: Material(2.1)})))
 
 
+def test_reference_media_refuses_a_material_the_stretch_cannot_be_graded_for():
+    """A dispersive entry used to be graded for its epsilon_inf, a conductive one without its
+    conductivity, with no message: a Lorentz glass of eps(1 um) = 2.1 and eps_inf = 1 got a
+    vacuum-matched face, which returns 1.1e-3 instead of 4.6e-4 on 12 cells at normal incidence."""
+    import math
+    from wavebit import ConductiveMaterial, DispersiveMaterial, Lorentz
+    from wavebit.errors import ValidationError
+    w0, w = 2*math.pi*C0/.4e-6, 2*math.pi*C0/1e-6
+    glass = DispersiveMaterial(epsilon_inf=1., poles=(Lorentz(omega_0=w0, gamma=0., strength=1.1*(w0**2-w**2)),))
+    for medium in (glass, ConductiveMaterial(epsilon=2.1, conductivity=1e5)):
+        with pytest.raises(ValidationError, match='Material\\(epsilon=') as error:
+            fdtd.PML(cells=8, wavelength=1., allow_thin=True, reference_media={'z-': medium})
+        assert error.value.code == 'numerics.absorber'
+        assert error.value.path == 'numerics.absorber.reference_media.z-'
+    for medium in (Material(2.1), 2.1):
+        fdtd.PML(cells=8, wavelength=1., allow_thin=True, reference_media={'z-': medium})
+
+
 def test_substrate_and_pillar_gradients_match_fresh_finite_differences():
     torch = pytest.importorskip('torch')
     p, n = pillar(), numerics(steps=100)

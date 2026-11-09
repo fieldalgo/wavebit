@@ -45,7 +45,10 @@ class PML:
     from growing; it changes oblique-angle absorption, so it is off (``None``) by default.
     ``reference_media={'z-': Material(...)}`` fixes the stretch profile while a continued
     substrate's physical material varies. It does not replace the substrate material. Omitted
-    faces follow their physical boundary medium.
+    faces follow their physical boundary medium. An entry is a ``Material`` or a bare
+    permittivity: the stretch is graded for one static ``eps * mu``, so a ``DispersiveMaterial``
+    (which would be read as its ``epsilon_inf``) or a ``ConductiveMaterial`` (its conductivity
+    dropped) is refused; write ``Material(epsilon=...)`` at the design wavelength instead.
     ``kappa_max`` is the peak real coordinate stretch (finite, static, >= 1; default 2).
     Changing it changes the finite termination and discrete reflection. Converge layer
     thickness, physical clearance and run duration together; it is not a stability guarantee.
@@ -75,6 +78,19 @@ class PML:
                 f'every face for its own boundary medium. Got {type(self.reference_media).__name__}.',
                 code='numerics.absorber', path='numerics.absorber.reference_media')
         object.__setattr__(self, 'reference_media', frozen_mapping(self.reference_media))
+        from wavebit.materials.models import ConductiveMaterial, DispersiveMaterial
+        for face, medium in self.reference_media.items():
+            if isinstance(medium, (DispersiveMaterial, ConductiveMaterial)):
+                # The stretch reads one static eps*mu; until 2026-11 a dispersive entry was
+                # graded for its epsilon_inf and a conductive one lost its conductivity, silently.
+                kind, lost = (('DispersiveMaterial', 'its poles (it would be graded for '
+                               'epsilon_inf alone)') if isinstance(medium, DispersiveMaterial)
+                              else ('ConductiveMaterial', 'its conductivity'))
+                raise ValidationError(
+                    f'PML(reference_media={{{face!r}: {kind}(...)}}): the stretch is graded for one '
+                    f'static permittivity, so {lost} would be ignored. Give the permittivity it '
+                    f'should be matched to, Material(epsilon=...) at the design wavelength.',
+                    code='numerics.absorber', path=f'numerics.absorber.reference_media.{face}')
 
 
 @spec
