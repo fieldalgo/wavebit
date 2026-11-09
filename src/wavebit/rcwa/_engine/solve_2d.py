@@ -706,27 +706,52 @@ def _eig_or_diagonal(xp, A):
     ``docs/theory/rcwa/rayleigh-points.md`` section 1 -- so it is what the layer's plane-wave
     modes are, and the rest of the solve takes it as any computed basis. Only a failure is
     replaced: a converged ``eig`` keeps its bits, and a matrix off-diagonal beyond round-off
-    still raises.
+    still raises. JAX's ``eig`` reports the failure as NaN rather than raising; eagerly, a
+    non-finite decomposition of a finite matrix is read as the same failure. Under a trace
+    nothing can be read and the NaN goes on to the solve's finiteness check.
     """
     try:
-        return eig(A)
+        w, W = eig(A)
     except Exception as exc:
         if not _did_not_converge(exc):
             raise
+        return _diagonal_modes(xp, A, exc)
+    if 'jax' in xp.__name__:
         import numpy as np
         try:
-            host = np.asarray(_readable(A, xp))
+            failed = not (np.all(np.isfinite(np.asarray(w))) and np.all(np.isfinite(np.asarray(W))))
+            finite = bool(np.all(np.isfinite(np.asarray(A))))
         except Exception:
-            raise exc from None
+            failed = False
+        if failed and finite:
+            return _diagonal_modes(xp, A, None, (w, W))
+    return w, W
+
+
+def _diagonal_modes(xp, A, exc, failed=None):
+    """``(diag(A), I)`` for :func:`_eig_or_diagonal`; its failure again where ``A`` is coupled.
+
+    ``exc`` is the exception ``eig`` raised (re-raised), or ``None`` with ``failed`` the
+    non-finite decomposition JAX returned (handed back unchanged).
+    """
+    import numpy as np
+    try:
+        host = np.asarray(_readable(A, xp))
+    except Exception:
+        host = None
+    if host is not None:
         d = np.diagonal(host)
         scale = np.max(np.abs(host)) if host.size else 0.
-        off = host - np.diag(d)
+        off = np.max(np.abs(host - np.diag(d)), initial=0.)
         tolerance = 4 * host.shape[-1] * np.finfo(host.real.dtype).eps * scale
-        if not (np.all(np.isfinite(host)) and np.max(np.abs(off), initial=0.) <= tolerance):
-            raise
-        device = getattr(A, 'device', None)
-        return (xp.asarray(d, dtype=A.dtype, device=device),
-                xp.asarray(np.eye(host.shape[-1], dtype=host.dtype), dtype=A.dtype, device=device))
+        if np.all(np.isfinite(host)) and off <= tolerance:
+            device = getattr(A, 'device', None)
+            return (xp.asarray(d, dtype=A.dtype, device=device),
+                    xp.asarray(np.eye(host.shape[-1], dtype=host.dtype), dtype=A.dtype,
+                               device=device))
+    if exc is not None:
+        raise exc
+    return failed
 
 
 def _did_not_converge(exc):
