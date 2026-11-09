@@ -36,6 +36,10 @@ class WavebitError(Exception):
         self.expected = expected
         self.actual = actual
         self.issue = Issue(code=code, path=path, message=message, expected=expected, actual=actual)
+        # The class this refusal was raised as, so CheckReport.raise_if_invalid raises the class
+        # prepare or run raises for the same input. Not a field: an Issue compares, prints and
+        # serializes as before.
+        object.__setattr__(self.issue, '_raised_as', type(self))
         super().__init__(f'{path}: {message}' if path else message)
 
 
