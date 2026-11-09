@@ -112,8 +112,9 @@ reference 스테핑은 soft-source 스펙트럼 보정을 유지합니다. `plan
 `(low, high)` 쌍에 대응시키며 shared 스테핑이 필요합니다. shared 스냅숏은 인과적 파형을 유지하기
 위해 일정한 반송파 보정을 쓰며, 주파수별 평면 보정과 다릅니다.
 `result.sample(x=..., y=..., z=..., times_seconds=...)`는 여섯 성분 전부를 그 SI 시각에서
-오프라인 보간하므로 기본 `components`가 필요합니다. 광원 불연속을 가로지르는 보간은 거부하며
-AD는 유지하지 않습니다. 순간 Poynting 벡터는 phasor 인자 1/2 없이 `cross(E.real, H.real)`입니다.
+오프라인 보간하므로 기본 `components`가 필요합니다. 광원 불연속을 가로지르는 보간과, 모든 성분이
+기록한 구간 밖의 시각은 거부합니다(`times_seconds`에서 `periodic.invalid`, 구간은 초 단위로
+알려 줍니다. `times_seconds`를 생략하면 그 구간 안의 기록 시각 전부를 씁니다). AD는 유지하지 않습니다. 순간 Poynting 벡터는 phasor 인자 1/2 없이 `cross(E.real, H.real)`입니다.
 [스냅숏](../../../examples/fdtd/fdtd_record.py) 예제와
 [Poynting](../../../examples/fdtd/fdtd_poynting.py) 예제를 보세요.
 
