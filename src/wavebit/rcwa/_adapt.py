@@ -76,6 +76,27 @@ def nonfinite_leaf(problem):
     return None
 
 
+def refuse_foreign_autodiff(problem, execution):
+    """Refuse a PyTorch tensor that PyTorch differentiates, given to a NumPy or JAX run.
+
+    Those backends cannot carry its derivative, and reading it raised PyTorch's own
+    RuntimeError ("Can't call numpy() on Tensor that requires grad") out of ``check``
+    instead of a report. A tensor that requires no grad is read as a number, as before.
+    """
+    if execution.backend == 'torch':
+        return
+    from .._common.backend import torch_autodiff
+    for path, value in named_leaves(problem):
+        if torch_autodiff(value):
+            raise UnsupportedFeatureError(
+                f'{path} is a PyTorch tensor that PyTorch differentiates (requires_grad, or a '
+                f'forward-mode or torch.func tangent), and backend={execution.backend!r} cannot carry '
+                'its derivative. Run with backend="torch" to differentiate it, or pass '
+                f'tensor.detach() (or a plain number) to run on {execution.backend}.',
+                code='execution.backend_autodiff', path=path,
+                expected=f'a value {execution.backend} can read', actual='torch.Tensor')
+
+
 def refuse_nonfinite(problem):
     """Refuse a NaN or infinite input at ``check``/``prepare``, naming the field that holds it.
 
