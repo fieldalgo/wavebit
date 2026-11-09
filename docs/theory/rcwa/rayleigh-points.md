@@ -1095,4 +1095,8 @@ while one ULP of `theta` either side converges. Where `eig` fails and the operat
 to round-off (`max|off-diagonal| <= 4 n eps max|A|`), the layer takes `(diag(A), I)`: the exact
 eigensystem of `A` without those entries, which is the nearby-problem criterion of §1. The
 answer is the bare interface's Fresnel value to 1e-11 and is continuous in `theta`. A converged
-`eig` is never replaced, and a matrix coupled beyond round-off still raises.
+`eig` is never replaced, and a matrix coupled beyond round-off still raises. PyTorch's `eig`
+fails on the same operator (error code 30; on main it escaped the public API as a raw
+`torch._C._LinAlgError`), and JAX's returns NaN without raising: an eager non-finite JAX
+decomposition of a finite matrix is read as the same failure. Under a JAX trace nothing can
+be read, and the NaN still reaches the solve's finiteness refusal.

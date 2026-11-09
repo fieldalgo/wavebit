@@ -10,6 +10,7 @@
   diagonal up to a few ulps of ``kx*ky - ky*kx``; that layer takes its exact diagonal modes.
 * Ordinary stacks keep their bits: neither change runs off its band.
 """
+import contextlib
 import warnings
 
 import numpy as np
@@ -45,9 +46,11 @@ def _fresnel(e1, e2, theta, polarization):
     return abs(r) ** 2, (ratio * abs(t) ** 2).real
 
 
-def _layers(kind, top, bottom):
+def _layers(kind, top, bottom, side='top'):
+    """Layers bottom to top; ``'lit medium'`` is one layer of the lit half-space's medium."""
     return {'empty': (),
-            'lit medium': (rcwa.Layer(thickness=0.3, background=Material(top)),),
+            'lit medium': (rcwa.Layer(thickness=0.3,
+                                      background=Material(top if side == 'top' else bottom)),),
             'both media': (rcwa.Layer(thickness=0.2, background=Material(bottom)),
                            rcwa.Layer(thickness=0.3, background=Material(top)))}[kind]
 
@@ -71,7 +74,7 @@ def test_a_graze_of_the_incident_medium_is_the_bare_interface(kind, side, polari
     lit, far = (top, bottom) if side == 'top' else (bottom, top)
 
     def at(wavelength):
-        return _solve(_problem(_layers(kind, top, bottom), top=top, bottom=bottom,
+        return _solve(_problem(_layers(kind, top, bottom, side), top=top, bottom=bottom,
                                period=(1.0, 1.0), wavelength=wavelength, side=side,
                                polarization=polarization),
                       algorithm=algorithm, formulation=formulation)
@@ -167,3 +170,33 @@ def test_a_failed_eig_takes_the_diagonal_only_of_a_round_off_diagonal_matrix(mon
     assert np.array_equal(w, d) and np.array_equal(W, np.eye(8))
     with pytest.raises(np.linalg.LinAlgError):
         solve_2d._eig_or_diagonal(np, coupled)
+
+
+def _on(backend):
+    """The backend's double-precision scope, skipping one that is not installed."""
+    pytest.importorskip(backend)
+    if backend == 'jax':
+        import jax
+        return jax.enable_x64(True)
+    return contextlib.nullcontext()
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('case', ['graze', 'no convergence'])
+def test_both_closed_form_stacks_solve_on_every_backend(backend, case):
+    """The graze merge reads host values, and the diagonal fallback hears each backend's
+    failure: NumPy's ``LinAlgError``, Torch's ``_LinAlgError``, and JAX's NaN."""
+    if case == 'graze':
+        problem = _problem(_layers('lit medium', 1.0, 2.25), top=1.0, bottom=2.25,
+                           period=(1.0, 1.0))
+        orders, (r, t) = (2, 2), _fresnel(1.0, 2.25, 0.0, 's')
+    else:
+        problem = _problem(_layers('lit medium', 1.5, 2.0), top=1.5, bottom=2.0,
+                           period=NOCONV_PERIOD, theta=NOCONV_THETA)
+        orders, (r, t) = (3, 3), _fresnel(1.5, 2.0, NOCONV_THETA, 's')
+    with _on(backend), warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        result = rcwa.run(problem, numerics=rcwa.Numerics(orders=orders), backend=backend)
+        R, T = float(np.sum(np.asarray(result.R))), float(np.sum(np.asarray(result.T)))
+    np.testing.assert_allclose(R, r, rtol=1e-11)
+    np.testing.assert_allclose(T, t, rtol=1e-11)
