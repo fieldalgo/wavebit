@@ -46,6 +46,10 @@ def _copy(value):
         return tuple(_copy(v) for v in value)
     if hasattr(value, 'shape') and hasattr(value, 'dtype'):
         xp = array_namespace(value)
+        if hasattr(value, 'requires_grad'):
+            # Torch: say what the copy keeps. Since torch 2.14 an unspecified requires_grad
+            # follows the input (and warns that it does); this states that same value.
+            return xp.asarray(value, copy=True, requires_grad=value.requires_grad)
         return xp.asarray(value, copy=True)
     return value
 
