@@ -670,6 +670,11 @@ def validate(scene, plan):
     concrete = planning_scene(scene, plan)
     from wavebit.fdtd._prepare.plan import plan as make_plan
     checked = make_plan(concrete, _shape_trace=True)
+    if plan.schedule is not None:
+        # The checkpoint block is a static execution choice the caller's plan carries in its
+        # skeleton (_execution._planned adds it last); the scene cannot say it, so the
+        # rebuilt plan takes it from the plan it is compared with.
+        checked = checked.with_static(schedule=plan.schedule)
     if checked.skeleton != plan.skeleton:
         raise ValueError(f'lower(scene, plan=...): traced {name(scene)} plan belongs to a different '
                          'scene; rebuild fd.plan from concrete geometry.')
