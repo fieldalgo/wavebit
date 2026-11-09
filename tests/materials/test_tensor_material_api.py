@@ -226,14 +226,15 @@ def test_tensor_picture_selects_component_and_paints_in_order():
     circle = (X-80.)**2+(Y-20.)**2<=110.**2
     np.testing.assert_allclose(xx, np.where(circle,5.,np.where(rectangle,a.epsilon[0,0],1.)))
     np.testing.assert_allclose(xy, np.where(circle,0.,np.where(rectangle,a.epsilon[0,1],0.)))
-    ax = solver.plot_structure(n=24, component='xy')
-    assert 'eps_xy' in ax.get_title()
-    import matplotlib.pyplot as plt
-    plt.close(ax.figure)
     with pytest.raises(ValueError, match='component'):
         solver.slice_structure()
     with pytest.raises(NotImplementedError, match='components'):
         solver.slice_structure(show='n', component='xx')
+    pytest.importorskip('matplotlib')
+    ax = solver.plot_structure(n=24, component='xy')
+    assert 'eps_xy' in ax.get_title()
+    import matplotlib.pyplot as plt
+    plt.close(ax.figure)
 
 
 @pytest.mark.parametrize('backend', ['numpy','jax','torch'])
