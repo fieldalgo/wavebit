@@ -262,7 +262,7 @@ a Sphere, Cylinder, Prism or turned Box
 | Refused | Why | What to do |
 | --- | --- | --- |
 | A traced `eps` or `mu` given per axis | the smoothed operator is built for one isotropic number | trace one scalar |
-| A traced background where a PML is matched to it (no `background=` of its own), or with a PlaneWave or TFSF source or a lattice `FarField` | the PML match, the plane-wave source's transverse wavevector, the grazing survey and the far-field map are built from it once | give each PML a concrete `background=`, or differentiate a structure instead |
+| A traced background where a PML is matched to it (no `background=` of its own), or with a PlaneWave or TFSF source or a lattice `FarField` | the PML match, the plane-wave source's transverse wavevector, the grazing survey and the far-field map are built from it once | beside a PlaneWave, TFSF or lattice `FarField`, keep the background concrete and differentiate a structure's material instead: no PML setting lifts it. A matched PML alone is lifted by a concrete reference on every face (`background=`; publicly, `PML(reference_media=...)` with an entry for every Open face) |
 | A traced material filling a stabilized PML layer the grazing rule judges | on a stabilized face the rule reads the face's exact return, on the host only | keep it concrete, or the face a pure stretch |
 | A traced material beside a smoothed region on a `Symmetry` plane | the mirror check reads the plan's contrast, which may be zero | keep the region a cell off the mirror |
 | A traced medium at a `Diffraction` plane with `orders=None` | the propagating orders cannot be counted for a traced index | give `orders=` |

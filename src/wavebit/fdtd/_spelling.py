@@ -146,6 +146,9 @@ PHRASES = _ABSORBER_PHRASES + _DIPOLE_PHRASES + (
     (_FD + r'Boundaries\.open\(fd\.PML\(cells=12, wavelength=\.\.\.\)\)',
      'fdtd.Boundaries.open() with Numerics(absorber=fdtd.PML(cells=12, wavelength=...))'),
     (_FD + r'Boundaries\(z=fd\.PML\(\.\.\.\), \.\.\.\)', 'fdtd.Boundaries(z=fdtd.Open(), ...)'),
+    # A face's PML reference is the public PML's reference_media entry for that face.
+    (_FD + r'PML\(background=\.\.\.\)',
+     'fdtd.PML(reference_media=...) with an entry for every Open face'),
     (r'Say fd\.PML\(cells=\.\.\., wavelength=\.\.\.\), or give the whole scene one with '
      r'fd\.Resolution\(cells_per_wavelength=\.\.\., wavelength=\.\.\.\)\.',
      'Say fdtd.PML(cells=..., wavelength=...) as Numerics(absorber=...).'),
