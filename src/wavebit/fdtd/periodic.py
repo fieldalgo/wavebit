@@ -143,7 +143,9 @@ class Numerics:
     shared-only controls, rather than silently ignoring them.
     ``orders`` is the diffraction-order window ``(Mu, Mv)``: an explicit pair of nonnegative
     integers, the half-widths along the two lattice vectors (``(M, 0)`` for a one-dimensional
-    period), or ``None`` for the engine's default window.
+    period), or ``None`` for the engine's default window. A one-row raster refuses a nonzero
+    ``Mv`` where it cannot be returned: always with ``'reference'``, and with ``'shared'`` under
+    a one-dimensional period or at in-plane incidence.
     """
     spacing: float
     duration_seconds: float

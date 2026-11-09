@@ -20,7 +20,7 @@ from wavebit._common.conventions import time_delay_phase
 from wavebit._common.conventions import yee_longitudinal_phase
 from wavebit.materials.response import as_material
 from wavebit.fdtd._periodic.grid import _validate_pml_reflection
-from wavebit.fdtd._periodic.grid import fdtd_grid, window_steps
+from wavebit.fdtd._periodic.grid import fdtd_grid, refuse_invariant_v_orders, window_steps
 from wavebit.observations.diffraction import Result
 from wavebit.observations.diffraction import ResultSub
 from wavebit.fdtd._periodic.runtime import time_loop_backend
@@ -1765,6 +1765,11 @@ def solve_scene_fdtd(structure, thickness, top, bot, period=None, wavelength=Non
         halfy = math.floor(ly*(max(host_indices)/band.min()+abs(host_ky)/(2*np.pi))) if raster.shape[1] > 1 else 0
     else:
         (halfx, halfy), _ = parse_order_pair(truncation_order)
+    if 2*halfy+1 > ny and raster.shape[1] == 1 and (len(lengths) == 1 or in_plane):
+        # Here y holds two cells at every resolution; "increase resolution" cannot be followed.
+        refuse_invariant_v_orders(halfx, halfy, 'the shared grid keeps two y cells for it '
+                                  + ('under a one-dimensional period' if len(lengths) == 1 else
+                                     'at in-plane incidence (phi 0)'))
     if 2*halfx+1 > nx or 2*halfy+1 > ny:
         raise ValueError('Diffraction window exceeds the spatial Nyquist limit; increase resolution.')
     mx, my = np.meshgrid(np.arange(-halfx, halfx+1), np.arange(-halfy, halfy+1))
