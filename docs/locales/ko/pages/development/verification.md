@@ -54,6 +54,17 @@ pytest-xdist가 필요합니다. 도구는 자체 기록기와 xdist를 명시�
 기존 conftest hook과 pytest 설정은 계속 적용됩니다. 지정하지 않은 BLAS 스레드
 수는 1로 설정합니다.
 
+이것이 중요한 이유는 여러 테스트가 두 결과를 비트 단위로 비교하는데, 스레드를 쓰는
+BLAS는 같은 합산을 호출마다 다르게 나눌 수 있기 때문입니다. `pytest`를 직접 실행할
+때는 CI처럼 `OPENBLAS_NUM_THREADS`, `OMP_NUM_THREADS`, `MKL_NUM_THREADS`를 1로
+설정하십시오(CI는 `XLA_FLAGS=--xla_cpu_multi_thread_eigen=false`도 설정합니다).
+몇몇 테스트는 기계가 실행할 수 없는 경우 보고서에 이유를 남기고 건너뜁니다.
+심볼릭 링크를 만들 수 없는 계정(개발자 모드나 관리자 권한이 없는 Windows)에서의
+심볼릭 링크 기록 사례, 찾은 메타데이터가 다른 체크아웃에서 만들어진 경우(`PYTHONPATH`
+실행)의 설치 메타데이터 비교, 그리고 그래프가 Inductor의 C++ 컴파일러를 필요로 하는
+`torch.compile` 사례(Windows에서는 `vcvars64.bat` 같은 Visual Studio 개발자 환경
+안에서만 찾을 수 있는 MSVC의 `cl`)입니다.
+
 선택 사항인 `--slow`는 research 선택 규칙을 유지하면서 profile의 범위를 좁힙니다.
 기본값 `include`는 profile의 기존 선택을 유지하고, `exclude`는 slow 사례를
 제외하며, `only`는 해당 범위의 slow 사례만 선택합니다. `quick --slow only`는
