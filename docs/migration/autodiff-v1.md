@@ -428,8 +428,9 @@ paths:
 - 2D with the Li, Laurent and NVF factorizations, and the z-coupled formulation;
 - shapes on rectangular, hexagonal and oblique cells, including a layer of two
   shapes, and a cell given as a bare array or as nested lists;
-- an NVF raster's period and cell angle (through the `'distance'` normal field,
-  the construction that carries a cell derivative; see
+- an NVF raster's period and cell angle (through the `'distance'` normal field;
+  `'spectral'` and `'smooth'` carry a cell derivative too since 2026-11-10, and a
+  frozen record replays it instead of holding the field; see
   [`../oblique-lattice.md`](../theory/rcwa/oblique-lattice.md));
 - a metal where the NVF floor binds, magnetic and tensor materials;
 - `excitation`, the scattering matrix and `solve_field`;

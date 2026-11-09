@@ -147,8 +147,9 @@ same line.
 ## The constructions
 
 Everything below is eager NumPy/SciPy for every backend, like `'distance'` itself: the
-normal field is frozen geometry, a constant to the solve, outside the AD graph (fmmax
-stop-gradients its field for the same reason). Backend agreement was measured: numpy, jax
+normal field is frozen geometry, a constant to the permittivity, outside its AD graph (fmmax
+stop-gradients its field for the same reason). The cell is the exception, and its derivative
+is carried -- see [the cell derivative through a record](#the-cell-derivative-through-a-record). Backend agreement was measured: numpy, jax
 and torch give the same efficiencies to ~1e-14. Sign is free throughout — the
 factorization consumes `n n^T` only.
 
@@ -849,6 +850,69 @@ moved the kernel — which is the objection that settles it. `sqrt(cell area)/16
 and basis-invariant at once, and reduces to `N/16` px bit-identically on a square cell. On the
 2:1 cell of `test_a_non_square_cell_measures_in_physical_space` it takes the mean angular error
 from **2.22 to 0.39 deg**. `'contour'`'s sigma was already stated this way.
+
+## The cell derivative through a record
+
+The field is a constant to the permittivity, and **not to the cell**: every construction reads
+the cell's metric, so a derivative with respect to `period` or the lattice has a share that
+comes from the field itself. Without a record, `'distance'` has always carried that share (its
+traced-basis branch chooses the nearest interface pixel on the host and rebuilds the distance in
+the traced metric). A record -- `freeze_geometry()`, and every `rcwa.prepare` / `Prepared.run` --
+used to hold the field, so the share was dropped from every replayed cell derivative, silently.
+
+How much was dropped, as (rebuilt - held) / rebuilt of a weighted `sum(T)` at truncation (2, 2),
+central differences of the NumPy solve with `h = 1e-2` and `1e-3` agreeing to ~1e-7. The skewed
+cell is `u = (1000, 0)`, `v = (40, 900)`, derivative in `(u_x, v_x)`; the period derivative is on
+a 1000 x 600 rectangle, in `(Lx, Ly)`:
+
+| construction | projector | 8x8 rod | 24x24 disc | rod, `period` |
+|---|---|---|---|---|
+| `'distance'` | linear | -106%, +6% | -6%, -15% | -0.5%, -5% |
+| `'contour'` | linear | +11%, -24% | +15%, -37% | -0.5%, -2% |
+| `'spectral'` | linear | -17%, +8% | +3%, -17% | -0.3%, +5% |
+| `'smooth'` | linear | -87%, -17% | +10%, -41% | +1%, +27% |
+| `'distance'` | circular | -1%, -22% | -93%, -87% | +8%, +18% |
+| `'spectral'` | circular | 0.07%, +96% | | |
+| `'smooth'` | circular | -0.4%, +21% | | |
+
+The fix splits each construction where it splits itself: into **choices**, which have no
+derivative, and the **smooth rest**. The record keeps the choices
+(`normal_plans.NormalFieldPlan`), and a replay whose cell carries a derivative rebuilds the rest
+from them in the live cell. Only the rebuilt field's tangent is used,
+`recorded - (stop_gradient(rebuilt) - rebuilt)`, so the value the projector reads is the record's
+bit for bit, and a cell no derivative reaches never enters the rebuild.
+
+| construction | choices recorded | rebuilt in the live cell |
+|---|---|---|
+| `'distance'` | nearest interface pixel | distance in the per-axis steps, wrapping differences, `J^-T` |
+| `'spectral'` | indicator, band, bulk donors, longer edge | low-pass and spectral gradient on Cartesian `G`, band normalisation |
+| `'smooth'` | phases, nearest other-phase pixel, branch, kernel radii | signed distance; scipy's truncated kernel as a circulant (axis-aligned) or the transform (skewed) |
+| `|grad d|` (circular) | nearest interface pixel | as `'distance'`, for every construction |
+
+Measured on both scenes, every replayed derivative under eager `jax.grad`, `jax.jit(jax.grad)`,
+`jax.grad(jax.jit)`, `jax.vmap` and PyTorch matches the rebuilt field's central difference to
+2e-7 relative, the difference's own truncation error. Field by field, the rebuild matches each
+NumPy construction to 1e-9 and its Jacobian matches the construction's central difference
+(`tests/rcwa/test_nvf_normal_plans.py`); the solve-level oracle is
+`tests/rcwa/test_nvf_record_under_a_cell_derivative.py`. With no record and a cell that has a value
+(eager `jax.grad`, PyTorch), `'spectral'` and `'smooth'` now take their choices on that value and
+carry the same derivative, where they used to refuse a traced cell.
+
+**`'contour'` is refused, not held.** Its curve is the 0.5 level set of a blurred indicator, and
+the blur's width and shape follow the cell, so the curve moves in index space as the cell does.
+Carrying that needs the contour extraction, the torus stitch and the arclength resampling
+differentiated with their combinatorics recorded. The cheap half -- the curve held in index
+coordinates, only its map to Cartesian coordinates carried -- was measured and is not an answer:
+on the rod it left `d/du_x` 12.6% off where holding the whole field left it 10.7% off (1.2%
+against 15% on the disc). So a cell derivative through a `'contour'` record raises a `TypeError`
+naming the three that carry it, from a JAX differentiation rule -- which `jax.grad(jax.jit(f))`
+reaches too, where a check at the door sees no tangent -- and at the door on PyTorch. A forward
+evaluation over a traced cell, under `jax.jit` or `jax.vmap`, replays the record as before.
+
+The circular projector's magnitude had its own defect on this path: `|grad d|` took a square root
+at its exact zeros (4 of 256 pixels on the rod), and `max`'s derivative carried the NaN to every
+pixel, so a cell derivative through `nvf_projector='circular'` read `[nan, nan]` even without a
+record. The root is guarded now and the values are unchanged.
 
 ## Verification
 

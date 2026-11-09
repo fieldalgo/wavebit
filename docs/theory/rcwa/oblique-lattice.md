@@ -770,9 +770,16 @@ cell's value, and the distance to it is rebuilt in the traced metric. That holds
 PyTorch alike since 2026-10-02. Before, it was JAX's alone. PyTorch raised a `TypeError` for a
 skewed cell under autograd. A `period` under autograd was detached for the field, so its
 derivative lost the field's share, 22% of it on an 8 x 8 raster on a 0.77 x 0.61 cell, with no
-error. `'contour'`, `'spectral'` and `'smooth'` build the field in NumPy from the metric, so a
-cell derivative through them raises a `TypeError` that says so, on both backends
-(`tests/common/test_lattice_pytree.py::test_the_raster_normal_field_carries_the_cell_on_both_backends`).
+error. `'spectral'` and `'smooth'` carry it too since 2026-11-10: they take their choices on the
+cell's value and rebuild the rest in the traced metric, and a frozen record keeps those choices so
+that a replay -- `rcwa.prepare` included, and `jax.jit` -- carries the same derivative instead of
+holding the field
+([`nvf-normal-methods.md`](nvf-normal-methods.md#the-cell-derivative-through-a-record)).
+`'contour'` follows a curve extracted in NumPy and cannot, so a cell derivative through it
+raises a `TypeError` that says so, on both backends
+(`tests/common/test_lattice_pytree.py`: `test_the_raster_normal_field_carries_the_cell_on_both_backends`,
+`test_spectral_and_smooth_carry_the_cell_where_it_has_a_value` and
+`test_a_normal_field_built_in_numpy_refuses_a_traced_cell_by_name`).
 
 ## What is binary and what is not — the table that decides the path
 

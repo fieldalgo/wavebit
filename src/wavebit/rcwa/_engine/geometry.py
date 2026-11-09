@@ -89,7 +89,15 @@ class StaticGeometry:
             so a replay can tell whether it still fits, not consumed by the build. Left
             ``None``, the NVF replay is unchecked.
         compression: per-layer ``(row_idx, col_idx, x, y)`` for the integrated path's factorization.
-        mu_normal_field, mu_normal_field_source, mu_compression: the same three records, taken
+        normal_field_plan: per-layer
+            :class:`~wavebit.rcwa._engine.normal_plans.NormalFieldPlan` -- the choices
+            ``normal_field`` was built from (which interface pixel is nearest, which band pixel
+            a bulk pixel copies, ...). Consumed only where the cell carries a derivative: the
+            replay rebuilds the field from them in the live cell and passes on the derivative,
+            the recorded value unchanged. ``None`` refuses that derivative rather than holding
+            the field.
+        mu_normal_field, mu_normal_field_source, mu_compression, mu_normal_field_plan: the same
+            records, taken
             off the raster ``mu`` field instead of the permittivity. Separate rather than
             shared because a magnetic inclusion need not sit where the dielectric one does,
             and the NVF rearrangement is written around *one* interface normal -- so each
@@ -165,6 +173,8 @@ class StaticGeometry:
     #: and fixed normals. Uses identity hashing because sampled records contain arrays.
     tensor_geometry: Optional[Any] = None
     factorization: Optional[str] = None
+    normal_field_plan: Optional[Any] = None
+    mu_normal_field_plan: Optional[Any] = None
 
     def _cache_key(self):
         """What ``__eq__``/``__hash__`` compare: the content when that is well defined.
@@ -187,7 +197,8 @@ class StaticGeometry:
         if self.normal_field is None and self.normal_field_source is None\
                 and self.compression is None and self.mu_normal_field is None\
                 and self.mu_normal_field_source is None and self.mu_compression is None\
-                and self.tensor_geometry is None:
+                and self.tensor_geometry is None and self.normal_field_plan is None\
+                and self.mu_normal_field_plan is None:
             try:
                 key = ('content', self.factorization, _hashable(self.boundary_plans),
                        _hashable(self.gamma_plans), _hashable(self.rectilinear_plans))

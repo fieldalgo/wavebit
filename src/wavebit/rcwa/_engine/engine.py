@@ -178,9 +178,8 @@ def _concrete_period(value):
     :func:`~wavebit.rcwa._engine.factorization._as_bools` relies on, there is no way to read a
     scalar out of one — so the honest answer there is ``None``.
 
-    ``None`` costs nothing when a frozen geometry is present, because
-    :meth:`CoreFactorizationMixin._geometry_lattice_for` recovers it from the record. Without
-    one it falls back to the legacy index-space normal, unchanged.
+    ``None`` sends :meth:`CoreFactorizationMixin._geometry_lattice_for` to the traced
+    ``period`` itself, which is the cell the geometry steps need.
     """
     import numpy as np
     if value is None:
@@ -658,33 +657,6 @@ def _perfect_lens(layers, below, above):
                     'in truncation_order; a little loss in either medium is what makes it a '
                     'physical one. See docs/theory/rcwa/connecting-algorithms.md, section 11.')
     return None
-
-
-def _recorded_lattice(normal_field_source):
-    """The cell basis a frozen record was taken on, or ``None`` if it does not name one.
-
-    The record stores the basis scaled to ``|a1| == 1``
-    (:func:`~wavebit.rcwa._engine.factorization._lattice_key`), because that is all the normal field
-    depends on — a uniform rescale of the cell leaves it identical. That scaled basis is itself
-    a perfectly good basis to hand back: it re-derives to exactly the key the staleness check
-    compares against, so a replay can never be refused for having reconstructed it differently.
-
-    Layers disagreeing, or a record predating the basis being an input, both answer ``None``:
-    neither names a single cell, and inventing one would be worse than falling back.
-    """
-    import numpy as np
-    if not normal_field_source:
-        return None
-    entries = [e for e in normal_field_source if len(e) > 2]
-    if len(entries) != len(normal_field_source):
-        return None
-    keys = {e[2] for e in entries}
-    if len(keys) != 1:
-        return None
-    key = keys.pop()
-    if key is None:
-        return None
-    return np.asarray(key, dtype=float).reshape(2, 2)
 
 
 #: Raised by :meth:`CoreSolveMixin._require_field_declaration` — the refusal the ``answers``
@@ -1956,7 +1928,7 @@ class CoreSolveMixin:
         return self._lattice_basis is None or _lattice.is_axis_aligned(self._lattice_basis)
 
     def _geometry_lattice_for(self, geometry, *, freezing=False):
-        """The cell basis the *geometry* steps should use — live, or recovered from the record.
+        """The cell basis the *geometry* steps should use: the live one, read where it can be.
 
         One accessor rather than two, because a skewed basis and a non-square pixel are the
         same question asked twice: both ask what one raster step means in real space, and a 2x2
@@ -1965,26 +1937,24 @@ class CoreSolveMixin:
         pixels are not square in real space had its normal up to ~18 degrees off; see
         :func:`~wavebit.rcwa._engine.factorization.normal_vector_field`).
 
-        ``period`` is readable except when it is the variable under differentiation, which is
-        exactly when a caller is most likely to also be replaying a frozen geometry. Freezing
-        happens eagerly on a concrete ``period``, so the record was built on a real pixel shape;
-        letting an unreadable one arrive as ``None`` would make the same structure look like a
-        different raster and the replay would be refused
-        (:func:`~wavebit.rcwa._engine.factorization._check_normal_field_still_fits`). Taking it back
-        out of the record rather than storing it twice keeps the two in step, and is the honest
-        answer besides — the field being replayed *is* the one built on that pixel shape,
-        whatever ``period`` has since become.
-
         Parametric shapes instead rebuild their projectors in the live cell metric,
         retaining derivatives of both periods even when their values are readable.
 
-        So does the raster's normal field, which is built in the cell metric too (the
-        ``'distance'`` construction carries its derivative): a PyTorch ``period`` under autograd
-        is readable -- it detaches -- and was read, so the field was built on the detached
-        cell and its share of a period derivative dropped, 22% of one on a 0.77 x 0.61 NVF
-        raster, where JAX's traced period was right. Without a record it stays live now, as
+        So does the raster's normal field, which is built in the cell metric too: a PyTorch
+        ``period`` under autograd is readable -- it detaches -- and was read, so the field was
+        built on the detached cell and its share of a period derivative dropped, 22% of one on
+        a 0.77 x 0.61 NVF raster, where JAX's traced period was right. It stays live now, as
         JAX's does. ``freezing`` asks for the readable cell regardless: a freeze is the eager
         pass, and its record is taken on the cell's value.
+
+        **A replay gets the live cell too.** It used to get the cell the record was taken on,
+        recovered from the record's key, which kept the staleness check comparing like with
+        like -- and made the builder see a constant cell, so the replayed field was held and its
+        share of a ``period`` derivative was dropped (0.3% to 27% across the four constructions
+        on a 1000 x 600 rod). The check reads a differentiated cell by its value now
+        (:func:`~wavebit.rcwa._engine.factorization._lattice_key`), and the builder rebuilds the
+        recorded field's derivative in the cell it is handed
+        (:mod:`~wavebit.rcwa._engine.normal_plans`); its value is still the record's.
         """
         if not self.lattice_is_axis_aligned:
             return self._lattice_basis
@@ -1994,14 +1964,10 @@ class CoreSolveMixin:
             # the numerical geometry builder must retain their derivatives.
             return self.lattice
         period = _concrete_period(self.period)
-        live = geometry is None and not freezing and _holds_autodiff(self.period)
+        live = not freezing and _holds_autodiff(self.period)
         if period is not None and not live:
             return _lattice.as_lattice(period=period)
-        if geometry is not None:
-            recorded = _recorded_lattice(geometry.normal_field_source)
-            if recorded is not None:
-                return recorded
-        # A traced `period` and no record. This used to return `None`, and `None` downstream is
+        # A traced `period`. This used to return `None`, and `None` downstream is
         # not "unknown" -- it is the identity metric, i.e. *square pixels*. So a `jax.grad` over
         # `period` on a raster whose pixels are not square silently solved a different structure:
         # measured on a 200 x 400 cell at 32 x 32, the value inside `value_and_grad` was
@@ -5835,11 +5801,16 @@ class CoreFactorizationMixin:
         # need no normal field; on a raster their records are the compression or nothing.
         normal_field = normal_field_source = compression = None
         mu_normal_field = mu_normal_field_source = mu_compression = None
+        normal_field_plan = mu_normal_field_plan = None
         if self._modeling_path == ModelingPath.RASTER:
             if factorization == Factorization.NVF:
+                # The choices beside the field, so a replay can carry a derivative with respect
+                # to the cell instead of holding the field (`normal_plans`).
+                normal_field_plan = []
                 normal_field = _fac.normal_field_for_raster(
                     self.structure, half_width_u, half_width_v, lattice=basis,
-                    method=self.raster_normal_method, nvf_projector=self.nvf_projector)
+                    method=self.raster_normal_method, nvf_projector=self.nvf_projector,
+                    plans=normal_field_plan)
                 normal_field_source = _fac.normal_field_source_for_raster(
                     self.structure, half_width_u, half_width_v, lattice=basis, method=self.raster_normal_method)
                 if self._mu is not None:
@@ -5849,9 +5820,11 @@ class CoreFactorizationMixin:
                     # -- the same argument `to_conv_mat_raster_pn_mu` makes. Sharing the
                     # permittivity's field would be right on every case where the two patterns
                     # coincide, which is most of them, and silently wrong on the rest.
+                    mu_normal_field_plan = []
                     mu_normal_field = _fac.normal_field_for_raster(
                         self._mu, half_width_u, half_width_v, lattice=basis,
-                        method=self.raster_normal_method, nvf_projector=self.nvf_projector)
+                        method=self.raster_normal_method, nvf_projector=self.nvf_projector,
+                        plans=mu_normal_field_plan)
                     mu_normal_field_source = _fac.normal_field_source_for_raster(
                         self._mu, half_width_u, half_width_v, lattice=basis, method=self.raster_normal_method)
             if coefficients == FourierCoefficients.INTEGRATED:
@@ -5866,6 +5839,8 @@ class CoreFactorizationMixin:
                                   mu_normal_field=mu_normal_field,
                                   mu_normal_field_source=mu_normal_field_source,
                                   mu_compression=mu_compression,
+                                  normal_field_plan=normal_field_plan,
+                                  mu_normal_field_plan=mu_normal_field_plan,
                                   # What this record was taken under, so that a replay under
                                   # another rule is refused rather than read -- see
                                   # `_refuse_a_record_of_another_rule`.
@@ -6681,15 +6656,17 @@ class CoreFactorizationMixin:
             # (it couples x and y, so epxy / epyx stop being zero).
             sampled = coefficients == FourierCoefficients.SAMPLED
             if geometry is None:
-                normal_field = normal_field_source = compression = None
+                normal_field = normal_field_source = compression = normal_field_plan = None
             elif mu_pass:
                 normal_field = geometry.mu_normal_field
                 normal_field_source = geometry.mu_normal_field_source
                 compression = geometry.mu_compression
+                normal_field_plan = geometry.mu_normal_field_plan
             else:
                 normal_field = geometry.normal_field
                 normal_field_source = geometry.normal_field_source
                 compression = geometry.compression
+                normal_field_plan = geometry.normal_field_plan
             # What the builder below would take from the raster's values, having no record of
             # it to replay -- refused by name, before it reads one, if the raster has none.
             self._refuse_to_plan_a_traced_raster(
@@ -6721,7 +6698,8 @@ class CoreFactorizationMixin:
                         normal_field_source=normal_field_source,
                         lattice=self._geometry_lattice_for(geometry),
                         raster_normal_method=self.raster_normal_method,
-                        nvf_projector=self.nvf_projector)
+                        nvf_projector=self.nvf_projector,
+                        normal_field_plan=normal_field_plan)
                 else:
                     conv = _fac.to_conv_mat_raster_integrated_nvf(
                         structure, half_width_u, half_width_v,
@@ -6730,7 +6708,8 @@ class CoreFactorizationMixin:
                         compression=compression,
                         lattice=self._geometry_lattice_for(geometry),
                         raster_normal_method=self.raster_normal_method,
-                        nvf_projector=self.nvf_projector)
+                        nvf_projector=self.nvf_projector,
+                        normal_field_plan=normal_field_plan)
 
         elif self._modeling_path == ModelingPath.PARAMETRIC:
             if factorization == Factorization.LI:
