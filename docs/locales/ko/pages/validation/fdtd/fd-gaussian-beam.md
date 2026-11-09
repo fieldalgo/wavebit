@@ -140,7 +140,11 @@ xfail)로 두고, 차수만 확인하는 통과 테스트를 곁에 둡니다. �
 `ModeMonitor`, `ModeSource`, `PML`을 지나는 도파관 문, `GaussianBeam`)은 측정한 그대로 완료입니다.
 G2는 실패로 기록한 채 둡니다. 그 테스트는 엄격한 예상 실패(strict xfail)로 남고 2e-3 rad 한계는
 바꾸지 않습니다. 한계를 맞추려고 더하는 것은 없습니다. S7과 G7에서 만난 JAX 역방향 미분의 메모리
-증가는 `fd-mode-source.md`에 적은 알려진 한계이며 별도 작업입니다.
+증가는 `fd-mode-source.md`에 적은 한계였고 별도 작업이었습니다. 2026-11-09 추가: 그 작업이
+반영되었습니다(JAX와 Torch CPU의 `checkpoint_steps`, [체크포인트 기록](checkpointing.md)). 잘린 실행의
+G7 미분 네 가지는 `checkpoint_steps = 7`에서 JAX와 Torch CPU 모두 일반 실행의 값과 상대 1e-12까지
+같습니다(`test_g7_derivatives_are_unchanged_by_checkpoint_segments`). 등록한 전체 길이 G7 실행은 다시
+하지 않았고, G7 수정과 판정은 그대로입니다.
 
 실행에 관한 두 가지는 한계를 바꾼 것이 아닙니다. G3의 반공간은 x 면을 가로지르므로
 `fd-waveguide-through-pml.md`의 슬래브 문인 `continuation=('x-', 'x+')`을 선언합니다.

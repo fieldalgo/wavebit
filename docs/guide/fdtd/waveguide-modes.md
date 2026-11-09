@@ -165,13 +165,15 @@ The pulse wavelength may not, because the mode is solved at it.
 On the JAX and Torch backends, derivatives of a run with respect to the source's `amplitude`,
 `phase` and `delay_seconds`, or to a traced structure away from the source plane, come from
 reverse-mode differentiation of the whole run (see
-{ref}`Differentiating a run <fdtd-model-differentiating>`). This has a known limitation:
-reverse mode keeps every time step, so its memory grows with the step count. On the JAX
-backend on a CPU, a run as long as the validation setups (about twelve thousand steps) did
-not fit in memory. `Numerics(checkpoint_steps=)`, which recomputes blocks instead of storing
-them, is admitted only on Torch CUDA. Until this is addressed, plan the step count of a run
-you differentiate on JAX with its memory in mind. The
-[validation record](../../validation/fdtd/fd-mode-source.md) states what was measured.
+{ref}`Differentiating a run <fdtd-model-differentiating>`). By default reverse mode keeps
+every time step, so its memory grows with the step count: on the JAX backend on a CPU, a run
+as long as the validation setups (about twelve thousand steps) did not fit in memory. For a
+long run, set `Numerics(checkpoint_steps=K)`. It recomputes segments of `K` steps instead of
+storing them, on JAX and on Torch, on a CPU as well as on CUDA, so that a run of `K**L` steps
+stores about `L * K` states. It needs a fixed `Duration`, not a `DecayStop`. The
+[checkpointing record](../../validation/fdtd/checkpointing.md) gives the schedule and its
+measured memory; through it, this source's derivatives equal the ordinary scan's to 1e-12
+([validation record](../../validation/fdtd/fd-mode-source.md)).
 
 ## Accuracy
 

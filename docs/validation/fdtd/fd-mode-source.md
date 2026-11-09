@@ -82,8 +82,8 @@ at that wavelength (from `solve_modes`), in the run's Fourier convention.
 Amendment to S7, before any derivative was computed: as registered (Setup S, about 12k
 steps) the reverse-mode runs keep every step and need about 8 MB a step on JAX here. Two
 full attempts stalled without returning, and a 15-period probe of the same setup needed 13 GB
-and was killed for memory; no derivative was computed. `Numerics(checkpoint_steps=)` is
-admitted only on Torch CUDA. As for MM4b in the mode-solver record, the derivatives and
+and was killed for memory; no derivative was computed. `Numerics(checkpoint_steps=)` was
+then admitted only on Torch CUDA. As for MM4b in the mode-solver record, the derivatives and
 the central differences are taken of the same truncated run instead: a 5 µm by 4 µm
 physical domain (x and z `Open`, 12-cell `PML`) holding the same slab, the source at
 z = -1 µm, `p2` at z = +0.5 µm reading 1.55 µm, the pulse of Setup S with `cutoff = 1e-3`
@@ -133,17 +133,25 @@ re-entering its own source. Each time the source was restored byte for byte. One
 bounded by no limit: the H row's half-cell group delay changes only the off-centre leakage,
 which S2 reports rather than limits, and the exact prediction follows it.
 
-### Known limitation: reverse-mode memory on JAX
+### Reverse-mode memory on JAX
 
 Recorded on 2026-11-06, after the results; no verdict above changes. On the JAX backend on a
 CPU, a reverse-mode derivative of a run keeps every step, so its memory grows with the step
 count. The registered S7 run did not fit, and the 15-period probe needed 13 GB (S7's
-amendment above). `Numerics(checkpoint_steps=)`, which recomputes blocks instead, is admitted
-only on Torch CUDA. This is a known limitation of the time-stepping engine, not of
-`ModeSource`, and is left open here as separate work. The guide pages for
+amendment above). `Numerics(checkpoint_steps=)`, which recomputes segments instead, was then
+admitted only on Torch CUDA. This was a limitation of the time-stepping engine, not of
+`ModeSource`, and was left here as separate work.
+
+Added 2026-11-09: that work has landed. `checkpoint_steps` is now admitted on JAX and Torch,
+on a CPU as well as on CUDA, with a nested schedule whose memory grows with the logarithm of
+the step count ([checkpointing record](checkpointing.md)). Through it, the four S7 derivatives
+of the truncated run, with `checkpoint_steps = 7` (nested segments of 343, 49 and 7 steps),
+equal the ordinary scan's to 1e-12 relative on JAX and on Torch CPU
+(`test_s7_derivatives_are_unchanged_by_checkpoint_segments`). The registered full-length S7
+run was not repeated; S7's amendment and verdict stand. The guide pages for
 [`ModeSource`](../../guide/fdtd/waveguide-modes.md) and
-[`GaussianBeam`](../../guide/fdtd/gaussian-beam.md) state it where their derivatives are
-described.
+[`GaussianBeam`](../../guide/fdtd/gaussian-beam.md) point to the setting where their
+derivatives are described.
 
 ## Comparison with Meep and FDTDX
 
