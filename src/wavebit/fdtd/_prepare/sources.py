@@ -47,13 +47,11 @@ from wavebit._common.conventions import yee_longitudinal_phase
 
 from wavebit.fdtd._legacy_boundaries import AXES
 from wavebit.fdtd._legacy_boundaries import PML_CELLS
-from wavebit.fdtd._legacy_boundaries import Absorber
 from wavebit.fdtd._legacy_boundaries import Absorbing
 from wavebit.fdtd._legacy_boundaries import Axis1D
 from wavebit.fdtd._legacy_boundaries import Bloch
 from wavebit.fdtd._legacy_boundaries import Periodic
 from wavebit.fdtd._legacy_boundaries import PML
-from wavebit.materials._time_domain import Conductor
 from wavebit.materials._time_domain import Dispersive
 from wavebit.materials._time_domain import as_material
 from wavebit.materials._time_domain import concrete
@@ -369,7 +367,6 @@ def _plane_wave_term(scene, plan, src, row):
     ks = k0i - 1 if src.sign > 0 else k0i + 1
     entry_H = k0i if src.sign > 0 else k0i - 1
     plane = grid.low[P] + k0i * grid.dx
-    _check_column_end(scene, src)
     sub = _column_plan(scene, src, plan)
     return ColumnTerm(name=src.name, kind='PlaneWave', row=row, axis=P, sub=sub, drive=drive,
                       ks=ks + off, corrections=corrections, entry_E=k0i + off,
@@ -707,27 +704,12 @@ def column_pads(scene, src):
     sheet. The main grid keeps its own face, so the mirror's reflection is scattered field and
     crosses the sheet. A ``TFSF`` already refuses a non-absorbing face on its axis, so its
     column is never padded.
-
-    A ``ConductiveAbsorber`` face (``Absorber``) is padded the same way: its PEC-backed graded
-    layer returns a normally incident wave with round-trip amplitude ``~exp(-3) = 5e-2``. In
-    the column that echo came back to the drive, which sent it down again as a second incident
-    wave, and the sheet injected the column's field, echo included: with no structure at all, the transmitted flux at 20 nm cells moved by -9.6 % to +10.6 % against
-    the PML scene and the measured incident spectrum by +-5 %. The column's cells under the
-    main grid's layer are plain background, and the main grid keeps its own layer, so its
-    reflection is scattered field, crosses the sheet and is measured -- the absorber's own
-    documented reflection, and no more (``tests/fdtd/test_fd_absorber_planewave.py``). A
-    background a PML cannot be matched to is refused for it (:func:`_check_column_end`).
     """
     if not isinstance(src, PlaneWave):
         return 0, 0
     P = AXES[src.axis]
-    return tuple(0 if _column_absorbs(scene.boundaries.face(P + side)) else PML_CELLS
+    return tuple(0 if isinstance(scene.boundaries.face(P + side), Absorbing) else PML_CELLS
                  for side in ('-', '+'))
-
-
-def _column_absorbs(face):
-    """Whether a PlaneWave column may end on ``face`` as it is: a PML, and nothing else."""
-    return isinstance(face, Absorbing) and not isinstance(face, Absorber)
 
 
 def _column_wavelength(scene, src):
@@ -736,44 +718,13 @@ def _column_wavelength(scene, src):
     if wavelength is None:
         wavelength = scene.resolution.wavelength
     if wavelength is None:
-        P = AXES[src.axis]
-        graded = any(isinstance(scene.boundaries.face(P + side), Absorber) for side in '-+')
-        said = ('a ConductiveAbsorber face along' if graded else 'a non-absorbing face along')
         raise ValueError(
-            f'PlaneWave({src.name!r}) has {said} {P}, so its '
+            f'PlaneWave({src.name!r}) has a non-absorbing face along {AXES[src.axis]}, so its '
             f'incident column carries a PML of its own past that face (the column must not '
             f'reflect), and that PML needs a concrete wavelength; the band centre is traced '
             f'here. Give the scene fd.Resolution(wavelength=...), or a concrete '
             f'Band(wavelength=...).')
     return wavelength
-
-
-def _check_column_end(scene, src):
-    """Refuse a PlaneWave whose column must end in a PML that its background cannot take.
-
-    Behind a ``ConductiveAbsorber`` face the column ends in a ``PML`` of its own
-    (:func:`column_pads`), matched to the scene's background. A ``Conductor`` or
-    ``Dispersive`` background has no real ``(eps, mu)`` to match, the reason the scene chose
-    that absorber, and keeping the absorber in the column re-injects its reflection as a
-    second incident wave. So the combination is refused, not run wrong.
-    """
-    P = AXES[src.axis]
-    sides = [P + side for side in '-+' if isinstance(scene.boundaries.face(P + side), Absorber)]
-    if not sides:
-        return
-    background = as_material(scene.background, 'Scene(background=)')
-    if not isinstance(background, (Conductor, Dispersive)):
-        return
-    raise NotImplementedError(
-        f'PlaneWave({src.name!r}) with fdtd.ConductiveAbsorber on {", ".join(map(repr, sides))} '
-        f'in an fd.{type(background).__name__} background. The plane wave is computed in a 1-D '
-        f'column of the background, and that column must not reflect: the absorber returns '
-        f'a round trip of ~exp(-3) = 5e-2 in amplitude, which the source sends back down as a '
-        f'second incident wave (flux off by up to ~10 % in an empty cell). A PML ends the column '
-        f'without that echo in a lossless background, but cannot be matched to a lossy or '
-        f'dispersive one, which has no single real (eps, mu). Make the background a lossless '
-        f'Material and give the lossy medium as a layer clear of the sheet (it may run into '
-        f'the absorber), or launch with another source.')
 
 
 def column_scene(scene, src, plan, role='column'):

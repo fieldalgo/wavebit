@@ -370,42 +370,6 @@ def _snapped(problem,scene,plan):
     return tuple(issues)
 
 
-def _graded_absorber(problem,numerics):
-    """A warning for each PlaneWave whose propagation axis ends in a ConductiveAbsorber.
-
-    The layer is PEC-backed and returns a normally incident wave with a round-trip amplitude
-    of ~exp(-3) = 5e-2, whatever its cell count. Its power, 2.5e-3, is not the error a
-    measurement sees: the returned wave is coherent with the scene's own reflections, so a
-    reflectance or transmittance moves at first order, by up to ~2 * 5e-2 * |r| per face --
-    6 % on a glass slab between two such faces (``tests/fdtd/test_fd_absorber_planewave.py``),
-    where the default PML stays within the grid's dispersion of the closed form.
-    """
-    from ._numerics import ConductiveAbsorber
-    from ._sources import PlaneWave
-    from ._boundaries import Open
-    if not isinstance(numerics.absorber,ConductiveAbsorber):
-        return ()
-    issues=[]
-    for source in problem.sources:
-        if not isinstance(source,PlaneWave):
-            continue
-        axis=str(source.direction)[-1]
-        faces=[axis+side for side in '-+' if isinstance(problem.scene.boundaries.face(axis+side),Open)]
-        if not faces:
-            continue
-        issues.append(Issue(code='numerics.absorber_reflection',severity='warning',
-            path='numerics.absorber',actual=tuple(faces),
-            message=f'PlaneWave({source.name!r}) propagates along {axis}, and its Open faces '
-                    f'{", ".join(map(repr,faces))} end in a fdtd.ConductiveAbsorber, which returns a '
-                    f'normally incident wave with a round-trip amplitude of ~exp(-3) = 5e-2 at any '
-                    f'cell count. That wave is coherent with the scene\'s own reflections, so a '
-                    f'measured reflectance or transmittance moves at first order -- by up to about '
-                    f'2 * 5e-2 * |r| per face (6 % on a glass slab), not by the 2.5e-3 of its '
-                    f'power. Use the default fdtd.PML where the media at the faces allow it, or '
-                    f'treat the absorber\'s return as part of the error budget.'))
-    return tuple(issues)
-
-
 #: Where each wall or mirror kind acts, in cells from its declared face (``_kernel.faces``):
 #: tangential E sits on node planes and tangential H on half planes, so a PMC wall (zero
 #: tangential H) and a high-side mirror (whose padded E images the last E layer) act on the
@@ -441,7 +405,7 @@ def _report(problem,numerics,execution,scene,plan,metadata):
                   checkpoint_steps=plan.schedule,boundary_planes=_boundary_planes(problem,plan,metadata),
                   duration_policy='fixed' if numerics.stopping is None else 'hard cap with concrete state-decay stopping',
                   monitor_samples=tuple((o.name,getattr(o,'indices',None)) for o in plan.observers))
-    return CheckReport(issues=_snapped(problem,scene,plan)+_graded_absorber(problem,numerics),
+    return CheckReport(issues=_snapped(problem,scene,plan),
                        estimates={'state_bytes':r.bytes_per_state,'parameter_bytes':r.bytes_per_params,
         'scope':'main E/H, CPML and material arrays; excludes runtime, temporary, source and observation storage'},
         capabilities={'backend':execution.backend,'precision':execution.precision,'device':execution.device,

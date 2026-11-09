@@ -49,22 +49,6 @@ and resolution for the actual scene; see the retained
 [absorber evidence](../../validation/fdtd/fd-constitutive-absorber.md) and
 [stopping validation](../../validation/fdtd/fd-decay-stopping.md).
 
-That 0.05 is an amplitude, and it is coherent with the scene's own reflections: a
-reflectance or transmittance moves at first order, by up to about `2 × 0.05 × |r|` per
-face, not by the 2.5e-3 of its power. On a glass slab (`eps = 2.25`) between two such
-faces at normal incidence, the transmitted flux moves by up to 6 % against the PML run,
-which stays within the grid's dispersion of the closed form. `fdtd.check()` warns
-(`numerics.absorber_reflection`) when a `PlaneWave` propagates into these faces.
-
-A `PlaneWave` computes its incident wave in a 1-D column of the background. Behind a
-`ConductiveAbsorber` face that column ends in a PML of its own, so the source does not
-re-inject the absorber's echo; the main grid keeps the absorber, and its return is
-measured as scattered field. (Before this, the echo was sent back down as a second
-incident wave: up to ±10 % in the transmitted flux of an empty cell.) A PML cannot be
-matched to a conductive or dispersive background, so a `PlaneWave` in such a background
-behind a `ConductiveAbsorber` is refused at `check()` with `fdtd.unsupported`; give the
-lossy medium as a layer clear of the sheet instead. A `TFSF` column is unchanged.
-
 For current PlaneWave/TFSF coverage and the limits of the tested time windows, see
 [source-column stopping validation](../../validation/fdtd/fd-source-decay.md).
 
