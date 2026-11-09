@@ -25,6 +25,7 @@ class Domain(Spoken, _scene.Domain):
     absorbing cells outside this box, so the box is what the sources, monitors and structures
     are placed in. Every number is static: it fixes the grid.
     """
+    _REFUSAL = ('fdtd.invalid', 'scene.domain')
 
 
 @eager_under_torch_compile
@@ -47,6 +48,7 @@ class SnappedSlab(Spoken, _legacy_geometry.Slab):
     Its other two axes run through the domain's faces, so they cannot be Open. A slab that
     reaches an Open face across its own axis continues into the absorbing layer there.
     """
+    _REFUSAL = ('shape.dimension', 'shape')
 
 
 @eager_under_torch_compile
@@ -65,6 +67,7 @@ class SnappedBox(Spoken, _legacy_geometry.Region):
     A structure may not touch an Open face; across a periodic axis it stays inside the period
     or spans all of it, which is how a lamellar grating spells its uniform axis.
     """
+    _REFUSAL = ('shape.dimension', 'shape')
 
 
 @eager_under_torch_compile
@@ -78,6 +81,7 @@ class Plane(Spoken, _legacy_geometry.Plane):
     spans; a :class:`PlaneWave` and a :class:`DiffractionMonitor` read the position alone.
     Every number is static: it picks grid indices.
     """
+    _REFUSAL = ('fdtd.invalid', 'plane')
 
 
 @spec

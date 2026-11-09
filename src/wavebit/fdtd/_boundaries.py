@@ -8,18 +8,19 @@ __all__ = ['Open', 'Periodic', 'Bloch', 'PEC', 'PMC', 'MirrorSymmetry', 'Invaria
            'Boundaries']
 
 
-def _publicly(build):
+def _publicly(build, root):
     """``build()``, with an engine refusal spelled for a public caller.
 
     The engine face a public face lowers to checks its own values; the refusal it raises names
-    its own leaves and keywords until the public spelling translates it.
+    its own leaves and keywords until the public spelling translates it. A plain ``ValueError``
+    leaves as a ``boundaries.face`` ``ValidationError`` at ``root.<field>`` (``structured``).
     """
-    from ._spelling import public, public_error
+    from ._spelling import public, public_error, structured
     with public():
         try:
             return build()
         except (TypeError, ValueError, NotImplementedError) as exc:
-            translated = public_error(exc)
+            translated = structured(public_error(exc), 'boundaries.face', root)
             if translated is exc:
                 raise
             raise translated from exc
@@ -70,7 +71,8 @@ class Bloch:
         require_units(units)
         medium = Material(epsilon=1.) if background is None else background
         values = _publicly(lambda: _legacy_boundaries.Bloch.from_source(
-            _source(source, units), lower_material(medium, units=units), invariant_axes))
+            _source(source, units), lower_material(medium, units=units), invariant_axes),
+            'Bloch.from_source')
         faces = {}
         for axis, value in values.items():
             if isinstance(value, _legacy_boundaries.Bloch):
@@ -95,7 +97,7 @@ class MirrorSymmetry:
     parity: int
 
     def __post_init__(self):
-        object.__setattr__(self, 'parity', _publicly(self._lowered).parity)
+        object.__setattr__(self, 'parity', _publicly(self._lowered, 'MirrorSymmetry').parity)
 
     def _lowered(self):
         return _legacy_boundaries.Symmetry(parity=self.parity)
@@ -116,7 +118,7 @@ class InvariantAxis:
     k_max: object = None
 
     def __post_init__(self):
-        object.__setattr__(self, 'k_max', _publicly(self._lowered).k_max)
+        object.__setattr__(self, 'k_max', _publicly(self._lowered, 'InvariantAxis').k_max)
 
     def _lowered(self):
         return _legacy_boundaries.Axis1D(k=self.k, k_max=self.k_max)

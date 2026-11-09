@@ -10,7 +10,7 @@ import json
 import numpy as np
 import pytest
 
-from wavebit import Job, Units, rcwa
+from wavebit import Job, Material, Units, rcwa
 from wavebit import materials as M
 from wavebit.errors import ValidationError
 
@@ -149,3 +149,94 @@ def test_a_valid_saved_table_still_round_trips():
     restored = Job.from_json(json.dumps(body))
     assert restored.problem.stack.top == M.TabulatedMaterial([1., 2.], [2., 3.], wavelength_unit='um')
     assert json.loads(restored.to_json()) == body
+
+
+# -- FDTD constructors -----------------------------------------------------------------------------
+
+def _fdtd():
+    from wavebit import fdtd
+    return fdtd
+
+
+FDTD = {
+    'Domain negative size': (lambda f: f.Domain(size=(-1., 1., 1.)), 'fdtd.invalid',
+                             'scene.domain.size'),
+    'Domain size None': (lambda f: f.Domain(size=None), 'fdtd.invalid', 'scene.domain.size'),
+    'Domain centre text': (lambda f: f.Domain(size=(1., 1., 1.), center='a'), 'fdtd.invalid',
+                           'scene.domain.center'),
+    'SnappedSlab no axis': (lambda f: f.SnappedSlab(), 'shape.dimension', 'shape'),
+    'SnappedSlab scalar span': (lambda f: f.SnappedSlab(z=1.), 'shape.dimension', 'shape.z'),
+    'SnappedSlab reversed': (lambda f: f.SnappedSlab(z=(1., 0.)), 'shape.dimension', 'shape.z'),
+    'SnappedSlab text bound': (lambda f: f.SnappedSlab(z=('a', 0.)), 'shape.dimension', 'shape.z'),
+    'SnappedBox size None': (lambda f: f.SnappedBox(size=None), 'shape.dimension', 'shape.size'),
+    'SnappedBox negative': (lambda f: f.SnappedBox(size=(-1., 1., 1.)), 'shape.dimension',
+                            'shape.size'),
+    'Plane no normal': (lambda f: f.Plane(), 'fdtd.invalid', 'plane'),
+    'Plane two normals': (lambda f: f.Plane(x=0., z=0.), 'fdtd.invalid', 'plane'),
+    'Plane long span': (lambda f: f.Plane(z=0., x=(0., 1., 2.)), 'fdtd.invalid', 'plane.x'),
+    'Plane reversed span': (lambda f: f.Plane(z=0., x=(1., 0.)), 'fdtd.invalid', 'plane.x'),
+    'Plane text position': (lambda f: f.Plane(z='a'), 'fdtd.invalid', 'plane.z'),
+    'TimeSeriesMonitor name None': (lambda f: f.TimeSeriesMonitor(None, at=(0, 0, 0)),
+                                    'fdtd.invalid', 'outputs.monitors.name'),
+    'TimeSeriesMonitor at scalar': (lambda f: f.TimeSeriesMonitor('p', at=1.),
+                                    'monitor.geometry', 'outputs.p.at'),
+    'TimeSeriesMonitor at None': (lambda f: f.TimeSeriesMonitor('p', at=None),
+                                  'monitor.geometry', 'outputs.p.at'),
+    'TimeSeriesMonitor component': (lambda f: f.TimeSeriesMonitor('p', at=(0, 0, 0),
+                                                                  component='Q'),
+                                    'fdtd.invalid', 'outputs.p.component'),
+    'MirrorSymmetry parity 2': (lambda f: f.MirrorSymmetry(parity=2), 'boundaries.face',
+                                'MirrorSymmetry.parity'),
+    'MirrorSymmetry parity None': (lambda f: f.MirrorSymmetry(parity=None), 'boundaries.face',
+                                   'MirrorSymmetry.parity'),
+    'InvariantAxis k text': (lambda f: f.InvariantAxis(k='a'), 'boundaries.face',
+                             'InvariantAxis.k'),
+    'InvariantAxis k above k_max': (lambda f: f.InvariantAxis(k=1., k_max=.5), 'boundaries.face',
+                                    'InvariantAxis'),
+    'PML reference_media int': (lambda f: f.PML(reference_media=3), 'numerics.absorber',
+                                'numerics.absorber.reference_media'),
+    'PML reference_media None': (lambda f: f.PML(reference_media=None), 'numerics.absorber',
+                                 'numerics.absorber.reference_media'),
+    'PML reference_media str': (lambda f: f.PML(reference_media='z-'), 'numerics.absorber',
+                                'numerics.absorber.reference_media'),
+    'PML reference_media list': (lambda f: f.PML(reference_media=['z-']), 'numerics.absorber',
+                                 'numerics.absorber.reference_media'),
+}
+
+
+@pytest.mark.parametrize('case', list(FDTD))
+def test_an_fdtd_constructor_refuses_bad_input_with_a_code_and_path(case):
+    build, code, path = FDTD[case]
+    fdtd = _fdtd()
+    error = _refused(lambda: build(fdtd), ValidationError, code, path)
+    # The engine's own explanation is kept, in the public vocabulary.
+    assert 'fd.' not in error.message, error.message
+
+
+def test_a_traced_fdtd_length_is_a_static_input_refusal():
+    jax = pytest.importorskip('jax')
+    fdtd = _fdtd()
+    with pytest.raises(ValidationError) as caught:
+        jax.grad(lambda v: (fdtd.Domain(size=(v, 1., 1.)), v)[1])(.3)
+    assert (caught.value.code, caught.value.path) == ('prepared.static_input', 'scene.domain.size')
+    assert 'is static' in caught.value.message
+
+
+def test_an_unknown_fdtd_keyword_is_still_a_type_error():
+    """A keyword the declaration does not have is Python's TypeError, as on every declaration."""
+    fdtd = _fdtd()
+    with pytest.raises(TypeError):
+        fdtd.Domain(sizes=(1., 1., 1.))
+    with pytest.raises(TypeError):
+        fdtd.TimeSeriesMonitor('p', point=(0, 0, 0))
+
+
+def test_valid_fdtd_constructions_are_unchanged():
+    fdtd = _fdtd()
+    assert fdtd.SnappedSlab(x=[np.float64(-1), 1]).x == (-1., 1.)
+    assert fdtd.Plane(y=.1, x=(-.3, .3)).x == (-.3, .3)
+    assert fdtd.MirrorSymmetry(parity=-1.).parity == -1
+    assert fdtd.TimeSeriesMonitor('p', at=(0, 0, np.float64(.1))).at == (0., 0., .1)
+    assert dict(fdtd.PML(reference_media={'z-': Material(2.25)}).reference_media) == {
+        'z-': Material(2.25)}
+    assert dict(fdtd.PML().reference_media) == {}
