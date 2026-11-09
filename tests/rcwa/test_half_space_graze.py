@@ -6,7 +6,9 @@
   top medium. The half-space beside it is fine, so the run merges into it there: the answer is
   the single interface's Fresnel coefficients, continuous with the stack one step off the point.
   A coherent multi-source solve cannot merge and refuses that point as the graze it is.
-* Ordinary stacks keep their bits: the merge does not run off its band.
+* At some ordinary angles LAPACK's ``geev`` does not converge on the uniform layer's operator,
+  diagonal up to a few ulps of ``kx*ky - ky*kx``; that layer takes its exact diagonal modes.
+* Ordinary stacks keep their bits: neither change runs off its band.
 """
 import warnings
 
@@ -15,7 +17,11 @@ import pytest
 
 from wavebit import Material, rcwa
 from wavebit.errors import NumericalError
+from wavebit.rcwa._engine import solve_2d
 
+# Measured on OpenBLAS: `geev` returns info > 0 on this empty interface's 98 x 98 operator.
+NOCONV_PERIOD = (1.49414428555847, 1.775182937114707)
+NOCONV_THETA = 0.16079553455782242
 
 
 def _problem(layers, *, top, bottom, period, wavelength=1.0, theta=0.0, phi=0.0, side='top',
@@ -118,3 +124,46 @@ def test_a_coherent_excitation_refuses_the_graze_as_a_graze():
     assert caught.value.code == 'rcwa.singular'
     assert 'Fourier order and NVF' not in str(caught.value)
     _solve(problem(1.0 * (1 + 1e-12)))
+
+
+@pytest.mark.parametrize('kind', ['empty', 'lit medium'])
+@pytest.mark.parametrize('polarization', ['s', 'p'])
+@pytest.mark.parametrize('algorithm', ['smm', 'etm'])
+def test_a_layer_of_the_cover_is_invisible_where_eig_does_not_converge(kind, polarization,
+                                                                       algorithm):
+    """The cover is ``eps = 1.5`` and the substrate ``eps = 2``: R and T are the bare
+    interface's, at the angle and one step to either side of it."""
+    def at(theta):
+        problem = _problem(_layers(kind, 1.5, 2.0), top=1.5, bottom=2.0,
+                           period=NOCONV_PERIOD, theta=theta, polarization=polarization)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            return rcwa.run(problem, numerics=rcwa.Numerics(orders=(3, 3), algorithm=algorithm))
+
+    r, t = _fresnel(1.5, 2.0, NOCONV_THETA, polarization)
+    exact = at(NOCONV_THETA)
+    np.testing.assert_allclose(np.sum(exact.R), r, rtol=1e-11)
+    np.testing.assert_allclose(np.sum(exact.T), t, rtol=1e-11)
+    for theta in (NOCONV_THETA * (1 + 1e-12), NOCONV_THETA * (1 - 1e-12)):
+        np.testing.assert_allclose(np.sum(at(theta).R), np.sum(exact.R), rtol=1e-9)
+
+
+def test_a_failed_eig_takes_the_diagonal_only_of_a_round_off_diagonal_matrix(monkeypatch):
+    """The fallback answers a failed ``eig`` on a matrix diagonal to round-off, and nothing
+    else: a converged ``eig`` keeps its bits, and a coupled matrix still raises."""
+    def refuse(_):
+        raise np.linalg.LinAlgError('Eigenvalues did not converge')
+
+    rng = np.random.default_rng(0)
+    d = np.repeat(rng.normal(size=4) + 0.1j, 2).astype(complex)
+    nearly = np.diag(d) + 2e-16 * np.triu(rng.normal(size=(8, 8)), 1)
+    coupled = np.diag(d) + 1e-6 * np.triu(rng.normal(size=(8, 8)), 1)
+    w, W = solve_2d._eig_or_diagonal(np, nearly)
+    expected = np.linalg.eig(nearly)
+    assert w.tobytes() == expected[0].tobytes() and W.tobytes() == expected[1].tobytes()
+
+    monkeypatch.setattr(solve_2d, 'eig', refuse)
+    w, W = solve_2d._eig_or_diagonal(np, nearly)
+    assert np.array_equal(w, d) and np.array_equal(W, np.eye(8))
+    with pytest.raises(np.linalg.LinAlgError):
+        solve_2d._eig_or_diagonal(np, coupled)

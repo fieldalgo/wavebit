@@ -694,6 +694,49 @@ def _pair_inverse(xp, Q, a, b, mask):
     return base + (MEoffD + DEoffM - MEM)
 
 
+def _eig_or_diagonal(xp, A):
+    """``eig(A)``, or ``A``'s own diagonal where ``eig`` fails on a matrix diagonal to round-off.
+
+    A uniform isotropic layer's ``Omega2`` is ``diag(kx**2 + ky**2 - eps*mu)`` twice over in
+    exact arithmetic; computed, its off-diagonal blocks hold the ``kx*ky - ky*kx`` cancellation,
+    a few ulps scattered over a matrix of exactly repeated eigenvalues. LAPACK's ``geev`` can fail
+    to converge on that (measured: ``info > 0`` on a 98 x 98 empty-interface operator, NumPy and
+    SciPy alike) although the answer is analytic. Where it does, ``(diag(A), I)`` is the exact
+    eigensystem of ``A`` less those round-off entries -- a nearby layer in the sense of
+    ``docs/theory/rcwa/rayleigh-points.md`` section 1 -- so it is what the layer's plane-wave
+    modes are, and the rest of the solve takes it as any computed basis. Only a failure is
+    replaced: a converged ``eig`` keeps its bits, and a matrix off-diagonal beyond round-off
+    still raises.
+    """
+    try:
+        return eig(A)
+    except Exception as exc:
+        if not _did_not_converge(exc):
+            raise
+        import numpy as np
+        try:
+            host = np.asarray(_readable(A, xp))
+        except Exception:
+            raise exc from None
+        d = np.diagonal(host)
+        scale = np.max(np.abs(host)) if host.size else 0.
+        off = host - np.diag(d)
+        tolerance = 4 * host.shape[-1] * np.finfo(host.real.dtype).eps * scale
+        if not (np.all(np.isfinite(host)) and np.max(np.abs(off), initial=0.) <= tolerance):
+            raise
+        device = getattr(A, 'device', None)
+        return (xp.asarray(d, dtype=A.dtype, device=device),
+                xp.asarray(np.eye(host.shape[-1], dtype=host.dtype), dtype=A.dtype, device=device))
+
+
+def _did_not_converge(exc):
+    """Whether ``exc`` is a backend's eigensolver reporting non-convergence."""
+    from numpy.linalg import LinAlgError
+    if isinstance(exc, LinAlgError):
+        return True
+    return isinstance(exc, RuntimeError) and 'linalg' in type(exc).__name__.lower()
+
+
 def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epyx_conv, C,
                    mu=None, k0_d=None, dng=None, pair_cap=None, with_coupling=False, env=None,
                    screen_k0_d=None):
@@ -816,7 +859,7 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     del B, D, Cc, E
     from wavebit.rcwa._engine.modal_gradient import _stop
     differentiated = carries_autodiff(Omega2_LR)
-    w, W = eig(_stop(Omega2_LR))
+    w, W = _eig_or_diagonal(xp, _stop(Omega2_LR))
     if not differentiated:
         # Only autodiff needs the original operator after the eigensolve.
         # Preserve the eager forward path's early release of this dense matrix.
