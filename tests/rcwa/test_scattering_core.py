@@ -549,12 +549,21 @@ def test_the_gap_has_waves_at_an_imaginary_k_par(extra, monkeypatch):
         return _all_amplitudes(
             _legacy_wavebit_rcwa(**dict(kw, layer_algorithm=algo)).solve(auto_detune=False))
 
-    assert np.abs(amplitudes('SMM') - amplitudes('ETM')).max() < 1e-14
+    etm = amplitudes('ETM')
+    assert np.abs(amplitudes('SMM') - etm).max() < 1e-14
     monkeypatch.setattr(scattering, '_gap_waves', _old_gap)
-    # The old gap fails either way: macOS (Accelerate) carries its infinite impedance to a
-    # non-finite result, Linux (OpenBLAS) refuses to invert it.
-    with np.errstate(all='ignore'), pytest.raises((FloatingPointError, np.linalg.LinAlgError)):
-        amplitudes('SMM')
+    # The old gap fails on every platform, in one of three ways. Where ``1 + k_par**2`` rounds
+    # to exactly 0 its impedance is infinite: macOS (Accelerate) carries that to a non-finite
+    # result, and Linux (OpenBLAS) refuses to invert it. NumPy's complex ``sin`` on Windows lands
+    # one ulp off, ``k_par = 1.0000000000000002j``, so the impedance is a finite -2.3e15; LAPACK
+    # inverts it and SMM returns finite amplitudes that are not ETM's (0.52 off on tm, 0.26 on
+    # conical). The silent wrong answer is the worst of the three, so it counts as failing too.
+    try:
+        with np.errstate(all='ignore'):
+            old = amplitudes('SMM')
+    except (FloatingPointError, np.linalg.LinAlgError):
+        return
+    assert not np.isfinite(old).all() or np.abs(old - etm).max() > 1e-12
 
 
 # ----------------------------------------------------------------------------- portability
