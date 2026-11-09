@@ -6064,6 +6064,13 @@ class CoreFactorizationMixin:
                 is being replayed onto. A traced call cannot check — the comparison is the
                 thing the record exists to avoid — so a long fit should re-freeze on a schedule
                 rather than wait to be told.
+            ValueError: when a raster that ``jax.jit`` or ``jax.vmap`` traces reaches a build
+                that plans from its values -- the NVF normal field, the ``integrated`` block
+                compression, the tensor NVF phase labels -- with no record of that decision in
+                ``geometry``. Raised before planning reads the raster; the message names the
+                raster and prints the freeze-and-replay recipe
+                (:meth:`_refuse_to_plan_a_traced_raster`). A raster that is a constant of the
+                trace, and an eager ``jax.grad`` tracer, are planned on their values.
         """
         with self._conditions(kwargs):    # an optimizer moves a design variable here
             self._frozen_geometry = geometry
@@ -6572,6 +6579,62 @@ class CoreFactorizationMixin:
                 compression=compression if integrated else None,
                 lattice=self._geometry_lattice_for(geometry), normal_method=self.raster_normal_method)
 
+    #: What each raster build plans from the raster's values, for the refusal below.
+    _RASTER_PLANS = {
+        'normal_field': 'the NVF normal field (which pixels border another phase)',
+        'compression': 'the integrated block compression (where runs of equal pixels end)',
+        'labels': 'the tensor NVF phase labels (which pixels hold the same tensor)',
+    }
+
+    def _refuse_to_plan_a_traced_raster(self, raster, quantity, plans, geometry):
+        """Refuse, by name, to plan a raster that a ``jax.jit`` or ``jax.vmap`` trace holds.
+
+        ``plans`` names the decisions the calling build would take from ``raster``'s values
+        because ``geometry`` replays no record of them (keys of :attr:`_RASTER_PLANS`). A
+        tracer under ``jax.jit`` or ``jax.vmap`` has no value to take them from. Planning was
+        attempted anyway, and the solve died inside it with JAX's own
+        ``TracerBoolConversionError`` -- or, on the tensor path, with "freeze_geometry() before
+        tracing a tensor raster" -- which names neither the raster nor the way out. Refusing is
+        right: there is nothing to plan from, and a guess would solve another structure. So
+        this refuses once, before anything reads the raster, and says what to do.
+
+        Asked of the value, not of the framework. :func:`_holds_tracer` first, which is
+        structural and free, so NumPy, PyTorch and a concrete JAX array pay nothing -- a raster
+        that is a constant of the trace included, whose layers are cut concrete and planned as
+        they are eagerly (:func:`~wavebit.rcwa._engine.factorization._layer_eps_for_normal_field`).
+        Then :func:`~wavebit.rcwa._engine.factorization._has_no_value`, which an eager
+        ``jax.grad`` tracer passes: it carries the primal the planning reads.
+
+        Called by the two builds that plan from a raster, each for its own quantity: the scalar
+        raster dispatch (:meth:`_slots_for`) and the tensor NVF labelling
+        (:func:`~wavebit.rcwa._engine.anisotropy._sampled_fields`). The public lifecycle never
+        gets here with a tracer: ``rcwa.prepare`` refuses a traced problem first, and
+        ``Prepared.run`` replays the records ``prepare`` took.
+        """
+        if not plans or not _holds_tracer(raster) or not _fac._has_no_value(raster):
+            return
+        keyword = 'structure' if quantity == 'permittivity' else 'mu'
+        what = ' and '.join(self._RASTER_PLANS[plan] for plan in plans)
+        record = ('No `geometry=` was given to replay instead' if geometry is None else
+                  f'The `geometry=` given holds no record of {"them" if len(plans) > 1 else "it"} '
+                  f'-- it was frozen under other settings, such as other `fourier_coefficients` '
+                  f'or without this raster')
+        plans_nothing = ("factorization='li' plans nothing" if 'labels' in plans else
+                         "fourier_coefficients='sampled' with factorization='li' or 'laurent' "
+                         "plans nothing")
+        raise ValueError(
+            f'the {quantity} raster (`{keyword}`) is traced -- a `jax.jit` or `jax.vmap` tracer, '
+            f'which has no value to read -- and this build plans {what} from its values. '
+            f'{record}, so there is nothing to plan from. Take the decisions once, eagerly, on '
+            f'the concrete raster outside the trace, and replay them inside it:\n'
+            f'    geometry = solver.freeze_geometry()\n'
+            f'    jax.jit(lambda x: solver.solve({keyword}=x, geometry=geometry))(x)\n'
+            f'Only the decisions are held; the values stay live and differentiable. A traced '
+            f'replay is not compared with the raster, so freeze again when its pattern moves. '
+            f'Through the public API the same split is rcwa.prepare outside the transform and '
+            f'Prepared.run inside it (docs/guide/common/autodiff.md, "A held raster preparation '
+            f'under jit"). Or trace a build that decides nothing from values: {plans_nothing}.')
+
     def _slots_for(self, structure, geometry, quantity):
         """Five convolution slots for one *quantity* of the current structure.
 
@@ -6605,6 +6668,14 @@ class CoreFactorizationMixin:
                 normal_field = geometry.normal_field
                 normal_field_source = geometry.normal_field_source
                 compression = geometry.compression
+            # What the builder below would take from the raster's values, having no record of
+            # it to replay -- refused by name, before it reads one, if the raster has none.
+            self._refuse_to_plan_a_traced_raster(
+                structure, quantity,
+                [plan for plan, needed in (
+                    ('normal_field', factorization == Factorization.NVF and normal_field is None),
+                    ('compression', not sampled and compression is None)) if needed],
+                geometry)
 
             if factorization == Factorization.LI:
                 if sampled:

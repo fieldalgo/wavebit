@@ -420,6 +420,12 @@ def _sampled_fields(solver, geometry, quantity):
     elif record is not None and record['snapshot'] is not None:
         raise StaleGeometryError('tensor shape geometry changed; freeze_geometry() again')
     structure = solver.structure if quantity == 'epsilon' or shaped else solver.mu
+    if record is None and not shaped:
+        # The labels below are this build's one decision from values; a raster with no value to
+        # read is refused by name here, before they are attempted. A 1 x 1 raster has no labels.
+        solver._refuse_to_plan_a_traced_raster(
+            structure, 'permittivity' if quantity == 'epsilon' else 'permeability',
+            [] if tuple(structure.shape[1:3]) == (1, 1) else ['labels'], geometry)
     # Cut and lifted under `_eager`, so a raster that is a constant of a `jax.jit` trace keeps
     # its values and its phases are labelled as they are eagerly. Staged, every layer of it was
     # a tracer -- even with only the wavelength traced -- and the solve was refused below as if
