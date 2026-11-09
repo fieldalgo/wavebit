@@ -516,7 +516,7 @@
     "jaxlib": {
       "spdx": "Apache-2.0",
       "url": "https://github.com/jax-ml/jax",
-      "bundled": "jaxlib's own compiled modules (jaxlib/*.so, Python extension modules without a version tag, and libjax_common.so) statically contain the components whose licenses the wheel's LICENSE.txt reproduces: BoringSSL, gRPC, Abseil, Protocol Buffers, RE2, DLPack, double-conversion, Eigen (MPL-2.0, file-level weak copyleft, compiled by the wheel's publisher and used as shipped), Farmhash, FlatBuffers, HighwayHash, libjpeg-turbo, fft2d, giflib, LLVM (Apache-2.0 WITH LLVM-exception), oneDNN, nsync, TensorFlow, pybind11, snappy, upb and zlib. No separately built third-party library. Checked on Linux, jaxlib 0.11.2.",
+      "bundled": "jaxlib's own compiled modules (jaxlib/*.so, Python extension modules without a version tag, and libjax_common.so) statically contain the components whose licenses the wheel's LICENSE.txt reproduces: BoringSSL, gRPC, Abseil, Protocol Buffers, RE2, DLPack, double-conversion, Eigen (MPL-2.0, file-level weak copyleft, compiled by the wheel's publisher and used as shipped), Farmhash, FlatBuffers, HighwayHash, libjpeg-turbo, fft2d, giflib, LLVM (Apache-2.0 WITH LLVM-exception), oneDNN, nsync, TensorFlow, pybind11, snappy, upb and zlib. No separately built third-party library. Checked on Linux, jaxlib 0.11.2. On Windows the one shared library is jaxlib/jax_common.dll, the counterpart of libjax_common.so (its strings name the OpenXLA authors); checked on Windows, jaxlib 0.11.0.",
       "bundled_files": [
         {
           "glob": "jaxlib/*.so",
@@ -526,6 +526,15 @@
             "linux"
           ],
           "review": "jaxlib's own compiled modules, loaded by jax; their static contents are listed under 'bundled'. Wavebit only calls jax's Python API and does not modify, relink or redistribute them."
+        },
+        {
+          "glob": "jaxlib/jax_common.dll",
+          "spdx": "Apache-2.0",
+          "linkage": "dynamic",
+          "platforms": [
+            "windows"
+          ],
+          "review": "jaxlib's own common library on Windows, the counterpart of libjax_common.so; its static contents are listed under 'bundled'. Wavebit only calls jax's Python API and does not modify, relink or redistribute it."
         }
       ]
     },
@@ -569,7 +578,18 @@
     },
     "ml-dtypes": {
       "spdx": "Apache-2.0",
-      "url": "https://github.com/jax-ml/ml_dtypes"
+      "url": "https://github.com/jax-ml/ml_dtypes",
+      "bundled_files": [
+        {
+          "glob": "ml_dtypes.libs/msvcp140-*.dll",
+          "spdx": "LicenseRef-MSVC-Redistributable",
+          "linkage": "dynamic",
+          "platforms": [
+            "windows"
+          ],
+          "review": "Microsoft Visual C++ runtime redistributable (msvcp140; its version resource names Microsoft Corporation), the same library numpy's Windows wheel carries; 'You may not modify these files'. Not redistributed by Wavebit. ml-dtypes' wheel carries no notice for it. Checked on Windows, ml-dtypes 0.6.0."
+        }
+      ]
     },
     "more-itertools": {
       "spdx": "MIT",
@@ -1212,7 +1232,7 @@
     "torch": {
       "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT",
       "url": "https://pytorch.org",
-      "bundled": "Linux CPU wheel: torch's own libraries in torch/lib/ (libtorch*, libc10, libshm and two test libraries) statically contain the third-party code whose licenses the wheel's dist-info/licenses/third_party/ reproduces, plus GNU libgomp (GCC's OpenMP runtime) as a separate shared library. Checked on Linux, torch 2.14.1+cpu.",
+      "bundled": "Linux CPU wheel: torch's own libraries in torch/lib/ (libtorch*, libc10, libshm and two test libraries) statically contain the third-party code whose licenses the wheel's dist-info/licenses/third_party/ reproduces, plus GNU libgomp (GCC's OpenMP runtime) as a separate shared library. Checked on Linux, torch 2.14.1+cpu. Windows CPU wheel: torch's own c10.dll, shm.dll and torch*.dll in torch/lib/, plus two separate third-party runtimes: libuv (uv.dll) and Intel's OpenMP runtime (libiomp5md.dll and its stub library libiompstubs5md.dll), Intel's own build rather than the LLVM OpenMP whose license the wheel reproduces. Checked on Windows, torch 2.14.1+cpu.",
       "bundled_files": [
         {
           "glob": "torch/lib/libgomp*.so*",
@@ -1231,6 +1251,51 @@
             "linux"
           ],
           "review": "torch's own libraries, under the expression its metadata declares; static contents per 'bundled'. Wavebit only calls torch's Python API and does not modify, relink or redistribute them."
+        },
+        {
+          "glob": "torch/lib/libiomp*5md.dll",
+          "spdx": "LicenseRef-Intel-EULA-Developer-Tools",
+          "linkage": "dynamic",
+          "platforms": [
+            "windows"
+          ],
+          "review": "Intel's OpenMP runtime (libiomp5md.dll) and its stub library (libiompstubs5md.dll): their version resources and strings name Intel Corporation and 'Intel(R) OMP version 5.0.20260213', built with Intel's oneAPI compiler, so this is Intel's own build, not the LLVM OpenMP whose license the wheel reproduces. The wheel carries no license text for it; Intel distributes this runtime as the intel-openmp package under the Intel End User License Agreement for Developer Tools (its PyPI metadata: 'Other/Proprietary License'). Loaded by torch's own libraries, not by Wavebit package code. Wavebit does not modify, relink or redistribute it."
+        },
+        {
+          "glob": "torch/lib/uv.dll",
+          "spdx": "MIT",
+          "linkage": "dynamic",
+          "platforms": [
+            "windows"
+          ],
+          "review": "libuv (exports uv_version), used by torch's own libraries; the wheel reproduces its MIT license under third_party/tensorpipe/third_party/libuv. Not redistributed."
+        },
+        {
+          "glob": "torch/lib/torch*.dll",
+          "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT",
+          "linkage": "dynamic",
+          "platforms": [
+            "windows"
+          ],
+          "review": "torch's own libraries (torch, torch_cpu, torch_python, torch_global_deps), under the expression its metadata declares; static contents per 'bundled'. Wavebit only calls torch's Python API and does not modify, relink or redistribute them."
+        },
+        {
+          "glob": "torch/lib/c10.dll",
+          "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT",
+          "linkage": "dynamic",
+          "platforms": [
+            "windows"
+          ],
+          "review": "torch's own core library, under the expression its metadata declares. Wavebit does not modify, relink or redistribute it."
+        },
+        {
+          "glob": "torch/lib/shm.dll",
+          "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT",
+          "linkage": "dynamic",
+          "platforms": [
+            "windows"
+          ],
+          "review": "torch's own shared-memory library, under the expression its metadata declares. Wavebit does not modify, relink or redistribute it."
         }
       ]
     },
