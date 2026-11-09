@@ -401,7 +401,8 @@ def _graded_absorber(problem,numerics):
     """A warning for each PlaneWave whose propagation axis ends in a ConductiveAbsorber.
 
     The layer is PEC-backed and returns a normally incident wave with a round-trip amplitude
-    of ~exp(-3) = 5e-2, whatever its cell count. Its power, 2.5e-3, is not the error a
+    near exp(-3) = 5e-2 in vacuum, exp(-3 n) in a filling medium of index n, whatever its
+    cell count. Its power, 2.5e-3 in vacuum, is not the error a
     measurement sees: the returned wave is coherent with the scene's own reflections, so a
     reflectance or transmittance moves at first order, by up to ~2 * 5e-2 * |r| per face --
     6 % on a glass slab between two such faces (``tests/fdtd/test_fd_absorber_planewave.py``),
@@ -424,12 +425,13 @@ def _graded_absorber(problem,numerics):
             path='numerics.absorber',actual=tuple(faces),
             message=f'PlaneWave({source.name!r}) propagates along {axis}, and its Open faces '
                     f'{", ".join(map(repr,faces))} end in a fdtd.ConductiveAbsorber, which returns a '
-                    f'normally incident wave with a round-trip amplitude of ~exp(-3) = 5e-2 at any '
-                    f'cell count. That wave is coherent with the scene\'s own reflections, so a '
-                    f'measured reflectance or transmittance moves at first order -- by up to about '
-                    f'2 * 5e-2 * |r| per face (6 % on a glass slab), not by the 2.5e-3 of its '
-                    f'power. Use the default fdtd.PML where the media at the faces allow it, or '
-                    f'treat the absorber\'s return as part of the error budget.'))
+                    f'normally incident wave with a round-trip amplitude near exp(-3) = 5e-2 in '
+                    f'vacuum (exp(-3 n) in a medium of index n) at any cell count. That wave is '
+                    f'coherent with the scene\'s own reflections, so a measured reflectance or '
+                    f'transmittance moves at first order -- by up to about 2 * 5e-2 * |r| per face '
+                    f'in vacuum (6 % on a glass slab), not by the 2.5e-3 of its power. Use the '
+                    f'default fdtd.PML where the media at the faces allow it, or treat the '
+                    f'absorber\'s return as part of the error budget.'))
     return tuple(issues)
 
 

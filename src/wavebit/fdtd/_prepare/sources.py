@@ -709,10 +709,11 @@ def column_pads(scene, src):
     column is never padded.
 
     A ``ConductiveAbsorber`` face (``Absorber``) is padded the same way: its PEC-backed graded
-    layer returns a normally incident wave with round-trip amplitude ``~exp(-3) = 5e-2``. In
-    the column that echo came back to the drive, which sent it down again as a second incident
-    wave, and the sheet injected the column's field, echo included: with no structure at all, the transmitted flux at 20 nm cells moved by -9.6 % to +10.6 % against
-    the PML scene and the measured incident spectrum by +-5 %. The column's cells under the
+    layer returns a normally incident wave with round-trip amplitude ``~exp(-3) = 5e-2`` in
+    vacuum (near ``exp(-3 n)`` in a medium of index ``n``). In the column that echo came back
+    to the drive, which sent it down again as a second incident wave, and the sheet injected
+    the column's field, echo included: with no structure at all, the transmitted flux at 20 nm
+    cells moved by -9.6 % to +10.6 % against the PML scene and the measured incident spectrum by +-5 %. The column's cells under the
     main grid's layer are plain background, and the main grid keeps its own layer, so its
     reflection is scattered field, crosses the sheet and is measured -- the absorber's own
     documented reflection, and no more (``tests/fdtd/test_fd_absorber_planewave.py``). A
@@ -768,7 +769,7 @@ def _check_column_end(scene, src):
         f'PlaneWave({src.name!r}) with fdtd.ConductiveAbsorber on {", ".join(map(repr, sides))} '
         f'in an fd.{type(background).__name__} background. The plane wave is computed in a 1-D '
         f'column of the background, and that column must not reflect: the absorber returns '
-        f'a round trip of ~exp(-3) = 5e-2 in amplitude, which the source sends back down as a '
+        f'a round trip of up to ~exp(-3) = 5e-2 in amplitude, which the source sends back down as a '
         f'second incident wave (flux off by up to ~10 % in an empty cell). A PML ends the column '
         f'without that echo in a lossless background, but cannot be matched to a lossy or '
         f'dispersive one, which has no single real (eps, mu). Make the background a lossless '
