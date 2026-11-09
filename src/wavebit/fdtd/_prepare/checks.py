@@ -64,6 +64,7 @@ The table, and where each row lives:
     (stage 3) an Axis1D k past k_max              boundaries.Axis1D (concrete); the params'
                                                   guard (traced), which makes the run nan
 """
+import cmath
 import collections
 import math
 import warnings
@@ -2607,8 +2608,41 @@ def _wavelength(scene, plan):
     return lengths[0] if lengths else None
 
 
-def _index_at(material, wavelength, *, conductive=False):
-    """``(n_real, skin_depth)`` of ``material`` at ``wavelength``, or ``(None, None)``."""
+class UndampedResonance(ValueError):
+    """A lossless Lorentz pole resonant exactly at a wavelength a frequency-domain check reads.
+
+    Its permittivity there is infinite (``strength / (omega_0**2 - w**2)`` with ``gamma = 0``),
+    so the material's index, its cells per wavelength and any frequency-domain quantity at
+    that wavelength are undefined. The time stepping itself never divides by that
+    denominator and stays well defined; what cannot be answered is the question the check
+    asks. The detuned scene's refusal asks for a spacing that goes to zero as the detuning
+    does, so this is that refusal's limit, stated as what it is rather than as ``index inf``.
+    """
+
+
+def _resonance_refusal(material, wavelength, where):
+    """The :class:`UndampedResonance` for the pole of ``material`` resonant at ``wavelength``."""
+    omega = 2.0 * math.pi / wavelength
+    named = 'a pole'
+    for i, p in enumerate(material.poles):
+        w0, gamma = concrete(getattr(p, 'omega_0', None)), concrete(getattr(p, 'gamma', None))
+        if w0 is not None and gamma == 0 and w0 * w0 - omega * omega == 0:
+            named = f'poles[{i}] = Lorentz(omega_0={w0:g}, gamma=0)'
+            break
+    return UndampedResonance(
+        f'{where}: {named} is an undamped resonance at wavelength {wavelength:g}, where its '
+        f'permittivity is infinite, so the material has no finite index there and no finite '
+        f'mesh resolves it (the frequency-domain quantities at that wavelength are undefined; '
+        f'the time stepping is not). Move that wavelength off the resonance, or give the pole '
+        f'physical damping (gamma > 0).')
+
+
+def _index_at(material, wavelength, *, conductive=False, where='a material'):
+    """``(n_real, skin_depth)`` of ``material`` at ``wavelength``, or ``(None, None)``.
+
+    Raises :class:`UndampedResonance` where a lossless pole makes ``eps`` infinite: there is
+    no index to return, and an ``inf``/``nan`` here would pass every ``cells < 8`` test.
+    """
     values = []
     for c in range(3):
         eps = concrete(material.eps[c])
@@ -2622,10 +2656,15 @@ def _index_at(material, wavelength, *, conductive=False):
             # too. This reader also serves post-run source round-trip diagnostics.
             poles = tuple(p for p in material.poles if not (
                 type(p) is Lorentz and concrete(p.strength) == 0 and not _carries(p.strength)))
-            eps = eps_at(poles, wavelength, eps)
+            try:
+                eps = eps_at(poles, wavelength, eps)
+            except ZeroDivisionError:
+                eps = math.inf
             if any(concrete(getattr(p, f)) is None
                    for p in material.poles for f in p.__dataclass_fields__):
                 return None, None
+            if not cmath.isfinite(complex(eps)):
+                raise _resonance_refusal(material, wavelength, where)
         if conductive and isinstance(material, Conductor):
             sigma = concrete(material.sigma[c])
             if sigma is None:
@@ -2702,7 +2741,7 @@ def _resolution_notes(scene, plan):
                  'mesh may be too coarse for it and nothing here can tell')]
     out = []
     for where, material in materials:
-        n, skin = _index_at(material, wavelength, conductive=conductive)
+        n, skin = _index_at(material, wavelength, conductive=conductive, where=where)
         if n is None:
             out.append((CoarseMeshWarning,
                         f'{where} has a traced value, so its cells per wavelength could not '
@@ -2816,7 +2855,11 @@ def check_wavelength_resolution(scene, grid):
                 asked.setdefault(w, m.name)
     for w in sorted(asked):
         for where, material in materials:
-            n, skin = _index_at(material, w, conductive=conductive)
+            try:
+                n, skin = _index_at(material, w, conductive=conductive, where=where)
+            except UndampedResonance as exc:
+                raise UndampedResonance(f'DiffractionMonitor({asked[w]!r}) asks for wavelength '
+                                        f'{w:g}; {exc}') from None
             if n is None or skin is not None:
                 continue                    # traced (not countable), or a metal: its skin
             cells = w / (n * grid.dx)
@@ -2837,7 +2880,8 @@ def check_wavelength_resolution(scene, grid):
     if band is None:
         return                              # traced: _resolution_notes says so, in a warning
     for where, material in materials:
-        n, skin = _index_at(material, band, conductive=conductive)
+        n, skin = _index_at(material, band, conductive=conductive,
+                            where=f'{where} (the sources\' shortest band wavelength)')
         if n is not None and skin is None and band / (n * grid.dx) < 8.0:
             raise _coarse_refusal(where, n, band, grid.dx, sources)
 

@@ -704,8 +704,10 @@ def _round_trip(scene, src, series):
     """The time a wave takes down the source's column and back, at its slowest: ``2 L / v``
     for the column's length ``L`` and the slowest axial group speed ``v = sqrt(n^2 - s^2) /
     n^2`` over the scene's materials that carry the wave (``n > s``, ``s = n_background sin
-    theta``); ``None`` when a material is traced."""
-    from wavebit.fdtd._prepare.checks import _index_at
+    theta``); ``None`` when a material is traced, or when an undamped pole is resonant at the
+    source's wavelength -- there its index is infinite and the round trip undefined, and this
+    post-run diagnostic declines to judge the column rather than fail a finished run."""
+    from wavebit.fdtd._prepare.checks import UndampedResonance, _index_at
     from wavebit.materials._time_domain import as_material
     from wavebit.fdtd._legacy_sources import concrete_or_none
     wavelength = concrete_or_none(src.band.wavelength)
@@ -713,7 +715,10 @@ def _round_trip(scene, src, series):
         return None
     background = as_material(getattr(scene, 'background', None), 'Scene(background=)')
     materials = [background] + [st.material for st in (getattr(scene, 'structures', ()) or ())]
-    n = [_index_at(m, wavelength)[0] for m in materials]
+    try:
+        n = [_index_at(m, wavelength)[0] for m in materials]
+    except UndampedResonance:
+        return None
     if any(v is None for v in n):
         return None
     s = n[0] * math.sin(math.radians(float(getattr(src, 'theta', 0.0) or 0.0)))
