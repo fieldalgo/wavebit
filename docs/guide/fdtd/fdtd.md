@@ -7,7 +7,7 @@
 
 
 :::{note}
-This dated document records the periodic entry point, now `wavebit.compat.legacy.fdtd`. Its §8h examples use that earlier interface, imported as `wavebit`, because the current `wavebit.fdtd` has no time record of the field, point probes or Jones-vector incidence yet; §8's one-run spectrum is shown in the current spelling.
+This dated document records the periodic entry point, now `wavebit.compat.legacy.fdtd`. Its §8h examples use that earlier interface, imported as `wavebit`, and run only on a historical checkout. The current [`wavebit.fdtd.periodic`](periodic-problems.md) has the same features under new names: `Outputs(snapshots=Snapshots(...))` records all six components over time, `Result.sample(...)` reads a point probe from that record, and `PlaneWave(polarization=(a_s, a_p))` takes a Jones pair; the top-level `wavebit.fdtd.PlaneWave` takes only `'s'` or `'p'`. §8's one-run spectrum is shown in the current spelling.
 :::
 
 Written: 2026-08-31, extended through 2026-09-04.
@@ -1061,7 +1061,7 @@ those additional outputs. Omitting the option retains the original transverse
 record and memory cost. The legacy `field_e`/`field_ex` outputs remain available.
 
 ```python
-# Earlier interface: the current wavebit.fdtd has no time record of the field yet.
+# Earlier interface; current: wavebit.fdtd.periodic Outputs(snapshots=Snapshots(...)).
 import numpy as np
 from wavebit.compat import legacy as wavebit
 
@@ -1106,7 +1106,7 @@ and time vector. `fdtd_poynting` adds the instantaneous vector
 `S = cross(E.real, H.real)`. Use either with `record_components='all'`:
 
 ```python
-# Earlier interface: the current wavebit.fdtd has no point probes of a time record yet.
+# Earlier interface; current: wavebit.fdtd.periodic Result.sample(...) on a Snapshots record.
 probe = wavebit.fdtd_poynting(diag, x=0., y=0., z=50.)
 time, flux = probe['t'], probe['S']
 # E/H/S have shape (number of times, 3), with x/y/z columns.
@@ -1156,7 +1156,7 @@ state. The same Jones vector applies to each wavelength of a broadband solve; th
 existing fixed-in-plane-wavevector rule still applies at oblique incidence.
 
 ```python
-# Earlier interface: fdtd.PlaneWave takes only polarization='s' or 'p' so far.
+# Earlier interface; current: wavebit.fdtd.periodic PlaneWave(polarization=(a_s, a_p)) (top-level fdtd.PlaneWave takes 's' or 'p').
 result = wavebit.fdtd(
     structure=np.full((1, 1, 2), 2.25), thickness=[100.],
     top=1., bot=1.44, period=[100.], wavelength=900.,
@@ -1192,7 +1192,7 @@ the recorded waveform exactly; finite Gaussian envelopes are not strictly analyt
 signals, so far spectral tails need not have an exact constant quadrature ratio.
 
 ```python
-# Earlier interface: no Jones-vector incidence or time record in wavebit.fdtd yet.
+# Earlier interface; current: wavebit.fdtd.periodic PlaneWave Jones pairs and Snapshots.
 result, diag = wavebit.fdtd(
     structure=np.ones((1, 1, 2)), thickness=[100.], top=1., bot=1.,
     period=[100.], wavelength=900., polarization=(1., 1j),

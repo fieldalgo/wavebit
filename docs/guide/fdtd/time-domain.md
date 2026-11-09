@@ -1,13 +1,18 @@
 # A solve in the time domain
 
 :::{note}
-Four examples use the current `wavebit.fdtd` module: the first two, the material derivative under
+Four examples use the top-level `wavebit.fdtd` scene API: the first two, the material derivative under
 [the common scene adapter](#common-scene-adapter) and [source placement](#source-position-independent-of-padding).
-The others call the earlier periodic factory `wavebit.compat.legacy.fdtd`, or its native grid `fdtd_grid`,
-because raster layers, whole-field time records, plotting, mode fitting, graded or layer-fitted meshes, angle,
-shape, thickness and half-space derivatives, Jones polarization and that route's source, extraction and
-convergence controls are not in the current module yet. `wavebit.compat` was retired on 2026-10-15, so those
-examples run only on a historical checkout; each sits in an *Earlier interface* block.
+The others were written for the earlier periodic factory `wavebit.compat.legacy.fdtd`, or its native grid
+`fdtd_grid`, retired with `wavebit.compat` on 2026-10-15; that code runs only on a historical checkout and
+each sits in an *Earlier interface* block. Their capabilities are current under new names:
+[`wavebit.fdtd.periodic`](periodic-problems.md) takes raster and typed-shape layers, records the whole field
+over time (`Snapshots`, with `Result.sample` point probes), builds graded (`algorithm='reference'`, `grading=`)
+and layer-fitted meshes, differentiates angle, shape, thickness and half-space inputs, takes Jones pairs, and
+has the pulse, extraction, cutoff and `DecayCheck` controls; mode fitting is `wavebit.observations.fit_modes`,
+and per-cell grids are [`wavebit.fdtd.native`](native-grids.md). Field plotting and animation have no current
+public equivalent. The numbers quoted with the earlier blocks were measured on that interface and have not been
+rerun; the first comment of most earlier blocks names the current spelling.
 :::
 
 `wavebit.fdtd` is the second solver. A periodic stack lit by a plane wave is an `fdtd.Problem`
@@ -396,9 +401,10 @@ rather than at the pixel centres.
 
 The current module keeps the time series of one component at its nearest Yee point,
 `fdtd.TimeSeriesMonitor(name, at=..., component=...)` (times in seconds, fields in V/m or A/m), and the final E
-and H, `fdtd.Outputs(final_fields=True)`, each with the coordinates it was sampled at. It does
-not record the whole domain over time yet, so this example and the plotting below keep the
-earlier factory.
+and H, `fdtd.Outputs(final_fields=True)`, each with the coordinates it was sampled at. The
+top-level scene does not record the whole domain over time; `wavebit.fdtd.periodic` does
+(`Outputs(snapshots=Snapshots(...))`). This example and the plotting below keep the earlier
+factory.
 
 :::{admonition} Earlier interface
 :class: earlier-interface
@@ -406,7 +412,7 @@ earlier factory.
 Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 ```python
-# Earlier interface: whole-domain time records are not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic Outputs(snapshots=Snapshots(...)).
 import numpy as np
 from wavebit.compat import legacy as wavebit
 from wavebit.compat.legacy import Stack, Layer, Incidence
@@ -452,7 +458,7 @@ The same record can be plotted or animated with optional Matplotlib
 (`pip install 'wavebit[plot]'`):
 
 ```python
-# Earlier interface: plot_fdtd_field and animate_fdtd_field are not in the current API yet.
+# Earlier interface; plot_fdtd_field and animate_fdtd_field have no current public equivalent.
 # Use record_field=10 in the solve above to resolve the optical oscillation.
 fig, ax, mesh = wavebit.plot_fdtd_field(diagnostics, frame=len(diagnostics['field_t']) // 2)
 animation = wavebit.animate_fdtd_field(diagnostics, interval=50)
@@ -569,7 +575,7 @@ electric conductivity are supported. Coefficients belong on each component's
 native Yee location; the function does not rasterize or average interfaces.
 
 ```python
-# Earlier interface: a native grid of per-cell coefficients is not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.native (Medium of per-cell arrays).
 import jax
 import jax.numpy as jnp
 from wavebit.compat import legacy as wavebit
@@ -923,7 +929,7 @@ Later shapes paint over earlier shapes, including periodic images. Coordinates,
 sizes and scalar positive real epsilon/mu can be NumPy, JAX or Torch values.
 
 ```python
-# Earlier interface: a differentiable rectangle on a half-space substrate is not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic (Rectangle regions on a Material substrate).
 import jax
 import jax.numpy as jnp
 from wavebit.compat import legacy as wavebit
@@ -998,7 +1004,7 @@ rectangle's `angle` in radians along with its centre, size and scalar material.
 The same shared RCWA recipe is used:
 
 ```python
-# Earlier interface: a rotation-angle derivative is not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic (Rectangle angle, differentiable).
 import jax
 import jax.numpy as jnp
 from wavebit.compat import legacy as wavebit
@@ -1075,7 +1081,7 @@ periodic cell edge. A completely hidden shape has no material or geometry
 sensitivity until its boundary becomes exposed.
 
 ```python
-# Earlier interface: overlapping painted rectangles are not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic (overlapping Rectangle regions).
 import jax
 import jax.numpy as jnp
 from wavebit.compat import legacy as wavebit
@@ -1138,7 +1144,7 @@ to the period centre. Centres wrap periodically. A finite `angle` has no effect
 on a circle, and its derivative is zero.
 
 ```python
-# Earlier interface: a differentiable disk on a half-space substrate is not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic (Circle regions on a Material substrate).
 import jax
 from wavebit.compat import legacy as wavebit
 
@@ -1199,7 +1205,7 @@ in radians; it may be live even when its current value is zero. Centres keep
 the common period-centred convention and wrap periodically.
 
 ```python
-# Earlier interface: an elliptical body is not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic Ellipse.
 import jax
 import jax.numpy as jnp
 from wavebit.compat import legacy as wavebit
@@ -1265,7 +1271,7 @@ while an angle changes. Python or NumPy scalar numbers continue to support
 automatic order selection.
 
 ```python
-# Earlier interface: an incidence-angle derivative is not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic (theta differentiates).
 import torch
 from wavebit.compat import legacy as wavebit
 
@@ -1294,7 +1300,7 @@ the scalar TE/TM convention fixes the x-z plane and cannot follow a changing
 azimuth. Pure s and p are `polarization=(1., 0.)` and `(0., 1.)` respectively.
 
 ```python
-# Earlier interface: angle derivatives and Jones polarization are not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic PlaneWave(theta=, phi=, polarization=(a_s, a_p)).
 import torch
 from wavebit.compat import legacy as wavebit
 
@@ -1365,7 +1371,7 @@ order. Material and pole gradients retain their usual meaning; mesh sizes and
 these resolution controls are not differentiable.
 
 ```python
-# Earlier interface: per-axis cell sizes are not in the current API yet (one cubic spacing).
+# Earlier interface; current: wavebit.fdtd.periodic Numerics(transverse_spacing=...).
 from wavebit.compat import legacy as wavebit
 
 result, diagnostic = wavebit.fdtd(
@@ -1489,7 +1495,9 @@ In the current module each measurement plane is the `DiffractionMonitor(plane=..
 declares, and `reference_plane` and `incident_plane` move its phase references (as in the
 example above); each result carries the Yee `k_normal` (the wavevector component along the port's normal
 axis) and `k_parallel` of every order. It has no
-cutoff classification yet, so the example below keeps the earlier route.
+cutoff classification; `wavebit.fdtd.periodic` reports one per order in
+`result.diagnostics['diffraction']` (`propagating`, `cutoff_wavelength`). The example below keeps
+the earlier route.
 
 :::{admonition} Earlier interface
 :class: earlier-interface
@@ -1506,7 +1514,7 @@ plane must precede the PML. Neither plane may touch a mixed interface cell.
 An unplaceable request raises instead of silently expanding the simulation.
 
 ```python
-# Earlier interface: the cutoff classification diagnostics are not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic result.diagnostics['diffraction'].
 import numpy as np
 from wavebit.compat import legacy as wavebit
 
@@ -1574,7 +1582,7 @@ With an explicit backend, `diffraction_method='directional'` uses both E and H
 to separate propagation toward and away from the stack at each measurement plane:
 
 ```python
-# Earlier interface: directional E/H extraction is not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic Numerics(extraction_method='directional').
 import numpy as np
 from wavebit.compat import legacy as wavebit
 
@@ -1662,7 +1670,7 @@ glancing waves at oblique incidence, but also weakens the source at wavelengths
 away from its center. Use a longer total run when increasing the width:
 
 ```python
-# Earlier interface: the pulse and convergence-window diagnostics are not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic diagnostics['pulse'] and Numerics(decay_check=DecayCheck(...)).
 import numpy as np
 from wavebit.compat import legacy as wavebit
 
@@ -1715,7 +1723,7 @@ For example, to weaken an unwanted oscillation at frequency 0.8 while measuring
 wavelengths 0.9, 1.0 and 1.1:
 
 ```python
-# Earlier interface: source spectral zeros are not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic Pulse(notch_frequencies_hz=...).
 import numpy as np
 from wavebit.compat import legacy as wavebit
 
@@ -1783,7 +1791,7 @@ diffraction threshold.
 Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 ```python
-# Earlier interface: whole-domain records and calibrated user planes are not in the current API yet.
+# Earlier interface; current whole-domain records: wavebit.fdtd.periodic Snapshots.
 import torch
 from wavebit.compat import legacy as wavebit
 from wavebit.compat.legacy import Stack, Incidence
@@ -1949,7 +1957,7 @@ reference planes, sources, monitors, PML, record coordinates and time step
 fixed. The spelling is shared with RCWA and typed `Stack` objects:
 
 ```python
-# Earlier interface: layer-thickness derivatives are not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic (thickness differentiates).
 import jax
 import jax.numpy as jnp
 from wavebit.compat.legacy import Stack, Incidence, fdtd
@@ -2020,7 +2028,7 @@ amplitudes are referenced to those physical faces, using the same convention as 
 retain JAX/Torch derivatives.
 
 ```python
-# Earlier interface: a moving outer face is not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic Numerics(variable_depth=True).
 import jax
 import numpy as np
 from wavebit.compat.legacy import fdtd
@@ -2192,7 +2200,7 @@ is static and is not a differentiable design variable.
 For `Stack` scenes, pass `grading=True` (ratio 1.06) or a ratio between 1 and 2:
 
 ```python
-# Earlier interface: a graded z mesh is not in the current API yet (its grid is uniform).
+# Earlier interface; current: wavebit.fdtd.periodic Numerics(algorithm='reference', grading=...).
 import numpy as np
 from wavebit.compat import legacy as wavebit
 from wavebit.compat.legacy import Stack, Incidence
@@ -2251,7 +2259,7 @@ thickness; every boundary lies on a z node. Cell widths inside the structure are
 at most `1/resolution`, and x/y sampling is unchanged. The default is `False`.
 
 ```python
-# Earlier interface: layer-fitted z cells are not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic Numerics(align_layers=True).
 import numpy as np
 from wavebit.compat import legacy as wavebit
 
@@ -2370,7 +2378,7 @@ independent of the supplied Jones vector. Existing top-level `amplitude_change`
 and `amplitudes_settled` retain their supplied-polarization meaning.
 
 ```python
-# Earlier interface: convergence-window diagnostics are not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic Numerics(decay_check=DecayCheck(...)).
 c = diagnostic['convergence']
 print(c['s_inc']['amplitudes_settled'], c['p_inc']['amplitudes_settled'])
 print(c['scattering_settled'])
@@ -2419,7 +2427,7 @@ using it on broadband pulses, rapidly changing fields, or resonant materials.
 There is no automatic stride selection.
 
 ```python
-# Earlier interface: DFT subsampling is not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic Numerics(dft_subsample=...).
 result, diagnostic = wavebit.fdtd(
     stack, incidence, backend='numpy', resolution=40,
     dft_subsample=2, return_diagnostics=True)
@@ -2455,7 +2463,7 @@ out-of-range integer indices and noninteger entries are refused. The region is
 static and requires `record_field`; it is available on the native grid API.
 
 ```python
-# Earlier interface: the native grid and its record regions are not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.native Snapshots(slices=...).
 out = wavebit.fdtd_grid(
     epsilon, spacing=(dz, dy, dx), dt=dt, steps=steps,
     record_field=10, record_components=('ey', 'hx'),
@@ -2491,7 +2499,7 @@ from any of `x`, `y`, `z` to `(lower, upper)` physical coordinates. It requires
 with `lower <= upper`; unspecified axes keep their entire extent.
 
 ```python
-# Earlier interface: whole-field records within physical bounds are not in the current API yet.
+# Earlier interface; current: wavebit.fdtd.periodic Snapshots(bounds=...).
 result, diagnostic = wavebit.fdtd(
     stack, incidence, backend='jax', resolution=40,
     record_field=10, record_components=('ey', 'hx'),
@@ -2530,13 +2538,13 @@ optimization parameters. For direct grid-index selection on `fdtd_grid`, use
 Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
 
 `wavebit.compat.legacy.fit_fdtd_modes(t, signal, modes=...)` analyzes a single point/component
-after the source becomes negligible. It has no current equivalent yet. It is NumPy
+after the source becomes negligible. Its current equivalent is `wavebit.observations.fit_modes`. It is NumPy
 post-processing of any uniformly sampled trace, so the series of a current `fdtd.TimeSeriesMonitor`
 (`result[name].times_seconds` in seconds, `.values`) also works; frequencies and decay rates then come
 out in Hz and 1/s. Select a trace from the recorded fields:
 
 ```python
-# Earlier interface: fit_fdtd_modes and whole-field records are not in the current API yet.
+# Earlier interface; current: wavebit.observations.fit_modes on wavebit.fdtd.periodic Snapshots.
 field = diagnostics['fields']['ey']
 signal = np.asarray(field['values'])[:, 0, 0, 0]
 fit = wavebit.fit_fdtd_modes(
