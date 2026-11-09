@@ -10,7 +10,7 @@ result = rcwa.run(problem, numerics=numerics,
 같은 키워드를 `fdtd.run`, `check`, `prepare`에도 사용합니다. 백엔드 이름은
 `"numpy"`, `"jax"`, `"torch"`이며 정밀도는 `"single"` 또는 `"double"`입니다.
 NumPy는 CPU가 필요합니다. JAX는 사용 가능한 `cpu`, `gpu`, `tpu` 장치를
-선택적 인덱스와 함께 받으며 Torch는 CPU 또는 사용 가능한 CUDA 장치를 받습니다.
+선택적 인덱스와 함께 받으며 Torch는 CPU 또는 사용 가능한 CUDA 장치를 torch의 표기로 받습니다. `cpu`나 `cpu:0`(Torch의 CPU 장치는 하나이므로 `cpu:1`은 거부), `cuda`나 `cuda:N`을 쓰며, 사용할 수 없는 CUDA 장치는 `execution.device_unavailable`로 거부합니다.
 이 장치 선택은 RCWA 실행을 설명합니다. 일반 장면 `fdtd`는 double 정밀도가
 필요합니다. NumPy와 JAX는 CPU를 사용하고 Torch는
 [제한된 CUDA 장면 계약](../../validation/fdtd/general-cuda.md)도 허용합니다.
@@ -30,7 +30,7 @@ from wavebit import rcwa
 
 x64를 켜지 않고 JAX double 정밀도를 요청하면 구조화된 오류가 발생합니다.
 선택적 의존성은 필요할 때만 import합니다. Live 배열은 선택한 백엔드와 장치에
-두세요. 미분 가능한 입력을 NumPy를 거쳐 변환하면 미분 경로가 끊어집니다.
+두세요. 미분 가능한 입력을 NumPy를 거쳐 변환하면 미분 경로가 끊어집니다. 바이트 순서가 다른 NumPy 배열(예: big-endian 파일에서 읽은 배열)은 NumPy와 JAX가 읽듯 Torch로 넘어갈 때 기본 순서로 바꾸며, 값은 그대로입니다.
 
 `backend="torch"`에 입력값으로 준 구체적인 JAX 배열은 자기 dtype 그대로 NumPy를 거쳐 읽은 뒤
 변환하므로, JAX x64를 켜든 끄든 같은 값을 NumPy 배열로 준 것과 같은 결과를 냅니다. 이 값은
