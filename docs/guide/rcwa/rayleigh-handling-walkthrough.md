@@ -131,6 +131,12 @@ pass `1e-8` for the same behaviour.
   solved exactly — and the outcome is *correct or loud*. A refusal (`NumericalError`, code
   `rcwa.singular`) means the exponential mode basis provably does not exist at that exact
   float; the message prescribes the one-ULP detune.
+- **`Numerics(formulation='first_order')`** refuses an order on a layer's light line the same
+  way, with `rcwa.singular` and the same advice, and `detuning` retries it: on a uniform layer
+  at orders (1, 1) and (2, 2) the 1e-12-detuned first-order result matches the second-order one
+  to 1e-13 in every efficiency. Until 2026-11-09 the first-order mode split miscounted there
+  and raised `rcwa.invalid`, advising a higher Fourier order, which keeps the condition;
+  `detuning` did not retry that refusal.
 - **Measurement scripts probing this regime must leave `detuning` at `None`** (on the earlier
   interface, pass `auto_detune=False`) — otherwise the library moves the exact point you meant
   to sample, and "exact vs detuned" comparisons come back identical (see `rayleigh-points.md`
