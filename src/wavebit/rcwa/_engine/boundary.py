@@ -758,29 +758,82 @@ def _continued_endpoints(xp, a, e, l2, valid, pair, scale):
     return tuple(xp.concat(parts)[back] for parts in (starts, ends, repeats))
 
 
-def _continued_in_pair(xp, a, e, l2, valid, tol2):
-    """:func:`_continued_endpoints` for intervals that all belong to one material pair."""
+#: Entries per ``(rows x intervals)`` temporary in :func:`_continued_in_pair`'s row blocks: the
+#: same 4M target as this module's other chunked loops.
+_PAIR_BLOCK = 4_000_000
+
+
+def _continued_in_pair(xp, a, e, l2, valid, tol2, rows=None):
+    """:func:`_continued_endpoints` for intervals that all belong to one material pair.
+
+    Every relation is between two intervals, so the full form holds several ``(m, m)``
+    temporaries at once. With the 3x3 periodic fold that is large: the two circles of
+    ``tests/rcwa/test_oblique_lattice.py::test_a_frozen_painting_plan_replays_on_a_skewed_cell``
+    on the hexagonal cell fold to about 5400 intervals in one pair, and these temporaries were
+    1.4 GB of that test's 1.58 GB peak (memray, high-water mark, NumPy). ``rows`` intervals are
+    therefore taken at a time, ``_PAIR_BLOCK // m`` by default. Each entry is the same
+    elementwise arithmetic on the same operands, and the reductions run along the full interval
+    axis as before, so the answer is bit-identical. The transpose that ``repeat`` reads is not
+    formed at all: it is tested, with the same arithmetic, only at the pairs where ``k`` already
+    holds both of ``j``'s endpoints. Peak 1.58 GB -> 0.30 GB on that test.
+
+    JAX keeps the single expression: a Python loop does not survive tracing, and one copy of the
+    body per block is the growth :func:`_scanned_normals` describes.
+    """
     m = a.shape[0]
+    if rows is None:
+        rows = m if 'jax' in xp.__name__ else max(1, _PAIR_BLOCK // max(m, 1))
     start, end = a, a + e
-    cross = e[:, None, 0]*e[None, :, 1] - e[:, None, 1]*e[None, :, 0]
-    parallel = cross*cross <= _SAME_POINT**2*l2[:, None]*l2[None, :]
     index = xp.arange(m)
-    other = (index[:, None] != index[None, :]) & valid[None, :] & parallel
 
-    def on(points):
-        """``points[k]`` lies on interval ``j``: within ``tol`` of its line, between its ends."""
-        d = points[:, None, :] - a[None, :, :]
-        along = d[..., 0]*e[None, :, 0] + d[..., 1]*e[None, :, 1]
-        perp = d[..., 0]*e[None, :, 1] - d[..., 1]*e[None, :, 0]
-        slack = xp.sqrt(tol2*l2)[None, :]
-        return (perp*perp <= tol2*l2[None, :]) & (along >= -slack) & (along <= l2[None, :] + slack)
+    def on(points, lo=0, hi=m):
+        """``points[k]`` lies on interval ``j``, for ``j`` in ``lo:hi``: within ``tol`` of its
+        line, between its ends."""
+        d = points[:, None, :] - a[None, lo:hi, :]
+        along = d[..., 0]*e[None, lo:hi, 0] + d[..., 1]*e[None, lo:hi, 1]
+        perp = d[..., 0]*e[None, lo:hi, 1] - d[..., 1]*e[None, lo:hi, 0]
+        slack = xp.sqrt(tol2*l2[lo:hi])[None, :]
+        return ((perp*perp <= tol2*l2[None, lo:hi]) & (along >= -slack)
+                & (along <= l2[None, lo:hi] + slack))
 
-    start_on, end_on = on(start), on(end)
-    # k repeats j when each holds the other's two endpoints.
-    repeat = other & start_on & end_on & xp.permute_dims(start_on & end_on, (1, 0))
-    through = other & ~repeat
-    return (xp.any(through & start_on, axis=1), xp.any(through & end_on, axis=1),
-            xp.any(repeat & (index[None, :] < index[:, None]), axis=1))
+    def on_pairs(points, j):
+        """``points[n]`` lies on interval ``j[n]``: one entry of :func:`on` per pair."""
+        d = points - a[j]
+        along = d[:, 0]*e[j, 0] + d[:, 1]*e[j, 1]
+        perp = d[:, 0]*e[j, 1] - d[:, 1]*e[j, 0]
+        slack = xp.sqrt(tol2*l2[j])
+        return (perp*perp <= tol2*l2[j]) & (along >= -slack) & (along <= l2[j] + slack)
+
+    if rows >= m:
+        cross = e[:, None, 0]*e[None, :, 1] - e[:, None, 1]*e[None, :, 0]
+        parallel = cross*cross <= _SAME_POINT**2*l2[:, None]*l2[None, :]
+        other = (index[:, None] != index[None, :]) & valid[None, :] & parallel
+        start_on, end_on = on(start), on(end)
+        # k repeats j when each holds the other's two endpoints.
+        repeat = other & start_on & end_on & xp.permute_dims(start_on & end_on, (1, 0))
+        through = other & ~repeat
+        return (xp.any(through & start_on, axis=1), xp.any(through & end_on, axis=1),
+                xp.any(repeat & (index[None, :] < index[:, None]), axis=1))
+
+    found = ([], [], [])
+    for lo in range(0, m, rows):
+        hi = min(m, lo + rows)
+        cross = e[lo:hi, None, 0]*e[None, :, 1] - e[lo:hi, None, 1]*e[None, :, 0]
+        parallel = cross*cross <= _SAME_POINT**2*l2[lo:hi, None]*l2[None, :]
+        other = (index[lo:hi, None] != index[None, :]) & valid[None, :] & parallel
+        start_on, end_on = on(start[lo:hi]), on(end[lo:hi])
+        # The transpose is read only where k holds j's two endpoints, which is rare, so j's own
+        # endpoints are tested against k at those pairs alone, by the arithmetic of `on`.
+        row, col = xp.nonzero(other & start_on & end_on)
+        k = row + lo
+        held = on_pairs(start[col], k) & on_pairs(end[col], k)
+        repeat = xp.zeros_like(other)
+        repeat[row[held], col[held]] = True
+        through = other & ~repeat
+        found[0].append(xp.any(through & start_on, axis=1))
+        found[1].append(xp.any(through & end_on, axis=1))
+        found[2].append(xp.any(repeat & (index[None, :] < index[lo:hi, None]), axis=1))
+    return tuple(xp.concat(parts) for parts in found)
 
 
 def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, contrasts,
