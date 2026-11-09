@@ -119,14 +119,77 @@ class ElectricDipole(Source):
 
 
 def _positive(value, name):
+    # A 0-d array or tensor is one number; a grad tensor or an eager JAX tracer is read through
+    # its value, and one under jit or vmap is judged by its shape and dtype alone.
+    if _carries_derivative(value) or getattr(value, 'shape', None) == ():
+        a = _readable(value)
+        if a is None:
+            if getattr(value, 'shape', None) == () and np.dtype(value.dtype).kind in 'iuf':
+                return
+            raise ValueError(f'{name} must be a positive finite real number')
+        value = a[()] if getattr(a, 'shape', None) == () else a
     if not np.isscalar(value) or not np.isrealobj(value) or not np.isfinite(value) or value <= 0:
         raise ValueError(f'{name} must be a positive finite real number')
 
 
 def _vector(value, size, name, real=False):
-    a = np.asarray(value)
+    message = f'{name} must contain {size} finite {"real " if real else ""}components'
+    if _carries_derivative(value):
+        # Validation must not detach the caller's graph: each leaf is read through its value
+        # (a grad tensor detached, an eager JAX tracer through its primal). A value under jit or
+        # vmap has none yet and is judged by its shape and dtype alone.
+        leaves = list(value) if isinstance(value, (list, tuple)) else None
+        if leaves is None and getattr(value, 'ndim', None) != 1:
+            raise ValueError(message)
+        read = [_readable(v) for v in (leaves if leaves is not None else [value])]
+        if any(a is None for a in read):
+            items = leaves if leaves is not None else [value]
+            shapes = [tuple(getattr(v, 'shape', ())) for v in items]
+            count = len(items) if leaves is not None else (shapes[0] or (0,))[0]
+            if (count != size or any(len(s) != (0 if leaves is not None else 1) for s in shapes)
+                    or real and any(_complex_dtype(v) for v in items)):
+                raise ValueError(message)
+            return
+        a = np.asarray(read if leaves is not None else read[0])
+    else:
+        a = np.asarray(value)
     if a.shape != (size,) or not np.all(np.isfinite(a)) or (real and np.any(a.imag)):
-        raise ValueError(f'{name} must contain {size} finite {"real " if real else ""}components')
+        raise ValueError(message)
+
+
+def _carries_derivative(value):
+    """Whether ``value`` is, or holds, a JAX tracer or a PyTorch tensor that requires grad."""
+    import sys
+    jax = sys.modules.get('jax')
+    stack = [value]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, (list, tuple)):
+            stack.extend(item)
+        elif jax is not None and isinstance(item, jax.core.Tracer):
+            return True
+        elif bool(getattr(item, 'requires_grad', False)):
+            return True
+    return False
+
+
+def _readable(value):
+    """``value`` as NumPy for a check, without touching its graph; None under jit or vmap."""
+    if hasattr(value, 'detach'):
+        return value.detach().cpu().numpy()
+    import sys
+    jax = sys.modules.get('jax')
+    if jax is not None and isinstance(value, jax.core.Tracer):
+        try:
+            return np.asarray(jax.lax.stop_gradient(value))
+        except (jax.errors.TracerArrayConversionError, jax.errors.ConcretizationTypeError):
+            return None
+    return np.asarray(value)
+
+
+def _complex_dtype(value):
+    dtype = getattr(value, 'dtype', None)
+    return dtype is not None and 'complex' in str(dtype)
 
 
 def _grid(value):

@@ -452,17 +452,28 @@ difference on both backends for two plane waves (`tests/api/test_eager_grad_pari
 were layer-thickness derivatives of a top-side `GaussianBeam` (whose phase on the top face moves
 with the stack height), of a run with an `ElectricDipole` (host layer and the layer above it),
 and of an interior field above the varied layer, and the derivative with respect to a
-`GaussianBeam` polarization (`tests/rcwa/test_source_derivatives.py`). A `GaussianBeam` builds
-its angular spectrum from concrete directions, so a derivative with respect to its direction
-(`theta`, `phi`, `kx`, `ky`), the wavelength or the lit half-space's material is refused (code
-`rcwa.unsupported`) rather than returned partial. Other inputs and sources have not been
-compared. It does not expose the single-plane-wave `R`, `T`, per-order
+`GaussianBeam` polarization (`tests/rcwa/test_source_derivatives.py`). Derivatives with
+respect to every component of an `ElectricDipole`'s `position`, the real and imaginary parts of
+its `moment`, and every component of a `GaussianBeam`'s `focus` were compared with central
+differences on a two-layer stack with a patterned layer, for periodic dipoles with and without
+`bloch_k`, an isolated dipole and beams lit from either side, under `jax.grad`, `jax.jacfwd`
+and PyTorch, for fields and powers (`tests/rcwa/test_source_placement_gradients.py`). For a
+complex `moment` leaf and a real result L, PyTorch's gradient is `dL/dRe(p) + 1j*dL/dIm(p)` and
+JAX's is its conjugate. A dipole's host layer is chosen from the value of its z and is not
+differentiable: a derivative with respect to z is the derivative within that layer, a dipole
+on an interface is refused whether or not it is differentiated (no one-sided derivative is
+returned), and two dipoles in one plane refuse a derivative with respect to the height of
+either. A `GaussianBeam` builds its angular spectrum from concrete directions, so a derivative
+with respect to its direction (`theta`, `phi`, `kx`, `ky`), its `waist` (which scales those
+directions), the wavelength or the lit half-space's material is refused, and so is one with
+respect to a dipole's `bloch_k`, which picks its Bloch sector (code `rcwa.unsupported`), rather
+than returned partial. Other inputs and sources have not been compared. It does not expose the single-plane-wave `R`, `T`, per-order
 amplitudes or scattering matrix: `Outputs(diffraction=True)` is refused (code
 `rcwa.coherent_diffraction`), and so is `Outputs(scattering=True)` (code
 `rcwa.coherent_scattering`). A prepared problem fixes the cell, the wavelengths, the source
 directions and sampling, and the half-space responses; changing one needs a new `prepare`
-(code `prepared.source_grouping`). Amplitudes, polarizations, dipole moments and layer
-materials stay live.
+(code `prepared.source_grouping`). Amplitudes, polarizations, dipole positions and moments,
+beam focus points and layer materials stay live.
 
 External plane waves have one wavelength, real kx/ky and positive incident normal power.
 The outer half-spaces remain uniform and isotropic; passive absorbing and magnetic
@@ -536,7 +547,8 @@ gaussian = rcwa.Problem(
 gaussian_result = rcwa.run(gaussian, numerics=rcwa.Numerics(orders=(0, 0)))
 ```
 
-`waist` is the scalar envelope's 1/e amplitude radius. `focus` is global xyz in
+`waist` is the scalar envelope's 1/e amplitude radius: a positive real number, or a
+zero-dimensional array or tensor holding one. `focus` is global xyz in
 the problem's length unit; `amplitude` is the electric vector norm and common phase at the
 focus in the absence of the structure. The incident medium must be isotropic,
 lossless, and have positive epsilon and mu: a beam launched from a negative-index side is
