@@ -100,9 +100,9 @@ A shape wider than the period is refused: its transform is a single sinc, which 
 transform of any periodic indicator, so the layer would not be the structure its parameters
 name — and it would otherwise solve and conserve energy. Sample it onto a raster instead. A
 negative length is refused for the same reason it used to be dangerous: it *subtracted* the
-shape. Both are refused when the problem is prepared (`ValidationError`, code `rcwa.invalid`)
-and when a prepared calculation is run on one (code `prepared.topology`); `rcwa.check` does not
-run these two checks yet.
+shape. Both are refused by `rcwa.check` (an issue with code `rcwa.invalid`), when the problem
+is prepared (`ValidationError`, code `rcwa.invalid`) and when a prepared calculation is run on
+one (code `prepared.topology`).
 
 See [`../parametric-modeling.md`](parametric-modeling.md) and
 [`../boundary-modeling.md`](boundary-modeling.md).
