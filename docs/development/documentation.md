@@ -49,18 +49,41 @@ Sphinx gettext catalogs live under `docs/locales/ko/LC_MESSAGES/`. Untranslated
 passages fall back to English on the Korean site, so every page remains usable.
 The homepage and all forty imported course chapters have complete Korean Markdown
 overlays under `docs/locales/ko/pages/`. Their source is loaded only in the Korean
-build; English pages remain canonical. Maintained guide and developer pages may also provide
-complete overlays — currently the [current implementation map](source-map.md),
-[recorded verification](verification.md),
-[third-party software, data and references](third-party.md),
-[run records](../guide/run-records.md),
-[exceptional points](../guide/rcwa/exceptional-points.md),
-[backends, devices and precision](../guide/common/backends.md),
-[how the FDTD solver models a problem](../guide/fdtd/model.md),
-[physical native Yee grids](../guide/fdtd/native-grids.md),
-[automatic stopping and graded absorbing padding](../guide/fdtd/stopping-and-absorbers.md) and
-[physical periodic-stack FDTD](../guide/fdtd/periodic-problems.md) — recorded separately from the
-imported course translations in the language inventory. Other pages use gettext where available
+build; English pages remain canonical. Other maintained pages may also provide complete
+overlays. Currently these are:
+
+- getting started: [installation](../getting-started/installation.md),
+  [first RCWA calculation](../getting-started/rcwa.md) and
+  [first FDTD calculation](../getting-started/fdtd.md);
+- guides: [run records](../guide/run-records.md),
+  [backends, devices and precision](../guide/common/backends.md),
+  [exceptional points](../guide/rcwa/exceptional-points.md),
+  [how the FDTD solver models a problem](../guide/fdtd/model.md),
+  [physical native Yee grids](../guide/fdtd/native-grids.md),
+  [automatic stopping and graded absorbing padding](../guide/fdtd/stopping-and-absorbers.md),
+  [physical periodic-stack FDTD](../guide/fdtd/periodic-problems.md),
+  [Gaussian beams](../guide/fdtd/gaussian-beam.md) and
+  [waveguide modes](../guide/fdtd/waveguide-modes.md);
+- migration: [public names and result keys](../migration/public-names.md);
+- FDTD validation: [memory-bounded reverse mode](../validation/fdtd/checkpointing.md),
+  [a focused Gaussian beam](../validation/fdtd/fd-gaussian-beam.md),
+  [a one-way waveguide mode source](../validation/fdtd/fd-mode-source.md),
+  [PlaneWave acceptance](../validation/fdtd/fd-planewave-acceptance.md),
+  [the polytope clip](../validation/fdtd/fd-polytope-clip.md),
+  [automatic stopping with incident source columns](../validation/fdtd/fd-source-decay.md),
+  [the off-diagonal constitutive slot](../validation/fdtd/fd-stage4-c11.md),
+  [the stage 4 report](../validation/fdtd/fd-stage4-report.md),
+  [waveguide modes of the discrete Yee system](../validation/fdtd/fd-waveguide-modes.md),
+  [a cell-snapped waveguide through an absorbing layer](../validation/fdtd/fd-waveguide-through-pml.md),
+  [outer-jit memory of area-painted derivatives](../validation/fdtd/fdtd-jit-painting-memory.md),
+  [bounded general-scene CUDA execution](../validation/fdtd/general-cuda.md) and
+  [native Yee-grid CUDA validation](../validation/fdtd/native-cuda.md);
+- development: [the current implementation map](source-map.md),
+  [recorded verification](verification.md) and
+  [third-party software, data and references](third-party.md).
+
+The directory `docs/locales/ko/pages/` is the authority for this list: the language inventory
+records only four of these pages apart from the imported course translations. Other pages use gettext where available
 and otherwise display an explicit English-fallback notice. Localized SVG and PNG
 assets live under `docs/locales/ko/assets/` with the same canonical relative paths.
 The source-read extension selects them without changing English content.
