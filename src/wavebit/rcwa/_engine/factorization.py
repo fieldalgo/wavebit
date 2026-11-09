@@ -1387,7 +1387,14 @@ def _field_magnitude(gx, gy):
     something else.
     """
     xp = array_namespace(gx)
-    m = xp.sqrt(gx ** 2 + gy ** 2)
+    # The guard goes inside the sqrt, for the reason `normal_vector_field`'s floor gives. Here it
+    # cost more than one pixel: a cell derivative through the circular projector came back NaN at
+    # every pixel (4 zero-gradient pixels of 256 on an 8 x 8 rod), because `max`'s derivative
+    # masks every pixel's tangent and sums them, and `0 * NaN` is NaN -- so the peak, which
+    # divides all of them, carried it everywhere. The value is unchanged: `sqrt(0)` was already 0.
+    sq = gx ** 2 + gy ** 2
+    nz = sq > 0
+    m = xp.where(nz, xp.sqrt(xp.where(nz, sq, xp.ones_like(sq))), xp.zeros_like(sq))
     peak = xp.max(m)
     # A `where` rather than a Python branch: on the traced-basis path `peak` is a tracer, and
     # the guard has to keep the division defined without asking what its value is.
