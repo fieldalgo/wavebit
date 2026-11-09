@@ -36,6 +36,16 @@ at its centre wavelength, so incidence angles across the band generally differ.
 `diagnostics['angles']` reports them in radians. Theta/phi are supported; Cartesian
 kx/ky incidence is refused.
 
+`Numerics(orders=(Mu, Mv))` is the diffraction-order window: the half-widths along the two
+lattice vectors. On a raster with one row every `v != 0` order is identically zero, so its
+window is `(M, 0)`. A nonzero `Mv` there is refused at `check`, `prepare` and `run`, with a
+message naming `orders=(M, 0)`, wherever it cannot be returned: by `algorithm='reference'`
+always (its window for such a cell has no `v` axis), and by `algorithm='shared'` under a
+one-dimensional `period=(P,)` or at in-plane incidence (`phi` None or 0), where its grid
+keeps two y cells at any resolution. RCWA refuses the same window on the same grating. Under
+a two-dimensional period at a nonzero or array azimuth the shared grid resolves y and
+returns the `v` orders, which are zero to round-off beside the `(M, 0)` answer.
+
 Choose the numerical algorithm explicitly when reproducing earlier results:
 
 | Algorithm | Execution and purpose |
