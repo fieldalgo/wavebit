@@ -8,7 +8,7 @@ import numpy as np
 from .._common.execution import Execution, CheckReport
 from .._common.backend import eager_under_torch_compile
 from ..errors import (ValidationError, UnsupportedFeatureError, IncompatibleProblemError, NumericalError,
-                      WavebitError, Issue)
+                      WavebitError)
 from .problem import Problem
 from .numerics import Numerics
 from ._engine.geometry import StaleGeometryError
@@ -56,8 +56,10 @@ def _public(text):
 def _issue(error, path='problem'):
     if isinstance(error, WavebitError):
         return error.issue
-    return Issue(code='rcwa.unsupported' if isinstance(error, NotImplementedError) else 'rcwa.invalid',
-                 path=path, message=_public(str(error)))
+    # As the error _normalize_errors raises for it, so the issue records that class.
+    if isinstance(error, NotImplementedError):
+        return UnsupportedFeatureError(_public(str(error)), code='rcwa.unsupported', path=path).issue
+    return ValidationError(_public(str(error)), code='rcwa.invalid', path=path).issue
 
 
 @contextmanager

@@ -102,8 +102,21 @@ class CheckReport(Declaration):
     def ok(self):
         return not any(getattr(i, 'severity', 'error') == 'error' for i in self.issues)
 
-    def raise_if_invalid(self, error_type=ValidationError):
+    def raise_if_invalid(self, error_type=None):
+        """Raise the first error issue; return this report when there is none.
+
+        By default the issue is raised as the class it was refused with -- the class
+        ``prepare`` or ``run`` raises for the same input (``IncompatibleProblemError`` for a
+        ``prepared.structure`` change, ``UnsupportedFeatureError``, ...) -- and as
+        ``ValidationError`` where an issue records none. ``error_type`` names one class for
+        every issue instead.
+        """
         for issue in self.issues:
             if getattr(issue, 'severity', 'error') == 'error':
-                raise error_type(issue.message, code=issue.code, path=issue.path, expected=issue.expected, actual=issue.actual)
+                kind = error_type
+                if kind is None:
+                    kind = getattr(issue, '_raised_as', None)
+                    if not (isinstance(kind, type) and issubclass(kind, ValidationError)):
+                        kind = ValidationError
+                raise kind(issue.message, code=issue.code, path=issue.path, expected=issue.expected, actual=issue.actual)
         return self
