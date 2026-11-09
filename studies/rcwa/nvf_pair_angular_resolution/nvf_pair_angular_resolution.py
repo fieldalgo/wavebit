@@ -72,7 +72,7 @@ def main():
         thickness=300.,top=1.,bottom=2.25,theta=.2,phi=0.),
         exponents=[.6,.8] if args.transmission_branches is None else [],
         mesh='symmetric',coercivity_angle=1.53,
-        source_sha256={str(p.relative_to(root)):hashlib.sha256(p.read_bytes()).hexdigest()
+        source_sha256={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
                        for p in sources}))
     start=time.perf_counter()
     if args.transmission_branches is None:
