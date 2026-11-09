@@ -61,9 +61,21 @@ class _BaseRCWA(CoreSolveMixin):
             return torch.device('cuda')
         if isinstance(value, torch.device):
             return value
+        # Torch's own spellings: 'cuda:N' keeps its index, and 'cpu:0' is the one CPU -- a
+        # tensor created there reports device('cpu'), which device('cpu:0') does not equal.
+        # Availability is the public Execution check's to report; this only parses.
+        if isinstance(value, str):
+            try:
+                device = torch.device(value)
+            except (RuntimeError, ValueError):
+                device = None
+            if device is not None and device.type == 'cuda':
+                return device
+            if device is not None and device.type == 'cpu' and device.index in (None, 0):
+                return torch.device('cpu')
         raise ValueError(
-            f"device: expected 0 / 'cpu', 1 / 'gpu' / 'cuda', or a torch.device; "
-            f'got {value!r}.')
+            f"device: expected 0 / 'cpu' / 'cpu:0', 1 / 'gpu' / 'cuda' / 'cuda:N', or a "
+            f'torch.device; got {value!r}.')
 
 
 @_eager_under_torch_compile

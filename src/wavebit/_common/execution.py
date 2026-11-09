@@ -77,6 +77,9 @@ class Execution(Declaration):
                 raise ValidationError('invalid Torch device', code='execution.device', path='execution.device') from exc
             if dev.type not in ('cpu', 'cuda'):
                 raise UnsupportedFeatureError('supported Torch devices are cpu and cuda', code='execution.device', path='execution.device')
+            if dev.type == 'cpu' and dev.index not in (None, 0):
+                # Torch has one CPU device; it would silently put 'cpu:1' there.
+                raise UnsupportedFeatureError("Torch has one CPU device: 'cpu' or 'cpu:0'", code='execution.device_unavailable', path='execution.device', actual=self.device)
             if dev.type == 'cuda' and (not torch.cuda.is_available() or (dev.index or 0) >= torch.cuda.device_count()):
                 raise UnsupportedFeatureError('requested CUDA device is unavailable', code='execution.device_unavailable', path='execution.device')
         return self

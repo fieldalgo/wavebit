@@ -252,7 +252,7 @@ is how a `wavebit.Job` carries them. It is validated when a run uses it, not whe
 | Field | Default | Accepts | Refuses |
 | --- | --- | --- | --- |
 | `backend` | `'numpy'` | `'numpy'`, `'jax'` or `'torch'`, exactly, or a `wavebit.Backend` member | anything else (`'JAX'`, `1`): `execution.backend`; an extra that is not installed: `execution.backend_unavailable` |
-| `device` | `'cpu'` | a string: `'cpu'`; on PyTorch also `'cuda'` or `'cuda:N'`; on JAX also `'gpu'` or `'tpu'`, optionally with `:N` | not a string (`0`): `execution.device`; NumPy off the CPU, PyTorch's `'mps'` or JAX's `'cuda'`: `execution.device`; a device that is not present: `execution.device_unavailable` |
+| `device` | `'cpu'` | a string: `'cpu'`; on PyTorch also `'cpu:0'` (its one CPU device; `'cpu:N'` for N > 0 is a device that is not present), `'cuda'` or `'cuda:N'`; on JAX also `'gpu'` or `'tpu'`, optionally with `:N` | not a string (`0`): `execution.device`; NumPy off the CPU, PyTorch's `'mps'` or JAX's `'cuda'`: `execution.device`; a device that is not present: `execution.device_unavailable` |
 | `precision` | `'double'` | `'double'` (complex128) or `'single'` (complex64) | anything else: `execution.precision`; JAX `'double'` before `jax.config.update("jax_enable_x64", True)`: `execution.jax_x64` |
 
 ## Two axis-order rules, and where they meet

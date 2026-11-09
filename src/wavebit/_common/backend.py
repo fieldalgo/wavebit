@@ -909,7 +909,7 @@ def _readable(v, xp):
     """
     if in_namespace(xp, v):
         return v
-    return xp.asarray(host_foreign(xp, v))
+    return xp.asarray(native_order(xp, host_foreign(xp, v)))
 
 
 def checked_float(v):
@@ -1466,6 +1466,20 @@ def host_foreign(xp, v):
     return host[()] if host.ndim == 0 else host
 
 
+def native_order(xp, v):
+    """A NumPy array bound for Torch in the machine's own byte order; anything else untouched.
+
+    ``torch.asarray`` refuses a big-endian array outright ("given numpy array has byte order
+    different from the native byte order") where NumPy and JAX read it, so a raster read from
+    a big-endian file solved on two backends and failed on the third. The conversion keeps
+    every value; it copies only an array that needs it.
+    """
+    if ('torch' in getattr(xp, '__name__', '') and isinstance(v, _np.ndarray)
+            and not v.dtype.isnative):
+        return v.astype(v.dtype.newbyteorder('='))
+    return v
+
+
 def as_array(xp, v, dtype=None, device=None, copy=False):
     """``v`` as an ``xp`` array, keeping any autograd graph intact.
 
@@ -1528,7 +1542,7 @@ def as_array(xp, v, dtype=None, device=None, copy=False):
     if in_namespace(xp, v):
         out = v if dtype is None or v.dtype == dtype else xp.astype(v, dtype)
         return out if device is None else ac.to_device(out, device)
-    v = forward_strided(host_foreign(xp, v))
+    v = native_order(xp, forward_strided(host_foreign(xp, v)))
     if dtype is None:
         return xp.asarray(v, device=device)
     return xp.asarray(v, dtype=dtype, device=device)

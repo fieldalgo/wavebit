@@ -7,7 +7,7 @@ result = rcwa.run(problem, numerics=numerics,
                   backend="numpy", device="cpu", precision="double")
 ```
 
-The same keywords apply to `fdtd.run`, `check`, and `prepare`. Backend names are `"numpy"`, `"jax"`, and `"torch"`; precision is `"single"` or `"double"`. NumPy requires CPU. JAX accepts available `cpu`, `gpu` or `tpu` devices, optionally with an index; Torch accepts CPU or available CUDA devices. These device options describe RCWA execution. General-scene `fdtd` requires double precision: NumPy and JAX use CPU, while Torch also admits the [bounded CUDA scene contract](../../validation/fdtd/general-cuda.md). The explicit `fdtd.native` and shared `fdtd.periodic` paths also require double precision and accept available backend devices; the periodic reference algorithm requires NumPy/CPU. Device admission is not a GPU performance or accuracy measurement. Physical feature support remains solver-specific.
+The same keywords apply to `fdtd.run`, `check`, and `prepare`. Backend names are `"numpy"`, `"jax"`, and `"torch"`; precision is `"single"` or `"double"`. NumPy requires CPU. JAX accepts available `cpu`, `gpu` or `tpu` devices, optionally with an index; Torch accepts CPU or available CUDA devices, in torch's spellings: `cpu` or `cpu:0` (Torch has one CPU device, so `cpu:1` is refused), and `cuda` or `cuda:N`; an unavailable CUDA device is refused with `execution.device_unavailable`. These device options describe RCWA execution. General-scene `fdtd` requires double precision: NumPy and JAX use CPU, while Torch also admits the [bounded CUDA scene contract](../../validation/fdtd/general-cuda.md). The explicit `fdtd.native` and shared `fdtd.periodic` paths also require double precision and accept available backend devices; the periodic reference algorithm requires NumPy/CPU. Device admission is not a GPU performance or accuracy measurement. Physical feature support remains solver-specific.
 
 Importing Wavebit does not enable JAX x64 globally. Configure double precision before creating JAX arrays:
 
@@ -17,7 +17,7 @@ jax.config.update("jax_enable_x64", True)
 from wavebit import rcwa
 ```
 
-Requesting JAX double precision without x64 enabled raises a structured error. Optional dependencies are imported only when needed. Keep live arrays on the selected backend and device; converting differentiable inputs through NumPy severs their derivative path.
+Requesting JAX double precision without x64 enabled raises a structured error. Optional dependencies are imported only when needed. Keep live arrays on the selected backend and device; converting differentiable inputs through NumPy severs their derivative path. A NumPy array in the other byte order (for example, read from a big-endian file) is converted to native order on its way into Torch, as NumPy and JAX read it; its values are unchanged.
 
 A concrete JAX array given as an input value to `backend="torch"` is read through NumPy with its
 own dtype and then converted, so it gives the same result as the same values passed as a NumPy

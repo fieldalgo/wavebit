@@ -805,3 +805,68 @@ def test_a_traced_jax_value_is_refused_by_name_on_the_way_into_torch():
         assert caught.value.code == 'backend.foreign_array'
         return v
     jax.jit(into_torch)(jax.numpy.asarray(1.5))
+
+
+# --- torch device spellings and byte order ------------------------------------------------
+
+def _torch_raster_problem(raster):
+    from wavebit import rcwa
+    from wavebit.units import Units
+    return rcwa.Problem(units=Units(length='um'), stack=rcwa.Stack(period=(.6, .5), layers=(
+        rcwa.Layer(thickness=.2, epsilon=raster),)), excitation=rcwa.Excitation(
+        wavelength=.8, sources=(rcwa.PlaneWave(theta=.3, phi=.4, polarization=(1., .5j)),)))
+
+
+_NATIVE_RASTER = np.array([[1., 1., 12.25, 12.25], [1., 12.25, 12.25, 1.]])
+
+
+def test_torch_takes_cpu_0_as_the_cpu():
+    torch = pytest.importorskip('torch')
+    from wavebit import rcwa
+    numerics = rcwa.Numerics(orders=(2, 2))
+    a = rcwa.run(_torch_raster_problem(_NATIVE_RASTER), numerics=numerics, backend='torch', device='cpu')
+    b = rcwa.run(_torch_raster_problem(_NATIVE_RASTER), numerics=numerics, backend='torch', device='cpu:0')
+    assert np.array_equal(np.asarray(a.R), np.asarray(b.R)) and np.array_equal(np.asarray(a.T), np.asarray(b.T))
+    from wavebit.rcwa._backends.torch_backend import RCWATorch
+    resolve = RCWATorch._resolve_device
+    assert resolve(None, 'cpu:0') == torch.device('cpu')
+    # Parsing only; availability is Execution's to report, by its own code.
+    assert resolve(None, 'cuda:1') == torch.device('cuda', 1)
+    assert resolve(None, 'cuda') == torch.device('cuda')
+    for bad in ('cpu:1', 'gpu:0', 'tpu', 'cuda:x'):
+        with pytest.raises(ValueError, match='device'):
+            resolve(None, bad)
+
+
+def test_torch_device_requests_are_refused_by_execution_codes():
+    pytest.importorskip('torch')
+    from wavebit import rcwa
+    from wavebit.errors import UnsupportedFeatureError
+    import torch
+    problem, numerics = _torch_raster_problem(_NATIVE_RASTER), rcwa.Numerics(orders=(2, 2))
+    with pytest.raises(UnsupportedFeatureError) as caught:
+        rcwa.run(problem, numerics=numerics, backend='torch', device='cpu:1')
+    assert caught.value.code == 'execution.device_unavailable'
+    if not torch.cuda.is_available():
+        for device in ('cuda', 'cuda:0', 'cuda:1'):
+            with pytest.raises(UnsupportedFeatureError) as caught:
+                rcwa.run(problem, numerics=numerics, backend='torch', device=device)
+            assert caught.value.code == 'execution.device_unavailable'
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('order', ['>', '<'])
+@pytest.mark.parametrize('kind,precision', [('f8', 'double'), ('c16', 'double'), ('f4', 'single')])
+def test_a_foreign_byte_order_raster_solves_as_its_native_copy(backend, order, kind, precision):
+    if backend == 'jax':
+        jax = pytest.importorskip('jax')
+        jax.config.update('jax_enable_x64', True)
+    elif backend == 'torch':
+        pytest.importorskip('torch')
+    from wavebit import rcwa
+    native = _NATIVE_RASTER + (.1j if kind == 'c16' else 0)
+    swapped = native.astype(order + kind)
+    numerics = rcwa.Numerics(orders=(2, 2))
+    a = rcwa.run(_torch_raster_problem(swapped), numerics=numerics, backend=backend, precision=precision)
+    b = rcwa.run(_torch_raster_problem(native.astype(kind)), numerics=numerics, backend=backend, precision=precision)
+    assert np.array_equal(np.asarray(a.R), np.asarray(b.R)) and np.array_equal(np.asarray(a.T), np.asarray(b.T))
