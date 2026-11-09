@@ -81,7 +81,8 @@ class GaussianBeam:
 
     sampling sets the midpoint-quadrature points on the two axes transverse to the
     central direction; angular_spectrum_extent is the half-width of that quadrature,
-    in units of 1/waist.
+    in units of 1/waist. Results are differentiable with respect to focus, amplitude
+    and polarization; a derivative with respect to waist or the direction is refused.
     """
     waist: object
     focus: tuple = (0., 0., 0.)
@@ -111,7 +112,11 @@ class GaussianBeam:
 
 @spec
 class ElectricDipole:
-    """A prescribed electric dipole moment in C m, using exp(-i omega t)."""
+    """A prescribed electric dipole moment in C m, using exp(-i omega t).
+
+    Results are differentiable with respect to position and moment within the host
+    layer; the host layer itself is chosen from the value of z.
+    """
     position: tuple
     moment: tuple
     repetition: str = 'periodic'

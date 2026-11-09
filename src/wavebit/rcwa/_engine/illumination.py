@@ -37,6 +37,7 @@ from wavebit.rcwa._engine.sources import _positive
 from wavebit.rcwa._engine.source_expansion import resolve_wave
 from wavebit.rcwa._engine.source_expansion import gaussian_waves
 from wavebit.rcwa._engine.source_expansion import dipole_layers
+from wavebit.rcwa._engine.source_expansion import _carries_derivative
 from wavebit.rcwa._engine.scattering import redheffer_star
 from wavebit.rcwa._engine.solve_2d_first_order import _conv_layers
 from wavebit.rcwa._engine.solve_2d_first_order import _interface_s
@@ -559,6 +560,12 @@ class CoherentSolver:
                 group['inputs'].append((side, rounded, amplitude*weight, pair, azimuth, actual))
 
         for dipole in dipoles:
+            if _carries_derivative(dipole.bloch_k):
+                # bloch_k selects the source's Bloch sector and order window on the host.
+                raise NotImplementedError(
+                    'ElectricDipole sorts its bloch_k into a Bloch sector on the host; a derivative '
+                    'with respect to bloch_k is not carried. Derivatives with respect to its '
+                    'position and moment and to the layers are.')
             grid = [(np.asarray(dipole.bloch_k if dipole.bloch_k is not None else (0., 0.)), 1.)]
             if dipole.repetition == 'isolated':
                 nx, ny = dipole.sampling
