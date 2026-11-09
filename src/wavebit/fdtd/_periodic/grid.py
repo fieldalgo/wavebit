@@ -15,6 +15,24 @@ from wavebit.fdtd._periodic.runtime import Step
 from wavebit.fdtd._periodic.runtime import time_loop_backend
 
 
+def refuse_invariant_v_orders(half_u, half_v):
+    """Refuse ``v`` orders on a cell invariant along ``y``, in both periodic engines.
+
+    A one-dimensional period, or a raster with one row, does not vary along ``y``, so every
+    ``n != 0`` order is identically zero and the window is ``(M, 0)`` -- the contract
+    ``periodic.Numerics(orders=)`` documents and RCWA's refusal of the same grating states.
+    The shared engine refused ``(M, 1)`` as a spatial-Nyquist violation, which no resolution
+    fixes; the reference engine dropped the ``v`` half-width without a word.
+    """
+    if half_v:
+        raise ValueError(
+            f'Numerics(orders=({half_u}, {half_v})) asks for v diffraction orders, but this '
+            f'cell is invariant along y (a one-dimensional period, or a raster with one row), '
+            f'so every n != 0 order is identically zero. Use Numerics(orders=({half_u}, 0)); '
+            f'for a structure that varies along y, give a two-dimensional period and a raster '
+            f'with more than one row.')
+
+
 def _validate_pml_reflection(value):
     """Keep CPML profile selection static and independent of material graphs."""
     value = np.asarray(value)
