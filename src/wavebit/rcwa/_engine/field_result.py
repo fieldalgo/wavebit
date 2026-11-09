@@ -103,6 +103,53 @@ def expand_spectrum(xp, kxy, coefficients, grid):
     return xp.reshape(flat, coefficients.shape[:-2] + x.shape + (6,))
 
 
+#: How far, in units of the working precision times the stack height and per layer, an explicit
+#: height may sit from a face and still be read at that face. A face is a sum of thicknesses,
+#: and the caller's sum (``0.1 + 0.2 + 0.3``) need not round as this one does (``0.3 + 0.2 +
+#: 0.1``): the two orders differ by up to about one rounding per term. Four per layer covers
+#: that with room, and is still far below any height a caller means as distinct from the face.
+_FACE_ULPS_PER_LAYER = 4
+
+
+def _snap_to_faces(xp, z, actual, faces):
+    """Explicit heights within rounding of a face, moved onto it exactly.
+
+    ``actual`` and ``faces`` are ``z`` and the stack's face heights read on the host. The move is
+    a constant added to ``z``, so a height keeps its own tangent; a height that was already on a
+    face, or away from every face, is returned bit for bit. Then the face's documented side is
+    chosen by the exact comparison that follows (the upper layer at an internal face), and the
+    closed outer faces are inside the stack rather than refused.
+    """
+    eps = float(np.finfo(np.asarray(faces).dtype).eps)
+    tol = _FACE_ULPS_PER_LAYER * max(len(faces) - 1, 1) * eps * float(np.max(np.abs(faces)))
+    if tol == 0:
+        return z, actual
+    gap = faces[None, :] - actual[:, None]
+    nearest = np.argmin(np.abs(gap), axis=1)
+    shift = gap[np.arange(actual.size), nearest]
+    shift = np.where(np.abs(shift) <= tol, shift, 0.)
+    if not np.any(shift):
+        return z, actual
+    # Within a factor of two of the face, `face - z` is exact (Sterbenz), so `z + shift` is the
+    # face exactly.
+    moved = z + as_array(xp, shift, dtype=z.dtype, device=getattr(z, 'device', None))
+    return moved, actual + shift
+
+
+def _outside_stack(faces, low, high):
+    """The refusal of heights outside ``[0, sum(thickness)]``, naming where the faces are."""
+    shown = ', '.join(repr(float(f)) for f in faces[:12])
+    if len(faces) > 12:
+        shown += f', ... ({len(faces)} faces)'
+    return ValueError(
+        f'sample_z coordinates must lie inside the stack, from 0 (its bottom face) to '
+        f'{float(faces[-1])!r} (its top face, the sum of the layer thicknesses), in the '
+        f"problem's length unit; got {float(low)!r} to {float(high)!r}. The stack's faces are at "
+        f'{shown}. A height within rounding of a face is read at that face. The half-spaces '
+        'outside carry fields this reconstruction does not sample; boundary_fields(side=...) '
+        'gives their limits at the outer faces.')
+
+
 def _local_height(xp, z, start, thickness, selected):
     """Clip unused evaluations without changing the selected layer's tangent."""
     local = z-start
@@ -187,12 +234,14 @@ class FieldState:
             owner = xp.repeat(xp.arange(ds.shape[0], device=getattr(ds, 'device', None)), count)
         else:
             z = _coordinates(xp, sample_z, data['lattice'], 'sample_z')
+            actual, faces = _host_value(z), _host_value(edges)
+            if actual is not None and faces is not None:
+                # Eager only, like the range check: a trace has no heights to compare.
+                z, actual = _snap_to_faces(xp, z, actual, faces)
+                if np.any(actual < 0) or np.any(actual > faces[-1]):
+                    raise _outside_stack(faces, actual.min(), actual.max())
             owner = xp.sum(xp.astype(z[:, None] >= edges[None, 1:], xp.int64), axis=1)
             owner = xp.minimum(owner, xp.full_like(owner, ds.shape[0]-1))
-        actual, total = _host_value(z), _host_value(edges[-1])
-        if actual is not None and total is not None:
-            if np.any(actual < 0) or np.any(actual > total):
-                raise ValueError('sample_z coordinates must lie inside the stack, 0 to sum(thickness)')
         result = None
         for g in data['groups']:
             if self.kind == 'source':

@@ -89,6 +89,11 @@ cell = result.field(
 Lengths use the problem's length unit. x/y are measured from the
 cell centre. z is height from the bottom of the stack, with +z upward, and must lie
 between 0 and `sum(thickness)`. Explicit coordinates retain the requested order.
+A height within a few rounding steps of a face (four per layer, relative to the stack height)
+is read at that face, so a face written as your own sum of thicknesses, such as
+`0.1 + 0.2 + 0.3` for layers `(0.3, 0.2, 0.1)`, selects the same side as the face itself; the
+z derivative at such a height is kept. A height really outside the stack is refused with
+`field.coordinates`, and the message gives the range and every face height.
 
 - Counts on x/y include both ends of the cell. A count of one selects the negative
   edge; `[0.]` selects the centre. On a skewed lattice, two counts sample along the
