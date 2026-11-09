@@ -584,6 +584,19 @@ medium's own incident admittance and the slot cancels algebraically **inside the
 exactly, for a complex `mu_top` as much as a real one. A transmitted order sits in the far
 half-space, so its slot and the superstrate's both survive.
 
+### NVF builds five slots; the 1D operators take three
+
+The NVF rule couples x and y, so it returns `mu_xy` / `mu_yx` matrices where Li and Laurent
+return `None`. On a one-row raster in an axis-aligned cell — the only structure routed to these
+operators — the normal field has no y component and those two matrices are zero by
+construction. Since 2026-11-09 `mu_conv_matrices()` spells them `None` for that structure,
+decided from its shape and cell rather than its values. Before that, the 1D solve read the zero
+matrices as a named off-diagonal permeability and refused the scene, while the same grating
+drawn with identical rows solved on the 2D path. The two now agree to 1e-14, and the one-row
+NVF solve equals the Li solve, as it must when every normal is `x`
+(`tests/rcwa/test_magnetic_1d.py`). Off-diagonal matrices handed to `solve_conv` explicitly
+are still refused.
+
 ### Non-magnetic solves are untouched, and it was measured rather than asserted
 
 Every branch is skipped rather than multiplied by an identity, so a non-magnetic 1D solve runs
