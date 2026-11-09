@@ -161,6 +161,11 @@ class TabulatedMaterial:
         device = getattr(wavelength, 'device', None)
         return self._evaluate(wavelength, xp=xp, dtype=dtype, device=device)
 
+    #: End points admitted this many units in the last place beyond the table, then read as the
+    #: end point itself. Zero here: a unitless table is compared as given. A table that converts
+    #: its wavelengths and the query between length units sets it (models.TabulatedMaterial).
+    _ENDPOINT_ULPS = 0
+
     def _evaluate(self, wavelength, *, xp, dtype, device):
         self._register_pytree()
         w = as_array(xp, wavelength, device=device)
@@ -169,7 +174,16 @@ class TabulatedMaterial:
         real_dtype = xp.float32 if dtype == xp.complex64 else xp.float64
         w = as_array(xp, w, dtype=real_dtype, device=device)
         x = as_array(xp, self.wavelengths, dtype=real_dtype, device=device)
-        valid = xp.isfinite(w) & (w >= x[0]) & (w <= x[-1])
+        if self._ENDPOINT_ULPS:
+            # Unit conversion rounds the stored end points and the query independently, so a
+            # table's own end wavelength can arrive an ulp outside it. Admit a few ulp and read
+            # those as the end point. Not a clip: a value inside the table, its end points
+            # included, keeps itself and its one-sided derivative (a clip splits it at a tie).
+            slack = self._ENDPOINT_ULPS * float(np.finfo(np.float32 if real_dtype == xp.float32 else np.float64).eps)
+            valid = xp.isfinite(w) & (w >= x[0] * (1 - slack)) & (w <= x[-1] * (1 + slack))
+            w = xp.where(w < x[0], x[0], xp.where(w > x[-1], x[-1], w))
+        else:
+            valid = xp.isfinite(w) & (w >= x[0]) & (w <= x[-1])
         if _concrete(xp.all(valid)) is False:
             raise ValueError(f'wavelength is outside material table range '
                              f'[{self.wavelengths[0]}, {self.wavelengths[-1]}]')

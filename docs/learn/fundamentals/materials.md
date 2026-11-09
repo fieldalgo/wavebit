@@ -219,7 +219,7 @@ Index alone cannot determine permittivity and permeability separately; permeabil
 
 ## Wavelength sweeps and differentiation
 
-Use the same length unit for the table and all geometry. Every dispersive object rejects out-of-range wavelengths with an error in ordinary execution. Inside JAX JIT, out-of-range elements become NaN. Values are not silently clamped to endpoints or extrapolated, so keep a sweep inside `wavelength_range`.
+Use the same length unit for the table and all geometry. Every dispersive object rejects out-of-range wavelengths with an error in ordinary execution. Inside JAX JIT, out-of-range elements become NaN. Values are not silently clamped to endpoints or extrapolated, so keep a sweep inside `wavelength_range`. A table's own end wavelengths are inside it in every unit: converting between `nm`, `um`, `mm` and `m` can round an end point by an ulp, so a `TabulatedMaterial` admits up to four ulp beyond each end and reads it as that end; a part in 10¹² beyond is refused.
 
 When a `TabulatedMaterial` is assigned to a region, layer background or surrounding medium, every wavelength in `rcwa.Excitation(wavelength=...)` automatically evaluates its values at that wavelength: a spectrum `wavelength=(800., 900., 1000.)`, or a new wavelength passed to a prepared problem with `prepared.run(problem.replace(excitation=problem.excitation.replace(wavelength=...)))`, as in the sweep example above.
 

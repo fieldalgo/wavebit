@@ -270,6 +270,8 @@ class DispersiveMaterial(Declaration):
 @eager_under_torch_compile
 class TabulatedMaterial(LegacyTabulatedMaterial):
     """A static spectrum with its own wavelength unit and interpolation convention."""
+    # Its wavelengths and every query pass through a length-unit conversion; see _evaluate.
+    _ENDPOINT_ULPS = 4
     def __init__(self, wavelengths, epsilon, *, wavelength_unit, mu=None):
         from wavebit.units import Units
         unit = Units(length=wavelength_unit)
