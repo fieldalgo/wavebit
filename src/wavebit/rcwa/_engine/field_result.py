@@ -215,16 +215,9 @@ class FieldState:
         grid = xy_grid(xp, self.data['lattice'], sample_x, sample_y)
         return self.reconstruct_on(grid, sample_z, incidence)
 
-    def reconstruct_on(self, grid, sample_z, incidence):
-        """:meth:`reconstruct` on centre-origin Cartesian points ``grid = (x, y)`` already laid
-        out, for a door whose lateral sampling rules are its own."""
-        index = self._incidence(incidence)
-        data = self.data
-        if (not data['groups'] and self.merged is None) or any(
-                g['layers'] is None for g in data['groups']):
-            raise RuntimeError("Internal fields require solve(answers='field') and at least one layer.")
-        xp = array_namespace(data['lattice'])
-        ds = xp.real(data['thickness'])
+    def _heights(self, xp, sample_z):
+        """The heights ``sample_z`` samples, the layer that owns each, and the stack's faces."""
+        ds = xp.real(self.data['thickness'])
         if not ds.shape[0]:
             raise ValueError('There are no finite layers to sample')
         edges = xp.concat([xp.zeros_like(ds[:1]), xp.cumulative_sum(ds)])
@@ -237,7 +230,7 @@ class FieldState:
             # Count samples include each layer's own limiting value at both faces.
             owner = xp.repeat(xp.arange(ds.shape[0], device=getattr(ds, 'device', None)), count)
         else:
-            z = _coordinates(xp, sample_z, data['lattice'], 'sample_z')
+            z = _coordinates(xp, sample_z, self.data['lattice'], 'sample_z')
             actual, faces = _host_value(z), _host_value(edges)
             if actual is not None and faces is not None:
                 # Eager only, like the range check: a trace has no heights to compare.
@@ -246,6 +239,48 @@ class FieldState:
                     raise _outside_stack(faces, actual.min(), actual.max())
             owner = xp.sum(xp.astype(z[:, None] >= edges[None, 1:], xp.int64), axis=1)
             owner = xp.minimum(owner, xp.full_like(owner, ds.shape[0]-1))
+        return z, owner, edges
+
+    def sample_points(self, sample_x, sample_y, sample_z=None):
+        """The coordinates a request samples, for a caller to record beside the values.
+
+        Explicit coordinates are returned as given; a count is replaced by the points it
+        samples, built by the same :func:`xy_grid` and heights :meth:`reconstruct` uses. On a
+        lattice read on the host as axis-aligned, ``x`` and ``y`` are 1-D; otherwise (a skewed
+        cell, or a lattice traced under ``jax.jit``) both counts give 2-D ``(y, x)`` arrays.
+        A ``sample_z`` count gives every layer its own two faces, so an internal face height
+        appears twice, the lower layer's first.
+        """
+        out = {}
+        if is_count(sample_x) or is_count(sample_y):
+            xp = array_namespace(self.data['lattice'])
+            x, y = (xp.real(a) for a in xy_grid(xp, self.data['lattice'], sample_x, sample_y))
+            lattice = _host_value(self.data['lattice'])
+            if lattice is not None and not np.any(np.abs(lattice[[0, 1], [1, 0]]) > 0):
+                x, y = x[0, :], y[:, 0]
+            if is_count(sample_x):
+                out['x'] = x
+            if is_count(sample_y):
+                out['y'] = y
+        out.setdefault('x', sample_x)
+        out.setdefault('y', sample_y)
+        if sample_z is not None:
+            if is_count(sample_z):
+                xp = array_namespace(self.data['lattice'])
+                sample_z = self._heights(xp, sample_z)[0]
+            out['z'] = sample_z
+        return {axis: out[axis] for axis in ('x', 'y', 'z') if axis in out}
+
+    def reconstruct_on(self, grid, sample_z, incidence):
+        """:meth:`reconstruct` on centre-origin Cartesian points ``grid = (x, y)`` already laid
+        out, for a door whose lateral sampling rules are its own."""
+        index = self._incidence(incidence)
+        data = self.data
+        if (not data['groups'] and self.merged is None) or any(
+                g['layers'] is None for g in data['groups']):
+            raise RuntimeError("Internal fields require solve(answers='field') and at least one layer.")
+        xp = array_namespace(data['lattice'])
+        z, owner, edges = self._heights(xp, sample_z)
         result = None
         for g in data['groups']:
             if self.kind == 'source':
@@ -257,7 +292,7 @@ class FieldState:
         if self.merged is not None:
             from wavebit.rcwa._engine.half_space_merge import zone_coefficients
             coefficient = zone_coefficients(xp, z, owner, edges, self.merged, data['merge'],
-                                            self.names[index], ds.shape[0])
+                                            self.names[index], edges.shape[0]-1)
             field = expand_spectrum(xp, data['boundary_kxy'], coefficient, grid)
             result = field if result is None else result + field
         return result

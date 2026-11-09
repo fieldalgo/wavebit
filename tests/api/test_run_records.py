@@ -48,6 +48,42 @@ def solved():
     return job, result
 
 
+def test_a_count_is_recorded_as_the_points_it_sampled(tmp_path, solved):
+    """``field(x=3, ...)`` used to keep the count 3 in ``coordinates``, and a record saved it."""
+    job, result = solved
+    counted = result.field(x=3, y=2, z=4)
+    coordinates = {axis: np.asarray(counted.coordinates[axis]) for axis in ('x', 'y', 'z')}
+    np.testing.assert_array_equal(coordinates['x'], np.linspace(-.5, .5, 3)*.8)
+    np.testing.assert_array_equal(coordinates['y'], np.linspace(-.5, .5, 2)*.9)
+    np.testing.assert_array_equal(coordinates['z'], np.linspace(0, 1, 4)*.2)
+    explicit = result.field(**coordinates)
+    np.testing.assert_array_equal(explicit.values, counted.values)
+    boundary = result.boundary_fields(side='top', x=3, y=(0.,))
+    np.testing.assert_array_equal(boundary.coordinates['x'], coordinates['x'])
+    assert boundary.coordinates['y'] == (0.,)
+    record = records.save_run(tmp_path/'rcwa', job=job, result=result, samples={'field': counted})
+    saved = records.load_run(record.path).samples['field']['coordinates']
+    for axis, values in coordinates.items():
+        np.testing.assert_array_equal(saved[axis], values)
+
+
+def test_a_count_on_a_skewed_cell_records_the_cell_points():
+    from wavebit import Lattice
+    problem = rcwa.Problem(units=Units(length='um'),
+        stack=rcwa.Stack(lattice=Lattice.hexagonal(.5),
+                         layers=(rcwa.Layer(thickness=.2, background=Material(2.25)),)),
+        excitation=rcwa.Excitation(wavelength=.6, sources=(rcwa.PlaneWave(polarization=(1., 1j)),)),
+        outputs=rcwa.Outputs(fields=True))
+    result = run(Job(solver='rcwa', problem=problem, numerics=rcwa.Numerics(),
+                     execution=Execution(backend='numpy')))
+    counted = result.field(x=3, y=2, z=2)
+    x, y = (np.asarray(counted.coordinates[axis]) for axis in ('x', 'y'))
+    assert x.shape == y.shape == (2, 3)
+    u, v = np.linspace(-.5, .5, 3), np.linspace(-.5, .5, 2)
+    np.testing.assert_allclose(x, u[None, :]*.5 - v[:, None]*.25, rtol=0, atol=1e-15)
+    np.testing.assert_allclose(y, v[:, None]*np.sqrt(3)/4 + 0*u[None, :], rtol=0, atol=1e-15)
+
+
 def update_payload(path, name, data):
     (path/name).write_bytes(data)
     manifest = json.loads((path/'manifest.json').read_text())
