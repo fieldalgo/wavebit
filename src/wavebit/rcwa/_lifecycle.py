@@ -91,6 +91,7 @@ def _resolve(problem, numerics, execution):
     if not isinstance(numerics, Numerics):
         raise ValidationError('numerics must be rcwa.Numerics.', code='numerics.type', path='numerics')
     execution.validate()
+    _adapt.refuse_foreign_autodiff(problem, execution)
     _adapt.validate_values(problem)
     if problem.outputs.scattering and numerics.algorithm != 'smm':
         raise UnsupportedFeatureError('Scattering matrices require algorithm="smm".',
@@ -126,6 +127,7 @@ def _resolve(problem, numerics, execution):
                                               code='prepared.host_topology_scope', path='numerics.topology_check')
             scene._check_before_building()
             solvers.append(solver)
+    _refuse_missing_contourpy(numerics)
     return solvers
 
 
@@ -190,6 +192,21 @@ def check(problem, *, numerics, backend='numpy', device='cpu', precision='double
         return _report(problem, numerics, execution, solvers)
     except (ValidationError, TypeError, ValueError, NotImplementedError) as error:
         return CheckReport(issues=(_issue(error),))
+
+
+def _refuse_missing_contourpy(numerics):
+    """Refuse ``raster_normal_method='contour'`` where contourpy, which it needs, is not installed.
+
+    Called once the solvers have accepted the request, so a request with no reader keeps its
+    own refusal. Without this, check passed and the run raised the engine's bare ImportError.
+    """
+    import importlib.util
+    if numerics.raster_normal_method == 'contour' and importlib.util.find_spec('contourpy') is None:
+        raise UnsupportedFeatureError(
+            "raster_normal_method='contour' extracts subpixel level sets with contourpy, which is "
+            "not installed. `pip install contourpy` (it ships with matplotlib), or use "
+            "raster_normal_method='spectral', which needs nothing beyond NumPy/SciPy.",
+            code='numerics.unavailable', path='numerics.raster_normal_method')
 
 
 def _partition_guards(problem, solvers):

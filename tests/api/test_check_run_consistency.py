@@ -124,3 +124,43 @@ def test_a_complex_or_string_shape_entry_is_refused_at_construction(build, path,
     assert (caught.value.code, caught.value.path) == ('shape.value', path)
     assert 'is a real number' in caught.value.message
     assert 'tracer' not in caught.value.message
+
+
+# -- 4. An optional dependency the numerics need is reported by check -------------------------
+
+def test_contour_normals_without_contourpy_are_refused_at_check(monkeypatch):
+    import sys
+    monkeypatch.setitem(sys.modules, 'contourpy', None)      # import contourpy -> ImportError
+    numerics = rcwa.Numerics(orders=(2, 2), factorization='nvf', raster_normal_method='contour')
+    problem = _raster(np.where(np.eye(16) > 0, 4., 2.25))
+    issue = _refused_alike(problem, numerics=numerics)
+    assert (issue.code, issue.path) == ('numerics.unavailable', 'numerics.raster_normal_method')
+    assert 'contourpy' in issue.message and "raster_normal_method='spectral'" in issue.message
+    # The advice: the spectral construction needs no optional dependency.
+    assert rcwa.check(problem, numerics=numerics.replace(raster_normal_method='spectral')).ok
+
+
+# -- 5. A tensor PyTorch differentiates, given to a NumPy or JAX run, is a check issue ---------
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax'])
+@pytest.mark.parametrize('where', ['theta', 'epsilon'])
+def test_a_differentiated_torch_tensor_on_another_backend_is_a_check_issue(backend, where):
+    torch = pytest.importorskip('torch')
+    jax = pytest.importorskip('jax')
+    leaf = torch.tensor(.2 if where == 'theta' else 4., dtype=torch.float64, requires_grad=True)
+    if where == 'theta':
+        problem, path = _rcwa(theta=leaf), 'excitation.sources[0].theta'
+    else:
+        problem, path = _region_material(leaf), 'stack.layers[0].regions[0].material.epsilon'
+    with jax.enable_x64(True):
+        report = rcwa.check(problem, numerics=NUMERICS, backend=backend)    # a report, never a raise
+        (issue,) = report.issues
+        assert (issue.code, issue.path) == ('execution.backend_autodiff', path)
+        for door in (rcwa.prepare, rcwa.run):
+            with pytest.raises(ValidationError) as caught:
+                door(problem, numerics=NUMERICS, backend=backend)
+            assert (caught.value.code, caught.value.path) == (issue.code, issue.path)
+        # The advice: a detached tensor runs on this backend, and the tensor itself runs on torch.
+        detached = _rcwa(theta=leaf.detach()) if where == 'theta' else _region_material(leaf.detach())
+        assert rcwa.check(detached, numerics=NUMERICS, backend=backend).ok
+    assert rcwa.check(problem, numerics=NUMERICS, backend='torch').ok
