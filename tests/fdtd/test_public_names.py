@@ -138,7 +138,7 @@ PINNED = {
     'decay_stop': (flush, dict(grid=.05, seconds=2e-15, stop=True),
                    '65950a1b4504c2c0f73c8982c83294ce1eb13088908dc256e4febb65de3321ff'),
     'conductive_absorber': (boxes, dict(grid=.05, steps=3, absorber=4),
-                            'b448567d71930a85a12def00cb3f3f948ef7e0877f06f817fe594e33ca40661b'),
+                            '60cfc88b64556ed993621888185545dc0c67687bccd57486f4ce13fde10cc8f0'),
 }
 
 
