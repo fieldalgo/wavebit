@@ -6428,7 +6428,18 @@ class CoreFactorizationMixin:
             return _anisotropy.build(self, geometry, quantity='mu')
         self._check_before_building()
         self._refuse_a_record_of_another_rule(geometry)
-        return self._slots_for(self._mu_structure(), geometry, quantity='permeability')
+        conv = self._slots_for(self._mu_structure(), geometry, quantity='permeability')
+        # A one-row raster on an axis-aligned cell is invariant along y, so NVF's normal field
+        # has no y component and its xy / yx slots are zero matrices by construction. That is
+        # the scene the 1D operators solve, and they take three slots, not five: those two
+        # zeros are absence, and absence is spelled `None` -- the Li and Laurent builders
+        # already spell it so. Left as matrices they were read as a named off-diagonal
+        # permeability and refused; the 2D path at `n_orders_v == 1` solves the same grating.
+        # Decided from the shape and the cell, never the values, so it holds under a trace.
+        if (self._modeling_path == ModelingPath.RASTER and conv.epxy is not None
+                and self.structure.shape[1] == 1 and self.lattice_is_axis_aligned):
+            conv = conv._replace(epxy=None, epyx=None)
+        return conv
 
     def _check_before_building(self):
         """The refusals every build goes through, in the order they have to be read in."""

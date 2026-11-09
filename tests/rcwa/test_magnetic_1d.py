@@ -410,3 +410,50 @@ def test_an_off_diagonal_permeability_is_refused_on_the_1d_paths():
         solver.solve_conv(*eps, mu=(*diagonal, *(np.zeros((1, 7, 7), dtype=complex),) * 2))
     # The same three slots, with absence spelled as the messages ask, solve.
     assert solver.solve_conv(*eps, mu=(*diagonal, None, None)) is not None
+
+
+# ------------------------------------------------------------ NVF on a one-row raster
+
+@pytest.mark.parametrize('label,kw', [('te', dict(tetm='te', phi=0.0)),
+                                      ('conical', dict(psi=PSI, phi=PHI))],
+                         ids=['te', 'conical'])
+def test_nvf_one_row_magnetic_raster_solves_as_the_2d_path_does(label, kw):
+    """A one-row eps raster with a mu raster under NVF is a 1D grating, not a gyromagnetic one.
+
+    NVF builds five slots, and on a y-invariant axis-aligned raster its normal field has no y
+    component, so ``mu_xy`` / ``mu_yx`` are zero by construction. They used to reach the 1D
+    solve as zero *matrices* and be refused as an off-diagonal permeability. The same grating
+    drawn with three identical rows routes to the 2D path at ``n_orders_v == 1`` and solved all
+    along; the two must agree, and in 1D NVF's normal is ``x`` everywhere, which is Li's rule.
+    """
+    _, one_row, _ = _solved(1, factorization='nvf', **kw)
+    _, two_d, _ = _solved(3, factorization='nvf', **({'psi': np.pi / 2, 'phi': 0.0}
+                                                      if label == 'te' else kw))
+    _, li, _ = _solved(1, factorization='li', **kw)
+    for name in ('R', 'T'):
+        got = np.asarray(getattr(one_row.incident, name))
+        assert np.allclose(got, np.asarray(getattr(two_d.incident, name)), rtol=0, atol=1e-13)
+        assert np.allclose(got, np.asarray(getattr(li.incident, name)), rtol=0, atol=1e-13)
+    # Lossless grating over a lossless substrate.
+    assert float(np.sum(one_row.incident.R) + np.sum(one_row.incident.T)) == pytest.approx(
+        1.0, abs=1e-12)
+
+
+def test_nvf_one_row_permeability_slots_spell_absence_as_none():
+    """The xy / yx permeability slots are absent, spelled ``None`` as the Li builders spell it."""
+    mu = _grating(1, factorization='nvf', tetm='te', phi=0.0).mu_conv_matrices()
+    assert mu.epxy is None and mu.epyx is None
+    # The 2D path keeps its five slots: three identical rows is not the 1D structure.
+    assert _grating(3, factorization='nvf', psi=PSI, phi=PHI).mu_conv_matrices().epxy is not None
+
+
+@pytest.mark.parametrize('eps,mu', SLABS[1:3], ids=[f'eps{e}_mu{m}' for e, m in SLABS[1:3]])
+@pytest.mark.parametrize('tetm', ['te', 'tm'])
+def test_nvf_uniform_magnetic_slab_written_as_a_raster_matches_its_closed_form(eps, mu, tetm):
+    solver = _legacy_wavebit_rcwa(backend='numpy', top=1.0, bot=1.0, theta=0.4, phi=0.0, tetm=tetm,
+                          truncation_order=(2, 0), period=(PERIOD, PERIOD), wavelength=WL,
+                          thickness=[THICK], structure=np.ones((1, 1, 16)) * eps,
+                          mu=np.ones((1, 1, 16)) * mu, factorization='nvf')
+    got = float(np.sum(solver.solve().incident.R))
+    assert solver.grating_type == 0
+    assert got == pytest.approx(_slab_closed_form(eps, mu, 0.4, tetm), abs=1e-13)
