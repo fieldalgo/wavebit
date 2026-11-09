@@ -351,7 +351,7 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 | `field` | `field.coordinates` | `rcwa` |
 | `geometry` | `geometry.cell_snapped` (a warning) | `fdtd` |
 | `initial` | `initial.type` | `fdtd` |
-| `job`, `record` | `job.encoding`, `job.schema`, `record.format` | `wavebit.Job`, run records |
+| `job`, `record` | `job.encoding` (also a saved declaration or material table its constructor refuses), `job.schema`, `record.format` | `wavebit.Job`, run records |
 | `layer` | `layer.ambiguous`, `layer.mu_without_raster`, `layer.regions`, `layer.thickness` | `rcwa` |
 | `material` | `material.type`; `material.scalar`, `material.shape`, `material.poles`, `material.wavelength_range`, `material.unknown_field` (`material.scalar`, `material.shape` and `material.poles` at construction; see [the materials guide](../guide/common/materials.md)); `material.engine_model`, `material.causal_model`, `material.pole_type`, `material.fdtd` (lowering a material to time domain) | `rcwa`, `fdtd.periodic`; `wavebit.materials`; `fdtd` |
 | `medium` | `medium.poles` | `fdtd.native` |

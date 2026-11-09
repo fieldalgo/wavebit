@@ -63,6 +63,11 @@ A `wavebit.job/v1` file, written before the [public names were renamed](../../mi
 is refused with code `job.schema` rather than converted: rebuild the problem with the
 current names and save it again.
 
+A file whose contents a declaration or a material table refuses -- an edited table whose
+wavelengths no longer increase, a `SnappedSlab` naming two axes -- is refused with code
+`job.encoding`; its `.path` names the value (`problem.stack.top`) and its message keeps the
+constructor's own reason.
+
 Old `JobSpec` JSON is a different format. It is not silently converted into this
 schema: use the [historical job manual](../../migration/jobs-v1.md) to interpret
 old units, polarization and sweeps before constructing current declarations.

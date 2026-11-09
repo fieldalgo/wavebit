@@ -136,9 +136,14 @@ def _decode(value, registry, path):
         if value['interpolation'] not in ('index', 'epsilon'):
             raise _error('Unknown table interpolation quantity.', path)
         constructor = TabulatedMaterial.from_refractive_index if value['interpolation'] == 'index' else TabulatedMaterial
-        return constructor(_decode(value['wavelengths'], registry, path+'.wavelengths'),
-                           _decode(value['values'], registry, path+'.values'),
-                           mu=_decode(value['mu'], registry, path+'.mu'), wavelength_unit=value['wavelength_unit'])
+        arguments = (_decode(value['wavelengths'], registry, path+'.wavelengths'),
+                     _decode(value['values'], registry, path+'.values'))
+        mu = _decode(value['mu'], registry, path+'.mu')
+        # As for a declaration below: a table the constructor refuses is a malformed job.
+        try:
+            return constructor(*arguments, mu=mu, wavelength_unit=value['wavelength_unit'])
+        except (TypeError, ValueError) as exc:
+            raise _error(f'Invalid table: {exc}', path) from exc
     if tag == 'complex' and set(value) == {'type', 'real', 'imag'}:
         real, imag = value['real'], value['imag']
         if type(real) not in (int, float) or type(imag) not in (int, float) or not math.isfinite(real) or not math.isfinite(imag):
@@ -185,7 +190,7 @@ def _decode(value, registry, path):
         kwargs = {k: _decode(v, registry, f'{path}.{k}') for k, v in value['fields'].items()}
         try:
             return cls(**kwargs)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, NotImplementedError) as exc:
             raise _error(f'Invalid {tag}: {exc}', path) from exc
     raise _error(f'Unknown or malformed job type {tag!r}.{_RENAMES}', path)
 
