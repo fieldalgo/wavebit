@@ -42,8 +42,9 @@ still requires an admitted explicit declaration. This option allows the existing
 conductive/dispersive boundary scopes that PML refuses.
 
 PML remains the default. The graded absorber's fixed cubic profile has a
-normal-incidence round-trip amplitude near `exp(-3)`, about 0.05; adding cells does
-not remove that attenuation floor. It is not equivalent to PML, and it does not accept
+normal-incidence round-trip amplitude near `exp(-3n)`, where `n` is the refractive index
+of the medium filling the layer: `exp(-3)`, about 0.05, in vacuum and about 0.011 at
+`n = 1.5`. Adding cells does not remove that attenuation floor. It is not equivalent to PML, and it does not accept
 PML reference-media, frequency-shift or reflection-target controls. Study reflection
 and resolution for the actual scene; see the retained
 [absorber evidence](../../validation/fdtd/fd-constitutive-absorber.md) and
