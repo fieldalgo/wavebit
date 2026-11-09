@@ -348,7 +348,7 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 | `execution` | `execution.backend`, `execution.backend_unavailable`, `execution.device`, `execution.device_unavailable`, `execution.precision`, `execution.jax_x64`; `execution.cuda_scope` (outside the qualified FDTD CUDA route) | every solver; `fdtd` |
 | `experimental` | `experimental.orders` | `rcwa.experimental` |
 | `fdtd` | `fdtd.invalid` (also a `Domain`, `Plane` or `TimeSeriesMonitor` name or component its constructor refuses), `fdtd.unsupported`, `fdtd.padding_continuation`, `fdtd.torch_transform` (a Torch run under `torch.func.vmap`, `jacfwd` or `hessian`, or a checkpointed one under `jacrev`) | `fdtd` |
-| `field` | `field.coordinates` | `rcwa` |
+| `field` | `field.coordinates`, `field.side`, `field.part` (`result.boundary_fields`) | `rcwa` |
 | `geometry` | `geometry.cell_snapped` (a warning) | `fdtd` |
 | `initial` | `initial.type` | `fdtd` |
 | `job`, `record` | `job.encoding` (also a saved declaration or material table its constructor refuses), `job.schema`, `record.format` | `wavebit.Job`, run records |
@@ -373,7 +373,7 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 | `snapshots` | `snapshots.every`, `snapshots.components`, `snapshots.slices` | `fdtd.native`, `fdtd.periodic` |
 | `source` | `source.type`, `source.name`, `source.name_duplicate`, `source.pulse`, `source.plane`, `source.plane_span`, `source.box`, `source.outside_domain`, `source.waveform_range`; `source.amplitude`, `source.direction`, `source.polarization_value`; `source.side`, `source.repetition`, `source.dimension`, `source.direction_ambiguous`, `source.polarization`, `source.polarization_shape`, `source.weights`, `source.weights_duplicate`, `source.angular_spectrum_extent` | `fdtd`; `rcwa` and `fdtd.periodic`; `rcwa` |
 | `stack` | `stack.layers`, `stack.period`, `stack.cell_ambiguous`, `stack.mixed_layer_encoding` | `rcwa`, `fdtd.periodic` |
-| `structure` | `structure.concrete`, `structure.layer`, `structure.nonfinite`, `structure.quantity`, `structure.samples`, `structure.wavelength` | `rcwa.sample_structure` |
+| `structure` | `structure.component` (`None` on a scalar layer, one xyz pair such as `'xy'` on a tensor one), `structure.concrete`, `structure.layer`, `structure.nonfinite`, `structure.quantity`, `structure.samples`, `structure.wavelength` | `rcwa.sample_structure` |
 | `units` | `units.type`, `units.length` | every solver |
 | `wavelength` | `wavelength.value`, `wavelength.empty`, `wavelength.shape` | `rcwa`, `fdtd.periodic`, `wavebit.materials` (a `TabulatedMaterial`'s `wavelengths`, at construction) |
 

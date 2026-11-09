@@ -240,3 +240,51 @@ def test_valid_fdtd_constructions_are_unchanged():
     assert dict(fdtd.PML(reference_media={'z-': Material(2.25)}).reference_media) == {
         'z-': Material(2.25)}
     assert dict(fdtd.PML().reference_media) == {}
+
+
+# -- RCWA sampling ---------------------------------------------------------------------------------
+
+def _rcwa_problem(background=2., fields=False):
+    layer = rcwa.Layer(thickness=.5, background=Material(background), regions=(
+        rcwa.Region(geometry=rcwa.Circle(radius=.2), material=Material(4.)),))
+    return rcwa.Problem(units=UM, stack=rcwa.Stack(period=(1., 1.), layers=(layer,)),
+                        excitation=rcwa.Excitation(wavelength=1.5, sources=(rcwa.PlaneWave(),)),
+                        outputs=rcwa.Outputs(fields=fields))
+
+
+@pytest.mark.parametrize('background,component', [
+    (2., 'xy'), (2., 'qq'), (2., 3), (2., ('x', 'y')), (2., np.array(['xx'])),
+    ([2., 3., 4.], None), ([2., 3., 4.], 'xyz'), ([2., 3., 4.], 1),
+], ids=['scalar layer, a component', 'unknown pair', 'integer', 'tuple', 'array',
+        'tensor layer, no component', 'triple', 'tensor, integer'])
+def test_sample_structure_refuses_a_component_it_cannot_sample(background, component):
+    error = _refused(lambda: rcwa.sample_structure(_rcwa_problem(background), samples=8,
+                                                   component=component),
+                     ValidationError, 'structure.component', 'component')
+    assert 'component' in error.message
+
+
+def test_sample_structure_still_samples_valid_components():
+    tensor = _rcwa_problem([2., 3., 4.])
+    assert rcwa.sample_structure(tensor, samples=8, component='zz').shape == (8, 8)
+    assert rcwa.sample_structure(_rcwa_problem(), samples=8).shape == (8, 8)
+
+
+@pytest.fixture(scope='module')
+def field_result():
+    return rcwa.run(_rcwa_problem(fields=True), numerics=rcwa.Numerics(orders=(1, 1)))
+
+
+@pytest.mark.parametrize('side,part,path', [
+    ('left', 'total', 'side'), (None, 'total', 'side'), (np.array(['top']), 'total', 'side'),
+    ('top', 'foo', 'part'), ('top', None, 'part'),
+])
+def test_boundary_fields_refuses_an_unknown_side_or_part(field_result, side, part, path):
+    _refused(lambda: field_result.boundary_fields(side=side, x=2, y=2, part=part),
+             ValidationError, f'field.{path}', path)
+
+
+def test_boundary_fields_still_samples_every_side_and_part(field_result):
+    for side in ('top', 'bottom'):
+        for part in ('incoming', 'outgoing', 'total'):
+            assert field_result.boundary_fields(side=side, x=2, y=2, part=part).values.shape[-1] == 6

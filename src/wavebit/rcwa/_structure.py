@@ -11,6 +11,10 @@ from .numerics import Numerics
 from .sources import PlaneWave
 
 
+#: The xyz component pairs of a tensor picture.
+_COMPONENTS = tuple(a + b for a in 'xyz' for b in 'xyz')
+
+
 @eager_under_torch_compile
 def sample_structure(problem, *, layer=0, samples=512, wavelength_index=0,
                      quantity='epsilon', component=None, **removed):
@@ -50,6 +54,11 @@ def sample_structure(problem, *, layer=0, samples=512, wavelength_index=0,
     if type(samples) is not int or samples < 1:
         raise ValidationError('samples must be a positive integer.', code='structure.samples',
                               path='samples')
+    if component is not None and (not isinstance(component, str) or component not in _COMPONENTS):
+        raise ValidationError(
+            f'component is None for a scalar picture, or one xyz pair of a tensor one: '
+            f'{", ".join(map(repr, _COMPONENTS))}; got {component!r}.',
+            code='structure.component', path='component')
     if quantity not in ('epsilon', 'mu'):
         raise ValidationError("quantity must be 'epsilon' or 'mu'.",
                               code='structure.quantity', path='quantity')
@@ -87,7 +96,17 @@ def sample_structure(problem, *, layer=0, samples=512, wavelength_index=0,
     with execution._scope():
         solver = _adapt.build_solver(sampled, Numerics(), execution, wavelength)
         from ._plotting import slice_structure
-        values = np.array(slice_structure(solver, layer=0, n=samples, component=component), copy=True)
+        try:
+            values = np.array(slice_structure(solver, layer=0, n=samples, component=component),
+                              copy=True)
+        except ValueError as exc:
+            if 'component' not in str(exc):
+                raise
+            raise ValidationError(
+                f'layer {layer} holds tensor values; name the component to sample, such as '
+                f"component='xx'." if component is None else
+                f'layer {layer} holds scalar values, so it has no component {component!r}; '
+                f'omit component.', code='structure.component', path='component') from exc
     if not np.isfinite(values).all():
         raise ValidationError('Sampled material values must be finite.',
                               code='structure.nonfinite', path='stack.layers')
