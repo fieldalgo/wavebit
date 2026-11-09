@@ -7,8 +7,10 @@ another refusal.
 import numpy as np
 import pytest
 
-from wavebit import Material, rcwa
-from wavebit.errors import IncompatibleProblemError, ValidationError
+from wavebit import Material, Units, fdtd, rcwa
+from wavebit.errors import IncompatibleProblemError, UnsupportedFeatureError, ValidationError
+from wavebit.fdtd import native, periodic
+from wavebit.units import C0
 
 
 def _rcwa(*, layer=None, top=None, theta=.2):
@@ -164,3 +166,71 @@ def test_a_differentiated_torch_tensor_on_another_backend_is_a_check_issue(backe
         detached = _rcwa(theta=leaf.detach()) if where == 'theta' else _region_material(leaf.detach())
         assert rcwa.check(detached, numerics=NUMERICS, backend=backend).ok
     assert rcwa.check(problem, numerics=NUMERICS, backend='torch').ok
+
+
+# -- 7. A refusal is one exception class whichever path raises it -----------------------------
+
+def _fdtd_case():
+    problem = fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(.1, .1, 1.6)),
+        boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open())),
+        sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=.5), pulse=fdtd.GaussianPulse(
+            wavelength=.8, frequency_sigma_hz=4e13)),),
+        outputs=fdtd.Outputs(monitors=(fdtd.TimeSeriesMonitor('e', at=(0, 0, 0), component='Ey'),)))
+    numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05), duration=fdtd.Duration(steps=4),
+                             absorber=fdtd.PML(cells=12))
+    changed = problem.replace(scene=problem.scene.replace(domain=fdtd.Domain(size=(.1, .1, 1.7))))
+    return fdtd.prepare(problem, numerics=numerics), changed
+
+
+def _periodic_case():
+    q = periodic.Problem(units=Units(length='um'),
+        stack=periodic.Stack(period=(.2,), top=Material(1.), bottom=Material(1.),
+            layers=(periodic.Layer(thickness=.1, epsilon=np.full((1, 2), 2.25)),)),
+        excitation=periodic.Excitation(wavelength=(.85, .9, .95), sources=(periodic.PlaneWave(),)))
+    n = periodic.Numerics(spacing=1/30, duration_seconds=55*.9e-6/C0, orders=(0, 0))
+    return periodic.prepare(q, numerics=n), q.replace(stack=q.stack.replace(period=(.3,)))
+
+
+def _native_case():
+    shape = (16, 2, 2)
+    current = np.zeros((3,)+shape)
+    current[0, 4] = 1e7
+    q = native.Problem(units=Units(length='um'), medium=native.Medium(epsilon=np.ones(shape)*2.),
+        current=native.Current(density=current, samples=np.sin(np.arange(24)*.1)))
+    n = native.Numerics(grid=native.Grid(spacing=(.05,)*3), time_step_seconds=.02e-6/C0, steps=24)
+    return (native.prepare(q, numerics=n),
+            q.replace(medium=native.Medium(epsilon=np.ones((16, 2, 3))*2.)))
+
+
+def _rcwa_case():
+    problem = _rcwa()
+    layers = problem.stack.layers*2
+    return (rcwa.prepare(problem, numerics=NUMERICS),
+            problem.replace(stack=problem.stack.replace(layers=layers)))
+
+
+@pytest.mark.parametrize('case', [_rcwa_case, _fdtd_case, _periodic_case, _native_case],
+                         ids=['rcwa', 'fdtd', 'periodic', 'native'])
+def test_a_changed_prepared_structure_raises_one_class_on_validate_and_run(case):
+    prepared, changed = case()
+    with pytest.raises(ValidationError) as validated:
+        prepared.validate(changed).raise_if_invalid()
+    with pytest.raises(ValidationError) as ran:
+        prepared.run(changed)
+    assert type(validated.value) is type(ran.value) is IncompatibleProblemError
+    assert (validated.value.code, validated.value.path) == (ran.value.code, ran.value.path)
+    assert validated.value.code == 'prepared.structure'
+
+
+def test_a_check_issue_is_raised_as_the_class_prepare_raises():
+    problem, numerics = _rcwa(), rcwa.Numerics(orders=(2, 2), factorization='li', raster_normal_method='spectral')
+    with pytest.raises(ValidationError) as checked:
+        rcwa.check(problem, numerics=numerics).raise_if_invalid()
+    with pytest.raises(ValidationError) as prepared:
+        rcwa.prepare(problem, numerics=numerics)
+    assert type(checked.value) is type(prepared.value) is UnsupportedFeatureError
+    # An explicit class still names one class for every issue, as before.
+    with pytest.raises(ValidationError) as named:
+        rcwa.check(problem, numerics=numerics).raise_if_invalid(ValidationError)
+    assert type(named.value) is ValidationError

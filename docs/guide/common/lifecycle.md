@@ -24,7 +24,7 @@ Preparation freezes structural choices needed by the solver: array shapes and co
 
 ## Validation is explicit
 
-`check` returns a `CheckReport` with structured issues, resolved settings, capabilities and estimates. It does not advance FDTD fields. `raise_if_invalid()` raises a typed validation error. Unsupported physical or numerical combinations are reported as unsupported rather than silently selecting a different model.
+`check` returns a `CheckReport` with structured issues, resolved settings, capabilities and estimates. It does not advance FDTD fields. `raise_if_invalid()` raises the first error as the class it was refused with, the one `prepare` or `run` raises for the same input: `IncompatibleProblemError` for a changed `prepared.structure`, `UnsupportedFeatureError` for an unsupported request, `ValidationError` otherwise. `raise_if_invalid(error_type)` raises every issue as `error_type` instead. Unsupported physical or numerical combinations are reported as unsupported rather than silently selecting a different model.
 
 Concrete checks can report invalid values before a run. Inside a transformation, some value-dependent conditions cannot raise a Python exception. Public results expose validity information for those checks; inspect it before using a result. A successful trace establishes transform compatibility, not physical convergence.
 
