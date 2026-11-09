@@ -89,6 +89,7 @@ from wavebit.materials.response import as_material
 from wavebit.fdtd._periodic.frequency_monitor import PlaneDFT
 from wavebit.fdtd._periodic.frequency_monitor import combine_monitors
 from wavebit.fdtd._periodic.grid import _validate_pml_reflection
+from wavebit.fdtd._periodic.grid import refuse_invariant_v_orders
 from wavebit.observations.diffraction import Result
 from wavebit.observations.diffraction import ResultSub
 
@@ -2605,6 +2606,9 @@ def solve_fdtd(structure, thickness, top, bot, period=None, wavelength=None, tet
     # with `R + T = 0.9167`.
     raster = np.asarray(structure, dtype=complex)
     raster = raster[:, 0, :] if raster.shape[1] == 1 else raster
+    if truncation_order is not None and raster.ndim == 2:
+        # Before any step, so check() refuses it too: the 1D window below keeps only u.
+        refuse_invariant_v_orders(*parse_order_pair(truncation_order)[0])
     top_material, bot_material = as_material(top, 'top'), as_material(bot, 'bot')
     eps_top = complex(np.asarray(top_material.epsilon, dtype=complex))
     eps_bot = complex(np.asarray(bot_material.epsilon, dtype=complex))

@@ -143,7 +143,8 @@ class Numerics:
     shared-only controls, rather than silently ignoring them.
     ``orders`` is the diffraction-order window ``(Mu, Mv)``: an explicit pair of nonnegative
     integers, the half-widths along the two lattice vectors (``(M, 0)`` for a one-dimensional
-    period), or ``None`` for the engine's default window.
+    period), or ``None`` for the engine's default window. A cell invariant along y (a
+    one-dimensional period, or a one-row raster) refuses a nonzero ``Mv`` in both algorithms.
     """
     spacing: float
     duration_seconds: float
