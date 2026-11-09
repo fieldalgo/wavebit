@@ -218,7 +218,7 @@ value = magnetic.at(900.)
 
 ## 파장 스윕과 미분에서 기억할 것
 
-표와 구조의 모든 길이는 같은 단위를 써야 합니다. 모든 분산 객체는 표 범위 밖의 파장을 일반 실행에서 오류로 거절합니다. JAX JIT 안에서 범위를 벗어난 원소는 NaN이 됩니다. 끝값으로 몰래 고정하거나 표 밖으로 외삽하지 않으므로, 파장 스윕 범위는 `wavelength_range` 안에 둡니다.
+표와 구조의 모든 길이는 같은 단위를 써야 합니다. 모든 분산 객체는 표 범위 밖의 파장을 일반 실행에서 오류로 거절합니다. JAX JIT 안에서 범위를 벗어난 원소는 NaN이 됩니다. 끝값으로 몰래 고정하거나 표 밖으로 외삽하지 않으므로, 파장 스윕 범위는 `wavelength_range` 안에 둡니다. 표 자신의 양 끝 파장은 어느 단위로 써도 범위 안입니다. `nm`, `um`, `mm`, `m` 사이의 변환이 끝점을 1 ulp 정도 반올림할 수 있으므로, `TabulatedMaterial`은 각 끝에서 4 ulp까지 넘어선 값을 받아 그 끝점으로 읽습니다. 10¹²분의 1만 넘어서도 거절합니다.
 
 영역·층 배경·위아래 매질에 `TabulatedMaterial`을 할당했다면, `rcwa.Excitation(wavelength=...)`의 모든 파장에서 그 파장의 재료값을 자동으로 구합니다. `wavelength=(800., 900., 1000.)` 같은 스펙트럼이든, 위의 스윕 예제처럼 `prepared.run(problem.replace(excitation=problem.excitation.replace(wavelength=...)))`로 준비된 문제에 새 파장을 넘기든 같습니다.
 

@@ -163,3 +163,30 @@ def test_vector_evaluation_preserves_shape_backend_and_wavelength_derivatives(ba
     np.testing.assert_allclose(actual.mu, [[1., 1.5], [2., 3.]])
     with pytest.raises(ValueError, match='range'):
         m.at(np.array([850., 1100.]))
+
+
+_EXPONENT = {'nm': -9, 'um': -6, 'mm': -3, 'm': 0}
+
+
+@pytest.mark.parametrize('table_unit', list(_EXPONENT))
+def test_every_table_accepts_its_own_end_wavelengths_in_every_unit(table_unit):
+    """An end wavelength written as its decimal in any unit reads the 'nm' table's end value.
+
+    Converting the table's nm column and the query rounds each independently; a 'mm' or 'm'
+    table refused its end by up to one ulp (Si at 0.014 mm, SiO2 at 6.7 um, Al2O3 at 0.2652 um).
+    """
+    from decimal import Decimal
+    from wavebit.units import Units
+    for name in materials.available():
+        nm = materials.load(name, wavelength_unit='nm')
+        table = materials.load(name, wavelength_unit=table_unit)
+        for end in nm.wavelength_range:
+            expected = complex(nm.at(end, units=Units(length='nm')).epsilon)
+            for query_unit, exponent in _EXPONENT.items():
+                query = float(Decimal(repr(end)).scaleb(-9 - exponent))
+                got = complex(table.at(query, units=Units(length=query_unit)).epsilon)
+                assert got == expected, (name, table_unit, query_unit, query)
+                # A few ulp, not a tolerance on the range: a part in 1e12 beyond is refused.
+                beyond = query * (1 + 1e-12) if end == nm.wavelength_range[1] else query * (1 - 1e-12)
+                with pytest.raises(wavebit.errors.ValidationError, match='range'):
+                    table.at(beyond, units=Units(length=query_unit))
