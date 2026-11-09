@@ -109,6 +109,22 @@ def test_a_wrongly_shaped_permeability_raster_is_refused_at_its_own_path():
     assert (issue.code, issue.path, issue.actual) == ('layer.raster_shape', 'stack.layers[0].mu', (8, 8, 3))
 
 
+@pytest.mark.parametrize('epsilon, mu', [(np.full((8, 8), 2.), np.ones((8, 7))),
+                                         (np.full((1, 8), 2.), np.ones((8, 8))),
+                                         (np.full((8, 8, 3, 3), 2.), np.ones((4, 8, 3, 3)))],
+                         ids=['columns', 'rows', 'tensor'])
+def test_a_permeability_raster_on_another_pixel_grid_is_refused_at_its_path(epsilon, mu):
+    issue = _refused_alike(_raster(epsilon, mu=mu))
+    assert (issue.code, issue.path, issue.actual) == ('layer.raster_shape', 'stack.layers[0].mu', mu.shape)
+    pixels = epsilon.shape[:2]
+    assert issue.expected == f'{pixels} or {pixels + (3, 3)}'
+    assert f'sampled on {pixels[0]} x {pixels[1]} pixels' in issue.message
+    assert 'structure is' not in issue.message
+    # The advice: the same pixel grid runs, with a scalar or a tensor per pixel either side.
+    for same in (np.ones(pixels), np.ones(pixels + (3, 3))):
+        assert rcwa.check(_raster(epsilon, mu=same), numerics=NUMERICS).ok
+
+
 # -- 3. A complex or string shape size is refused when the shape is written -------------------
 
 @pytest.mark.parametrize('build, path', [
