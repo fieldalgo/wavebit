@@ -156,6 +156,22 @@ def gaussian_waves(solver, source):
     return waves
 
 
+def _uniform_tolerance(a):
+    """How close to uniform a host's raster or operator block has to be, at its own precision.
+
+    Float64 keeps the tolerances it always had. A coarser array is held to its own resolution,
+    relative to its magnitude: the solve rebases every block to the centre origin by
+    ``phase_i * conj(phase_j)``, whose diagonal is ``|phase|**2``. That is exactly 1 while
+    ``bloch_k`` is zero (the phases are +-1) and 1 +- 1e-8 in complex64 once it is not, so the
+    float64 ``atol=1e-12`` called a uniform single-precision host patterned.
+    """
+    eps = float(np.finfo(np.asarray(a).real.dtype).eps)
+    if eps <= np.finfo(np.float64).eps:
+        return dict(atol=1e-12, rtol=1e-10)
+    tol = 32*eps
+    return dict(atol=tol*float(np.max(np.abs(a), initial=0.)), rtol=tol)
+
+
 def dipole_layers(solver, group, layers, k0, kxy):
     """Split source-bearing layers and integrate the electric-current delta in z.
 
@@ -184,7 +200,7 @@ def dipole_layers(solver, group, layers, k0, kxy):
             for raster in (scene.structure, scene.mu):
                 if raster is not None:
                     a = _host(raster[li])
-                    uniform = uniform and np.allclose(a, a[0, 0], atol=1e-12, rtol=1e-10)
+                    uniform = uniform and np.allclose(a, a[0, 0], **_uniform_tolerance(a))
         if not uniform:
             raise ValueError('ElectricDipole requires a uniform host layer: shapes=[] or a '
                              'raster with the same material in every spatial cell.')
@@ -193,7 +209,7 @@ def dipole_layers(solver, group, layers, k0, kxy):
         blocks += list(material.get('mu_blocks', {}).values())
         for block in blocks:
             a = _host(block)
-            if not np.allclose(a, np.eye(len(a))*a[0, 0], atol=1e-12, rtol=1e-10):
+            if not np.allclose(a, np.eye(len(a))*a[0, 0], **_uniform_tolerance(a)):
                 raise ValueError('ElectricDipole currently requires a spatially uniform host layer; '
                                  'other layers may be patterned.')
         by_height.setdefault(z, (li, []))[1].append((dipole, weight))
