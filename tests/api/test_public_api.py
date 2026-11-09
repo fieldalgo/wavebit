@@ -13,6 +13,7 @@ import dataclasses
 import importlib
 import pkgutil
 import re
+import sys
 import traceback
 
 import numpy as np
@@ -865,11 +866,15 @@ def test_the_renamed_rcwa_members_answer_what_they_did():
 
 def test_a_port_named_tuple_constructor_cannot_name_its_replacement():
     """``typing.NamedTuple`` refuses a custom ``__new__``, so the old keywords get Python's own
-    error; the migration guide names the replacement. Only attribute reads are tombstoned."""
+    error; the migration guide names the replacement. Only attribute reads are tombstoned.
+    ``_replace`` with an unknown field raises ``ValueError`` before Python 3.13 and
+    ``TypeError`` from 3.13 on."""
     with pytest.raises(TypeError, match="unexpected keyword argument 'kx'"):
         operators.Port(kx=0., ky=None, index=1., mu=1., channel='sp')
-    with pytest.raises(ValueError, match="unexpected field names: .*'kx'"):
+    replace_error = TypeError if sys.version_info >= (3, 13) else ValueError
+    with pytest.raises(replace_error, match="unexpected field names: .*'kx'") as caught:
         _port()._replace(kx=0.)
+    assert type(caught.value) is replace_error
 
 
 def test_a_tombstoned_port_survives_a_jit_round_trip():

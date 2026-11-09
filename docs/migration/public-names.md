@@ -329,8 +329,8 @@ The RCWA warnings a solve can raise have one public home, `wavebit.rcwa.diagnost
 
 `Port` is a named tuple, so only its attributes can name their replacement: `port.kx` fails
 saying `kx_over_k0`, but `Port(kx=...)` raises Python's own `TypeError` and
-`port._replace(kx=...)` its own `ValueError` for an unknown field. The tables above give the
-replacement.
+`port._replace(kx=...)` its own `TypeError` (`ValueError` before Python 3.13) for an unknown
+field. The tables above give the replacement.
 
 `rcwa.check` now refuses a `GaussianBeam(angular_spectrum_extent=...)` that is not a positive,
 finite real number with code `source.angular_spectrum_extent`; the same values were refused

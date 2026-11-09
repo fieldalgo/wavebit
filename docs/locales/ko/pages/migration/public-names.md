@@ -317,7 +317,7 @@ native 사례(E, H, 분극 밀도, 스냅샷, 스펙트럼, 7단계 감쇠 창)�
 
 `Port`는 named tuple이라 속성만 새 이름을 알려 줄 수 있습니다. `port.kx`는 `kx_over_k0`를
 알려 주며 실패하지만, 알 수 없는 필드에 대해 `Port(kx=...)`는 파이썬 자체의 `TypeError`를,
-`port._replace(kx=...)`는 파이썬 자체의 `ValueError`를 냅니다. 새 이름은 위 표에 있습니다.
+`port._replace(kx=...)`는 파이썬 자체의 `TypeError`(파이썬 3.13 이전에는 `ValueError`)를 냅니다. 새 이름은 위 표에 있습니다.
 
 `rcwa.check`는 이제 양의 유한 실수가 아닌 `GaussianBeam(angular_spectrum_extent=...)`를 코드
 `source.angular_spectrum_extent`로 거부합니다. 같은 값은 전에도 check에서 거부됐지만, 코드
