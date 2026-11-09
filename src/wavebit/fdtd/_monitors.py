@@ -37,8 +37,9 @@ class FieldMonitor:
     is read back as ``result['f']``, a :class:`wavebit.RawFieldSpectrum`: the raw pulse
     transform of each component on its own Yee points, in V*s/m and A*s/m. Give exactly one of
     ``plane`` (an :class:`fdtd.Plane`, optionally with transverse spans) or ``box`` (an
-    :class:`fdtd.SnappedBox`, whose volume is recorded). ``wavelengths`` are vacuum wavelengths
-    in ``Problem.units``.
+    :class:`fdtd.SnappedBox`, whose volume is recorded). A plane without a span along an axis
+    covers the physical domain there, never an ``Open`` face's absorbing layer.
+    ``wavelengths`` are vacuum wavelengths in ``Problem.units``.
     """
     name: str
     wavelengths: tuple

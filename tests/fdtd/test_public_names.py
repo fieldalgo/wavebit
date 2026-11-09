@@ -119,13 +119,16 @@ def numerics(grid, steps=None, seconds=None, courant=None, pml=None, absorber=No
 
 
 #: (scene, numerics, skeleton measured at d7bf1ab before the rename, in the old names).
+#: ``boxes`` carries a span-less FieldMonitor plane on an all-Open scene. Its two pins were
+#: re-measured when such a plane stopped reading the absorbing layers: each now equals the
+#: skeleton of the same scene with that plane given its physical span explicitly.
 PINNED = {
     'snapped': (snapped, dict(grid=.05, steps=3),
                 '0ed7027b12155b3eac0e6215794f0cd09747330816c3ccf2280dbc973e6e560e'),
     'junction': (flush, dict(grid=.05, steps=3),
                  '0f31d017f5eb2cea6f821085798b22f5ac78ec404b9358632c447f946a83869a'),
     'monitor_and_tfsf_boxes': (boxes, dict(grid=.05, steps=3, pml=12),
-                               '8bdbacc2f5a19ba7d37b8066473a058d08d236a8ead193824ac06e404eaea360'),
+                               '1ff7bdea390067e2f6f7a5904824651b06bdc685f6003036fe7d5a6ea4196752'),
     'invariant_axes': (invariant, dict(grid=.01, steps=3, pml=12),
                        '585c0f639d1391b806b3def375f4fe1f25751e631d114f42b99e5c41d9cf888d'),
     'mirror': (mirror, dict(grid=.05, steps=3),
@@ -135,7 +138,7 @@ PINNED = {
     'decay_stop': (flush, dict(grid=.05, seconds=2e-15, stop=True),
                    '65950a1b4504c2c0f73c8982c83294ce1eb13088908dc256e4febb65de3321ff'),
     'conductive_absorber': (boxes, dict(grid=.05, steps=3, absorber=4),
-                            '6dd31b8ca1331e86185d5a9a7d348a4db6d9814c317bc3c1fe769a1cc3bc098d'),
+                            'b448567d71930a85a12def00cb3f3f948ef7e0877f06f817fe594e33ca40661b'),
 }
 
 
