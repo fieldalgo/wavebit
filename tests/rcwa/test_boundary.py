@@ -1720,3 +1720,47 @@ def test_continued_endpoints_per_pair_match_the_one_array_form():
     for g, w in zip(got, want):
         np.testing.assert_array_equal(np.asarray(g), w)
     assert any(np.any(w) for w in want)
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'torch'])
+def test_continued_endpoints_in_row_blocks_match_the_one_array_form(backend, monkeypatch):
+    """Taking a pair's intervals a block of rows at a time reads the same three flags, bit for bit.
+
+    The blocks bound the ``(m, m)`` temporaries that were 1.4 GB of the oblique-lattice frozen
+    replay's peak. One pair holds every case: splits, reversed repeats, and a whole line that
+    holds its pieces' endpoints while they do not hold its own -- the one relation that reads
+    the transpose, which the blocked form tests pair by pair, so that test is held too. Block
+    sizes put each case across a block edge. ``rows=None`` goes through the module's own default, made small here.
+    """
+    import wavebit.rcwa._engine.boundary as boundary
+    if backend == 'torch':
+        pytest.importorskip('torch')
+        import array_api_compat.torch as xp
+        import torch
+
+        def arr(v):
+            return torch.as_tensor(v)
+    else:
+        xp, arr = np, np.asarray
+    rng = np.random.default_rng(11)
+    pieces = [((0., 0.), (.3, 0.)), ((.3, 0.), (.5, 0.)), ((.5, 0.), (1., 0.)),
+              ((.5, 0.), (.3, 0.)), ((1., 0.), (.5, 0.)),                  # two reversed repeats
+              ((0., 0.), (1., 0.)),            # holds pieces' ends, but they do not hold its own
+              ((.2, .2), (.2, .2)),
+              ((.2, .2), (.2, .6)), ((.2, .6), (.2, .9)), ((.2, .9), (.2, .6))]
+    pieces += [tuple(map(tuple, rng.uniform(0., 1., (2, 2)))) for _ in range(40)]
+    starts = np.array([p[0] for p in pieces])
+    edges = np.array([p[1] for p in pieces]) - starts
+    order = rng.permutation(len(pieces))
+    a, e = starts[order], edges[order]
+    l2 = np.sum(e*e, axis=1)
+    valid = l2 > 0.
+    m = len(pieces)
+    want = _continued_endpoints_dense(a, e, l2, valid, np.zeros(m, int), 1.)
+    assert all(np.any(w) for w in want), 'every flag must be live for the comparison to mean much'
+    tol2 = boundary._SAME_POINT**2
+    monkeypatch.setattr(boundary, '_PAIR_BLOCK', 5*m)            # rows=None -> blocks of 5
+    for rows in (1, 2, 3, 7, m - 1, m, None):
+        got = boundary._continued_in_pair(xp, arr(a), arr(e), arr(l2), arr(valid), tol2, rows=rows)
+        for g, w in zip(got, want):
+            np.testing.assert_array_equal(np.asarray(g), w, err_msg=f'rows={rows}')
