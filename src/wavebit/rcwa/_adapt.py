@@ -664,3 +664,53 @@ def refuse_near_zero_smm_layers(problem, numerics, execution, wavelength):
                 code='rcwa.near_zero_permittivity_smm', path=path,
                 expected=f'|eps| >= {floor:.3g}, algorithm="etm", or no y wavevector component',
                 actual=max(values))
+
+
+def _zz_magnitudes(epsilon, path):
+    """``|eps_zz|`` of every sample of a permittivity, or None if it is traced."""
+    if opaque(epsilon):
+        return None
+    a = np.abs(host(epsilon, path))
+    if a.shape[-2:] == (3, 3):
+        return a[..., 2, 2].ravel()
+    if a.shape[-1:] == (3,) and a.ndim in (1, 3):
+        return a[..., 2].ravel()
+    return a.ravel()
+
+
+def refuse_zero_permittivity_layers(problem, execution, wavelength):
+    """Refuse a layer with a sample whose ``eps_zz`` has no finite inverse at the run's precision.
+
+    Every formulation here inverts ``eps_zz`` (the second-order operators carry its Fourier
+    inverse, the first-order one its reciprocal), and the inverse rule also inverts each pixel
+    or region's permittivity. An exact zero -- or a value so small that its reciprocal overflows
+    the run's floating type -- makes those infinite: NumPy and JAX raised "SVD did not converge"
+    or "Singular matrix", PyTorch a raw linear-algebra error, on every algorithm and incidence.
+    A small nonzero value is not refused: a uniform layer down to 1e-18 in double precision
+    solved with energy conserved and agreed with the eps -> 0 limit. Where such a solve still
+    fails it is reported as ``rcwa.singular``. A traced permittivity cannot be read.
+    """
+    precision = execution.precision
+    info = np.finfo(np.float64 if precision == 'double' else np.float32)
+    floor = 1 / float(info.max)          # below this, 1/|eps| is not finite
+    for i, layer in enumerate(problem.stack.layers):
+        path = f'stack.layers[{i}]'
+        if layer.epsilon is not None:
+            values = [_zz_magnitudes(layer.epsilon, f'{path}.epsilon')]
+        else:
+            materials = [layer.background] + [region.material for region in layer.regions]
+            values = [_zz_magnitudes(physical_material(m, wavelength, problem.units).epsilon, path)
+                      for m in materials]
+        if not values or any(v is None for v in values):
+            continue
+        smallest = float(np.min(np.concatenate(values)))
+        if smallest <= floor:
+            what = 'is exactly zero' if smallest == 0 else (
+                f'has magnitude {smallest:.3g}, whose reciprocal overflows {precision} precision')
+            raise UnsupportedFeatureError(
+                f'Layer {i}: its permittivity (eps_zz) {what} in at least one sample. RCWA inverts '
+                'eps_zz and, by the inverse rule, each sample, so such a layer has no computable '
+                'modes. Give it a nonzero permittivity (an epsilon-near-zero material usually has '
+                'a small loss).',
+                code='rcwa.zero_permittivity', path=path,
+                expected=f'|eps_zz| > {floor:.3g} in every sample', actual=smallest)

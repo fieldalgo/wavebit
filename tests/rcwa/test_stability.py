@@ -244,3 +244,104 @@ def test_near_zero_layer_has_a_continuous_energy_conserving_limit():
         R, T = _near_zero(eps, phi=0.)
         R_etm, T_etm = _near_zero(eps, phi=0., algorithm='etm')
         assert abs(R + T - 1) < 1e-14 and abs(R - R_etm) < 1e-14
+
+
+# --- a layer whose eps_zz is zero, or whose inverse overflows ------------------------------
+#
+# RCWA inverts eps_zz, and the inverse rule each sample. eps = 0 raised "SVD did not
+# converge" / "Singular matrix" (NumPy, JAX) or a raw torch LinAlgError on every algorithm
+# and incidence. Small nonzero values still solve; single-precision ETM fails some of them by
+# rounding, which must surface as rcwa.singular.
+
+def _zero_layers(eps):
+    from wavebit import rcwa
+    from wavebit.materials import Material
+    region = rcwa.Region(geometry=rcwa.Rectangle(center=(0., 0.), size=(.2, .2)), material=Material(eps))
+    return {'uniform': rcwa.Layer(thickness=.2, background=Material(eps)),
+            'tensor_zz': rcwa.Layer(thickness=.2, background=Material([2., 2., eps])),
+            'raster_pixel': rcwa.Layer(thickness=.2, epsilon=np.array([[eps, eps, 2.25, 2.25]])),
+            'region': rcwa.Layer(thickness=.2, background=Material(2.25), regions=(region,))}
+
+
+def _zero_problem(layer, phi=.4):
+    from wavebit import rcwa
+    from wavebit.units import Units
+    return rcwa.Problem(units=Units(length='um'), stack=rcwa.Stack(period=(.6, .5), layers=(layer,)),
+                        excitation=rcwa.Excitation(wavelength=.8, sources=(
+                            rcwa.PlaneWave(theta=.3, phi=phi, polarization=(1., .5j)),)))
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'torch'])
+@pytest.mark.parametrize('algorithm', ['etm', 'smm'])
+@pytest.mark.parametrize('phi', [0., .4])
+@pytest.mark.parametrize('kind', ['uniform', 'tensor_zz', 'raster_pixel', 'region'])
+def test_a_zero_eps_zz_is_refused_at_check_on_every_path(kind, phi, algorithm, backend):
+    pytest.importorskip(backend)
+    from wavebit import rcwa
+    from wavebit.errors import UnsupportedFeatureError
+    problem, numerics = _zero_problem(_zero_layers(0.)[kind], phi), rcwa.Numerics(orders=(3, 0), algorithm=algorithm)
+    issues = rcwa.check(problem, numerics=numerics, backend=backend).issues
+    assert [(i.code, i.path) for i in issues] == [('rcwa.zero_permittivity', 'stack.layers[0]')]
+    with pytest.raises(UnsupportedFeatureError) as caught:
+        rcwa.run(problem, numerics=numerics, backend=backend)
+    assert caught.value.code == 'rcwa.zero_permittivity' and 'nonzero permittivity' in caught.value.message
+
+
+@pytest.mark.parametrize('precision', ['double', 'single'])
+def test_a_permittivity_whose_inverse_overflows_is_refused(precision):
+    pytest.importorskip('torch')
+    from wavebit import rcwa
+    from wavebit.errors import UnsupportedFeatureError
+    eps = 1e-320 if precision == 'double' else 1e-40          # 1/eps is not finite there
+    with pytest.raises(UnsupportedFeatureError) as caught:
+        rcwa.run(_zero_problem(_zero_layers(eps)['uniform']), numerics=rcwa.Numerics(orders=(3, 0), algorithm='etm'),
+                 backend='torch', precision=precision)
+    assert caught.value.code == 'rcwa.zero_permittivity'
+
+
+@pytest.mark.parametrize('backend', ['torch', 'jax'])
+def test_single_precision_near_zero_either_solves_or_fails_structured(backend):
+    """The reported case: single-precision ETM on a uniform |eps| = 1e-13 layer raised a raw
+    torch LinAlgError. Whether such a factorization fails depends on rounding; it must either
+    conserve energy or say rcwa.singular, never leak a backend error."""
+    pytest.importorskip(backend)
+    from wavebit import rcwa
+    from wavebit.errors import NumericalError
+    numerics = rcwa.Numerics(orders=(3, 0), algorithm='etm')
+    for eps in (1e-9, 1e-12, 1e-13, 1e-16):
+        try:
+            result = rcwa.run(_zero_problem(_zero_layers(eps)['uniform']), numerics=numerics,
+                              backend=backend, precision='single')
+        except NumericalError as error:
+            assert error.code == 'rcwa.singular'
+        else:
+            assert abs(float(np.sum(np.asarray(result.R)) + np.sum(np.asarray(result.T))) - 1) < 1e-6
+
+
+def test_small_nonzero_permittivity_that_solves_is_not_refused():
+    """Not refused: uniform layers at 1e-13 and 1e-18 (below double roundoff), small samples beside ordinary ones,
+    and a zero in-plane component with a nonzero eps_zz; each conserves energy."""
+    from wavebit import rcwa
+    from wavebit.materials import Material
+    numerics = rcwa.Numerics(orders=(3, 0), algorithm='etm')
+    for layer in (_zero_layers(1e-13)['uniform'], _zero_layers(1e-18)['uniform'], _zero_layers(1e-16)['raster_pixel'],
+                  _zero_layers(1e-16)['region'], rcwa.Layer(thickness=.2, background=Material([0., 2., 2.]))):
+        result = rcwa.run(_zero_problem(layer), numerics=numerics)
+        assert abs(float(np.sum(result.R) + np.sum(result.T)) - 1) < 1e-13
+    # Below the double roundoff the answer is the eps -> 0 limit: R moves by 0.548 eps.
+    near, tiny = (float(np.sum(rcwa.run(_zero_problem(_zero_layers(eps)['uniform']), numerics=n).R))
+                  for eps, n in ((1e-13, numerics), (1e-18, numerics)))
+    assert abs(near - tiny) < 1e-13
+
+
+def test_a_torch_factorization_failure_is_a_structured_numerical_error(monkeypatch):
+    torch = pytest.importorskip('torch')
+    from wavebit import rcwa
+    from wavebit.errors import NumericalError
+    from wavebit.rcwa._backends.torch_backend import RCWATorch
+    def singular(self, *args, **kwargs):
+        raise torch.linalg.LinAlgError('linalg.inv: The diagonal element 8 is zero')
+    monkeypatch.setattr(RCWATorch, 'solve', singular)
+    with pytest.raises(NumericalError) as caught:
+        rcwa.run(_zero_problem(_zero_layers(2.25)['uniform']), numerics=rcwa.Numerics(orders=(3, 0)), backend='torch')
+    assert caught.value.code == 'rcwa.singular'
