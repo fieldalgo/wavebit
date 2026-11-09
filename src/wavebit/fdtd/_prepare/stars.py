@@ -5,7 +5,7 @@
 ``coefficients.build`` paints (the voxel's own mix, ``coefficients.mix``) and ``C`` the node
 cross coefficients ``constitutive.lower`` paints, applied by ``cross_action`` with ``c/4`` for
 each pair of edges that share a node. It is the operator Werner, Bauer and Cary call wc07
-(J. Comput. Phys. 247, 211, 2013, Eq. 11), after Oskooi, Kottke and Johnson (Opt. Lett. 34,
+(J. Comput. Phys. 255, 436, 2013, Eq. 11), after Oskooi, Kottke and Johnson (Opt. Lett. 34,
 2778, 2009).
 
 **Why it can fail.** ``Xi`` is positive definite only if the energy ``v . Xi v`` is positive for
