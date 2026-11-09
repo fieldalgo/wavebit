@@ -220,14 +220,22 @@ def test_a_snapped_face_declared_on_a_plus_plane_is_refused(n):
     _plans(_mirror_n((_region(-0.2, plane - 0.025),), n))
 
 
-def test_the_flush_hole_the_plus_door_refuses_is_real(monkeypatch):
-    """With the door held open, 13 cells: the plane's cell holds background, not the bar."""
+@pytest.mark.parametrize('n', (12, 13))
+def test_with_the_plus_door_held_open_a_face_on_the_plane_snaps_to_the_wall(monkeypatch, n):
+    """With the door held open, at either parity of the count: the plane's cell holds the bar.
+
+    The face at ``x = -0.025`` is the ``+`` plane, the centre of the last cell: a tie, which
+    goes to the higher boundary -- the wall -- so the bar fills ``[-0.2, 0]``, four cells.
+    Python's ``round`` (half to even) used to send it down at 13 cells and up at 12, leaving the
+    plane's cell empty at 13 only; this pinned that hole. The refusal above stands either way: a
+    face declared on a ``+`` plane is half a cell from both readings of the scene.
+    """
     monkeypatch.setattr(checks, 'check_symmetry', lambda scene, grid: None)
-    scene = _mirror_n((_region(-0.2, -0.025),), 13)
+    scene = _mirror_n((_region(-0.2, -0.025),), n)
     plan = _plans(scene)
     eps = (plan.dt / plan.dx) / np.asarray(_quiet(fd.lower, scene, plan, 'numpy')['be'])
     row = eps[1, N // 2, N // 2, :]
-    assert row[-1] == 1.0 and row[-2] == 4.0, row
+    np.testing.assert_array_equal(row, [1.0] * (n - 4) + [4.0] * 4)
 
 
 def test_a_snapped_shape_reaching_the_mirrored_wall_is_judged_against_it():
