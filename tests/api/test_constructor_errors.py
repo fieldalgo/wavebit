@@ -5,10 +5,12 @@ Each case names the class, the ``code`` and the ``path`` a caller can match on
 as a bare ``TypeError`` or ``ValueError`` (a NumPy ``isfinite`` or ``complex()`` message among
 them) or silently built a material whose permittivity was NaN.
 """
+import json
+
 import numpy as np
 import pytest
 
-from wavebit import Units
+from wavebit import Job, Units, rcwa
 from wavebit import materials as M
 from wavebit.errors import ValidationError
 
@@ -103,3 +105,47 @@ def test_valid_material_spellings_are_still_accepted():
     M.DispersiveMaterial([[2, 0, 0], [0, 2, 0], [0, 0, 3]], [M.Drude(1e15, 1e13)])
     M.TabulatedMaterial(np.array([1, 2]), [[1., 1., 1.], [2., 2., 2.]], wavelength_unit='um')
     assert M.ConductiveMaterial(2.25, 1e3).at(.5, units=UM).epsilon is not None
+
+
+# -- Saved jobs ------------------------------------------------------------------------------------
+
+def _table_job():
+    table = M.TabulatedMaterial([1., 2.], [2., 3.], wavelength_unit='um')
+    problem = rcwa.Problem(units=UM, stack=rcwa.Stack(top=table),
+                           excitation=rcwa.Excitation(wavelength=1.5, sources=(rcwa.PlaneWave(),)))
+    return json.loads(Job(solver='rcwa', problem=problem, numerics=rcwa.Numerics()).to_json())
+
+
+def _with_table(key, value):
+    body = _table_job()
+    body['problem']['fields']['stack']['fields']['top'][key] = value
+    return lambda: Job.from_json(json.dumps(body))
+
+
+@pytest.mark.parametrize('key,value', [
+    ('wavelengths', {'type': 'tuple', 'items': [2., 1.]}),
+    ('wavelengths', None),
+    ('values', {'type': 'tuple', 'items': [{'type': 'complex', 'real': 1., 'imag': 0.}]}),
+    ('values', 'abc'),
+    ('wavelength_unit', 'km'),
+], ids=['decreasing', 'no wavelengths', 'short values', 'text values', 'unit'])
+def test_a_malformed_saved_table_is_a_job_encoding_refusal(key, value):
+    _refused(_with_table(key, value), ValidationError, 'job.encoding', 'problem.stack.top')
+
+
+def test_a_saved_slab_with_two_axes_is_a_job_encoding_refusal():
+    from wavebit import fdtd
+    from wavebit.jobs import _decode, _encode, _registry
+    registry = _registry()
+    encoded = _encode(fdtd.SnappedSlab(z=(-.1, .1)), registry, 'shape')
+    encoded['fields']['x'] = {'type': 'tuple', 'items': [-.1, .1]}
+    path = 'problem.scene.structures[0].shape'
+    error = _refused(lambda: _decode(encoded, registry, path), ValidationError, 'job.encoding', path)
+    assert 'SnappedSlab' in error.message and 'ONE axis' in error.message
+
+
+def test_a_valid_saved_table_still_round_trips():
+    body = _table_job()
+    restored = Job.from_json(json.dumps(body))
+    assert restored.problem.stack.top == M.TabulatedMaterial([1., 2.], [2., 3.], wavelength_unit='um')
+    assert json.loads(restored.to_json()) == body

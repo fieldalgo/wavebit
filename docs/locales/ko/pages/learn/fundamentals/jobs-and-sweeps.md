@@ -60,6 +60,10 @@ result = run(restored)
 [공개 이름이 바뀌기](../../migration/public-names.md) 전에 저장한 `wavebit.job/v1` 파일은
 변환하지 않고 `job.schema` 코드로 거부합니다. 현재 이름으로 문제를 다시 만들어 저장하세요.
 
+선언이나 물질 표가 거부하는 내용이 든 파일(파장이 더 이상 증가하지 않도록 고친 표, 두 축을 지정한
+`SnappedSlab` 등)은 `job.encoding` 코드로 거부합니다. `.path`는 해당 값(`problem.stack.top`)을
+가리키고, 메시지에는 생성자가 거부한 이유가 그대로 남습니다.
+
 이전 `JobSpec` JSON은 다른 형식이며 자동 변환하지 않습니다. [이전 Job 안내](../../migration/jobs-v1.md)로
 원래 단위·편광·sweep을 해석한 다음 현재 선언을 구성해야 합니다.
 
