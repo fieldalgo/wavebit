@@ -210,6 +210,12 @@ def damping_profile(depth, thickness):
     ``tests/fdtd/test_fd_absorber.py``, whose 0-degree column runs 4.81e-2 to 5.04e-2 and which
     lands on ``exp(-6)`` and ``exp(-9)`` when the profile is scaled x2 and x3.
 
+    That is the vacuum number. The rate is a rate in time, so a medium of index ``n`` filling
+    the layer, which the wave crosses ``n`` times more slowly, gives a round trip near
+    ``exp(-3 n)``: about 1.2e-2 at ``n = 1.5`` and 2.8e-3 at ``n = 2`` (``exp(-4.5)`` = 1.1e-2,
+    ``exp(-6)`` = 2.5e-3), measured at 24 cells with the doubling probe's window lengthened
+    for the slower echo.
+
     Matched rates reflect nothing at normal incidence, and everything the stretch would have
     absorbed at an angle.
 
