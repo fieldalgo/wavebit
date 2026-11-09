@@ -164,7 +164,12 @@ def _report(problem, numerics, execution, solvers):
                   # solve took.
                   'solve_path': solvers[0]._solve_path(planned=True),
                   'half_space_merge_tolerance': numerics.half_space_merge_tolerance,
-                  'shape_nvf_grid_size': scene.shape_nvf_grid_size if scene.factorization.value == 'nvf' else None,
+                  # None where shape NVF does not read the grid: under 'li'/'laurent', and on
+                  # a raster, whose normal field is built at the raster's own resolution (an
+                  # explicit grid there is refused, rcwa.unsupported).
+                  'shape_nvf_grid_size': (scene.shape_nvf_grid_size
+                                          if scene.factorization.value == 'nvf'
+                                          and scene.modeling_path == 'parametric' else None),
                   'backend': execution.backend, 'device': execution.device, 'precision': execution.precision,
                   'retained_fields': problem.outputs.fields, 'retained_scattering': problem.outputs.scattering,
                   'length_units': problem.units.length})
