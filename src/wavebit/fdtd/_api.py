@@ -469,18 +469,61 @@ def _report(problem,numerics,execution,scene,plan,metadata):
                       'geometry_ranges':tuple(numerics.geometry_ranges)},resolved=resolved)
 
 
-def _issue(exc):
+#: Refusals that name no field: the catch-all, and a material lowered without its place.
+_UNPLACED=(('fdtd.invalid','problem'),('material.fdtd','material'))
+
+
+def _nonfinite_path(problem,path):
+    """``path`` from :func:`wavebit.rcwa._adapt.named_leaves` in FDTD's own spelling.
+
+    FDTD names a structure, source or monitor by its declared name, as its other refusals do
+    (``scene.structures.core``, ``sources.pw``, ``outputs.flux``), not by its position.
+    """
+    import re
+    roots=(('scene.structures',problem.scene.structures,'scene.structures'),
+           ('sources',problem.sources,'sources'),('outputs.monitors',problem.outputs.monitors,'outputs'))
+    for prefix,items,named in roots:
+        m=re.fullmatch(re.escape(prefix)+r'\[(\d+)\](.*)',path)
+        if m:
+            name=getattr(items[int(m.group(1))],'name',None)
+            return f'{named}.{name}{m.group(2)}' if isinstance(name,str) else path
+    return path
+
+
+def _nonfinite(exc,problem):
+    """``problem.nonfinite`` at the field holding a NaN or infinity, for a refusal naming none.
+
+    Every non-finite input FDTD refuses was already refused at ``check``, but by a check that
+    names no field (``fdtd.invalid`` at ``problem``, ``material.fdtd`` at ``material``). Only
+    such a refusal is renamed, so what is admitted does not change; ``None`` otherwise.
+    """
+    from wavebit.rcwa._adapt import nonfinite_error,nonfinite_leaf
+    if (getattr(exc,'code',None),getattr(exc,'path',None)) not in _UNPLACED or not isinstance(problem,Problem):
+        return None
+    try:
+        found=nonfinite_leaf(problem,skip=())
+    except (TypeError,ValueError,RuntimeError):     # a value no host can read (torch.func.vmap)
+        return None
+    if found is None:
+        return None
+    path,value=found
+    return nonfinite_error(_nonfinite_path(problem,path),value)
+
+
+def _issue(exc,problem=None):
     """``exc`` as a structured error, in the public vocabulary (``_spelling``).
 
     An engine refusal that is not one already carries the catch-all code: ``fdtd.unsupported``
-    for a ``NotImplementedError``, ``fdtd.invalid`` otherwise; its message is kept.
+    for a ``NotImplementedError``, ``fdtd.invalid`` otherwise; its message is kept. Given the
+    ``problem``, a refusal that names no field becomes ``problem.nonfinite`` where the problem
+    holds a NaN or an infinity (:func:`_nonfinite`).
     """
     exc=public_error(exc)
-    if isinstance(exc,ValidationError):
-        return exc
-    if isinstance(exc,NotImplementedError):
+    if isinstance(exc,NotImplementedError) and not isinstance(exc,ValidationError):
         return UnsupportedFeatureError(str(exc),code='fdtd.unsupported',path='problem')
-    return ValidationError(str(exc),code='fdtd.invalid',path='problem')
+    if not isinstance(exc,ValidationError):
+        exc=ValidationError(str(exc),code='fdtd.invalid',path='problem')
+    return (_nonfinite(exc,problem) if problem is not None else None) or exc
 
 
 def _check_mode_monitors(problem,numerics):
@@ -600,7 +643,7 @@ def check(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
             _check_mode_monitors(problem,numerics)
             return _report(problem,numerics,execution,scene,plan,metadata)
     except (TypeError,ValueError,NotImplementedError) as exc:
-        return CheckReport(issues=(_issue(exc).issue,))
+        return CheckReport(issues=(_issue(exc,problem).issue,))
 
 
 @eager_under_torch_compile
@@ -621,7 +664,7 @@ class Prepared:
                 scene,metadata=self._lower(problem)
                 return _report(problem,self.numerics,self.execution,scene,self._plan,metadata)
         except (TypeError,ValueError,NotImplementedError) as exc:
-            return CheckReport(issues=(_issue(exc).issue,))
+            return CheckReport(issues=(_issue(exc,problem).issue,))
 
     def _lower(self,problem):
         if not isinstance(problem, Problem):
@@ -656,7 +699,7 @@ class Prepared:
         with self.execution._scope(),_public_spelling():
             try:scene,metadata=self._lower(problem)
             except (TypeError,ValueError,NotImplementedError) as exc:
-                raise _issue(exc) from exc
+                raise _issue(exc,problem) from exc
             try:
                 from ._prepare.fields import static_host_patterns
                 cuda_patterns=(self.execution.backend=='torch'
@@ -688,7 +731,7 @@ def prepare(problem,*,numerics,backend='numpy',device='cpu',precision='double'):
             _check_mode_monitors(problem,numerics)
             report=_report(problem,numerics,execution,scene,plan,metadata)
         except (TypeError,ValueError,NotImplementedError) as exc:
-            raise _issue(exc) from exc
+            raise _issue(exc,problem) from exc
     homogeneous_ade=(execution.device!='cpu' and any(
         type(s.material) is DispersiveMaterial for s in problem.scene.structures))
     from ._geometry import SnappedBox

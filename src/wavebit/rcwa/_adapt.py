@@ -55,14 +55,15 @@ def named_leaves(value, path='', skip=()):
         yield path, value
 
 
-def nonfinite_leaf(problem):
+def nonfinite_leaf(problem, skip=(Rectangle, Circle, Ellipse, Polygon)):
     """The first concrete numerical leaf holding a NaN or an infinity, as ``(path, value)``.
 
-    Region geometry is left to the layer geometry checks, which name a non-finite size or
-    angle in their own words; a traced leaf under ``jax.jit`` or ``jax.vmap`` cannot be read
-    and is left to the run's runtime guard. ``None`` when every readable leaf is finite.
+    Region geometry is skipped by default and left to the RCWA layer geometry checks, which
+    name a non-finite size or angle in their own words; ``skip=()`` reads it too. A traced
+    leaf under ``jax.jit`` or ``jax.vmap`` cannot be read and is left to the run's runtime
+    guard. ``None`` when every readable leaf is finite.
     """
-    for path, value in named_leaves(problem, skip=(Rectangle, Circle, Ellipse, Polygon)):
+    for path, value in named_leaves(problem, skip=skip):
         if opaque(value):
             continue
         try:
@@ -97,6 +98,13 @@ def refuse_foreign_autodiff(problem, execution):
                 expected=f'a value {execution.backend} can read', actual='torch.Tensor')
 
 
+def nonfinite_error(path, value):
+    """The ``problem.nonfinite`` refusal of ``value`` at the field ``path``."""
+    return ValidationError(f'{path} holds a non-finite value ({value!r}). Every numerical input '
+                           'must be finite: no NaN and no infinity.',
+                           code='problem.nonfinite', path=path, expected='finite values', actual=value)
+
+
 def refuse_nonfinite(problem):
     """Refuse a NaN or infinite input at ``check``/``prepare``, naming the field that holds it.
 
@@ -105,10 +113,7 @@ def refuse_nonfinite(problem):
     """
     found = nonfinite_leaf(problem)
     if found is not None:
-        path, value = found
-        raise ValidationError(f'{path} holds a non-finite value ({value!r}). Every numerical input '
-                              'must be finite: no NaN and no infinity.',
-                              code='problem.nonfinite', path=path, expected='finite values', actual=value)
+        raise nonfinite_error(*found)
 
 
 def abstract(value):
