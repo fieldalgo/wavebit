@@ -129,7 +129,7 @@ if __name__ == '__main__':
     print('\nshapes across backends\n')
     print(f'Norm of difference NumPy and JAX; R: {np.linalg.norm(de_ri_v_0-de_ri_v_1)}, T: {np.linalg.norm(de_ti_v_0-de_ti_v_1)}')
     print(f'Norm of difference JAX and Torch; R: {np.linalg.norm(de_ri_v_1-de_ri_v_2)}, T: {np.linalg.norm(de_ti_v_1-de_ti_v_2)}')
-    print(f'Norm of difference Torch and NumPy; R: {np.linalg.norm(de_ri_v_1-de_ri_v_2)}, T: {np.linalg.norm(de_ti_v_1-de_ti_v_2)}')
+    print(f'Norm of difference Torch and NumPy; R: {np.linalg.norm(de_ri_v_2-de_ri_v_0)}, T: {np.linalg.norm(de_ti_v_2-de_ti_v_0)}')
 
     de_ri_r_0_dfs, de_ti_r_0_dfs = run_raster(rcwa_options, 'numpy', 'sampled')  # NumPy
     de_ri_r_0_cfs, de_ti_r_0_cfs = run_raster(rcwa_options, 'numpy', 'integrated')  # NumPy
@@ -144,12 +144,12 @@ if __name__ == '__main__':
     de_ri_r_2_cfs, de_ti_r_2_cfs = np.array(de_ri_r_2_cfs), np.array(de_ti_r_2_cfs)
 
     print('\nRaster, sampled coefficients; R and T from NumPy\n')
-    print('Reflectance from NumPy: \n', de_ri_r_1_dfs[c_x-1:c_x+2, c_y-1:c_y+2])
-    print('Transmittance from NumPy: \n', de_ti_r_1_dfs[c_x-1:c_x+2, c_y-1:c_y+2])
+    print('Reflectance from NumPy: \n', de_ri_r_0_dfs[c_x-1:c_x+2, c_y-1:c_y+2])
+    print('Transmittance from NumPy: \n', de_ti_r_0_dfs[c_x-1:c_x+2, c_y-1:c_y+2])
 
     print('\nRaster, integrated coefficients; R and T from NumPy\n')
-    print('Reflectance from NumPy: \n', de_ri_r_1_dfs[c_x-1:c_x+2, c_y-1:c_y+2])
-    print('Transmittance from NumPy: \n', de_ti_r_1_dfs[c_x-1:c_x+2, c_y-1:c_y+2])
+    print('Reflectance from NumPy: \n', de_ri_r_0_cfs[c_x-1:c_x+2, c_y-1:c_y+2])
+    print('Transmittance from NumPy: \n', de_ti_r_0_cfs[c_x-1:c_x+2, c_y-1:c_y+2])
 
     print('\nshapes vs raster dfs \n')
     print(f'Norm of difference, shapes and raster dfs, NumPy;'
