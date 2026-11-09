@@ -108,9 +108,18 @@ class InvariantAxis:
     ``fdtd.Boundaries(x=fdtd.Bloch(k=kx), y=fdtd.InvariantAxis(k=ky), z=fdtd.Open())`` is a
     conical 1-D grating: the structure is uniform along y and the grid holds one cell of it.
     The derivative along the axis is the exact ``i k``, not a one-cell difference, so the
-    grid's dispersion does not change the wavevector. ``k`` is in inverse ``Problem.units``
-    lengths; ``k_max`` is the largest ``|k|`` the preparation is made for (default ``|k|``,
-    required when ``k`` is traced). The domain must be one cell along the axis.
+    grid's dispersion does not change the wavevector. ``k`` is a real wavevector in inverse
+    ``Problem.units`` lengths (default 0); a ``PlaneWave``'s transverse k must equal it, which
+    ``Bloch.from_source(..., invariant_axes=...)`` writes. ``k`` is static in a prepared
+    calculation: another ``k`` needs a new ``prepare``, and a traced ``k`` is refused
+    (``prepared.static_input``). ``k_max`` (default ``|k|``, at least ``|k|``) is the ``|k|``
+    the stability check admits the time step against -- the ``i k`` term tightens the bound,
+    so too large a ``k_max`` is refused; it does not change the step.
+
+    The domain must be one cell along the axis, and both faces of the axis take this same
+    declaration. The run is complex, ``k = 0`` included. Bodies must be uniform along the axis,
+    sources must not span cells along it (a ``PlaneWave`` qualifies), and diffraction orders
+    along it are 0.
     """
     k: object = 0.0
     k_max: object = None
