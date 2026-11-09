@@ -5,6 +5,8 @@ numerical leaves; callers must not mutate their buffers during a calculation.
 """
 from dataclasses import field
 
+import numpy as np
+
 from .._common.declarations import spec
 from ..materials import Material
 from ..units import Units
@@ -15,6 +17,31 @@ def _freeze_sequence(value):
     # Python containers are owned structural values; backend arrays remain
     # borrowed numerical leaves, preserving their differentiation graphs.
     return tuple(_freeze_sequence(v) for v in value) if isinstance(value, (tuple, list)) else value
+
+
+def _refuse_non_real(shape, name, value):
+    """Refuse a string or complex entry in a shape's lengths, centre or angle.
+
+    Each entry is read by the geometry builders as a real number; a complex one reached them
+    and was taken for a ``jax.jit`` tracer (it has no real value to read), and a string failed
+    inside NumPy. A traced or differentiated entry is judged by its dtype alone.
+    """
+    for entry in value if isinstance(value, tuple) else (value,):
+        dtype = getattr(entry, 'dtype', None)
+        kind = None
+        if dtype is not None:
+            if getattr(dtype, 'is_complex', False):          # a torch dtype
+                kind = 'c'
+            else:
+                try:
+                    kind = np.dtype(dtype).kind
+                except TypeError:
+                    kind = None
+        if isinstance(entry, (str, bytes, complex)) or kind in ('c', 'U', 'S', 'O'):
+            raise ValidationError(f'{shape}({name}={value!r}): each entry is a real number (a length in '
+                                  "the problem's unit, or an angle in radians), not "
+                                  f'{type(entry).__name__!r}.', code='shape.value', path=f'geometry.{name}',
+                                  expected='real numbers', actual=repr(value))
 
 
 @spec
@@ -30,6 +57,8 @@ class Rectangle:
         if len(self.size) != 2 or len(self.center) != 2:
             raise ValidationError('Rectangle size and center each need two components.',
                                   code='shape.dimension', path='geometry')
+        for name in ('size', 'center', 'angle'):
+            _refuse_non_real('Rectangle', name, getattr(self, name))
 
 
 @spec
@@ -43,6 +72,8 @@ class Circle:
         if len(self.center) != 2:
             raise ValidationError('Circle center needs two components.',
                                   code='shape.dimension', path='geometry.center')
+        for name in ('radius', 'center'):
+            _refuse_non_real('Circle', name, getattr(self, name))
 
 
 @spec
@@ -58,6 +89,8 @@ class Ellipse:
         if len(self.radii) != 2 or len(self.center) != 2:
             raise ValidationError('Ellipse radii and center each need two components.',
                                   code='shape.dimension', path='geometry')
+        for name in ('radii', 'center', 'angle'):
+            _refuse_non_real('Ellipse', name, getattr(self, name))
 
 
 @spec
