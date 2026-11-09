@@ -308,7 +308,13 @@ def _seeded_materials(scene, plan, where, substitute=True):
       (``sources.plane_wave_drive``), the grazing survey's rows and the lattice far-field map
       (``results`` refuses a traced one after the run), all built on the host (a cell driven
       by Dipoles, with any PML matched to a concrete medium of its own, reads it nowhere
-      else);
+      else). This refusal belongs to the scenes this substitution serves, a traced geometry
+      or a plan certifying smoothed coupling (:func:`_coupled`), and a concrete face
+      reference does not lift it. Elsewhere a traced background is lowered live: beside a
+      normally incident PlaneWave it runs and differentiates once every PML face it reaches
+      has a concrete reference (public ``PML(reference_media={'z-': ..., 'z+': ...})``),
+      while a matched face is refused by ``params._cpml`` and an oblique PlaneWave by its own
+      Bloch-wavevector check;
     * a traced structure filling a stabilized PML layer the grazing survey reads
       (:func:`_stabilized_media`): the rule judges the orders there on the face's exact return
       too, on the host only (on a pure-stretch face :func:`grazing_guard` holds it at run
