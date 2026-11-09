@@ -818,3 +818,21 @@ def test_resolved_normal_grid_is_none_where_shape_nvf_does_not_read_it():
         orders=(2, 2), shape_nvf_grid_size=64)).resolved['shape_nvf_grid_size'] == 64
     assert rcwa.check(problem(circle), numerics=rcwa.Numerics(
         orders=(2, 2), factorization='laurent')).resolved['shape_nvf_grid_size'] is None
+
+
+def test_a_region_free_layer_reports_and_accepts_a_normal_grid_its_answer_does_not_read():
+    """What docs/reference/keywords.md says of a stack whose layers have no regions: shape NVF
+    is resolved, so ``resolved`` reports the default or explicit grid and an explicit one is
+    accepted, while the answer is the same bit for bit (there is no interface to sample)."""
+    problem = rcwa.Problem(units=Units(length='um'),
+        stack=rcwa.Stack(period=(1., 1.), top=Material(1.),
+                         layers=(rcwa.Layer(thickness=.2, background=Material(1.5)),)),
+        excitation=rcwa.Excitation(wavelength=1.3, sources=(rcwa.PlaneWave(theta=.2),)))
+    transmitted = {}
+    for grid, reported in ((None, 1024), (9, 9), (128, 128)):
+        numerics = rcwa.Numerics(orders=(2, 2), shape_nvf_grid_size=grid)
+        report = rcwa.check(problem, numerics=numerics)
+        assert report.ok and report.resolved['factorization'] == 'nvf'
+        assert report.resolved['shape_nvf_grid_size'] == reported
+        transmitted[grid] = np.asarray(rcwa.run(problem, numerics=numerics).T)
+    assert all(np.array_equal(transmitted[None], value) for value in transmitted.values())

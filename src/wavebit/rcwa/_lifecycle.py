@@ -168,9 +168,10 @@ def _report(problem, numerics, execution, solvers):
                   # solve took.
                   'solve_path': solvers[0]._solve_path(planned=True),
                   'half_space_merge_tolerance': numerics.half_space_merge_tolerance,
-                  # None where shape NVF does not read the grid: under 'li'/'laurent', and on
-                  # a raster, whose normal field is built at the raster's own resolution (an
-                  # explicit grid there is refused, rcwa.unsupported).
+                  # None under 'li'/'laurent', and on a raster, whose normal field is built at
+                  # the raster's own resolution (an explicit grid there is refused,
+                  # rcwa.unsupported). A stack of region-free layers resolves to 'nvf' and
+                  # reports the grid, default or explicit, although its answer does not read it.
                   'shape_nvf_grid_size': (scene.shape_nvf_grid_size
                                           if scene.factorization.value == 'nvf'
                                           and scene.modeling_path == 'parametric' else None),
