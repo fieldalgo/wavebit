@@ -1222,6 +1222,94 @@ def test_a_crease_is_where_w_jumps_and_this_is_how_far():
     assert abs(rung[1]) > 50 * abs(rung[0]), rung           # 1/step: the loss itself jumps
 
 
+def test_the_cap_rims_steep_gradient_is_the_planes_own_derivative():
+    """Just outside a cylinder's cap rim the gradient grows as ``1/delta``, and it is right.
+
+    A 2026-10-26 survey read ``jax.grad`` of a cylinder's geometry at 1.9e12 where a cap rim
+    lay on a cell boundary, and about 1 nearby, and asked whether a tie-break could remove it.
+    It cannot without changing values away from the tie. The cylinder's moment is the tangent
+    plane's (see :func:`test_the_plane_is_the_cylinders_moment_and_this_is_what_that_costs`). A
+    point a distance ``delta`` outside the rim takes the normal of the nearest rim point, so the
+    normal turns through 90 degrees over a move of order ``delta``, and ``w`` is ``n_c^2``. The
+    slope of ``w`` is then ``C / delta``. Measured at a voxel centred on the rim
+    (``dx = 0.25``, radius ``0.5 - delta``, height ``1 - 3 delta``), the loss below reads
+    ``delta * d/d radius = 0.3277`` and ``delta * d/d height = -0.1092`` at every delta from
+    1e-3 to 1e-11. JAX and Torch agree, and both match a NumPy central difference with step
+    ``delta / 100`` to 2e-5. That makes it a ridge, not one bad point: 3.3e4 at
+    ``delta = 1e-5``. A rule that changes only a few ulp around the tie leaves every value
+    outside that band, so it leaves the slope at ``delta = 2 tau`` at ``C / (2 tau)``, above
+    1e15 for any ulp-scale ``tau``. Removing the ridge means an exact rim moment (the clipped
+    arc's), which changes ``w`` at every rim voxel.
+
+    The cylinder has a second selection, which is the one that does depend on rounding. Inside
+    the corner, at ``d_radial == d_axial``, the normal flips from the wall's to the cap's.
+    There ``w`` jumps by its full range (``(1, 0, 0)`` to ``(0, 0, 1)``), but the gradient is the
+    selected side's and is finite. Both are pinned here, so neither can get worse silently.
+    """
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+    import jax.numpy as jnp
+    jax.config.update('jax_enable_x64', True)
+    h = 0.25
+
+    def loss(xp, radius, height, point):
+        fill, w = occupancy(Cylinder(radius, height, 'z', (0., 0., 0.)),
+                            xp.asarray(np.array([point])), h)
+        return (w * w).sum() + (fill * fill).sum()
+
+    def grads(v, point):
+        g_jax = np.asarray(jax.grad(lambda t: loss(jnp, t[0], t[1], point))(jnp.asarray(v)))
+        t = torch.tensor(v, dtype=torch.float64, requires_grad=True)
+        loss(torch, t[0], t[1], point).backward()
+        return g_jax, t.grad.numpy()
+
+    rim = (0.5, 0.0, 0.5)                        # on the rim of radius 0.5, height 1
+    for delta in (1e-3, 1e-5, 1e-7, 1e-9, 1e-11):
+        v = np.array([0.5 - delta, 1.0 - 3 * delta])
+        g_jax, g_torch = grads(v, rim)
+        assert np.allclose(g_jax, g_torch, rtol=1e-12, atol=0), (delta, g_jax, g_torch)
+        if delta >= 1e-9:                        # below that the difference is round-off
+            s = delta / 100
+            cd = np.array([(loss(np, *(v + s * e), rim) - loss(np, *(v - s * e), rim)) / (2 * s)
+                           for e in np.eye(2)])
+            assert np.allclose(g_jax, cd, rtol=1e-4), (delta, g_jax, cd)
+        slope = delta * g_jax
+        assert abs(slope[0] - 0.3277) < 2e-3, (delta, slope)    # 1/delta, no faster
+        assert abs(slope[1] + 0.1092) < 2e-3, (delta, slope)
+
+    # At and within two ulp of the tie: finite everywhere, and never past 1/distance.
+    def ulps(x, n):
+        for _ in range(abs(n)):
+            x = np.nextafter(x, np.inf if n > 0 else -np.inf)
+        return x
+
+    for nr in range(-2, 3):
+        for nh in range(-2, 3):
+            v = np.array([ulps(0.5, nr), ulps(1.0, nh)])
+            g_jax, g_torch = grads(v, rim)
+            assert np.isfinite(g_jax).all() and np.isfinite(g_torch).all(), (nr, nh)
+            # Here the two backends round differently, by O(1) on a slope up to 1e15, so
+            # each is held to the bound on its own rather than to the other.
+            outside = np.hypot(max(rim[0] - v[0], 0.), max(rim[2] - v[1] / 2, 0.))
+            for g in (g_jax, g_torch):
+                assert outside * np.abs(g).max() < 1.0, (nr, nh, g)
+                if outside == 0:
+                    assert np.abs(g).max() < 2.0, (nr, nh, g)
+
+    # The inside-corner tie, exact in binary: d_radial == d_axial == -h/4.
+    corner, v = (0.375, 0.0, 0.375), np.array([0.5, 1.0])
+    w = {n: occupancy(Cylinder(ulps(0.5, n), 1.0, 'z', (0., 0., 0.)), np.array([corner]), h)[1][0]
+         for n in (-1, 0, 1)}
+    assert np.array_equal(w[-1], [1., 0., 0.]), w        # the wall's normal, one ulp inside
+    assert np.array_equal(w[0], [0., 0., 1.]), w         # the tie goes to the cap
+    assert np.array_equal(w[1], [0., 0., 1.]), w
+    g_jax, g_torch = grads(v, corner)
+    assert np.allclose(g_jax, g_torch, rtol=1e-12), (g_jax, g_torch)
+    s = 1e-8
+    back = (loss(np, *(v - s * np.eye(2)[0]), corner) - loss(np, *v, corner)) / -s
+    assert np.isfinite(g_jax).all() and abs(g_jax[0] - back) < 1e-4 * abs(back), (g_jax, back)
+
+
 def test_a_union_of_flush_bodies_reads_solid_material_on_the_seam():
     """A rod standing on a substrate of the same material: the joint is solid, not half solid.
 
