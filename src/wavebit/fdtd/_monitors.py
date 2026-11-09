@@ -28,6 +28,11 @@ class TimeSeriesMonitor(Spoken, _legacy_monitors.Record):
     one of ``'Ex'``, ``'Ey'``, ``'Ez'``, ``'Hx'``, ``'Hy'``, ``'Hz'``.
     """
 
+    def _refusal(self):
+        name = getattr(self, 'name', None)
+        root = f'outputs.{name}' if isinstance(name, str) and name else 'outputs.monitors'
+        return {'at': 'monitor.geometry', None: 'fdtd.invalid'}, root
+
 
 @spec(positional=('name',))
 class FieldMonitor:

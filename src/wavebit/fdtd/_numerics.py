@@ -1,5 +1,6 @@
 """Grid, integration duration, and absorbing implementation choices."""
 import math
+from collections.abc import Mapping
 from dataclasses import field
 from wavebit._common.declarations import spec, static_float
 from wavebit._common.execution import frozen_mapping
@@ -67,6 +68,12 @@ class PML:
             raise ValidationError(str(exc), code='numerics.pml.kappa_max',
                                   path='numerics.absorber.kappa_max') from exc
         object.__setattr__(self, 'kappa_max', kappa)
+        if not isinstance(self.reference_media, Mapping):
+            raise ValidationError(
+                "PML(reference_media=...) maps an Open face's name to the material its layer is "
+                "graded for, as {'z-': Material(epsilon=2.25)}; omit it (or pass {}) to grade "
+                f'every face for its own boundary medium. Got {type(self.reference_media).__name__}.',
+                code='numerics.absorber', path='numerics.absorber.reference_media')
         object.__setattr__(self, 'reference_media', frozen_mapping(self.reference_media))
 
 

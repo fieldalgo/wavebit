@@ -584,6 +584,17 @@ emits them as Python warnings from `wavebit.fdtd.diagnostics`.
 false only for errors), `resolved` (grid shape, spacing, domains, padding, `time_step_seconds`, steps),
 `capabilities` (backend, warnings) and `estimates` (memory of the main field and material arrays).
 
+A declaration refuses a malformed value when it is built, before `check` sees it, with a
+`ValidationError` whose `.path` names the field and whose message says what it takes:
+`Domain` with `fdtd.invalid` at `scene.domain.size` or `scene.domain.center`; `SnappedSlab` and
+`SnappedBox` with `shape.dimension` at `shape.<axis>`, `shape.size` or `shape.center`; `Plane`
+with `fdtd.invalid` at `plane.<axis>`; `TimeSeriesMonitor` with `monitor.geometry` at
+`outputs.<name>.at` and `fdtd.invalid` for its `name` and `component`; `MirrorSymmetry` and
+`InvariantAxis` with `boundaries.face` at `MirrorSymmetry.parity`, `InvariantAxis.k`; and
+`PML(reference_media=...)` that is not a mapping with `numerics.absorber`. A traced value where
+one of these needs a static number is `prepared.static_input`. A `SnappedSlab` naming two axes
+is still Python's `NotImplementedError`, and an unknown keyword `TypeError`.
+
 `prepare(problem, numerics=...)` fixes the computational structure; `prepared.run(problem)`
 runs a complete problem against it. Material values, source amplitudes, phases, delays and pulse
 parameters, the initial-field amplitude and the geometry of bodies with a reserved range are

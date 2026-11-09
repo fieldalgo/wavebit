@@ -240,6 +240,30 @@ def public_error(exc):
     return exc
 
 
+def structured(exc, code, root):
+    """A plain engine ``ValueError`` as a ``ValidationError``, its message kept; else ``exc``.
+
+    ``code`` is the refusal's code, or a mapping from the refused field to its code (``None``
+    keys the default). The field is the one keyword the refusal's opening call names, as in
+    ``Domain(size=(-1.0, 1.0, 1.0)): every size is a positive length``; it is placed at
+    ``root.<field>``, and a refusal naming none or several at ``root``. A traced value where a
+    static one is required is ``prepared.static_input``, as at the entry points. A
+    ``TypeError`` (an unknown or missing keyword) and a ``NotImplementedError`` keep their type.
+    """
+    from wavebit.errors import ValidationError
+    if type(exc) is not ValueError:
+        return exc
+    message = str(exc)
+    fields = re.findall(r'(?<![\w.])([a-z_]+)=', message.split(': ', 1)[0])
+    field = fields[0] if len(fields) == 1 else None
+    path = f'{root}.{field}' if field else root
+    if isinstance(code, dict):
+        code = code.get(field, code[None])
+    if ') is static:' in message:
+        code = 'prepared.static_input'
+    return ValidationError(message, code=code, path=path)
+
+
 @eager_under_torch_compile
 class Spoken:
     """A public class extending one of the engine's own declarations, refusing in the public vocabulary.
@@ -250,7 +274,16 @@ class Spoken:
     in a plan, it records the engine class this one extends (a junction's signature skips
     ``Spoken``), so the public name changes no skeleton; ``tests/fdtd/test_public_spelling.py``
     pins that.
+
+    A plain ``ValueError`` from the engine constructor leaves as a ``ValidationError`` whose code
+    and path :meth:`_refusal` names (:func:`structured`).
     """
+
+    #: ``(code, path root)`` of a refusal; :func:`structured` reads a code mapping by field.
+    _REFUSAL = ('fdtd.invalid', '')
+
+    def _refusal(self):
+        return self._REFUSAL
 
     def __init_subclass__(cls, **kwargs):
         # ``__init__`` below takes ``*args, **kwargs``; ``inspect`` and the API reference read
@@ -265,7 +298,7 @@ class Spoken:
         try:
             super().__init__(*args, **kwargs)
         except (TypeError, ValueError, NotImplementedError) as exc:
-            translated = public_error(exc)
+            translated = structured(public_error(exc), *self._refusal())
             if translated is exc:
                 raise
             raise translated from exc
