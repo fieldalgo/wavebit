@@ -65,7 +65,10 @@ derivatives; it can cost more when many pixels have equal values.
 An eager ``jax.grad`` can read the primal for planning, including the normal field through the
 base raster's interface mask (:func:`_upsampled_interface_mask`). Under ``jax.jit`` a traced
 raster still needs explicit records: the declared geometry is resolved or validated before
-choosing the derivative-safe grid. The normal-field derivative holds its interface decisions fixed.
+choosing the derivative-safe grid. Without them the solver refuses it by name before any of the
+planning here reads a value
+(:meth:`~wavebit.rcwa._engine.engine.CoreFactorizationMixin._refuse_to_plan_a_traced_raster`).
+The normal-field derivative holds its interface decisions fixed.
 
 A supplied record belongs to the structure it was taken on. Where values can be read, a stale
 record is refused by :func:`_check_normal_field_still_fits` or
@@ -1584,22 +1587,29 @@ def normal_field_source_for_raster(structure, half_width_u, half_width_v, lattic
             for eps, _, _, _ in _layer_eps_for_normal_field(xp, structure, half_width_u, half_width_v)]
 
 
+def _has_no_value(array):
+    """Whether ``array`` is held by a ``jax.jit`` or ``jax.vmap`` trace, with no value to read.
+
+    Asked through :func:`~wavebit._common.backend._concrete`, so a ``jax.grad`` tracer and a
+    tensor under autograd, which carry their values, are not such an array. The reduction runs
+    under :func:`~wavebit._common.backend.concrete_scope`: an array that is a constant of the
+    trace is read as the constant it is, not staged into a tracer that cannot be.
+    """
+    if not hasattr(array, 'shape'):
+        return False
+    xp = array_namespace(array)
+    with concrete_scope(xp):
+        return _concrete(xp.all(xp.isfinite(array))) is None
+
+
 def _cell_has_no_value(lattice):
     """Whether ``lattice`` is a basis held by a ``jax.jit`` or ``jax.vmap`` trace, with no value.
 
-    Asked through :func:`~wavebit._common.backend._concrete`, so a ``jax.grad`` tracer and a
-    tensor under autograd, which carry their values, are not such a cell. The reduction runs
-    under :func:`~wavebit._common.backend.concrete_scope`: a basis that is a constant of the
-    trace is read as the constant it is, not staged into a tracer that cannot be.
+    :func:`_has_no_value` of its columns.
     """
     if lattice is None:
         return False
-    cols = getattr(lattice, 'columns', lattice)
-    if not hasattr(cols, 'shape'):
-        return False
-    xp = array_namespace(cols)
-    with concrete_scope(xp):
-        return _concrete(xp.all(xp.isfinite(cols))) is None
+    return _has_no_value(getattr(lattice, 'columns', lattice))
 
 
 def _check_normal_field_still_fits(eps_matrix, source, index, lattice=None, method=None):
