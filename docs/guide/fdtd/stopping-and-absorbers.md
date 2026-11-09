@@ -49,6 +49,15 @@ and resolution for the actual scene; see the retained
 [absorber evidence](../../validation/fdtd/fd-constitutive-absorber.md) and
 [stopping validation](../../validation/fdtd/fd-decay-stopping.md).
 
+A `PML` without `wavelength=` tunes its complex-frequency shift to the band centre its
+sources share, so `prepare` fixes that wavelength with the rest of the absorber. Reusing the
+preparation with another `GaussianPulse.wavelength`, concrete or traced (`jax.grad`,
+`jax.jit`, a Torch tensor that requires a gradient), is refused as `prepared.pml_wavelength`
+at `sources.<name>.pulse.wavelength`. Give the absorber its own tuning wavelength,
+`fdtd.PML(cells=..., wavelength=...)`, to vary or differentiate the pulse wavelength under one
+preparation: the layer then stays at that wavelength for every run, as it would in a fresh
+`fdtd.run` with the same numerics.
+
 For current PlaneWave/TFSF coverage and the limits of the tested time windows, see
 [source-column stopping validation](../../validation/fdtd/fd-source-decay.md).
 

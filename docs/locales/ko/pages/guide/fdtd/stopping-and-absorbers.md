@@ -45,6 +45,14 @@ PML의 기준 매질·주파수 이동·목표 반사율 설정을 받지 않습
 [기존 자동 종료 검증](../../validation/fdtd/fd-decay-stopping.md),
 [현재 광원 보조 격자 검증](../../validation/fdtd/fd-source-decay.md)을 참고하세요.
 
+`wavelength=` 없이 선언한 `PML`은 광원들이 공유하는 대역 중심 파장에 복소 주파수 이동을
+맞추므로, `prepare`가 그 파장을 흡수층의 나머지와 함께 고정합니다. 준비된 계산을 다른
+`GaussianPulse.wavelength`로 재사용하면, 구체 값이든 추적 값이든(`jax.grad`, `jax.jit`,
+기울기를 요구하는 Torch 텐서) `sources.<name>.pulse.wavelength` 경로의
+`prepared.pml_wavelength`로 거절됩니다. 하나의 준비로 펄스 파장을 바꾸거나 미분하려면
+흡수층에 고유 파장 `fdtd.PML(cells=..., wavelength=...)`을 주세요. 그러면 흡수층은 모든
+실행에서 그 파장에 머물며, 같은 수치 설정의 새 `fdtd.run`과 같습니다.
+
 두 정책은 현재 `Job` 파일로 저장·복원할 수 있습니다. 기존 공개 회귀 검증은
 균일 도체의 독립 점화식, 세 CPU 백엔드의 동일 구간 장·이력, nm/µm 단위 변환,
 독립적으로 선언한 정규화 장면과의 단계형 패딩 E/SI-H 비교를 포함합니다.
