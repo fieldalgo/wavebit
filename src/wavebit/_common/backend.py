@@ -1134,11 +1134,12 @@ class ExceptionalPointWarning(UserWarning):
 
     The result may be inaccurate. Detuning, ``rcwa.Numerics(detuning=...)``, does not act on
     this warning: its Rayleigh detuning ladder is too small to leave a coincident
-    exceptional-point band. The screens cannot run under an abstract trace (``jax.jit`` or
-    ``jax.vmap``), where an untaken cluster remains silent; a failed joint rebuild there, or
-    more candidate clusters than the trace's slots (degenerate ones in a nearly dependent basis
-    counted too), returns NaN instead. See ``docs/theory/rcwa/rayleigh-points.md`` for the
-    measured limits.
+    exceptional-point band. Nothing can warn under an abstract trace (``jax.jit``, ``jax.vmap``,
+    ``torch.func.vmap``): there the unresolved screen runs as data, on every mode's ball of at
+    most eight modes, and the layer answers NaN where it would warn, on both paths -- as a
+    failed joint rebuild does, or more candidate clusters or balls than the trace's slots
+    (degenerate ones in a nearly dependent basis counted too). The backward-error screen does
+    not run under a trace. See ``docs/theory/rcwa/rayleigh-points.md`` for the measured limits.
     """
 
 

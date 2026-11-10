@@ -1230,3 +1230,324 @@ def test_a_graze_on_the_first_order_path_is_not_an_exceptional_point(algo, rel):
         got = s.solve(auto_detune=False)
     ref = _legacy_wavebit_rcwa(**kw).solve(auto_detune=False)
     assert abs(float(np.sum(np.real(_np(got.R)))) - float(np.sum(np.real(_np(ref.R))))) < 1e-12
+
+
+# ------------------------------------------------------------------ the unresolved screen, traced
+
+def _coincident_pairs(count, root=None, seed=0):
+    """``count`` coincident Jordan pairs at 0.3 (couplings 0.05, 0.04, 0.03), a plain root at
+    ``0.3 + root`` beside them if given, the rest spread out, in a basis of condition 10. Three
+    pairs, or two and a root within ``_EP_CLUSTER``, are a defective cluster of more than four
+    modes, which no rebuild takes."""
+    rng = np.random.default_rng(seed)
+    U, _ = np.linalg.qr(rng.normal(size=(14, 14)) + 1j * rng.normal(size=(14, 14)))
+    Vh, _ = np.linalg.qr(rng.normal(size=(14, 14)) + 1j * rng.normal(size=(14, 14)))
+    P = U @ np.diag(np.geomspace(1, 10, 14)) @ Vh
+    lead = [0.3] * (2 * count) + ([0.3 + root] if root is not None else [])
+    J = np.diag(lead + list(np.linspace(0.7, 2.8, 14 - len(lead)))).astype(complex)
+    for p, c in zip(range(count), (0.05, 0.04, 0.03)):
+        J[2 * p, 2 * p + 1] = c
+    return P @ J @ np.linalg.inv(P)
+
+
+def _a_chain():
+    """:func:`test_a_chain_is_not_taken`'s operator: a refused pair, then modes 0.9e-4 apart."""
+    rng = np.random.default_rng(0)
+    U, _ = np.linalg.qr(rng.normal(size=(12, 12)) + 1j * rng.normal(size=(12, 12)))
+    J = np.diag([0.3, 0.3, 0.3 + 5e-8, 0.3 + 0.9e-4, 0.3 + 1.8e-4, 0.7, 0.9, 1.3, 1.6, 1.9, 2.3,
+                 2.8]).astype(complex)
+    J[0, 1] = 0.05
+    return U @ J @ U.conj().T
+
+
+def _degenerate_balls(centres, seed=3):
+    """Two exactly degenerate pairs 1e-5 apart at each centre, each pair in a nearly parallel
+    basis (:func:`test_a_degenerate_ball_in_a_parallel_basis_is_not_taken`): normal four-mode balls
+    whose unit columns are nearly dependent. ``(A, w, W)``, the basis as given."""
+    rng = np.random.default_rng(seed)
+    w = []
+    for c in centres:
+        w += [c, c, c + 1e-5, c + 1e-5]
+    w = np.array(w + list(np.linspace(3.3, 4.0, 10 - len(w))), dtype=complex)
+    n = len(w)
+    U, _ = np.linalg.qr(rng.normal(size=(n, n)) + 1j * rng.normal(size=(n, n)))
+    V = np.eye(n, dtype=complex)
+    for i in range(0, 4 * len(centres), 2):
+        V[:, i + 1] = (V[:, i] + 1e-4 * V[:, i + 1]) / np.linalg.norm(V[:, i] + 1e-4 * V[:, i + 1])
+    return U @ np.diag(w) @ U.conj().T, w, U @ V
+
+
+def _kept(A):
+    """The basis the 2D path keeps for ``A`` and the group its screen reads (jointly rebuilt
+    members each apart): ``(A, w, W, group)``, ``w`` ``eig``'s eigenvalues."""
+    pairs, clusters, rebuilt, _ = _layer(A)
+    w, W = np.linalg.eig(A)
+    if rebuilt is None:
+        return A, w, W, None
+    group = None
+    if clusters is not None:
+        ii = np.arange(len(w))
+        joint = np.isin(ii, np.asarray(clusters[0])[np.asarray(clusters[1])])
+        group = np.where(joint, ii + 1, 0)
+    return A, w, np.asarray(rebuilt[0]), group
+
+
+TRACED_SCREEN_CASES = {
+    'a chain': (lambda: _kept(_a_chain()), True),
+    'a length-3 Jordan chain': (lambda: _kept(_chain(0)), True),
+    'a length-3 Jordan chain, every mode apart': (
+        lambda: _kept(_chain(0))[:3] + (np.arange(12),), False),
+    'three coincident pairs': (lambda: _kept(_coincident_pairs(3)), True),
+    'two coincident pairs and a root': (lambda: _kept(_coincident_pairs(2, 5e-5)), True),
+    'two coincident pairs, rebuilt jointly': (lambda: _kept(_coincident_pairs(2)), False),
+    'a Jordan pair beside a root, rebuilt': (lambda: _kept(_jordan_beside(1e-6)[0]), False),
+    'a degenerate ball in a parallel basis': (lambda: _degenerate_balls([0.3]) + (None,), False),
+    'a lone Jordan pair as eig left it': (
+        lambda: (lambda A: (A,) + np.linalg.eig(A) + (None,))(_jordan_beside(1e-2)[0]), False),
+}
+
+
+def _traced_screen(backend, A, w, W, group, slots=2):
+    """:func:`solve_2d._unresolved_cluster_traced` under ``jax.jit``, or under ``torch.func.vmap``
+    over a batch of one."""
+    if backend == 'jax':
+        jax = pytest.importorskip('jax')
+        jax.config.update('jax_enable_x64', True)
+        jnp = jax.numpy
+        g = None if group is None else jnp.asarray(group)
+        return bool(jax.jit(lambda w_, W_, A_: solve_2d._unresolved_cluster_traced(
+            jnp, w_, W_, lambda: A_, solve_2d._EP_SINE, g, slots))(
+            jnp.asarray(w), jnp.asarray(W), jnp.asarray(A)))
+    torch = pytest.importorskip('torch')
+    import array_api_compat.torch as tx
+    g = None if group is None else torch.as_tensor(group)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')            # functorch's batching-rule notices for conj
+        out = torch.func.vmap(lambda w_, W_, A_: solve_2d._unresolved_cluster_traced(
+            tx, w_, W_, lambda: A_, solve_2d._EP_SINE, g, slots))(
+            *(torch.as_tensor(np.asarray(x))[None] for x in (w, W, A)))
+    return bool(out[0])
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+@pytest.mark.parametrize('name', list(TRACED_SCREEN_CASES))
+def test_the_traced_screen_reads_what_the_eager_screen_reads(name, backend):
+    """Under an abstract trace the unresolved screen cannot walk a cluster; it reads every mode's
+    ball of at most eight modes instead, and must reach the eager verdict: loud on a chain, a
+    length-3 Jordan chain after the pair rebuild, and defective clusters of five and six modes
+    (none of which any rebuild takes); quiet on a cluster rebuilt jointly (its members apart), a
+    pair rebuilt beside a root, a degenerate ball in a nearly parallel basis, the length-3 chain
+    with every mode in a group of its own (as a jointly rebuilt member is, or the other direction
+    of the first-order split), and a lone Jordan pair in ``eig``'s basis (a ball of two: the pair
+    gate's business, not a cluster). Measured: the same verdict as the eager screen on 200 random
+    clustered layers as well (129 loud). Catches the traced screen returning a constant, its
+    singular-value or defect test dropped, the group ignored, and balls of two read."""
+    build, loud = TRACED_SCREEN_CASES[name]
+    A, w, W, group = build()
+    eager = solve_2d._unresolved_defective_cluster(np, w, W, lambda: A, solve_2d._EP_SINE, group)
+    assert eager is loud
+    assert _traced_screen(backend, A, w, W, group) is loud
+
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_the_traced_crowded_pair_screen_reads_what_the_eager_one_reads(backend):
+    """:func:`test_the_crowded_pair_screen_reads_the_backward_error`'s verdicts, under ``jax.jit``
+    (``k0_d`` a traced argument) and ``torch.func.vmap``: exact model quiet; a 1e-12 miss quiet, a
+    1e-11 miss loud; one pair masked out, or the pairs 0.5 apart, quiet; ``k0_d`` 100 loud on the
+    1e-12 miss, 1 quiet; single precision quiet. Catches the traced screen off, its one-pair or
+    threshold or sensitivity terms lost, or ``k0_d`` read only when concrete."""
+    a, b = np.array([0, 2]), np.array([1, 3])
+    both, one = np.array([True, True]), np.array([True, False])
+    if backend == 'jax':
+        jax = pytest.importorskip('jax')
+        jax.config.update('jax_enable_x64', True)
+        jnp = jax.numpy
+
+        def traced(A, w, W, Q, mask, k0_d):
+            f = jax.jit(lambda w_, A_, W_, Q_, m_, k_: solve_2d._crowded_pairs_traced(
+                jnp, w_, A_, W_, Q_, jnp.asarray(a), jnp.asarray(b), m_,
+                k0_d=None if k0_d is None else k_, slots=2))
+            return bool(f(*(jnp.asarray(x) for x in (w, A, W, Q, mask)),
+                          jnp.asarray(0.0 if k0_d is None else k0_d)))
+    else:
+        torch = pytest.importorskip('torch')
+        import array_api_compat.torch as tx
+
+        def traced(A, w, W, Q, mask, k0_d):
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')        # functorch's batching-rule notices
+                out = torch.func.vmap(lambda w_, A_, W_, Q_, k_: solve_2d._crowded_pairs_traced(
+                    tx, w_, A_, W_, Q_, torch.as_tensor(a), torch.as_tensor(b),
+                    torch.as_tensor(mask), k0_d=None if k0_d is None else k_, slots=2))(
+                    *(torch.as_tensor(np.asarray(x))[None] for x in (w, A, W, Q)),
+                    torch.tensor([0.0 if k0_d is None else k0_d], dtype=torch.float64))
+            return bool(out[0])
+
+    def screen(gap, missed, mask=both, dtype=complex, k0_d=None):
+        A, w, W, Q, miss = _two_pair_model(gap, dtype)
+        return traced(A + missed * miss, w, W, Q, mask, k0_d)
+
+    assert screen(1e-7, 0.0) is False
+    assert screen(1e-7, 1e-12) is False
+    assert screen(1e-7, 1e-11) is True
+    assert screen(1e-7, 1e-11, one) is False
+    assert screen(0.5, 1e-11) is False
+    assert screen(1e-7, 1e-12, k0_d=1.0) is False
+    assert screen(1e-7, 1e-12, k0_d=100.0) is True
+    assert screen(1e-7, 0.0, dtype=np.complex64) is False
+
+
+def test_more_crowded_balls_than_slots_are_loud():
+    """Two clusters of two pairs each (at 0.3 and 0.9), an exact layer model: the traced
+    backward-error screen is quiet with a slot for each, and loud with one -- a cluster it cannot
+    read answers NaN, never silence. Catches its overflow term dropped."""
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    jnp = jax.numpy
+    rng = np.random.default_rng(7)
+    n2 = 12
+    W = np.eye(n2) + 0.2 * (rng.normal(size=(n2, n2)) + 1j * rng.normal(size=(n2, n2)))
+    w = np.array([0.3, 0.3, 0.3 + 1e-7, 0.3 + 1e-7, 0.9, 0.9, 0.9 + 1e-7, 0.9 + 1e-7,
+                  1.4, 2.0, 2.6, 3.1], dtype=complex)
+    Q = np.diag(np.sqrt(w))
+    Q[0, 1], Q[2, 3], Q[4, 5], Q[6, 7] = 0.04, -0.03, 0.05, 0.02
+    A = W @ (Q @ Q) @ np.linalg.inv(W)
+    a, b, mask = np.array([0, 2, 4, 6]), np.array([1, 3, 5, 7]), np.ones(4, dtype=bool)
+    assert solve_2d._crowded_pairs_imprecise(np, w, A, W, Q, a, b, mask) is False
+
+    def traced(slots):
+        return bool(jax.jit(lambda *x: solve_2d._crowded_pairs_traced(jnp, *x, slots=slots))(
+            *(jnp.asarray(x) for x in (w, A, W, Q, a, b, mask))))
+    assert traced(2) is False
+    assert traced(1) is True
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_one_ball_takes_one_slot_and_more_balls_than_slots_are_loud(backend):
+    """Every member of a closed ball reads the same ball; it takes one slot. A degenerate
+    four-mode ball in a nearly parallel basis with one slot: quiet, as eagerly. Two such balls
+    with one slot: more candidates than slots, so the trace answers NaN where the eager screen
+    is quiet -- loud, never silent, as the cluster gate's overflow. Catches the one-seed-per-ball
+    rule dropped (four seeds overflow one slot) and the overflow term dropped."""
+    A, w, W = _degenerate_balls([0.3])
+    assert not solve_2d._unresolved_defective_cluster(np, w, W, lambda: A, solve_2d._EP_SINE)
+    assert _traced_screen(backend, A, w, W, None, slots=1) is False
+    A, w, W = _degenerate_balls([0.3, 1.4])
+    assert not solve_2d._unresolved_defective_cluster(np, w, W, lambda: A, solve_2d._EP_SINE)
+    assert _traced_screen(backend, A, w, W, None, slots=1) is True
+    assert _traced_screen(backend, A, w, W, None, slots=2) is False
+
+
+def _jit_rows(s, wavelength):
+    """``_row`` of ``s.solve`` under ``jax.jit`` in the wavelength, and its ``jit(grad)`` of
+    ``sum R``. A trace cannot warn: its verdict is in the answer."""
+    import types
+
+    import jax
+    jnp = jax.numpy
+    keys = ('R', 'T', 'r_xyz', 't_xyz')
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        orders_v = s.solve(auto_detune=False).orders_v
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        out = jax.jit(lambda w: [getattr(s.solve(wavelength=w, auto_detune=False), k)
+                                 for k in keys])(jnp.asarray(wavelength))
+        grad = jax.jit(jax.grad(lambda w: jnp.sum(jnp.real(
+            s.solve(wavelength=w, auto_detune=False).R))))(jnp.asarray(wavelength))
+    assert not any(issubclass(r.category, _legacy_wavebit_ExceptionalPointWarning) for r in rec)
+    return _row(types.SimpleNamespace(orders_v=orders_v, **dict(zip(keys, out)))), float(grad)
+
+
+@pytest.mark.parametrize('name,algo,dth', [
+    ('PL952', 'SMM', 1e-8), ('PA616', 'ETM', 1e-7), ('PL952', 'ETM', 3e-4),
+    pytest.param('PA616', 'SMM', 3e-4, marks=pytest.mark.slow)])
+def test_coincident_exceptional_points_on_the_first_order_path_are_exact_or_nan_under_jit(
+        name, algo, dth):
+    """The first-order formulation, which has no joint rebuild, under ``jax.jit``: where the eager
+    solve warns, every traced answer and ``jit(grad)`` is NaN, never a finite value; where it is
+    quiet, the traced answer is within 1e-12 of the 1D rebuild. Measured before (silent): up to
+    0.69 off on SMM and 1.7e-4 on ETM at every offset the eager screen warns at (0 .. 1e-4, both
+    scenes). Catches the traced screen not wired into the first-order split."""
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    scene = _littrow(SCENES[name], dth)
+    ref = _vector(_solver(scene).solve(auto_detune=False))
+    s = _solver(scene, algo=algo, backend='jax', two_d=True)
+    s.formulation = 'first_order'
+    _, warned = _solve_2d(scene, algo, True)
+    loud = _legacy_wavebit_ExceptionalPointWarning in warned
+    assert loud is (dth < 3e-4)
+    rows, grad = _jit_rows(s, scene['wavelength'])
+    if loud:
+        assert np.all(np.isnan(rows)) and np.isnan(grad)
+    else:
+        assert np.all(np.isfinite(rows)) and np.isfinite(grad)
+        assert np.max(np.abs(rows[2:] - ref[2:])) < 1e-12
+
+
+@pytest.mark.parametrize('dth,says', [(0.0, 'no rebuild takes'), (3e-7, 'could not separate')],
+                         ids=['unresolved', 'crowded'])
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+def test_what_the_2d_screens_warn_on_is_nan_under_jit(algo, dth, says, monkeypatch):
+    """The 2D wiring of both traced screens: PL952 with the joint gate closed. At the coincidence
+    its four modes stay in ``eig``'s nearly dependent basis (the unresolved screen's case, 2.6e-4
+    .. 8.7e-4 off eagerly); at 3e-7 the pair gate takes the two pairs one at a time and they miss
+    the operator (the backward-error screen's case, 2.8e-11 off). Eagerly that screen's warning;
+    under ``jax.jit`` NaN in every answer and ``jit(grad)``, where the trace was silent. Catches
+    either traced verdict not applied to the 2D layer's ``Q``."""
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    monkeypatch.setattr(solve_2d, '_defective_clusters', lambda *a, **k: None)
+    scene = _littrow(SCENES['PL952'], dth)
+    s = _solver(scene, algo=algo, two_d=True)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        s.solve(auto_detune=False)
+    said = [str(r.message) for r in rec
+            if issubclass(r.category, _legacy_wavebit_ExceptionalPointWarning)]
+    assert len(said) == 1 and says in said[0], said
+    rows, grad = _jit_rows(_solver(scene, algo=algo, backend='jax', two_d=True),
+                           scene['wavelength'])
+    assert np.all(np.isnan(rows)) and np.isnan(grad)
+
+
+@pytest.mark.parametrize('kind', ['near-degenerate', 'normal incidence'])
+@pytest.mark.parametrize('first_order', [False, True], ids=['2d', 'first_order'])
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+def test_degenerate_clusters_keep_their_bits_under_jit(kind, first_order, algo, monkeypatch):
+    """:func:`test_degenerate_clusters_stay_quiet` under ``jax.jit``: the traced screen reads a
+    uniform layer's degenerate clusters, in whatever basis ``eig`` chose, as quiet, and a quiet
+    layer keeps its bits -- the same ``jit`` values and ``jit(grad)`` as with the traced screen
+    forced off. At normal incidence the first-order split's degenerate clusters are sixteen modes
+    in a basis that is not orthonormal: read as eight-mode balls once per lane set, or with the
+    pair gate's four slots, they overflowed and the layer came back NaN. Catches a degenerate
+    cluster read as defective, and the slots or the one-seed-per-ball rule narrowed."""
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    jnp = jax.numpy
+    kw = dict(UNIFORM_NEAR_DEGENERATE, backend='jax', layer_algorithm=algo)
+    if kind == 'normal incidence':
+        kw.update(structure=np.full((1, 8, 8), 3.1), theta=0.0, phi=0.0, truncation_order=[5, 5],
+                  wavelength=731.0)
+
+    def run():
+        s = _legacy_wavebit_rcwa(**kw)
+        if first_order:
+            s.formulation = 'first_order'
+        wl = jnp.asarray(kw['wavelength'])
+        vals = jax.jit(lambda w: [getattr(s.solve(wavelength=w, auto_detune=False), k)
+                                  for k in ('R', 'T', 'r_xyz', 't_xyz')])(wl)
+        grad = jax.jit(jax.grad(lambda w: jnp.sum(jnp.real(
+            s.solve(wavelength=w, auto_detune=False).R))))(wl)
+        return [np.asarray(v) for v in vals] + [np.asarray(grad)]
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        screened = run()
+    assert all(np.all(np.isfinite(v)) for v in screened)
+    monkeypatch.setattr(solve_2d, '_unresolved_cluster_traced',
+                        lambda xp, w, *a, **k: xp.zeros((), dtype=xp.bool))
+    unscreened = run()
+    for got, ref in zip(screened, unscreened):
+        assert got.dtype == ref.dtype and got.tobytes() == ref.tobytes()
