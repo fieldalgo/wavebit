@@ -343,6 +343,58 @@ def test_a_differentiated_material_beside_the_absorber_runs_once_moved_clear():
     assert leaf.grad is not None and bool(torch.isfinite(leaf.grad))
 
 
+def _absorber_refused_alike(problem, numerics, code, path):
+    """check's issue, and what prepare and run raise: one class, ``code`` at ``path``."""
+    (issue,) = fdtd.check(problem, numerics=numerics).issues
+    assert (issue.code, issue.path) == (code, path)
+    raised = []
+    for door in (fdtd.prepare, fdtd.run):
+        with pytest.raises(ValidationError) as caught:
+            door(problem, numerics=numerics)
+        raised.append(caught.value)
+    assert type(raised[0]) is type(raised[1]) is ValidationError
+    for exc in raised:
+        assert (exc.code, exc.path, exc.message) == (code, path, issue.message)
+    return issue
+
+
+@pytest.mark.parametrize('name', sorted(ABSORBER_CASES) + ['initial'])
+def test_a_conductive_absorber_coupling_refusal_is_numerics_absorber_at_every_door(name):
+    # The owner's decision of 2026-11-10: the absorber's own code, at the absorber, not the
+    # catch-all fdtd.invalid at problem. What is refused, and its words, are unchanged.
+    if name == 'initial':
+        problem, numerics = _absorbed(initial=fdtd.InitialField(E=(None, lambda x, y, z: x*0 + 1, None)))
+    else:
+        problem, numerics, _ = _absorber_case(name)
+    issue = _absorber_refused_alike(problem, numerics, 'numerics.absorber', 'numerics.absorber')
+    _public_absorber_words(issue.message)
+
+
+def test_a_traced_material_beside_the_absorber_is_numerics_absorber_on_validate_and_run():
+    torch = pytest.importorskip('torch')
+    leaf = torch.tensor(2.25, dtype=torch.float64, requires_grad=True)
+    problem, numerics = _absorbed()
+    prepared = fdtd.prepare(problem, numerics=numerics, backend='torch')
+    traced = _absorbed(material=Material(leaf))[0]
+    (issue,) = prepared.validate(traced).issues
+    with pytest.raises(ValidationError) as ran:
+        prepared.run(traced)
+    assert type(ran.value) is ValidationError
+    assert ((issue.code, issue.path) == (ran.value.code, ran.value.path)
+            == ('numerics.absorber', 'numerics.absorber'))
+    _public_absorber_words(issue.message)
+
+
+@pytest.mark.parametrize('cells, says', [(1, 'two is the minimum that grades at all'),
+                                         (2.5, 'an integer is needed'),
+                                         (True, 'an integer is needed, not a bool')])
+def test_a_conductive_absorber_cell_count_is_refused_at_its_field(cells, says):
+    problem, numerics = _absorbed(clear=3.)
+    numerics = numerics.replace(absorber=fdtd.ConductiveAbsorber(cells=cells))
+    issue = _absorber_refused_alike(problem, numerics, 'numerics.absorber', 'numerics.absorber.cells')
+    assert issue.message.startswith(f'ConductiveAbsorber(cells={cells!r}): ') and says in issue.message
+
+
 def test_every_absorber_coupling_refusal_the_engine_holds_has_public_words():
     import ast
     import pathlib
