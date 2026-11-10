@@ -8,7 +8,8 @@ yet the four span about two dimensions (smallest singular value ~1e-7). Just off
 coincidence the two pairs sit a few 1e-8 .. 1e-6 apart, and one pair rebuild each cannot
 separate them. Without the joint rebuild the 2D path is 4.6e-7 .. 1.0e-3 off there (the screens
 change no arithmetic: before them it was silent, since then it warns), and first-order SMM up to
-0.55. The joint rebuild (``solve_2d._rebuild_defective_clusters``) takes the four modes as one
+1.1. The joint rebuild (``solve_2d._rebuild_defective_clusters``; on the first-order split,
+``solve_2d_first_order._regular_clusters``, in each direction) takes the four modes as one
 cluster.
 """
 
@@ -78,18 +79,16 @@ def test_coincident_exceptional_points_are_exact(name, algo, dth):
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('name', list(SCENES))
 @pytest.mark.parametrize('dth', COINCIDENT)
-def test_coincident_exceptional_points_on_the_first_order_path_are_exact_or_loud(name, algo, dth):
-    """The first-order formulation, which has no joint rebuild: within 1e-12 of the 1D rebuild,
-    or an ``ExceptionalPointWarning``. Loud for ``dth <= 1e-4`` (its separation refusal), exact
-    beyond. Catches the screen removed (first-order PL952 at 1e-8 silent at 0.39)."""
+def test_coincident_exceptional_points_on_the_first_order_path_are_exact(name, algo, dth):
+    """The first-order formulation: within 1e-12 of the 1D rebuild, and quiet. Its split holds
+    the four modes in each direction, and takes them as one defective cluster, rebuilt jointly
+    (``solve_2d_first_order._regular_clusters``). Measured <= 2.0e-14 at 19 offsets of either sign
+    on NumPy, JAX and PyTorch; before the joint rebuild the split warned for ``dth <= 1e-4``
+    (PA616; 1e-5 PL952) and was up to 1.1 off there (SMM). Catches the joint rebuild removed
+    from the split or its gate closed (loud, or off)."""
     scene = _littrow(SCENES[name], dth)
-    ref = _vector(_solver(scene).solve(auto_detune=False))
-    got, warned = _solve_2d(scene, algo, True)
-    err = np.max(np.abs(got[2:] - ref[2:]))
-    loud = _legacy_wavebit_ExceptionalPointWarning in warned
-    assert loud or err < 1e-12, f'{name} {algo} dth {dth:g}: {err:.1e} off, silently'
-    if dth >= 3e-4:
-        assert not loud and err < 1e-12
+    _exact_and_quiet(scene, algo, f'{name} {algo} dth {dth:g} first order',
+                     solve=lambda: _solve_2d(scene, algo, True))
 
 
 #: A uniform layer at oblique incidence whose first-order split holds two exactly degenerate
@@ -123,7 +122,9 @@ def test_degenerate_clusters_stay_quiet(kind, first_order, algo, monkeypatch):
 
     def refused(*args, **kwargs):
         raise AssertionError('a degenerate cluster was rebuilt jointly')
+    from wavebit.rcwa._engine import solve_2d_first_order
     monkeypatch.setattr(solve_2d, '_rebuild_defective_clusters', refused)
+    monkeypatch.setattr(solve_2d_first_order, '_regular_clusters', refused)
     with warnings.catch_warnings():
         warnings.simplefilter('error')
         quiet = run()
@@ -829,10 +830,12 @@ def test_two_clusters_in_one_layer(name, algo, dth, joint_layers):
         assert _backward(A, out) < 1e-13
 
 
-def test_more_clusters_than_the_trace_holds_is_loud(monkeypatch):
+@pytest.mark.parametrize('first_order', [False, True], ids=['2d', 'first_order'])
+def test_more_clusters_than_the_trace_holds_is_loud(monkeypatch, first_order):
     """Under ``jax.jit`` the clusters are rebuilt up to a static count of slots; the ``(5, 2)``
-    layer at the coincidence holds two, so one slot must give NaN, never the other cluster left
-    to the pair rebuild; two slots are exact."""
+    layer at the coincidence holds two (four in the first-order split, two in each direction),
+    so one slot fewer must give NaN, never a cluster left to the pair rebuild; enough slots are
+    exact."""
     jax = pytest.importorskip('jax')
     jax.config.update('jax_enable_x64', True)
     jnp = jax.numpy
@@ -842,10 +845,12 @@ def test_more_clusters_than_the_trace_holds_is_loud(monkeypatch):
         warnings.simplefilter('ignore')
         row = list(_np(_solver_v2(scene).solve(auto_detune=False).orders_v)).index(0)
     original = solve_2d._defective_clusters
-    for slots, finite in ((1, False), (2, True)):
+    for slots, finite in ((3, False), (4, True)) if first_order else ((1, False), (2, True)):
         monkeypatch.setattr(solve_2d, '_defective_clusters',
-                            lambda *a, slots=slots: original(*a[:-1], slots))
+                            lambda *a, slots=slots, **k: original(*a[:-1], slots, **k))
         s = _solver_v2(scene, backend='jax')
+        if first_order:
+            s.formulation = 'first_order'
         R, T, r, t = (np.asarray(x) for x in jax.jit(lambda w: [
             getattr(s.solve(wavelength=w, auto_detune=False), k)
             for k in ('R', 'T', 'r_xyz', 't_xyz')])(jnp.asarray(scene['wavelength'])))
@@ -854,6 +859,50 @@ def test_more_clusters_than_the_trace_holds_is_loud(monkeypatch):
             continue
         got = np.concatenate([r[row].ravel(), t[row].ravel()])
         assert np.max(np.abs(got - ref[2:])) < 1e-12
+
+
+def _sum_R(s):
+    import jax.numpy as jnp
+    return lambda w: jnp.sum(jnp.real(s.solve(wavelength=w, auto_detune=False).R))
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+def test_two_clusters_a_direction_on_the_first_order_path(algo):
+    """The first-order split of the ``(5, 2)`` layer at the coincidence holds two four-mode
+    clusters in each direction beside row 2's pair: five coupled rows a direction, more than the
+    traced exponential gathers by default (``modal_gradient._COUPLED_CAP``, four). Eagerly and
+    under ``jax.jit`` within 1e-12 of the 1D rebuild and quiet, and ``jit(grad)`` of ``sum R``
+    within 1e-10 of the eager ``jax.grad``, relative. Measured TBD. Catches the split's coupled
+    count not reaching the exponential's traced rule (its tangent NaN)."""
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    jnp = jax.numpy
+    scene = _littrow(SCENES['PL952'], 0.0)
+    ref = _vector(_solver(scene).solve(auto_detune=False))
+    s = _solver_v2(scene, algo, backend='jax')
+    s.formulation = 'first_order'
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        eager = _row(s.solve(auto_detune=False))
+        g = float(jax.grad(_sum_R(s))(jnp.asarray(scene['wavelength'])))
+    assert not any(issubclass(r.category, _legacy_wavebit_ExceptionalPointWarning) for r in rec)
+    assert np.max(np.abs(eager[2:] - ref[2:])) < 1e-12
+    rows, grad = _jit_rows(s, scene['wavelength'])
+    assert np.max(np.abs(rows[2:] - ref[2:])) < 1e-12
+    assert abs(grad - g) <= 1e-10 * max(1.0, abs(g)), (grad, g)
+    # The field reconstruction reads the count off the layer record's length.
+    xs, zs = jnp.asarray([-200., 130.]), jnp.asarray([0.3, 0.7]) * sum(scene['thickness'])
+
+    def field(w):
+        f = s.solve(wavelength=w, auto_detune=False, answers='field').reconstruct_field(
+            sample_x=xs, sample_y=jnp.asarray([0.]), sample_z=zs)
+        return jnp.sum(jnp.abs(f[..., :3]) ** 2)
+    wl = jnp.asarray(scene['wavelength'])
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        gf = float(jax.grad(field)(wl))
+        gj = float(jax.jit(jax.grad(field))(wl))
+    assert abs(gj - gf) <= 1e-10 * abs(gf), (gj, gf)
 
 
 @pytest.mark.slow
@@ -897,15 +946,17 @@ def test_a_trace_keeps_the_bits_where_no_cluster_is_live(algo, monkeypatch):
 LITTROW_CASES = [('PL952', 0.0), ('PA616', 1e-8)]
 
 
+@pytest.mark.parametrize('first_order', [False, True], ids=['2d', 'first_order'])
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('name, dth', LITTROW_CASES + [
     pytest.param('PL952', 7e-8, marks=pytest.mark.slow)])
-def test_derivatives_at_a_coincidence_are_the_1d_rebuild_s(name, dth, algo):
+def test_derivatives_at_a_coincidence_are_the_1d_rebuild_s(name, dth, algo, first_order):
     """``d(sum R)`` in the raster, the wavelength, the thickness and ``theta`` at a jointly
     rebuilt cluster: ``jax.grad``, ``jax.jvp``, torch reverse and ``forward_ad`` against
     ``jax.grad`` of the 1D rebuild. Measured <= 1.8e-13; with the pair rebuild alone 3.3e-8 ..
-    3.1e-3. Catches an entry list that leaves out a cluster's coupling (the generator and
-    inverse rules then drop its terms while the values stay exact)."""
+    3.1e-3. On the first-order split, whose cluster block of the generator is coupled the same
+    way, <= 1.2e-13. Catches an entry list that leaves out a cluster's coupling (the generator
+    and inverse rules then drop its terms while the values stay exact)."""
     from tests.rcwa.test_conical_cutoff import _rel
     jax = pytest.importorskip('jax')
     jax.config.update('jax_enable_x64', True)
@@ -918,6 +969,8 @@ def test_derivatives_at_a_coincidence_are_the_1d_rebuild_s(name, dth, algo):
 
     def make(backend, two_d):
         s = _solver(scene, algo=algo if two_d else 'ETM', backend=backend, two_d=two_d)
+        if two_d and first_order:
+            s.formulation = 'first_order'
         if backend == 'jax':
             def f(u, w, d, th):
                 st = jnp.repeat(u, 2, axis=1) if two_d else u
@@ -953,15 +1006,17 @@ def test_derivatives_at_a_coincidence_are_the_1d_rebuild_s(name, dth, algo):
         assert _rel(float(tangent), ref[1]) < 1e-10
 
 
+@pytest.mark.parametrize('first_order', [False, True], ids=['2d', 'first_order'])
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('name, dth', LITTROW_CASES)
-def test_a_coincidence_under_an_abstract_trace(name, dth, algo):
+def test_a_coincidence_under_an_abstract_trace(name, dth, algo, first_order):
     """A jointly rebuilt cluster under ``jit``, ``jit(vmap)`` and ``torch.func.vmap`` (values), and
     ``jit(grad(sum vmap))``, ``jit(vmap(grad))``, torch backward through ``torch.func.vmap``
     (``dR/dwl`` per lane), lanes ``rel`` 0, +-1e-12 and 1e-2 (off the cluster): the eager 1D
     rebuild's. Measured <= 1.4e-14 (values) and <= 9.6e-14 (derivatives); with the pair rebuild
-    alone, silent and up to 1.9e-3 (values) and 7.5e-3 (derivatives) off. Catches the traced
-    gate or slots broken, and the check or the overflow poisoning a live layer."""
+    alone, silent and up to 1.9e-3 (values) and 7.5e-3 (derivatives) off. On the first-order
+    split <= 1.6e-14 and <= 1.2e-13. Catches the traced gate or slots broken, and the check or
+    the overflow poisoning a live layer."""
     jax = pytest.importorskip('jax')
     jax.config.update('jax_enable_x64', True)
     torch = pytest.importorskip('torch')
@@ -976,6 +1031,9 @@ def test_a_coincidence_under_an_abstract_trace(name, dth, algo):
     gref = np.array([float(jax.grad(lambda w: jnp.sum(jnp.real(
         s1.solve(wavelength=w, auto_detune=False).R)))(jnp.asarray(w))) for w in lanes])
     s = _solver(scene, algo=algo, backend='jax', two_d=True)
+    st = _solver(scene, algo=algo, backend='torch', two_d=True)
+    if first_order:
+        s.formulation = st.formulation = 'first_order'
     row = 1                                      # orders_v = (-1, 0, 1)
 
     def one(w):
@@ -984,7 +1042,6 @@ def test_a_coincidence_under_an_abstract_trace(name, dth, algo):
     jf = jax.jit(one)
     values = {'jit': np.stack([np.asarray(jf(jnp.asarray(w))) for w in lanes]),
               'jit(vmap)': np.asarray(jax.jit(jax.vmap(one))(jnp.asarray(lanes)))}
-    st = _solver(scene, algo=algo, backend='torch', two_d=True)
 
     def tone(w):
         r = st.solve(wavelength=w, auto_detune=False)
@@ -1010,20 +1067,25 @@ def test_a_coincidence_under_an_abstract_trace(name, dth, algo):
         assert np.isfinite(err) and err < 1e-11, f'{label}: {err:.1e}'
 
 
+@pytest.mark.parametrize('first_order', [False, True], ids=['2d', 'first_order'])
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('name, dth', LITTROW_CASES)
-def test_a_coincidence_field_and_its_gradient_are_the_1d_rebuild_s(name, dth, algo):
+def test_a_coincidence_field_and_its_gradient_are_the_1d_rebuild_s(name, dth, algo, first_order):
     """Six components on a 12 x 1 x 8 grid against the 1D field (its global phase removed), and
     ``jax.grad`` of ``sum |E|**2`` at nine points in the raster and the wavelength, eagerly and
     under ``jax.jit``, at a jointly rebuilt cluster. Measured: fields <= 1.3e-13 of ``max|F|``,
-    gradients <= 3.3e-12; with the pair rebuild alone up to 7.0e-3 and 5.9e-2."""
+    gradients <= 3.3e-12; with the pair rebuild alone up to 7.0e-3 and 5.9e-2. On the
+    first-order split <= 3.5e-14 and <= 1.0e-12."""
     jax = pytest.importorskip('jax')
     jax.config.update('jax_enable_x64', True)
     jnp = jax.numpy
     scene = _littrow(SCENES[name], dth)
     ref = _np(_solver(scene).solve(auto_detune=False, answers='field').reconstruct_field(
         sample_x=12, sample_y=1, sample_z=8))
-    got = _np(_solver(scene, algo=algo, two_d=True).solve(auto_detune=False, answers='field')
+    s2 = _solver(scene, algo=algo, two_d=True)
+    if first_order:
+        s2.formulation = 'first_order'
+    got = _np(s2.solve(auto_detune=False, answers='field')
               .reconstruct_field(sample_x=12, sample_y=1, sample_z=8)).reshape(ref.shape)
     phase = np.exp(1j * np.angle(np.vdot(got.ravel(), ref.ravel())))
     assert np.max(np.abs(got * phase - ref)) < 1e-12 * np.max(np.abs(ref))
@@ -1031,6 +1093,8 @@ def test_a_coincidence_field_and_its_gradient_are_the_1d_rebuild_s(name, dth, al
 
     def objective(two_d, a):
         s = _solver(scene, algo=a, backend='jax', two_d=two_d)
+        if two_d and first_order:
+            s.formulation = 'first_order'
 
         def F(u, w):
             st = jnp.repeat(u, 2, axis=1) if two_d else u
@@ -1054,13 +1118,21 @@ def test_a_coincidence_field_and_its_gradient_are_the_1d_rebuild_s(name, dth, al
 GENUINE_C4V = 641.1137704156972
 
 
-def _c4v_amplitudes(wavelength, eps=12.25, algo='ETM', factorization='laurent'):
+def _c4v_solver(wavelength, eps=12.25, algo='ETM', factorization='laurent', first_order=False,
+                backend='numpy'):
     st = np.ones((1, 20, 20), dtype=complex if np.iscomplexobj(eps) else float)
     st[0, 6:14, 6:14] = eps
-    s = _legacy_wavebit_rcwa(backend='numpy', wavelength=wavelength, period=[1000., 1000.],
+    s = _legacy_wavebit_rcwa(backend=backend, wavelength=wavelength, period=[1000., 1000.],
                              truncation_order=[4, 4], structure=st, thickness=[300.], top=1.0,
                              bot=2.1025, theta=0.0, phi=0.0, psi=np.pi / 4, layer_algorithm=algo,
                              factorization=factorization)
+    if first_order:
+        s.formulation = 'first_order'
+    return s
+
+
+def _c4v_amplitudes(wavelength, eps=12.25, algo='ETM', factorization='laurent', first_order=False):
+    s = _c4v_solver(wavelength, eps, algo, factorization, first_order)
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter('always')
         r = s.solve(auto_detune=False)
@@ -1118,6 +1190,65 @@ def test_off_a_c4v_coincidence_the_doublets_are_one_cluster(factorization, coinc
     3e-6; with the narrow ball alone silent and up to 9.1e-12 off. Catches the wide level
     removed."""
     _c4v_exact_and_quiet(coincidence * (1 + rel), factorization, joint_layers, monkeypatch)
+
+
+def _c4v_first_order_oracle(wavelength, factorization, monkeypatch):
+    """:func:`_c4v_exact_and_quiet`'s Cauchy circle, on the first-order split."""
+    with monkeypatch.context() as m:
+        m.setattr(solve_2d, '_EP_SINE', 0.0)
+        from wavebit.rcwa._engine import solve_2d_first_order as fo
+        m.setattr(fo, '_PARALLEL_SIN', 0.0)
+        return np.mean([_c4v_amplitudes(wavelength, 12.25 + 1e-2 * np.exp(2j * np.pi * k / 16),
+                                        factorization=factorization, first_order=True)[0]
+                        for k in range(16)], axis=0)
+
+
+@pytest.mark.parametrize('rel', [0.0, 1e-7])
+@pytest.mark.parametrize('factorization, coincidence', C4V)
+def test_a_c4v_cluster_on_the_first_order_split(factorization, coincidence, rel, monkeypatch):
+    """The C4v pillar's coincidences, and the doublets just off them, on the first-order split:
+    one four-mode cluster a direction, rebuilt jointly, ETM and SMM within 1e-12 of the Cauchy
+    oracle and quiet. Measured <= 2.0e-14 at relative offsets 0 and +-1e-9 at the three
+    coincidences and +-1e-8 .. 1e-5 at two of them; before the joint rebuild loud and up to
+    3.7e-4 off at the
+    coincidence, and with its gate closed silent and up to 3.1e-13 off at 1e-7, where the
+    screen's narrow balls hold two modes each. Catches the gate closed on the first-order split
+    or its wide radius lost."""
+    wavelength = coincidence * (1 + rel)
+    oracle = _c4v_first_order_oracle(wavelength, factorization, monkeypatch)
+    for algo in ('ETM', 'SMM'):
+        got, warned = _c4v_amplitudes(wavelength, algo=algo, factorization=factorization,
+                                      first_order=True)
+        err = np.max(np.abs(got - oracle))
+        assert _legacy_wavebit_ExceptionalPointWarning not in warned, f'{algo}: warned'
+        assert err < 1e-12, f'{algo}: {err:.1e} off'
+
+
+@pytest.mark.slow
+def test_a_c4v_cluster_the_trace_leaves_over_is_loud(monkeypatch):
+    """At a relative 1e-7 off the C4v coincidence a cluster the trace's slots leave over would go
+    to nothing that reads it -- no pair is gated, and the screen's narrow balls hold two modes
+    each -- and the first-order split was 2.2e-13 off with the joint gate closed, silently. So
+    under ``jax.jit`` one slot, where the split holds a cluster in each direction, must answer
+    NaN, and two are within 1e-12 of the Cauchy oracle. Catches the cluster gate's overflow
+    dropped from the first-order split."""
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    jnp = jax.numpy
+    wavelength = GENUINE_C4V * (1 + 1e-7)
+    oracle = _c4v_first_order_oracle(wavelength, 'laurent', monkeypatch)
+    original = solve_2d._defective_clusters
+    for slots, finite in ((1, False), (2, True)):
+        monkeypatch.setattr(solve_2d, '_defective_clusters',
+                            lambda *a, slots=slots, **k: original(*a[:-1], slots, **k))
+        s = _c4v_solver(wavelength, first_order=True, backend='jax')
+        r, t = jax.jit(lambda w: [getattr(s.solve(wavelength=w, auto_detune=False), k)
+                                  for k in ('r_xyz', 't_xyz')])(jnp.asarray(wavelength))
+        got = np.concatenate([np.asarray(r).ravel(), np.asarray(t).ravel()])
+        if not finite:
+            assert np.all(np.isnan(got)), slots
+            continue
+        assert np.max(np.abs(got - oracle)) < 1e-12
 
 
 def test_smm_screens_with_the_thickness_etm_reads(monkeypatch):
@@ -1461,30 +1592,28 @@ def _jit_rows(s, wavelength):
 
 
 @pytest.mark.parametrize('name,algo,dth', [
-    ('PL952', 'SMM', 1e-8), ('PA616', 'ETM', 1e-7), ('PL952', 'ETM', 3e-4),
+    ('PL952', 'SMM', 1e-8), ('PA616', 'ETM', 1e-7), ('PL952', 'ETM', 0.0),
     pytest.param('PA616', 'SMM', 3e-4, marks=pytest.mark.slow)])
-def test_coincident_exceptional_points_on_the_first_order_path_are_exact_or_nan_under_jit(
+def test_coincident_exceptional_points_on_the_first_order_path_are_exact_under_jit(
         name, algo, dth):
-    """The first-order formulation, which has no joint rebuild, under ``jax.jit``: where the eager
-    solve warns, every traced answer and ``jit(grad)`` is NaN, never a finite value; where it is
-    quiet, the traced answer is within 1e-12 of the 1D rebuild. Measured before (silent): up to
-    0.69 off on SMM and 1.7e-4 on ETM at every offset the eager screen warns at (0 .. 1e-4, both
-    scenes). Catches the traced screen not wired into the first-order split."""
+    """The first-order joint rebuild under ``jax.jit``, its clusters in traced slots: the answer
+    within 1e-12 of the 1D rebuild, and ``jit(grad)`` of ``sum R`` within 1e-11 of the 1D path's
+    ``jax.grad``, relative. Measured <= 1.7e-14 and <= 1.0e-13 (both scenes, ETM and SMM, five
+    offsets 0 .. 1e-4). Before the joint rebuild the eager solve warned at every offset here but
+    3e-4 and the trace answered NaN; before the traced screens it was up to 0.69 off, silently.
+    Catches the traced cluster slots not wired into the first-order split."""
     jax = pytest.importorskip('jax')
     jax.config.update('jax_enable_x64', True)
+    jnp = jax.numpy
     scene = _littrow(SCENES[name], dth)
-    ref = _vector(_solver(scene).solve(auto_detune=False))
+    one = _solver(scene, backend='jax')
+    ref = _vector(one.solve(auto_detune=False))
+    g = float(jax.grad(_sum_R(one))(jnp.asarray(scene['wavelength'])))
     s = _solver(scene, algo=algo, backend='jax', two_d=True)
     s.formulation = 'first_order'
-    _, warned = _solve_2d(scene, algo, True)
-    loud = _legacy_wavebit_ExceptionalPointWarning in warned
-    assert loud is (dth < 3e-4)
     rows, grad = _jit_rows(s, scene['wavelength'])
-    if loud:
-        assert np.all(np.isnan(rows)) and np.isnan(grad)
-    else:
-        assert np.all(np.isfinite(rows)) and np.isfinite(grad)
-        assert np.max(np.abs(rows[2:] - ref[2:])) < 1e-12
+    assert np.max(np.abs(rows[2:] - ref[2:])) < 1e-12
+    assert abs(grad - g) <= 1e-11 * abs(g), (grad, g)
 
 
 @pytest.mark.parametrize('dth,says', [(0.0, 'no rebuild takes'), (3e-7, 'could not separate')],
@@ -1522,8 +1651,10 @@ def test_degenerate_clusters_keep_their_bits_under_jit(kind, first_order, algo, 
     layer keeps its bits -- the same ``jit`` values and ``jit(grad)`` as with the traced screen
     forced off. At normal incidence the first-order split's degenerate clusters are sixteen modes
     in a basis that is not orthonormal: read as eight-mode balls once per lane set, or with the
-    pair gate's four slots, they overflowed and the layer came back NaN. Catches a degenerate
-    cluster read as defective, and the slots or the one-seed-per-ball rule narrowed."""
+    pair gate's four slots, they overflowed and the layer came back NaN. On the first-order split
+    the joint rebuild's slots run dead there, and the bits are the same with its gate closed too.
+    Catches a degenerate cluster read as defective, the slots or the one-seed-per-ball rule
+    narrowed, and a dead slot that moves a bit."""
     jax = pytest.importorskip('jax')
     jax.config.update('jax_enable_x64', True)
     jnp = jax.numpy
@@ -1551,3 +1682,9 @@ def test_degenerate_clusters_keep_their_bits_under_jit(kind, first_order, algo, 
     unscreened = run()
     for got, ref in zip(screened, unscreened):
         assert got.dtype == ref.dtype and got.tobytes() == ref.tobytes()
+    if first_order:
+        # The first-order split's joint rebuild runs its traced slots dead here: the same bits
+        # with its gate closed, the coupled exponential's count with it.
+        monkeypatch.setattr(solve_2d, '_defective_clusters', lambda *a, **k: None)
+        for got, ref in zip(run(), unscreened):
+            assert got.dtype == ref.dtype and got.tobytes() == ref.tobytes()

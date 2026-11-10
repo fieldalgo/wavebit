@@ -355,7 +355,7 @@ class FieldState:
         start = ge[0]
         for j, layer in enumerate(g['layers']):
             eps, d, lf, pf, lb, pb, af, ab = layer[:8]
-            coupled = len(layer) > 8      # a regular-pair layer (illumination._cascade)
+            coupled = len(layer) - 8      # a regular-pair layer's count (illumination._cascade)
             # Dipole planes split a layer into concrete segment thicknesses.
             d = xp.real(_array(xp, d, self.data['thickness']))
             # The segment's host layer is static metadata, not a traced choice.

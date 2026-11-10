@@ -196,20 +196,33 @@ def test_the_split_sylvester_solves_its_equation():
     assert np.max(np.abs((X @ L - L @ X - R)[separate])) < 1e-13
 
 
-def test_a_pair_beside_a_coincident_root_is_refused_loudly():
-    """Two identical decoupled Jordan blocks share their root: no pair basis spans them.
+def _quiet_split(M, n_orders):
+    """``_layer_split`` with every warning an error; ``M``'s residual in each direction's split,
+    relative to ``|M|``, and the split's ``coupled`` word."""
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        lam_f, psi_f, lam_b, psi_b, coupled = fo._layer_split(np, M, n_orders)
+    miss = max(np.linalg.norm(M @ psi - psi @ lam) for psi, lam in ((psi_f, lam_f), (psi_b, lam_b)))
+    return miss / np.linalg.norm(M), coupled
 
-    The split keeps the eigenvector basis and says so (``ExceptionalPointWarning``).
-    """
+
+@pytest.mark.parametrize('seed', [0, 1, 2])
+def test_coincident_jordan_blocks_are_rebuilt_jointly(seed):
+    """Two identical decoupled Jordan blocks share their root: no pair basis spans them, and
+    ``eig`` mixes their four vectors. The split takes them as one defective cluster per direction
+    (``_regular_clusters``): quiet, each direction's modes an invariant subspace of ``M`` to
+    rounding (measured <= 1e-15 of ``|M|``), its generator a coupling on disjoint rows and
+    columns. Before the joint rebuild the split kept the eigenvector basis and warned. Catches
+    the cluster gate or the rebuild removed from the split (loud)."""
     J = np.array([[0.3j, 1.0], [0.0, 0.3j]])
     K = np.array([[-0.3j, 1.0], [0.0, -0.3j]])
     M = np.zeros((8, 8), complex)
     for k, block in enumerate((J, J, K, K)):
         M[2 * k:2 * k + 2, 2 * k:2 * k + 2] = block
-    rng = np.random.default_rng(0)
+    rng = np.random.default_rng(seed)
     Q, _ = np.linalg.qr(rng.normal(size=(8, 8)) + 1j * rng.normal(size=(8, 8)))
-    with pytest.warns(_legacy_wavebit_ExceptionalPointWarning):
-        fo._layer_split(np, Q @ M @ Q.conj().T, 2)
+    miss, coupled = _quiet_split(Q @ M @ Q.conj().T, 2)
+    assert coupled and miss < 1e-13, miss
 
 
 def _jordan_beside(offset, seed=0):
@@ -231,24 +244,159 @@ def _jordan_beside(offset, seed=0):
 
 
 @pytest.mark.parametrize('offset', [0.0, 1e-9, 1e-5])
-def test_a_pair_beside_a_root_it_nearly_shares_is_refused_loudly(offset):
-    """A third root within ``_PAIR_SEPARATION`` of the pair: no subspace of the pair's own.
+def test_a_pair_beside_a_root_it_nearly_shares_is_rebuilt_jointly(offset):
+    """A third root within ``_PAIR_SEPARATION`` of the pair: no subspace of the pair's own, and
+    the pair rebuild refuses it (rebuilt as a pair anyway, its residual was 6.0e-11 at ``offset =
+    1e-5`` and worse nearer). The three modes are one defective cluster, rebuilt jointly and
+    split one and two: quiet, an invariant subspace to rounding. Before the joint rebuild the
+    split kept the eigenvector basis and warned. Catches the refused pair left in ``eig``'s
+    basis (loud) or rebuilt as a pair beside the cluster (off)."""
+    miss, coupled = _quiet_split(_jordan_beside(offset), 3)
+    assert coupled and miss < 1e-13, miss
 
-    The third mode is not parallel to the pair, so only the separation test sees it. Without
-    the refusal the rebuilt pair's residual was 6.0e-11 at ``offset = 1e-5`` and worse nearer.
-    """
-    with pytest.warns(_legacy_wavebit_ExceptionalPointWarning):
-        fo._layer_split(np, _jordan_beside(offset), 3)
+
+def _cluster_beside_a_pair(seed, cond):
+    """A ``16 x 16`` first-order operator (``n_orders = 4``): two coincident Jordan blocks at
+    ``0.3j``, a Jordan pair at ``0.5j``, plain roots, and the mirror below, in a random basis of
+    condition ``cond`` -- one that couples every block to every other."""
+    def J(r):
+        return np.array([[r, 1.0], [0.0, r]])
+    blocks = [J(0.3j), J(0.3j), J(0.5j), np.array([[0.9j]]), np.array([[1.1j]]),
+              J(-0.3j), J(-0.3j), J(-0.5j), np.array([[-1.0j]]), np.array([[-1.2j]])]
+    D = np.zeros((16, 16), complex)
+    k = 0
+    for block in blocks:
+        m = block.shape[0]
+        D[k:k + m, k:k + m] = block
+        k += m
+    rng = np.random.default_rng(seed)
+    U, _ = np.linalg.qr(rng.normal(size=(16, 16)) + 1j * rng.normal(size=(16, 16)))
+    Vh, _ = np.linalg.qr(rng.normal(size=(16, 16)) + 1j * rng.normal(size=(16, 16)))
+    V = U @ np.diag(np.geomspace(1.0, cond, 16)) @ Vh
+    return V @ D @ np.linalg.inv(V)
 
 
-def test_a_pair_beyond_the_separation_floor_is_rebuilt_quietly():
-    """At ``1e-3`` the pair is rebuilt, silently, its residual at most 1.2e-12 (measured)."""
-    M = _jordan_beside(1e-3)
+@pytest.mark.parametrize('cond', [1.0, 10.0, 100.0])
+@pytest.mark.parametrize('seed', [0, 1, 2])
+def test_a_cluster_beside_a_rebuilt_pair_in_a_general_basis(seed, cond):
+    """In ``W0``'s coordinates a rebuilt pair is a triangular block, not two plain roots: its
+    ``a`` row is coupled to its ``b`` row, and a cluster's correction must solve the two together
+    (``_joint_cluster_bases``' ``m01_row``). The y-invariant scenes cannot see it -- their order
+    rows never couple, so a cluster's residual has no part on another row's pair. In a basis that
+    couples every block the split is quiet and an invariant subspace to rounding: measured <= 8.2e-15
+    of ``|M|``; with the pair's coupling left out of the cluster's rows 3.2e-10 .. 1.1e-8, and
+    loud. Catches that coupling dropped."""
+    miss, coupled = _quiet_split(_cluster_beside_a_pair(seed, cond), 4)
+    assert coupled and miss < 1e-13, miss
+
+
+def _collapsed_split(seed):
+    """A ``12 x 12`` first-order operator (``n_orders = 3``) with a Jordan pair and a plain root at
+    ``0.3j`` (and plain roots elsewhere, six a direction), and the columns ``eig`` may hand back
+    for the three on some CPU arithmetic paths, built by hand as on the 2D path
+    (``test_exceptional_point_clusters._collapsed``): the pair's eigenvector, and two copies of it
+    turned by 1e-15 into the cluster's other two directions. ``(M, lam, psi)``."""
+    rng = np.random.default_rng(seed)
+    Q, _ = np.linalg.qr(rng.normal(size=(12, 12)) + 1j * rng.normal(size=(12, 12)))
+    J = np.diag([0.3j, 0.3j, 0.3j, 0.7j, 0.9j, 1.1j,
+                 -0.5j, -0.8j, -1.0j, -1.2j, -1.4j, -1.6j]).astype(complex)
+    J[0, 1] = 0.05
+    M = Q @ J @ Q.conj().T
+    lam, psi = np.linalg.eig(M)
+    near = np.argsort(np.abs(lam - 0.3j))[:3]
+    for i, c in zip(near, (Q[:, 0], Q[:, 0] + 1e-15 * Q[:, 1], Q[:, 0] + 1e-15 * Q[:, 2])):
+        psi[:, i] = c / np.linalg.norm(c)
+    lam[near] = 0.3j
+    return M, lam, psi
+
+
+@pytest.mark.parametrize('seed', [0, 1, 2])
+def test_a_collapsed_start_is_loud_on_the_first_order_split(seed, monkeypatch):
+    """Three nearly parallel columns for a three-mode cluster leave its subspace undetermined
+    beyond the Newton and chord steps, and the joint rebuild's check reads it. Its rebuilt
+    columns are not nearly dependent, so the screen after it is quiet: the check alone is loud
+    -- eagerly an ``ExceptionalPointWarning`` saying the joint rebuild failed, under
+    ``jax.jit`` NaN in both generators. Catches the check's verdict dropped eagerly or under a
+    trace (a split that misses ``M``, silently)."""
+    M, lam, psi = _collapsed_split(seed)
+    monkeypatch.setattr(fo, 'eig', lambda A: (lam, psi))
+    with pytest.warns(_legacy_wavebit_ExceptionalPointWarning, match='joint rebuild failed'):
+        fo._layer_split(np, M, 3)
+    jax = pytest.importorskip('jax')
+    _legacy_wavebit_enable_x64()
+    jnp = jax.numpy
+    monkeypatch.setattr(fo, 'eig', lambda A: (jnp.asarray(lam), jnp.asarray(psi)))
+    lam_f, _, lam_b, _ = jax.jit(lambda m: fo._layer_split(jnp, m, 3)[:4])(jnp.asarray(M))
+    assert np.all(np.isnan(np.asarray(lam_f))) and np.all(np.isnan(np.asarray(lam_b)))
+
+
+def test_a_cluster_never_spans_the_two_directions(monkeypatch):
+    """A Jordan pair just above zero and a root just below it, ``4e-5`` apart: one ball of three
+    by distance, but the pair goes up and the root down. The split's two halves propagate
+    apart, so a cluster across them cannot be rebuilt -- its coupling would join the
+    directions. The gate reads each direction alone (``group=forward``) and takes nothing here.
+    Catches the direction restriction dropped (the three were taken as one cluster)."""
+    blocks = [np.array([[2e-5j, 1.0], [0.0, 2e-5j]]), np.array([[0.7j]]), np.array([[0.9j]]),
+              np.array([[1.1j]]), np.array([[1.3j]]), np.array([[-2e-5j]]), np.array([[-0.8j]]),
+              np.array([[-1.0j]]), np.array([[-1.2j]]), np.array([[-1.4j]]), np.array([[-1.6j]])]
+    M = np.zeros((12, 12), complex)
+    k = 0
+    for block in blocks:
+        m = block.shape[0]
+        M[k:k + m, k:k + m] = block
+        k += m
+    rng = np.random.default_rng(5)
+    Q, _ = np.linalg.qr(rng.normal(size=(12, 12)) + 1j * rng.normal(size=(12, 12)))
+
+    def refused(*args, **kwargs):
+        raise AssertionError('a cluster across the two directions was rebuilt')
+    monkeypatch.setattr(fo, '_regular_clusters', refused)
     with warnings.catch_warnings():
-        warnings.simplefilter('error')
-        lam_f, psi_f, _, _, coupled = fo._layer_split(np, M, 3)
-    assert coupled
-    assert np.linalg.norm(M @ psi_f - psi_f @ lam_f) < 5e-12 * np.linalg.norm(M)
+        warnings.simplefilter('ignore')
+        fo._layer_split(np, Q @ M @ Q.conj().T, 3)
+
+
+def _jordan_chain():
+    """``_jordan_beside``'s layout with a length-3 Jordan block at ``0.3j`` (and its mirror)."""
+    blocks = [np.array([[0.3j, 1.0, 0.0], [0.0, 0.3j, 1.0], [0.0, 0.0, 0.3j]]),
+              np.array([[0.7j]]), np.array([[0.9j]]), np.array([[1.1j]]),
+              np.array([[-0.3j, 1.0, 0.0], [0.0, -0.3j, 1.0], [0.0, 0.0, -0.3j]]),
+              np.array([[-0.8j]]), np.array([[-1.0j]]), np.array([[-1.2j]])]
+    M = np.zeros((12, 12), complex)
+    k = 0
+    for block in blocks:
+        m = block.shape[0]
+        M[k:k + m, k:k + m] = block
+        k += m
+    rng = np.random.default_rng(4)
+    Q, _ = np.linalg.qr(rng.normal(size=(12, 12)) + 1j * rng.normal(size=(12, 12)))
+    return Q @ M @ Q.conj().T
+
+
+def test_a_length_three_jordan_chain_is_loud():
+    """A length-3 Jordan block has no split into blocks with a coupling on disjoint rows and
+    columns, so the joint rebuild's check fails on it: eagerly an ``ExceptionalPointWarning``,
+    under ``jax.jit`` NaN in both directions' generators. Catches the check's verdict dropped
+    from the first-order split (a silent answer in a basis that misses ``M``)."""
+    M = _jordan_chain()
+    with pytest.warns(_legacy_wavebit_ExceptionalPointWarning, match='joint rebuild'):
+        fo._layer_split(np, M, 3)
+    jax = pytest.importorskip('jax')
+    _legacy_wavebit_enable_x64()
+    jnp = jax.numpy
+    lam_f, _, lam_b, _ = jax.jit(lambda m: fo._layer_split(jnp, m, 3)[:4])(jnp.asarray(M))
+    assert np.all(np.isnan(np.asarray(lam_f))) and np.all(np.isnan(np.asarray(lam_b)))
+
+
+@pytest.mark.parametrize('offset', [1e-3, 1e-2])
+def test_a_pair_beyond_the_separation_floor_is_rebuilt_quietly(offset):
+    """Beyond ``_PAIR_SEPARATION`` the pair has a subspace of its own. Within the joint gate's
+    wide radius (3e-3) the pair and the root are still one cluster of three, rebuilt jointly;
+    beyond it the pair is rebuilt alone. Either way silently, an invariant subspace to rounding:
+    measured <= 1.6e-15 of ``|M|`` jointly (offsets 0 .. 2.9e-3) and <= 1.1e-14 as a pair (4e-3,
+    1e-2), three bases each; as a pair beside the root at 1e-4 it was 1.2e-12."""
+    miss, coupled = _quiet_split(_jordan_beside(offset), 3)
+    assert coupled and miss < 1e-13, miss
 
 
 # --------------------------------------------------------------------- 3. derivatives

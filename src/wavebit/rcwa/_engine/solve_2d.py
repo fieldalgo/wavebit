@@ -728,7 +728,7 @@ def _closed_balls(xp, d, span, radius, rows_of, k, idx, dev):
     return rows, nbr, valid, xp.take(seed, rows) & clique & same_ball, count_r
 
 
-def _defective_clusters(xp, w, W, q, pairs, operator, slots):
+def _defective_clusters(xp, w, W, q, pairs, operator, slots, group=None):
     """The defective clusters of a 2D layer the joint rebuild takes, or ``None`` when none is.
 
     A cluster is a ball of the product operator's eigenvalues: the modes within a radius of its
@@ -751,7 +751,9 @@ def _defective_clusters(xp, w, W, q, pairs, operator, slots):
     its last lane, and under a trace a slot nothing took is all padding); ``Q0`` ``(S, n2, k)`` an
     orthonormal basis of each cluster's unit columns (zero-padded before the QR); and, under an
     abstract trace, whether more clusters qualified than the ``slots`` held (``None`` eagerly).
-    ``operator()`` builds the product operator, only when a candidate needs it.
+    ``operator()`` builds the product operator, only when a candidate needs it. ``group``
+    (optional, one label per mode) keeps modes of different groups out of one ball: the
+    first-order split's two directions (:func:`_unresolved_defective_cluster` reads it so too).
 
     Read through :func:`~wavebit._common.backend._concrete`, as :func:`_defective_pairs` is.
     Eagerly the answer is exactly the qualifying clusters, and a layer with none returns ``None``
@@ -767,6 +769,8 @@ def _defective_clusters(xp, w, W, q, pairs, operator, slots):
     idx = xp.arange(n2, device=dev)
     scale = xp.maximum(xp.ones_like(xp.abs(w)), xp.abs(w))
     d = xp.abs(w[:, None] - w[None, :])
+    if group is not None:
+        d = xp.where(group[:, None] == group[None, :], d, xp.full_like(d, float('inf')))
     span = xp.maximum(scale[:, None], scale[None, :])
     Wn = W / xp.linalg.vector_norm(W, axis=0)[None, :]
     C = W.dtype
@@ -1117,6 +1121,156 @@ _JOINT_IMPRECISE_2D = (
     'inaccurate. Move the angle or wavelength by more than a relative 1e-4 to check it.')
 
 
+def _joint_cluster_bases(xp, A, W0, Q0, Mc, Gc, members, cvalid, lam, is_a, m01_row, partner, F,
+                         pair_terms=None):
+    """Each defective cluster's corrected basis, split and check readings; values only.
+
+    The part of the joint rebuild the two formulations share: :func:`_rebuild_defective_clusters`
+    on the 2D path, :func:`~wavebit.rcwa._engine.solve_2d_first_order._regular_clusters` on the
+    first-order one. ``A`` is the layer operator, ``Q0`` ``(S, n, k)`` each cluster's orthonormal
+    start (padded lanes zero), ``W0`` the layer's basis with those columns on the members,
+    ``Mc = Q0^H A Q0`` and ``Gc`` ``(n, S k)`` the clusters' residual ``A Q0 - Q0 Mc`` expanded in
+    ``W0``. Off the clusters ``W0^-1 A W0`` is block diagonal: ``lam`` on the diagonal, and a row
+    ``is_a`` coupled to its ``partner`` row by ``m01_row`` (a pair's upper-triangular block).
+    ``pair_terms(HZ, Yc)``, where given, adds the pairs' own residual expansion to the chord
+    step's residual: on the 2D path the pairs' columns in ``W0`` are corrected in the same step.
+    ``F`` is the stand-in eigenvalue of padded lanes.
+
+    One Newton step for each cluster's invariant subspace and a chord step after it, kept where
+    it at least halves the check's miss (:data:`_EP_STEP_GAIN`), then :func:`_cluster_split`:
+    the method :func:`_rebuild_defective_clusters` describes. Returns ``(Q1, X, Mx, dg, JK, res1,
+    tau, tau_res, cond, dropped)`` for the basis each cluster keeps: the corrected orthonormal
+    basis, the split ``X`` and ``X^-1 T X``, its diagonal, the coupled ``J x K`` entries, and the
+    check's subspace residual, thresholds, ``cond(X)`` and dropped part.
+    """
+    n2 = W0.shape[0]
+    C = W0.dtype
+    dev = getattr(W0, 'device', None)
+    idx = xp.arange(n2, device=dev)
+    S, k = members.shape
+    one = xp.ones_like
+    lane = xp.arange(k, device=dev)
+    eyek = xp.astype(lane[:, None] == lane[None, :], C)
+    mflat = xp.reshape(members, (-1,))
+    Oc = (idx[:, None] == mflat[None, :]) & xp.reshape(cvalid, (-1,))[None, :]   # (n2, S k)
+    is_c = xp.any(Oc, axis=1)
+    pc = xp.argmax(xp.astype(Oc, xp.int32), axis=1)                    # a member's flat lane
+    slot_of = pc // k
+    vv = cvalid[:, :, None] & cvalid[:, None, :]
+
+    def padded(M, pad):
+        return xp.where(vv, M, xp.where(eyek != 0, pad * one(M), xp.zeros_like(M)))
+
+    def _correct(Gc):
+        # A cluster's correction from the expansion Gc of its residual. Plain rows
+        # y_i (lambda_i - M_c) = -g_i (a pair's `a` row also takes -m01 y_b); member rows below.
+        Gs = xp.permute_dims(xp.reshape(Gc, (n2, S, k)), (1, 0, 2))               # (S, n2, k)
+        Mrow = lam[None, :, None, None] * eyek - padded(Mc, -F)[:, None]          # (S, n2, k, k)
+        Mrow = xp.matrix_transpose(xp.where(is_c[None, :, None, None], eyek * one(Mrow), Mrow))
+        Yc = linear_solve(xp, Mrow, -Gs[..., None])[..., 0]
+        rhs_a = -Gs - m01_row[None, :, None] * xp.take(Yc, partner, axis=1)
+        Yc = xp.where(is_a[None, :, None], linear_solve(xp, Mrow, rhs_a[..., None])[..., 0], Yc)
+        del Mrow, rhs_a
+        if S > 1:
+            # Another cluster's rows: M_r Y - Y M_s = -G, k*k unknowns (vec column-major), with
+            # stand-ins of opposite sign on padded lanes so that no pivot is zero.
+            Mr, Ms = padded(Mc, F), padded(Mc, -F)
+            Kt = (eyek[None, None, :, None, :, None] * Mr[:, None, None, :, None, :]
+                  - xp.permute_dims(Ms, (0, 2, 1))[None, :, :, None, :, None]
+                  * eyek[None, None, None, :, None, :])
+            Kt = xp.reshape(Kt, (S, S, k * k, k * k))
+            GG = xp.reshape(xp.take(Gc, mflat, axis=0), (S, k, S, k))             # [r, i, s, j]
+            rhs = -xp.reshape(xp.permute_dims(GG, (0, 2, 3, 1)), (S, S, k * k))
+            rv = xp.reshape(xp.broadcast_to(cvalid[:, None, None, :], (S, S, k, k)), (S, S, k * k))
+            same = xp.arange(S, device=dev)[:, None] == xp.arange(S, device=dev)[None, :]
+            lane2 = xp.arange(k * k, device=dev)
+            Kt = xp.where(same[:, :, None, None],
+                          xp.astype(lane2[:, None] == lane2[None, :], C) * one(Kt), Kt)
+            rhs = xp.where(rv & ~same[:, :, None], rhs, xp.zeros_like(rhs))
+            sol = linear_solve(xp, Kt, rhs[..., None])[..., 0]
+            Yrs = xp.reshape(xp.permute_dims(xp.reshape(sol, (S, S, k, k)), (0, 3, 1, 2)),
+                             (S * k, S, k))
+            Yc = xp.where(is_c[None, :, None], xp.permute_dims(xp.take(Yrs, pc, axis=0), (1, 0, 2)),
+                          Yc)
+            del Kt, GG, rhs, sol, Yrs
+        ownc = is_c[None, :] & (slot_of[None, :] == xp.arange(S, device=dev)[:, None])
+        Yc = xp.where(ownc[:, :, None] | ~cvalid[:, None, :], xp.zeros_like(Yc), Yc)
+        return Yc
+
+    Yc = _correct(Gc)
+    # A second step, in W0's coordinates and with no new solve. There a cluster's subspace is
+    # E_c + Y and H = W0^-1 A W0 is known from the first step: diagonal on the plain columns, the
+    # pairs' and clusters' blocks plus their residual expansions G and Gc on theirs. The residual
+    # H (E_c + Y) - (E_c + Y) T, T its own rows, takes the first step's correction again (the
+    # chord method, Kelley 1995, ch. 5): one step leaves a remainder of second order in the start's
+    # error over the gap, which reached the check's threshold where eig's start was poor or
+    # another block close; this one leaves third order. Its residual is read from the first
+    # step's expansions, so where the first step is already at rounding it only moves the basis
+    # by rounding: below, each cluster takes it only where it at least halves the check's miss.
+    ownc = is_c[None, :] & (slot_of[None, :] == xp.arange(S, device=dev)[:, None])
+    Ecs = xp.astype(ownc[:, :, None] & ((pc - slot_of * k)[None, :, None] == lane[None, None, :])
+                    & cvalid[:, None, :], C)                                  # (S, n2, k)
+    HZ = Ecs @ Mc + xp.permute_dims(xp.reshape(Gc, (n2, S, k)), (1, 0, 2))
+    HZ = HZ + lam[None, :, None] * Yc + xp.where(
+        is_a[None, :, None], m01_row[None, :, None] * xp.take(Yc, partner, axis=1), xp.zeros_like(Yc))
+    MY = xp.reshape(Mc[None] @ xp.reshape(xp.take(Yc, mflat, axis=1), (S, S, k, k)), (S, S * k, k))
+    HZ = xp.where(is_c[None, :, None], HZ - lam[None, :, None] * Yc + xp.take(MY, pc, axis=1), HZ)
+    if pair_terms is not None:
+        HZ = pair_terms(HZ, Yc)
+    HZ = HZ + Gc @ (xp.astype(xp.reshape(cvalid, (-1,)), C)[None, :, None] * xp.take(Yc, mflat, axis=1))
+    F2 = HZ - (Ecs + Yc) @ (xp.matrix_transpose(Ecs) @ HZ)
+    Yc2 = Yc + _correct(xp.reshape(xp.permute_dims(F2, (1, 0, 2)), (n2, S * k)))
+    del Ecs, HZ, MY, F2
+    # The clusters: the corrected bases, their restrictions, the disjoint split, and how far each
+    # misses the check below (under 1 it passes). Each cluster keeps the basis after two steps
+    # only where its miss is at most half the one-step basis's (sufficient decrease, as a line
+    # search asks of a step: Kelley 1995, ch. 8); elsewhere the one-step basis stays, bit for bit.
+    # The miss reads the split as well as the residual: at an exact coincidence eig(T)'s
+    # eigenvectors are sensitive to rounding in T, and a basis with a smaller residual once gave
+    # the split a cond(X) of 156 where the one-step basis gave 3.4.
+    rdt = xp.real(Q0).dtype
+    eps = float(xp.finfo(rdt).eps)
+    norm_A = xp.linalg.matrix_norm(A)
+
+    def corrected(Z):
+        Q1, _ = xp.linalg.qr(Z)
+        Q1 = xp.where(cvalid[:, None, :], Q1, Q0)
+        AQ1 = A @ Q1
+        T = xp.where(vv, _conj_t(xp, Q1) @ AQ1, xp.zeros_like(vv, dtype=C))
+        res1 = xp.linalg.matrix_norm(xp.where(cvalid[:, None, :], AQ1 - Q1 @ T, xp.zeros_like(AQ1)))
+        del AQ1
+        T = padded(T, F)
+        X, J, cond = _cluster_split(xp, T, cvalid, F)
+        Mx = linear_solve(xp, X, T @ X)
+        dg = xp.linalg.diagonal(Mx)
+        JK = J[:, :, None] & (~J & cvalid)[:, None, :]
+        dropped = xp.linalg.matrix_norm(xp.where(vv & ~(JK | (eyek != 0)), Mx, xp.zeros_like(Mx)))
+        # The check's thresholds, at the cluster's scale.
+        nvalid = xp.sum(xp.astype(cvalid, rdt), axis=1)
+        lam_c = (xp.sum(xp.where(cvalid, dg, xp.zeros_like(dg)), axis=1)
+                 / xp.maximum(nvalid, xp.ones_like(nvalid)))
+        tau = (_EP_BACKWARD * (eps / 2.220446049250313e-16)
+               * xp.maximum(xp.ones_like(xp.abs(lam_c)), xp.abs(lam_c)))
+        tau_res = xp.maximum(tau, _EP_RESIDUAL * eps * norm_A * xp.ones_like(tau))
+        finite = xp.isfinite(cond)
+        miss = xp.maximum(res1 / tau_res, xp.where(finite, cond, xp.zeros_like(cond)) * dropped / tau)
+        miss = xp.where(finite, miss, xp.full_like(miss, float('inf')))
+        return (Q1, X, Mx, dg, JK, res1, tau, tau_res, cond, dropped), miss
+
+    first, miss1 = corrected(Q0 + W0 @ Yc)
+    second, miss2 = corrected(Q0 + W0 @ Yc2)
+    two = miss2 <= _EP_STEP_GAIN * miss1
+    del Yc, Yc2
+
+    def chosen(x1, x2):
+        return xp.where(xp.reshape(two, (S,) + (1,) * (len(x1.shape) - 1)), x2, x1)
+
+    Q1, X, Mx, dg, JK, res1, tau, tau_res, cond, dropped = (
+        chosen(x1, x2) for x1, x2 in zip(first, second))
+    del first, second, miss1, miss2
+    return Q1, X, Mx, dg, JK, res1, tau, tau_res, cond, dropped
+
+
 def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
     """:func:`_rebuild_defective_pairs` for a layer holding defective clusters; values only.
 
@@ -1176,7 +1330,6 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
     Oc = (idx[:, None] == mflat[None, :]) & xp.reshape(cvalid, (-1,))[None, :]   # (n2, S k)
     is_c = xp.any(Oc, axis=1)
     pc = xp.argmax(xp.astype(Oc, xp.int32), axis=1)                    # a member's flat lane
-    slot_of = pc // k
     if pairs is not None:
         a, b, mask, v, x0, p_over = pairs
     else:
@@ -1260,66 +1413,12 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
                                                     (S * k, npair)), pc, axis=0), Y1)
     zero = xp.zeros_like(Y0)
     Y0, Y1 = xp.where(own, zero, Y0), xp.where(own, zero, Y1)
-    def _correct(Gc):
-        # A cluster's correction from the expansion Gc of its residual. Plain rows
-        # y_i (lambda_i - M_c) = -g_i (a pair's `a` row also takes -m01 y_b); member rows below.
-        Gs = xp.permute_dims(xp.reshape(Gc, (n2, S, k)), (1, 0, 2))               # (S, n2, k)
-        Mrow = lam[None, :, None, None] * eyek - padded(Mc, -F)[:, None]          # (S, n2, k, k)
-        Mrow = xp.matrix_transpose(xp.where(is_c[None, :, None, None], eyek * one(Mrow), Mrow))
-        Yc = linear_solve(xp, Mrow, -Gs[..., None])[..., 0]
-        rhs_a = -Gs - m01_row[None, :, None] * xp.take(Yc, partner, axis=1)
-        Yc = xp.where(is_a[None, :, None], linear_solve(xp, Mrow, rhs_a[..., None])[..., 0], Yc)
-        del Mrow, rhs_a
-        if S > 1:
-            # Another cluster's rows: M_r Y - Y M_s = -G, k*k unknowns (vec column-major), with
-            # stand-ins of opposite sign on padded lanes so that no pivot is zero.
-            Mr, Ms = padded(Mc, F), padded(Mc, -F)
-            Kt = (eyek[None, None, :, None, :, None] * Mr[:, None, None, :, None, :]
-                  - xp.permute_dims(Ms, (0, 2, 1))[None, :, :, None, :, None]
-                  * eyek[None, None, None, :, None, :])
-            Kt = xp.reshape(Kt, (S, S, k * k, k * k))
-            GG = xp.reshape(xp.take(Gc, mflat, axis=0), (S, k, S, k))             # [r, i, s, j]
-            rhs = -xp.reshape(xp.permute_dims(GG, (0, 2, 3, 1)), (S, S, k * k))
-            rv = xp.reshape(xp.broadcast_to(cvalid[:, None, None, :], (S, S, k, k)), (S, S, k * k))
-            same = xp.arange(S, device=dev)[:, None] == xp.arange(S, device=dev)[None, :]
-            lane2 = xp.arange(k * k, device=dev)
-            Kt = xp.where(same[:, :, None, None],
-                          xp.astype(lane2[:, None] == lane2[None, :], C) * one(Kt), Kt)
-            rhs = xp.where(rv & ~same[:, :, None], rhs, xp.zeros_like(rhs))
-            sol = linear_solve(xp, Kt, rhs[..., None])[..., 0]
-            Yrs = xp.reshape(xp.permute_dims(xp.reshape(sol, (S, S, k, k)), (0, 3, 1, 2)),
-                             (S * k, S, k))
-            Yc = xp.where(is_c[None, :, None], xp.permute_dims(xp.take(Yrs, pc, axis=0), (1, 0, 2)),
-                          Yc)
-            del Kt, GG, rhs, sol, Yrs
-        ownc = is_c[None, :] & (slot_of[None, :] == xp.arange(S, device=dev)[:, None])
-        Yc = xp.where(ownc[:, :, None] | ~cvalid[:, None, :], xp.zeros_like(Yc), Yc)
-        return Yc
-
-    Yc = _correct(Gc)
-    # A second step, in W0's coordinates and with no new solve. There a cluster's subspace is
-    # E_c + Y and H = W0^-1 A W0 is known from the first step: diagonal on the plain columns, the
-    # pairs' and clusters' blocks plus their residual expansions G and Gc on theirs. The residual
-    # H (E_c + Y) - (E_c + Y) T, T its own rows, takes the first step's correction again (the
-    # chord method, Kelley 1995, ch. 5): one step leaves a remainder of second order in the start's
-    # error over the gap, which reached the check's threshold where eig's start was poor or
-    # another block close; this one leaves third order. Its residual is read from the first
-    # step's expansions, so where the first step is already at rounding it only moves the basis
-    # by rounding: below, each cluster takes it only where it at least halves the check's miss.
-    ownc = is_c[None, :] & (slot_of[None, :] == xp.arange(S, device=dev)[:, None])
-    Ecs = xp.astype(ownc[:, :, None] & ((pc - slot_of * k)[None, :, None] == lane[None, None, :])
-                    & cvalid[:, None, :], C)                                  # (S, n2, k)
-    HZ = Ecs @ Mc + xp.permute_dims(xp.reshape(Gc, (n2, S, k)), (1, 0, 2))
-    HZ = HZ + lam[None, :, None] * Yc + xp.where(
-        is_a[None, :, None], m01_row[None, :, None] * xp.take(Yc, partner, axis=1), xp.zeros_like(Yc))
-    MY = xp.reshape(Mc[None] @ xp.reshape(xp.take(Yc, mflat, axis=1), (S, S, k, k)), (S, S * k, k))
-    HZ = xp.where(is_c[None, :, None], HZ - lam[None, :, None] * Yc + xp.take(MY, pc, axis=1), HZ)
     pm = xp.astype(pmask, C)[None, :, None]
-    HZ = HZ + Ca @ (pm * xp.take(Yc, a, axis=1)) + Cb @ (pm * xp.take(Yc, b, axis=1))
-    HZ = HZ + Gc @ (xp.astype(xp.reshape(cvalid, (-1,)), C)[None, :, None] * xp.take(Yc, mflat, axis=1))
-    F2 = HZ - (Ecs + Yc) @ (xp.matrix_transpose(Ecs) @ HZ)
-    Yc2 = Yc + _correct(xp.reshape(xp.permute_dims(F2, (1, 0, 2)), (n2, S * k)))
-    del Ecs, HZ, MY, F2
+
+    def pair_terms(HZ, Yc):
+        # The pairs' own residual expansion: their columns in W0 are corrected in this step too.
+        return HZ + Ca @ (pm * xp.take(Yc, a, axis=1)) + Cb @ (pm * xp.take(Yc, b, axis=1))
+
     # The pairs, as in _rebuild_defective_pairs.
     v1 = v + W0 @ Y0
     x1 = x0 + W0 @ Y1
@@ -1340,53 +1439,9 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
     t = xp.where(pmask, T01 / (alpha + beta), xp.zeros_like(T01))
     Va = (Omega_R @ v1) / alpha[None, :]
     Vb = (Omega_R @ x1 - Va * t[None, :]) / beta[None, :]
-    # The clusters: the corrected bases, their restrictions, the disjoint split, and how far each
-    # misses the check below (under 1 it passes). Each cluster keeps the basis after two steps
-    # only where its miss is at most half the one-step basis's (sufficient decrease, as a line
-    # search asks of a step: Kelley 1995, ch. 8); elsewhere the one-step basis stays, bit for bit.
-    # The miss reads the split as well as the residual: at an exact coincidence eig(T)'s
-    # eigenvectors are sensitive to rounding in T, and a basis with a smaller residual once gave
-    # the split a cond(X) of 156 where the one-step basis gave 3.4.
-    rdt = xp.real(Q0).dtype
-    eps = float(xp.finfo(rdt).eps)
-    norm_A = xp.linalg.matrix_norm(A)
-
-    def corrected(Z):
-        Q1, _ = xp.linalg.qr(Z)
-        Q1 = xp.where(cvalid[:, None, :], Q1, Q0)
-        AQ1 = A @ Q1
-        T = xp.where(vv, _conj_t(xp, Q1) @ AQ1, xp.zeros_like(vv, dtype=C))
-        res1 = xp.linalg.matrix_norm(xp.where(cvalid[:, None, :], AQ1 - Q1 @ T, xp.zeros_like(AQ1)))
-        del AQ1
-        T = padded(T, F)
-        X, J, cond = _cluster_split(xp, T, cvalid, F)
-        Mx = linear_solve(xp, X, T @ X)
-        dg = xp.linalg.diagonal(Mx)
-        JK = J[:, :, None] & (~J & cvalid)[:, None, :]
-        dropped = xp.linalg.matrix_norm(xp.where(vv & ~(JK | (eyek != 0)), Mx, xp.zeros_like(Mx)))
-        # The check's thresholds, at the cluster's scale.
-        nvalid = xp.sum(xp.astype(cvalid, rdt), axis=1)
-        lam_c = (xp.sum(xp.where(cvalid, dg, xp.zeros_like(dg)), axis=1)
-                 / xp.maximum(nvalid, xp.ones_like(nvalid)))
-        tau = (_EP_BACKWARD * (eps / 2.220446049250313e-16)
-               * xp.maximum(xp.ones_like(xp.abs(lam_c)), xp.abs(lam_c)))
-        tau_res = xp.maximum(tau, _EP_RESIDUAL * eps * norm_A * xp.ones_like(tau))
-        finite = xp.isfinite(cond)
-        miss = xp.maximum(res1 / tau_res, xp.where(finite, cond, xp.zeros_like(cond)) * dropped / tau)
-        miss = xp.where(finite, miss, xp.full_like(miss, float('inf')))
-        return (Q1, X, Mx, dg, JK, res1, tau, tau_res, cond, dropped), miss
-
-    first, miss1 = corrected(Q0 + W0 @ Yc)
-    second, miss2 = corrected(Q0 + W0 @ Yc2)
-    two = miss2 <= _EP_STEP_GAIN * miss1
-    del W0, Yc, Yc2
-
-    def chosen(x1, x2):
-        return xp.where(xp.reshape(two, (S,) + (1,) * (len(x1.shape) - 1)), x2, x1)
-
-    Q1, X, Mx, dg, JK, res1, tau, tau_res, cond, dropped = (
-        chosen(x1, x2) for x1, x2 in zip(first, second))
-    del first, second, miss1, miss2
+    Q1, X, Mx, dg, JK, res1, tau, tau_res, cond, dropped = _joint_cluster_bases(
+        xp, A, W0, Q0, Mc, Gc, members, cvalid, lam, is_a, m01_row, partner, F, pair_terms)
+    del W0, Gc
     # One side for the cluster: the root nearer the label of its most decaying member.
     qm = xp.reshape(xp.take(q, mflat), (S, k))
     key = xp.where(cvalid, xp.real(qm), xp.full_like(xp.real(qm), -float('inf')))
