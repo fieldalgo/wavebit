@@ -561,3 +561,62 @@ def test_periodic_sample_times_are_refused_in_seconds_under_their_public_name():
         with pytest.raises(ValidationError) as caught:
             result.sample(z=.05, times_seconds=bad)
         assert caught.value.path == 'times_seconds' and says in caught.value.message
+
+
+# -- 12. A shape NVF grid below 4*max(orders)+1 is refused at check, not first at run ----------
+
+_REGION = (rcwa.Region(geometry=rcwa.Rectangle(size=(.3, .4)), material=Material(4.)),)
+_TENSOR = (rcwa.Region(geometry=rcwa.Rectangle(size=(.3, .4)), material=Material(np.diag([4., 3., 2.]))),)
+_BEAM = dict(sources=(rcwa.GaussianBeam(waist=1., angular_spectrum_extent=3., sampling=(3, 3)),))
+_BEAM_OUT = rcwa.Outputs(diffraction=False, power_region=((-.4, .4), (-.45, .45)))
+GRID_STACKS = {
+    'region': (rcwa.Layer(thickness=.2, background=Material(1.5), regions=_REGION),),
+    'region-free': (rcwa.Layer(thickness=.2, background=Material(1.5)),),
+    'no-layers': (),
+    'tensor-beside-region': (rcwa.Layer(thickness=.2, background=Material(1.5), regions=_TENSOR),
+                             rcwa.Layer(thickness=.2, background=Material(1.5), regions=_REGION)),
+}
+
+
+def _grid_problem(layers, beam=False):
+    excitation = rcwa.Excitation(wavelength=1.3, **(_BEAM if beam else dict(sources=(rcwa.PlaneWave(theta=.2),))))
+    return rcwa.Problem(stack=rcwa.Stack(period=(1., 1.), layers=layers), excitation=excitation,
+                        **(dict(outputs=_BEAM_OUT) if beam else {}))
+
+
+@pytest.mark.parametrize('orders,grid', [((2, 2), 8), ((3, 1), 12), ((1, 0), 4)])
+@pytest.mark.parametrize('stack', sorted(GRID_STACKS))
+def test_an_aliasing_shape_nvf_grid_is_refused_at_every_door(stack, orders, grid):
+    problem = _grid_problem(GRID_STACKS[stack])
+    issue = _refused_alike(problem, rcwa.Numerics(orders=orders, shape_nvf_grid_size=grid))
+    assert (issue.code, issue.path) == ('numerics.grid', 'numerics.shape_nvf_grid_size')
+    need = 4*max(orders) + 1
+    assert f'at least 4*max(orders)+1 = {need}' in issue.message
+    assert 'truncation_order' not in issue.message
+    # The advice: at the floor, the same problem runs.
+    result = rcwa.run(problem, numerics=rcwa.Numerics(orders=orders, shape_nvf_grid_size=need))
+    assert np.isfinite(result.T).all()
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('beam', [False, True], ids=['plane-wave', 'beam'])
+def test_an_aliasing_shape_nvf_grid_is_refused_alike_on_each_backend(backend, beam):
+    pytest.importorskip(backend)
+    problem = _grid_problem(GRID_STACKS['region'], beam=beam)
+    x64 = (__import__('jax').enable_x64(True) if backend == 'jax' else __import__('contextlib').nullcontext())
+    with x64:
+        issue = _refused_alike(problem, rcwa.Numerics(orders=(2, 2), shape_nvf_grid_size=8), backend=backend)
+    assert (issue.code, issue.path) == ('numerics.grid', 'numerics.shape_nvf_grid_size')
+
+
+@pytest.mark.parametrize('layers', [
+    (rcwa.Layer(thickness=.2, background=Material(1.5), regions=_TENSOR),),
+    (rcwa.Layer(thickness=.2, background=Material(1.5), regions=_TENSOR), rcwa.Layer(thickness=.2, background=Material(1.5))),
+    (rcwa.Layer(thickness=.2, background=Material(np.diag([2., 2.5, 3.]))),),
+], ids=['tensor-region', 'tensor-beside-region-free', 'tensor-background'])
+def test_a_short_grid_that_runs_today_still_runs(layers):
+    # A tensor layer reads the grid through its own interpolation, with no aliasing floor, and a
+    # tensor stack's region-free layer reads no grid: these ran below the floor and still do.
+    problem, numerics = _grid_problem(layers), rcwa.Numerics(orders=(2, 2), shape_nvf_grid_size=8)
+    assert rcwa.check(problem, numerics=numerics).ok
+    assert np.isfinite(rcwa.run(problem, numerics=numerics).T).all()

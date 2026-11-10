@@ -134,6 +134,31 @@ def _resolve(problem, numerics, execution):
     return solvers
 
 
+def _refuse_aliasing_grid(numerics, solvers):
+    """Refuse an explicit ``shape_nvf_grid_size`` below ``4*max(orders)+1`` before anything runs.
+
+    The engine reads this grid only when it builds the shape NVF projectors, so ``check`` and
+    ``prepare``, which build no layer, passed it and ``run`` refused it (``rcwa.invalid``, an
+    aliasing message). The engine says whether its build checks the stated grid
+    (``_stated_normal_grid_meets_its_floor``): NVF on the parametric path, including a stack whose
+    layers have no regions, except a tensor layer, which reads the grid without that floor. The
+    default is resolved at or above the floor, so only a stated value can trip it.
+    """
+    grid = numerics.shape_nvf_grid_size
+    scene = _engine_scene(solvers[0])
+    if grid is None or not scene._stated_normal_grid_meets_its_floor():
+        return
+    (_, half_u), (_, half_v) = scene.order_window
+    need = max(4*half_u + 1, 4*half_v + 1)
+    if grid < need:
+        raise ValidationError(
+            f'shape_nvf_grid_size={grid} aliases at Numerics(orders=({half_u}, {half_v})): the shape '
+            f'NVF normal field is read off a {grid}x{grid} grid, and the projectors ask for orders up '
+            f'to +/-2*orders, so it needs at least 4*max(orders)+1 = {need} points per axis. Give '
+            f'shape_nvf_grid_size >= {need}, or leave it None for max(1024, {need}).',
+            code='numerics.grid', path='numerics.shape_nvf_grid_size', expected=f'>= {need}', actual=grid)
+
+
 def _report(problem, numerics, execution, solvers):
     scene = _engine_scene(solvers[0])
     window = tuple(tuple(v) for v in scene.order_window)
@@ -198,6 +223,7 @@ def check(problem, *, numerics, backend='numpy', device='cpu', precision='double
         # tensor or scalar -- is the same at every wavelength.
         with execution._scope():
             _engine_scene(solvers[0])._check_layer_geometry()
+        _refuse_aliasing_grid(numerics, solvers)
         return _report(problem, numerics, execution, solvers)
     except (ValidationError, TypeError, ValueError, NotImplementedError) as error:
         return CheckReport(issues=(_issue(error),))
@@ -472,6 +498,7 @@ def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='doub
         solvers = _resolve(problem, numerics, execution)
         _adapt.refuse_nonfinite(problem)
         geometry = tuple(_engine_scene(solver).freeze_geometry() for solver in solvers)
+        _refuse_aliasing_grid(numerics, solvers)
         report = _report(problem, numerics, execution, solvers)
         partitions = _partition_guards(problem, solvers)
         host_topology = None

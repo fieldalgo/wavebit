@@ -5625,6 +5625,28 @@ class CoreFactorizationMixin:
             return max(self._NORMAL_GRID_DEFAULT, floor)
         return want
 
+    def _stated_normal_grid_meets_its_floor(self):
+        """Whether a build checks a *stated* ``shape_nvf_grid_size`` against the aliasing floor.
+
+        The public doors ask this before anything is built, so that ``check`` and ``prepare``
+        refuse what the build would (:func:`~wavebit.rcwa._engine.factorization.check_normal_grid`)
+        and nothing else. It follows the build's own dispatch: on the parametric NVF path a stack
+        with no tensor material checks it in every build, including one whose layers have no
+        regions; in a tensor stack only an isotropic patterned layer does, since that takes the
+        scalar shape builder (``tensor_shapes.checked_layers``), while a tensor layer reads the
+        grid through its own spectral interpolation, which has no floor. ``None`` is resolved at
+        or above the floor (:meth:`_resolve_normal_grid`), so it never trips this.
+        """
+        if (self._normal_grid is None or self._modeling_path != ModelingPath.PARAMETRIC
+                or self.factorization != Factorization.NVF):
+            return False
+        if not self._has_tensor_materials():
+            return True
+        if not _anisotropy.integrated_shapes(self):
+            return False
+        from wavebit.rcwa._engine.tensor_shapes import _isotropic
+        return any(_isotropic(layer) is not None for layer in self.structure)
+
     def _reject_unread_normal_method(self, factorization):
         """Refuse an explicit ``raster_normal_method`` on a build that constructs no raster normal
         field — before it silently decides nothing.
