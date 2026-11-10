@@ -160,6 +160,11 @@ if not 0 < _CAP_BLEND < 1:
 _CAP_RAMP = _os.environ.get('WAVEBIT_STUDY_CYLINDER_CAP_RAMP', 'inside')
 if _CAP_RAMP not in ('inside', 'centred'):
     raise ValueError(f'WAVEBIT_STUDY_CYLINDER_CAP_RAMP={_CAP_RAMP!r}')
+#: STUDY: the blend's polynomial: ``'c1'`` smoothstep ``y^2 (3 - 2y)`` (default) or ``'c2'``
+#: smootherstep ``y^3 (10 - 15y + 6y^2)``, whose second derivative also vanishes at both ends.
+_CAP_STEP = _os.environ.get('WAVEBIT_STUDY_CYLINDER_CAP_STEP', 'c1')
+if _CAP_STEP not in ('c1', 'c2'):
+    raise ValueError(f'WAVEBIT_STUDY_CYLINDER_CAP_STEP={_CAP_STEP!r}')
 #: STUDY: beyond this many cells from a cap plane, the side wall's own plane and the nearest-
 #: surface plane are the same moment (see :meth:`Cylinder._split_tensor`).
 _SPLIT_REACH = (2 ** .5 - 1) / 2
@@ -1540,6 +1545,8 @@ class Cylinder(_Extrusion):
 
         def share(t):
             y = xp.minimum(xp.maximum(shift - t / width, xp.zeros_like(t)), xp.ones_like(t))
+            if _CAP_STEP == 'c2':
+                return y * y * y * (10 - 15 * y + 6 * y * y)
             return y * y * (3 - 2 * y)
 
         t_lo, t_hi = xp.abs(lo - s) - dx / 2, xp.abs(hi - s) - dx / 2

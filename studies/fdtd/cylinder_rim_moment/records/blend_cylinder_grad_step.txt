@@ -1,0 +1,12 @@
+c1 AD [-130.06785782   -5.35151096  115.02423966   -2.40789468    1.98922198]
+c1 h 3e-06 central -2.407877446 forward -2.408040928 backward -2.407713964  AD-central rel 7.2e-06
+c1 h 1e-06 central -2.407888928 forward -2.407943157 backward -2.407834700  AD-central rel 2.4e-06
+c1 h 3e-07 central -2.407892907 forward -2.407908444 backward -2.407877370  AD-central rel 7.4e-07
+c1 h 1e-07 central -2.407892907 forward -2.407896318 backward -2.407889497  AD-central rel 7.4e-07
+c1 h 3e-08 central -2.407891013 forward -2.407887223 backward -2.407894802  AD-central rel 1.5e-06
+c2 AD [-130.06785782   -5.35151096  115.02423966   -2.40789468    1.98922198]
+c2 h 3e-06 central -2.407894575 forward -2.408040928 backward -2.407748222  AD-central rel 4.3e-08
+c2 h 1e-06 central -2.407894613 forward -2.407943157 backward -2.407846068  AD-central rel 2.7e-08
+c2 h 3e-07 central -2.407894423 forward -2.407908444 backward -2.407880402  AD-central rel 1.1e-07
+c2 h 1e-07 central -2.407894044 forward -2.407896318 backward -2.407891770  AD-central rel 2.6e-07
+c2 h 3e-08 central -2.407894802 forward -2.407887223 backward -2.407902381  AD-central rel 5.1e-08

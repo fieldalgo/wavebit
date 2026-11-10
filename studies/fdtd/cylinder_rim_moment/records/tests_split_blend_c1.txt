@@ -1,0 +1,899 @@
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [  4%]
+........................................................................ [  9%]
+........................................................................ [ 14%]
+........................................................................ [ 19%]
+........................................................................ [ 24%]
+........................................................................ [ 29%]
+........................................................................ [ 34%]
+........................................................................ [ 39%]
+........................................................................ [ 43%]
+.........................................................F.F............ [ 48%]
+........................................................................ [ 53%]
+.......F......................F...F..F..........FFF..................... [ 58%]
+......s..s..s..s..s..s...................s...s.......................... [ 63%]
+........................................................................ [ 68%]
+........................................................................ [ 73%]
+........................................................................ [ 78%]
+....F................................................................... [ 82%]
+........................................................................ [ 87%]
+........................................................................ [ 92%]
+........................................................................ [ 97%]
+...................................                                      [100%]
+=================================== FAILURES ===================================
+_____________ test_public_solver_reproduces_the_measured_study[0] ______________
+[gw0] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+tests/fdtd/test_fd_junction_physics.py:41: in test_public_solver_reproduces_the_measured_study
+    np.testing.assert_allclose(np.asarray(got[key]), np.asarray(row[key]), rtol=0, atol=1e-10)
+E   AssertionError: 
+E   Not equal to tolerance rtol=0, atol=1e-10
+E   
+E   Mismatched elements: 6 / 6 (100%)
+E   First 5 mismatches are at indices:
+E    [0, 0]: -0.03419510014060847 (ACTUAL), -0.03335594884026219 (DESIRED)
+E    [0, 1]: 0.057776398787854816 (ACTUAL), 0.057433600751094355 (DESIRED)
+E    [1, 0]: -0.017499811594551724 (ACTUAL), -0.016782061224882978 (DESIRED)
+E    [1, 1]: 0.00945189561065667 (ACTUAL), 0.009019897053500004 (DESIRED)
+E    [2, 0]: -0.028979278469774168 (ACTUAL), -0.028378352612421033 (DESIRED)
+E   Max absolute difference among violations: 0.00083915
+E   Max relative difference among violations: 0.04789396
+E    ACTUAL: array([[-0.034195,  0.057776],
+E          [-0.0175  ,  0.009452],
+E          [-0.028979, -0.03414 ]])
+E    DESIRED: array([[-0.033356,  0.057434],
+E          [-0.016782,  0.00902 ],
+E          [-0.028378, -0.034601]])
+_____________ test_public_solver_reproduces_the_measured_study[1] ______________
+[gw0] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+tests/fdtd/test_fd_junction_physics.py:41: in test_public_solver_reproduces_the_measured_study
+    np.testing.assert_allclose(np.asarray(got[key]), np.asarray(row[key]), rtol=0, atol=1e-10)
+E   AssertionError: 
+E   Not equal to tolerance rtol=0, atol=1e-10
+E   
+E   Mismatched elements: 6 / 6 (100%)
+E   First 5 mismatches are at indices:
+E    [0, 0]: -0.0405732623968401 (ACTUAL), -0.03973181296827941 (DESIRED)
+E    [0, 1]: 0.05992763541448561 (ACTUAL), 0.059592652388811056 (DESIRED)
+E    [1, 0]: -0.021224043885993717 (ACTUAL), -0.02050065924540975 (DESIRED)
+E    [1, 1]: 0.01413108635032871 (ACTUAL), 0.013703674820957877 (DESIRED)
+E    [2, 0]: -0.02981031299223977 (ACTUAL), -0.029203179187616925 (DESIRED)
+E   Max absolute difference among violations: 0.00084145
+E   Max relative difference among violations: 0.03528592
+E    ACTUAL: array([[-0.040573,  0.059928],
+E          [-0.021224,  0.014131],
+E          [-0.02981 , -0.028856]])
+E    DESIRED: array([[-0.039732,  0.059593],
+E          [-0.020501,  0.013704],
+E          [-0.029203, -0.029316]])
+_ test_a_metasurface_cell_repeats_its_campaign_row_and_its_distance_from_rcwa[M1-20-p] _
+[gw0] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+tests/fdtd/test_fd_metasurface.py:148: in test_a_metasurface_cell_repeats_its_campaign_row_and_its_distance_from_rcwa
+    repeat_campaign_run(name, n, pol)
+tests/fdtd/test_fd_metasurface.py:132: in repeat_campaign_run
+    np.testing.assert_allclose(value, [complex(*v) for v in values],
+E   AssertionError: 
+E   Not equal to tolerance rtol=0, atol=1e-10
+E   r|-1|0|r_s
+E   Mismatched elements: 3 / 3 (100%)
+E   Mismatch at indices:
+E    [0]: (0.000380633892357032-0.0001627577315910616j) (ACTUAL), (0.00033866394225578344-3.684619579840738e-05j) (DESIRED)
+E    [1]: (-0.0001191440254455531-0.0006479339090718814j) (ACTUAL), (-6.529207082861055e-05-0.000582433864724535j) (DESIRED)
+E    [2]: (-0.0006397582201229281-7.584195706325255e-05j) (ACTUAL), (-0.0006199749968625215-5.466646966349347e-05j) (DESIRED)
+E   Max absolute difference among violations: 0.00013272
+E   Max relative difference among violations: 0.38960042
+E    ACTUAL: array([ 0.000381-1.627577e-04j, -0.000119-6.479339e-04j,
+E          -0.00064 -7.584196e-05j])
+E    DESIRED: array([ 3.386639e-04-3.684620e-05j, -6.529207e-05-5.824339e-04j,
+E          -6.199750e-04-5.466647e-05j])
+_ test_a_metasurface_cell_repeats_its_campaign_row_and_its_distance_from_rcwa[M2-25-s] _
+[gw0] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+tests/fdtd/test_fd_metasurface.py:148: in test_a_metasurface_cell_repeats_its_campaign_row_and_its_distance_from_rcwa
+    repeat_campaign_run(name, n, pol)
+tests/fdtd/test_fd_metasurface.py:132: in repeat_campaign_run
+    np.testing.assert_allclose(value, [complex(*v) for v in values],
+E   AssertionError: 
+E   Not equal to tolerance rtol=0, atol=1e-10
+E   r|0|0|r_s
+E   Mismatched elements: 3 / 3 (100%)
+E   Mismatch at indices:
+E    [0]: (-0.0035689292133869984-0.24135863599698368j) (ACTUAL), (-0.0033953494916189896-0.24061383482476795j) (DESIRED)
+E    [1]: (-0.18570589242549304-0.16307643991024717j) (ACTUAL), (-0.18534976388268865-0.16251970573402783j) (DESIRED)
+E    [2]: (-0.2541328923381722-0.0753344943836079j) (ACTUAL), (-0.2540413470423175-0.07517176967991474j) (DESIRED)
+E   Max absolute difference among violations: 0.00076476
+E   Max relative difference among violations: 0.00317806
+E    ACTUAL: array([-0.003569-0.241359j, -0.185706-0.163076j, -0.254133-0.075334j])
+E    DESIRED: array([-0.003395-0.240614j, -0.18535 -0.16252j , -0.254041-0.075172j])
+_________ test_all_five_public_geometry_derivatives_match_numpy[jax-y] _________
+[gw1] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+tests/fdtd/test_fd_cylinder_grad.py:146: in test_all_five_public_geometry_derivatives_match_numpy
+    np.testing.assert_allclose(derivative, expected, rtol=2e-6, atol=0.)
+E   AssertionError: 
+E   Not equal to tolerance rtol=2e-06, atol=0
+E   
+E   Mismatched elements: 1 / 5 (20%)
+E   Mismatch at index:
+E    [3]: -2.4078946784120037 (ACTUAL), -2.4078774458757835 (DESIRED)
+E   Max absolute difference among violations: 1.72325362e-05
+E   Max relative difference among violations: 7.1567331e-06
+E    ACTUAL: array([-130.067858,   -5.351511,  115.02424 ,   -2.407895,    1.989222])
+E    DESIRED: array([-130.067858,   -5.351507,  115.02424 ,   -2.407877,    1.989222])
+________ test_all_five_public_geometry_derivatives_match_numpy[torch-y] ________
+[gw1] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+tests/fdtd/test_fd_cylinder_grad.py:146: in test_all_five_public_geometry_derivatives_match_numpy
+    np.testing.assert_allclose(derivative, expected, rtol=2e-6, atol=0.)
+E   AssertionError: 
+E   Not equal to tolerance rtol=2e-06, atol=0
+E   
+E   Mismatched elements: 1 / 5 (20%)
+E   Mismatch at index:
+E    [3]: -2.4078946784120077 (ACTUAL), -2.4078774458757835 (DESIRED)
+E   Max absolute difference among violations: 1.72325362e-05
+E   Max relative difference among violations: 7.1567331e-06
+E    ACTUAL: array([-130.067858,   -5.351511,  115.02424 ,   -2.407895,    1.989222])
+E    DESIRED: array([-130.067858,   -5.351507,  115.02424 ,   -2.407877,    1.989222])
+______ test_the_plane_is_the_cylinders_moment_and_this_is_what_that_costs ______
+[gw1] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+tests/fdtd/test_fd_shapes.py:1076: in test_the_plane_is_the_cylinders_moment_and_this_is_what_that_costs
+    assert np.abs(w - want)[(area > 0) & rim].max() > 0.3, 'and the rim is what it is not'
+E   AssertionError: and the rim is what it is not
+E   assert np.float64(0.01860245077600131) > 0.3
+E    +  where np.float64(0.01860245077600131) = <built-in method max of numpy.ndarray object at 0x7f025493a4f0>()
+E    +    where <built-in method max of numpy.ndarray object at 0x7f025493a4f0> = array([[1.15213564e-02, 4.27240951e-03, 7.24894692e-03],\n       [1.14767052e-02, 4.30522706e-03, 7.17147818e-03],\n    ...4905124e-03, 2.60010235e-03, 5.10511125e-05],\n       [2.55039156e-03, 2.60057537e-03, 5.01838041e-05]], shape=(456, 3)).max
+______________ test_a_crease_is_where_w_jumps_and_this_is_how_far ______________
+[gw1] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+tests/fdtd/test_fd_shapes.py:1168: in test_a_crease_is_where_w_jumps_and_this_is_how_far
+    assert step_w > want_w, (name, step_w)   # a crease, and this is how big
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: ('cyl rim', np.float64(0.20224620092557666))
+E   assert np.float64(0.20224620092557666) > 0.9
+________ test_the_cap_rims_steep_gradient_is_the_planes_own_derivative _________
+[gw1] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+tests/fdtd/test_fd_shapes.py:1277: in test_the_cap_rims_steep_gradient_is_the_planes_own_derivative
+    assert abs(slope[0] - 0.3277) < 2e-3, (delta, slope)    # 1/delta, no faster
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: (0.001, array([0.0008534 , 0.00048553]))
+E   assert np.float64(0.326846600276023) < 0.002
+E    +  where np.float64(0.326846600276023) = abs((np.float64(0.0008533997239769486) - 0.3277))
+____________ test_w_vanishes_only_where_the_fill_is_already_decided ____________
+[gw0] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+tests/fdtd/test_fd_shapes.py:587: in test_w_vanishes_only_where_the_fill_is_already_decided
+    assert worst_of['cylinder', 16] > 1e-2, worst_of       # and the cylinder does not fall
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: {('box', 4): 1.4432899320127035e-15, ('box', 8): 2.4424906541753444e-15, ('prism', 4): 1.1102230246251565e-15, ('prism', 8): 1.4432899320127035e-15, ...}
+E   assert 3.2556034504915843e-06 > 0.01
+=============================== warnings summary ===============================
+tests/api/test_check_run_consistency.py: 37 warnings
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: CoarseMeshWarning: Scene(background=): 11.46 cells per wavelength (index 1.000); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-material-0.1]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: CoarseMeshWarning: structures[0]: 10.19 cells per wavelength (index 1.573); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-material-0.1]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.2 from the inner face of the absorber on 'z-'; half a wavelength in its own medium is 0.509342. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-material-0.1]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.2 from the inner face of the absorber on 'z+'; half a wavelength in its own medium is 0.509342. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-material-0.1]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-material-0.05]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-material-0.04]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fdtd.Box, fdtd.Cylinder, fdtd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Cylinder: 1}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fdtd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-material-0.1]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-source-0.1]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[stopping-0.1]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.1]
+tests/api/test_check_run_consistency.py::test_a_differentiated_material_beside_the_absorber_runs_once_moved_clear
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: CoarseMeshWarning: structures[0] (Cylinder(radius=0.22, height=1.0, axis='z', center=(0.0, 0.0, 0.0))) is 4.4 cells across its smallest extent (0.44); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.055 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-material-0.05]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.1 from the inner face of the absorber on 'z-'; half a wavelength in its own medium is 0.509342. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-material-0.05]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.1 from the inner face of the absorber on 'z+'; half a wavelength in its own medium is 0.509342. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-material-0.04]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.08 from the inner face of the absorber on 'z-'; half a wavelength in its own medium is 0.509342. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-material-0.04]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.08 from the inner face of the absorber on 'z+'; half a wavelength in its own medium is 0.509342. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-source-0.1]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[stopping-0.1]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.1]
+tests/api/test_check_run_consistency.py::test_the_other_absorber_advice_runs
+tests/api/test_check_run_consistency.py::test_a_differentiated_material_beside_the_absorber_runs_once_moved_clear
+tests/api/test_check_run_consistency.py::test_a_prepared_fdtd_run_names_the_nonfinite_live_material
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: CoarseMeshWarning: structures[0]: 10.68 cells per wavelength (index 1.500); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-source-0.1]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[stopping-0.1]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.1]
+tests/api/test_check_run_consistency.py::test_a_differentiated_material_beside_the_absorber_runs_once_moved_clear
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.2 from the inner face of the absorber on 'z-'; half a wavelength in its own medium is 0.534202. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-source-0.1]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[stopping-0.1]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.1]
+tests/api/test_check_run_consistency.py::test_a_differentiated_material_beside_the_absorber_runs_once_moved_clear
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.2 from the inner face of the absorber on 'z+'; half a wavelength in its own medium is 0.534202. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-source-0.1]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[stopping-0.1]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.1]
+tests/api/test_check_run_consistency.py::test_the_other_absorber_advice_runs
+tests/api/test_check_run_consistency.py::test_a_differentiated_material_beside_the_absorber_runs_once_moved_clear
+tests/api/test_check_run_consistency.py::test_a_prepared_fdtd_run_names_the_nonfinite_live_material
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fdtd.Box, fdtd.Cylinder, fdtd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Cylinder: 0.436}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fdtd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-source-0.05]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[stopping-0.05]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.05]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.1 from the inner face of the absorber on 'z-'; half a wavelength in its own medium is 0.534202. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-source-0.05]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[stopping-0.05]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.05]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.1 from the inner face of the absorber on 'z+'; half a wavelength in its own medium is 0.534202. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-source-0.05]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[stopping-0.05]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.05]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fdtd.Box, fdtd.Cylinder, fdtd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Cylinder: 0.445665}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fdtd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-source-0.04]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[stopping-0.04]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.04]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.08 from the inner face of the absorber on 'z-'; half a wavelength in its own medium is 0.534202. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-source-0.04]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[stopping-0.04]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.04]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.08 from the inner face of the absorber on 'z+'; half a wavelength in its own medium is 0.534202. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[magnetic-source-0.04]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[stopping-0.04]
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.04]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fdtd.Box, fdtd.Cylinder, fdtd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Cylinder: 0.483266}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fdtd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.1]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.1 from the inner face of the absorber on 'x-'; half a wavelength in its own medium is 0.534202. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.1]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.1 from the inner face of the absorber on 'x+'; half a wavelength in its own medium is 0.534202. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.05]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.2 from the inner face of the absorber on 'x-'; half a wavelength in its own medium is 0.534202. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.05]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.2 from the inner face of the absorber on 'x+'; half a wavelength in its own medium is 0.534202. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.04]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.24 from the inner face of the absorber on 'x-'; half a wavelength in its own medium is 0.534202. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_a_conductive_absorber_refusal_names_public_declarations_and_advice_that_runs[two-axes-0.04]
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0.24 from the inner face of the absorber on 'x+'; half a wavelength in its own medium is 0.534202. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_the_other_absorber_advice_runs
+tests/api/test_check_run_consistency.py::test_a_differentiated_material_beside_the_absorber_runs_once_moved_clear
+tests/api/test_check_run_consistency.py::test_a_prepared_fdtd_run_names_the_nonfinite_live_material
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0 from the inner face of the absorber on 'z-'; half a wavelength in its own medium is 0.534202. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_the_other_absorber_advice_runs
+tests/api/test_check_run_consistency.py::test_a_differentiated_material_beside_the_absorber_runs_once_moved_clear
+tests/api/test_check_run_consistency.py::test_a_prepared_fdtd_run_names_the_nonfinite_live_material
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: AbsorberProximityWarning: structures[0] is 0 from the inner face of the absorber on 'z+'; half a wavelength in its own medium is 0.534202. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and a ConductiveAbsorber there is matched at normal incidence only, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/api/test_check_run_consistency.py::test_the_other_absorber_advice_runs
+tests/api/test_check_run_consistency.py::test_a_differentiated_material_beside_the_absorber_runs_once_moved_clear
+tests/api/test_check_run_consistency.py::test_a_prepared_fdtd_run_names_the_nonfinite_live_material
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: CoarseMeshWarning: structures[0] (Cylinder(radius=0.22, height=1.4000000000000001, axis='z', center=(0.0, 0.0, 0.0))) is 4.4 cells across its smallest extent (0.44); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.055 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_cells_across.py::test_an_eps_20_sphere_eight_cells_across_plans
+tests/fdtd/test_fd_cells_across.py::test_a_prism_is_measured_across_its_hull
+tests/fdtd/test_public_discretisation.py::test_routed_whole_cell_fill_reaches_prepared_coefficients_exactly[cell0-box0]
+tests/fdtd/test_public_discretisation.py::test_routed_whole_cell_fill_reaches_prepared_coefficients_exactly[cell1-box1]
+tests/fdtd/test_public_junction.py::test_two_standing_bodies_share_one_substrate[False]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: this scene has a material but no wavelength (no Resolution(wavelength=) and no PML carrying one), so the cells-per-wavelength check did not run -- the mesh may be too coarse for it and nothing here can tell
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_cells_across.py: 2 warnings
+tests/fdtd/test_fd_clip.py: 2 warnings
+tests/fdtd/test_fd_symmetric_stencil.py: 2 warnings
+tests/fdtd/test_fd_triplet_sphere.py: 1 warning
+tests/fdtd/test_lifecycle.py: 3 warnings
+tests/fdtd/test_public_discretisation.py: 4 warnings
+tests/fdtd/test_public_junction.py: 4 warnings
+tests/fdtd/test_public_spelling.py: 2 warnings
+tests/fdtd/test_fd_traced_material.py: 1 warning
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3).
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_clip.py::test_polyhedral_fills_and_interfaces_are_the_polytopes[turned boxes apart]
+  /home/user/wavebit/.venv/lib/python3.12/site-packages/_pytest/python.py:171: PytestReturnNotNoneWarning: Test functions should return None, but tests/fdtd/test_fd_clip.py::test_polyhedral_fills_and_interfaces_are_the_polytopes[turned boxes apart] returned <class 'set'>.
+  Did you mean to use `assert` instead of `return`?
+  See https://docs.pytest.org/en/stable/how-to/assert.html#return-not-none for more information.
+    warnings.warn(
+
+tests/fdtd/test_fd_clip.py::test_polyhedral_fills_and_interfaces_are_the_polytopes[box sunk]
+  /home/user/wavebit/.venv/lib/python3.12/site-packages/_pytest/python.py:171: PytestReturnNotNoneWarning: Test functions should return None, but tests/fdtd/test_fd_clip.py::test_polyhedral_fills_and_interfaces_are_the_polytopes[box sunk] returned <class 'set'>.
+  Did you mean to use `assert` instead of `return`?
+  See https://docs.pytest.org/en/stable/how-to/assert.html#return-not-none for more information.
+    warnings.warn(
+
+tests/fdtd/test_fd_clip.py::test_polyhedral_fills_and_interfaces_are_the_polytopes[turned box sunk]
+  /home/user/wavebit/.venv/lib/python3.12/site-packages/_pytest/python.py:171: PytestReturnNotNoneWarning: Test functions should return None, but tests/fdtd/test_fd_clip.py::test_polyhedral_fills_and_interfaces_are_the_polytopes[turned box sunk] returned <class 'set'>.
+  Did you mean to use `assert` instead of `return`?
+  See https://docs.pytest.org/en/stable/how-to/assert.html#return-not-none for more information.
+    warnings.warn(
+
+tests/fdtd/test_fd_clip.py::test_polyhedral_fills_and_interfaces_are_the_polytopes[prism sunk]
+  /home/user/wavebit/.venv/lib/python3.12/site-packages/_pytest/python.py:171: PytestReturnNotNoneWarning: Test functions should return None, but tests/fdtd/test_fd_clip.py::test_polyhedral_fills_and_interfaces_are_the_polytopes[prism sunk] returned <class 'set'>.
+  Did you mean to use `assert` instead of `return`?
+  See https://docs.pytest.org/en/stable/how-to/assert.html#return-not-none for more information.
+    warnings.warn(
+
+tests/fdtd/test_fd_clip.py: 2 warnings
+tests/fdtd/test_lifecycle.py: 3 warnings
+tests/fdtd/test_public_junction.py: 4 warnings
+tests/fdtd/test_public_spelling.py: 1 warning
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: this scene has a material but no wavelength (no source, and no fdtd.PML(wavelength=...) as Numerics(absorber=...) on an Open face), so the cells-per-wavelength check did not run -- the mesh may be too coarse for it and nothing here can tell
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_clip.py::test_the_public_lifecycle_reaches_the_clip
+tests/fdtd/test_fd_clip.py::test_the_public_lifecycle_reaches_the_clip
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: structures[0] and structures[1] share 81 electric voxels answered by the C10 clip (15 where the two are proved apart, 0 where both are flat, 66 beside an unturned Box face): exact per-medium fills and one projection over both interfaces, exact for parallel planar layers. See docs/validation/fdtd/fd-polytope-clip.md for what was measured; it is not an error bound for this scene.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_clip.py::test_the_public_lifecycle_reaches_the_clip
+tests/fdtd/test_fd_clip.py::test_the_public_lifecycle_reaches_the_clip
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: GeometryClippedWarning: structures[0] (Box(size=(2.0, 2.0, 1.0), center=(0.0, 0.0, -0.5))) loses 20.0% of its declared volume to the 'z-' (PEC) face: the part past a PEC or PMC wall is not in the run. A structure meant to run on out of the box needs fdtd.Open() on that face, and one meant to fill a periodic axis spans it; neither warns.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_mie_physics.py: 19 warnings
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3).
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_mie_physics.py: 19 warnings
+  /home/user/wavebit/src/wavebit/_common/backend.py:122: RadiationApproximationWarning: FarFieldMonitor ['ff'] uses continuum propagation on discrete grid fields. A weak sphere (epsilon=1.1, radius/wavelength=0.25) measured optical-theorem residuals 52.05%/26.38%/12.91% at 20/28/40 cells per wavelength. These are examples, not an error bound for this scene. Use propagation="yee" for the validated lattice radiation map within its supported frequency band; keep continuum only when its approximation is intended. See docs/validation/fdtd/fd-lattice-radiation.md.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_symmetric_stencil.py::test_same_operator_physical_controls[sphere]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0]: 8.42 cells per wavelength (index 3.464); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_symmetric_stencil.py::test_explicit_absorption_surface_reaches_preparation
+tests/fdtd/test_fd_triplet_sphere.py::test_sphere_geometry_and_increment_backends[numpy]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0]: 9.72 cells per wavelength (index 1.500); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_triplet_sphere.py::test_sphere_geometry_and_increment_backends[numpy]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: RadiationApproximationWarning: FarFieldMonitor ['ff'] uses continuum propagation on discrete grid fields. A weak sphere (epsilon=1.1, radius/wavelength=0.25) measured optical-theorem residuals 52.05%/26.38%/12.91% at 20/28/40 cells per wavelength. These are examples, not an error bound for this scene. Use propagation="yee" for the validated lattice radiation map within its supported frequency band; keep continuum only when its approximation is intended. See docs/validation/fdtd/fd-lattice-radiation.md.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_lifecycle.py: 35 warnings
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: Scene(background=): 11.46 cells per wavelength (index 1.000); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_lifecycle.py::test_padding_is_outside_and_nonvacuum_background_continues
+tests/fdtd/test_lifecycle.py::test_padding_is_outside_and_nonvacuum_background_continues
+tests/fdtd/test_lifecycle.py::test_padding_is_outside_and_nonvacuum_background_continues
+tests/fdtd/test_lifecycle.py::test_padding_is_outside_and_nonvacuum_background_continues
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: Scene(background=): 8.90 cells per wavelength (index 1.500); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_lifecycle.py::test_invariant_axes_name_the_invariant_axes
+  /home/user/wavebit/src/wavebit/fdtd/_execution.py:280: UnsettledFieldWarning: monitor 't': the field in its region was still 1.00e+00 of its peak energy in the last period of its longest wavelength (the line is 1e-05). Its DFT is of a signal cut off before it decayed, so the phasors -- and every flux, order and normalisation built on them -- carry that truncation. Run longer (Duration(steps=), Duration(periods=, source=), Duration(seconds=)).
+    res = _solve(scene, p, rt, rows)
+
+tests/fdtd/test_lifecycle.py::test_invariant_axes_name_the_invariant_axes
+  /home/user/wavebit/src/wavebit/fdtd/_execution.py:280: UnsettledFieldWarning: monitor 'raw': the field in its region was still 1.00e+00 of its peak energy in the last period of its longest wavelength (the line is 1e-05). Its DFT is of a signal cut off before it decayed, so the phasors -- and every flux, order and normalisation built on them -- carry that truncation. Run longer (Duration(steps=), Duration(periods=, source=), Duration(seconds=)).
+    res = _solve(scene, p, rt, rows)
+
+tests/fdtd/test_lifecycle.py::test_invariant_axes_name_the_invariant_axes
+  /home/user/wavebit/src/wavebit/fdtd/_execution.py:280: UnsettledFieldWarning: monitor 'q': the field in its region was still 1.00e+00 of its peak energy in the last period of its longest wavelength (the line is 1e-05). Its DFT is of a signal cut off before it decayed, so the phasors -- and every flux, order and normalisation built on them -- carry that truncation. Run longer (Duration(steps=), Duration(periods=, source=), Duration(seconds=)).
+    res = _solve(scene, p, rt, rows)
+
+tests/fdtd/test_lifecycle.py::test_invariant_axes_name_the_invariant_axes
+  /home/user/wavebit/src/wavebit/fdtd/_execution.py:280: UnsettledFieldWarning: monitor 'f': the field in its region was still 1.00e+00 of its peak energy in the last period of its longest wavelength (the line is 1e-05). Its DFT is of a signal cut off before it decayed, so the phasors -- and every flux, order and normalisation built on them -- carry that truncation. Run longer (Duration(steps=), Duration(periods=, source=), Duration(seconds=)).
+    res = _solve(scene, p, rt, rows)
+
+tests/fdtd/test_lifecycle.py::test_diffraction_band_guard_is_separate_from_runtime_stability
+  /home/user/wavebit/src/wavebit/fdtd/_execution.py:280: UnsettledFieldWarning: monitor 't': the field in its region was still 3.51e-04 of its peak energy in the last period of its longest wavelength (the line is 1e-05). Its DFT is of a signal cut off before it decayed, so the phasors -- and every flux, order and normalisation built on them -- carry that truncation. Run longer (Duration(steps=), Duration(periods=, source=), Duration(seconds=)).
+    res = _solve(scene, p, rt, rows)
+
+tests/fdtd/test_lifecycle.py::test_diffraction_band_guard_is_separate_from_runtime_stability
+  /home/user/wavebit/src/wavebit/fdtd/_execution.py:280: UnsettledFieldWarning: monitor 'raw': the field in its region was still 3.51e-04 of its peak energy in the last period of its longest wavelength (the line is 1e-05). Its DFT is of a signal cut off before it decayed, so the phasors -- and every flux, order and normalisation built on them -- carry that truncation. Run longer (Duration(steps=), Duration(periods=, source=), Duration(seconds=)).
+    res = _solve(scene, p, rt, rows)
+
+tests/fdtd/test_lifecycle.py::test_diffraction_band_guard_is_separate_from_runtime_stability
+  /home/user/wavebit/src/wavebit/fdtd/_execution.py:280: UnsettledFieldWarning: monitor 'q': the field in its region was still 3.51e-04 of its peak energy in the last period of its longest wavelength (the line is 1e-05). Its DFT is of a signal cut off before it decayed, so the phasors -- and every flux, order and normalisation built on them -- carry that truncation. Run longer (Duration(steps=), Duration(periods=, source=), Duration(seconds=)).
+    res = _solve(scene, p, rt, rows)
+
+tests/fdtd/test_lifecycle.py::test_diffraction_band_guard_is_separate_from_runtime_stability
+  /home/user/wavebit/src/wavebit/fdtd/_execution.py:280: UnsettledFieldWarning: monitor 'f': the field in its region was still 3.51e-04 of its peak energy in the last period of its longest wavelength (the line is 1e-05). Its DFT is of a signal cut off before it decayed, so the phasors -- and every flux, order and normalisation built on them -- carry that truncation. Run longer (Duration(steps=), Duration(periods=, source=), Duration(seconds=)).
+    res = _solve(scene, p, rt, rows)
+
+tests/fdtd/test_lifecycle.py::test_ranged_geometry_derivative_and_runtime_guard_survive_public_lifecycle
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0] (Sphere(radius=0.22, center=(-0.073, 0.017, -0.009))) is 4.4 cells across its smallest extent (0.44); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.055 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_lifecycle.py::test_ranged_geometry_derivative_and_runtime_guard_survive_public_lifecycle
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0] (Sphere(radius=0.220003, center=(-0.073, 0.017, -0.009))) is 4.4 cells across its smallest extent (0.440006); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0550008 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_lifecycle.py::test_ranged_geometry_derivative_and_runtime_guard_survive_public_lifecycle
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0] (Sphere(radius=0.219997, center=(-0.073, 0.017, -0.009))) is 4.4 cells across its smallest extent (0.439994); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0549992 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_lifecycle.py::test_a_traced_permittivity_below_the_resolution_floor_runs_to_nan_and_fails_validity[slab]
+tests/fdtd/test_lifecycle.py::test_a_traced_permittivity_below_the_resolution_floor_runs_to_nan_and_fails_validity[slab]
+tests/fdtd/test_lifecycle.py::test_a_traced_permittivity_below_the_resolution_floor_runs_to_nan_and_fails_validity[slab]
+tests/fdtd/test_lifecycle.py::test_a_traced_permittivity_below_the_resolution_floor_runs_to_nan_and_fails_validity[slab]
+tests/fdtd/test_lifecycle.py::test_a_traced_permittivity_below_the_resolution_floor_runs_to_nan_and_fails_validity[unturned ranged box]
+tests/fdtd/test_lifecycle.py::test_a_torch_permittivity_below_the_resolution_floor_runs_to_nan_and_fails_validity
+tests/fdtd/test_lifecycle.py::test_a_torch_permittivity_below_the_resolution_floor_runs_to_nan_and_fails_validity
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0] has a traced value, so its cells per wavelength could not be checked
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_lifecycle.py::test_a_traced_permittivity_below_the_resolution_floor_runs_to_nan_and_fails_validity[unturned ranged box]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0]: 9.05 cells per wavelength (index 1.500); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_lifecycle.py::test_a_traced_permittivity_below_the_resolution_floor_runs_to_nan_and_fails_validity[unturned ranged box]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0] (Box(size=(0.44, 0.44, 0.44), center=(0.0, 0.0, 0.0))) is 4.4 cells across its smallest extent (0.44); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.055 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[voxel]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[voxel]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[voxel]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[voxel]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[stencil]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[stencil]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[stencil]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[stencil]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0]: 8.75 cells per wavelength (index 1.500); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[voxel]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[voxel]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[voxel]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[voxel]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[stencil]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[stencil]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[stencil]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[stencil]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0] (Sphere(radius=0.14, center=(0.0, 0.0, 0.0))) is 5.0 cells across its smallest extent (0.28); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.035 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[stencil]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[stencil]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[stencil]
+tests/fdtd/test_public_discretisation.py::test_allowed_sphere_lowering_matches_explicit_existing_selector[stencil]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: structures[0] uses discretization='stencil': the symmetric extended-stencil operator on E. It passes the stage-4 C3 Mie gate: convergence order 2.244 on the epsilon=12 sphere (radius/wavelength=0.25, 40/56/80 vacuum cells per wavelength, three placements; -4.08% at 80), 2.064 on the glass sphere (epsilon=2.25) and 2.057 at epsilon=1.1 (20/28/40). On glass and weak spheres at those grids its error is larger than with the default rule. These benchmarks are not an error bound for this scene. Validate its observables under refinement. See docs/design/fd-symmetric-stencil.md.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-False-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-True-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-False-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-True-cylinder]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fdtd.Box, fdtd.Cylinder, fdtd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Cylinder: 0.490114}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fdtd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-False-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-False-cylinder]
+tests/fdtd/test_public_junction.py::test_prepared_staircase_rejects_traced_standing_body_explicitly
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: structures[1] stands flush on structures[0] at z = 0.0125: 168 electric junction voxels (96 on the rim), 0 beside the base, take junction='staircase'. Each junction point takes its owning medium. Its junction term is first order (0.98-1.02 on the flat film); coarse-grid cancellation can make its total error look smaller. 'split' is the default. These measurements are not an error bound for this scene; see docs/validation/fdtd/fd-subpixel-occupancy.md, The junction.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-False-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-False-box]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: GeometryClippedWarning: structures[0] (Box(size=(2.0, 2.0, 1.2125), center=(0.0, 0.0, -0.59375))) loses 49.5% of its declared volume to the 'z-' (PEC) face: the part past a PEC or PMC wall is not in the run. A structure meant to run on out of the box needs fdtd.Open() on that face, and one meant to fill a periodic axis spans it; neither warns.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-False-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-False-cylinder]
+tests/fdtd/test_public_junction.py::test_prepared_staircase_rejects_traced_standing_body_explicitly
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[1] (Cylinder(radius=0.15, height=0.4, axis='z', center=(0.017, -0.013, 0.21250000000000002))) is 6.0 cells across its smallest extent (0.3); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0375 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-False-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-False-box]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-True-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-True-box]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-False-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-False-box]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-True-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-True-box]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[2] (Sphere(radius=0.11, center=(0.5, 0.3, 0.2))) is 4.4 cells across its smallest extent (0.22); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0275 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-False-box]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-False-box]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: structures[1] stands flush on structures[0] at z = 0.0125: 196 electric junction voxels (96 on the rim), 0 beside the base, take junction='staircase'. Each junction point takes its owning medium. Its junction term is first order (0.98-1.02 on the flat film); coarse-grid cancellation can make its total error look smaller. 'split' is the default. These measurements are not an error bound for this scene; see docs/validation/fdtd/fd-subpixel-occupancy.md, The junction.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-False-box]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-False-box]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[1] (Box(size=(0.3, 0.3, 0.4), center=(0.017, -0.013, 0.21250000000000002))) is 6.0 cells across its smallest extent (0.3); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0375 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-True-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-True-cylinder]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: structures[0] stands flush on structures[1] at z = 0.0125: 168 electric junction voxels (96 on the rim), 0 beside the base, take junction='staircase'. Each junction point takes its owning medium. Its junction term is first order (0.98-1.02 on the flat film); coarse-grid cancellation can make its total error look smaller. 'split' is the default. These measurements are not an error bound for this scene; see docs/validation/fdtd/fd-subpixel-occupancy.md, The junction.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-True-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-True-box]
+tests/fdtd/test_public_junction.py::test_two_standing_bodies_share_one_substrate[False]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: GeometryClippedWarning: structures[1] (Box(size=(2.0, 2.0, 1.2125), center=(0.0, 0.0, -0.59375))) loses 49.5% of its declared volume to the 'z-' (PEC) face: the part past a PEC or PMC wall is not in the run. A structure meant to run on out of the box needs fdtd.Open() on that face, and one meant to fill a periodic axis spans it; neither warns.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-True-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-True-cylinder]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0] (Cylinder(radius=0.15, height=0.4, axis='z', center=(0.017, -0.013, 0.21250000000000002))) is 6.0 cells across its smallest extent (0.3); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0375 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-True-box]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-True-box]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: structures[0] stands flush on structures[1] at z = 0.0125: 196 electric junction voxels (96 on the rim), 0 beside the base, take junction='staircase'. Each junction point takes its owning medium. Its junction term is first order (0.98-1.02 on the flat film); coarse-grid cancellation can make its total error look smaller. 'split' is the default. These measurements are not an error bound for this scene; see docs/validation/fdtd/fd-subpixel-occupancy.md, The junction.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[False-True-box]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-True-box]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0] (Box(size=(0.3, 0.3, 0.4), center=(0.017, -0.013, 0.21250000000000002))) is 6.0 cells across its smallest extent (0.3); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0375 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-False-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-False-box]
+tests/fdtd/test_public_junction.py::test_prepared_staircase_rejects_traced_standing_body_explicitly
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0]: 10.67 cells per wavelength (index 1.500); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-False-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-False-box]
+tests/fdtd/test_public_junction.py::test_prepared_staircase_rejects_traced_standing_body_explicitly
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[1]: 8.00 cells per wavelength (index 2.000); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-False-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-False-box]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-True-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-True-box]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[2]: 9.24 cells per wavelength (index 1.732); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-False-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-False-box]
+tests/fdtd/test_public_junction.py::test_prepared_staircase_rejects_traced_standing_body_explicitly
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: AbsorberProximityWarning: structures[0] is -0.6 from the inner face of the absorber on 'z-'; half a wavelength in its own medium is 0.266667. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and the PML there is matched to index 1.5, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-True-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-True-box]
+tests/fdtd/test_public_junction.py::test_two_standing_bodies_share_one_substrate[True]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0]: 8.00 cells per wavelength (index 2.000); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-True-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-True-box]
+tests/fdtd/test_public_junction.py::test_two_standing_bodies_share_one_substrate[True]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[1]: 10.67 cells per wavelength (index 1.500); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-True-cylinder]
+tests/fdtd/test_public_junction.py::test_only_standing_body_gets_staircase[True-True-box]
+tests/fdtd/test_public_junction.py::test_two_standing_bodies_share_one_substrate[True]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: AbsorberProximityWarning: structures[1] is -0.6 from the inner face of the absorber on 'z-'; half a wavelength in its own medium is 0.266667. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and the PML there is matched to index 1.5, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_two_standing_bodies_share_one_substrate[False]
+tests/fdtd/test_public_junction.py::test_two_standing_bodies_share_one_substrate[True]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fd.Box, fd.Cylinder, fd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Cylinder: 0.463212}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_two_standing_bodies_share_one_substrate[False]
+tests/fdtd/test_public_junction.py::test_two_standing_bodies_share_one_substrate[True]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: structures[0] stands flush on structures[1] at z = 0.0125: 166 electric junction voxels (92 on the rim), 0 beside the base, take junction='staircase'. Each junction point takes its owning medium. Its junction term is first order (0.98-1.02 on the flat film); coarse-grid cancellation can make its total error look smaller. 'split' is the default. These measurements are not an error bound for this scene; see docs/validation/fdtd/fd-subpixel-occupancy.md, The junction. structures[2] stands flush on structures[1] at z = 0.0125: 166 electric junction voxels (92 on the rim), 0 beside the base, take junction='staircase'. Each junction point takes its owning medium. Its junction term is first order (0.98-1.02 on the flat film); coarse-grid cancellation can make its total error look smaller. 'split' is the default. These measurements are not an error bound for this scene; see docs/validation/fdtd/fd-subpixel-occupancy.md, The junction.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_two_standing_bodies_share_one_substrate[False]
+tests/fdtd/test_public_junction.py::test_two_standing_bodies_share_one_substrate[True]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0] (Cylinder(radius=0.15, height=0.4, axis='z', center=(-0.3, 0.0, 0.2125))) is 6.0 cells across its smallest extent (0.3); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0375 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_two_standing_bodies_share_one_substrate[False]
+tests/fdtd/test_public_junction.py::test_two_standing_bodies_share_one_substrate[True]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[2] (Cylinder(radius=0.15, height=0.4, axis='z', center=(0.3, 0.0, 0.2125))) is 6.0 cells across its smallest extent (0.3); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0375 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_two_standing_bodies_share_one_substrate[True]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[2]: 8.00 cells per wavelength (index 2.000); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_junction.py::test_prepared_staircase_rejects_traced_standing_body_explicitly
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fd.Box, fd.Cylinder, fd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Cylinder: 0.490114}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_spelling.py::test_a_smoothed_edge_in_an_open_face_layer_is_offered_only_what_the_public_route_admits[Box]
+tests/fdtd/test_public_spelling.py::test_a_smoothed_edge_in_an_open_face_layer_is_offered_only_what_the_public_route_admits[Cylinder]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0]: 8.91 cells per wavelength (index 1.500); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_spelling.py::test_a_smoothed_edge_in_an_open_face_layer_is_offered_only_what_the_public_route_admits[Box]
+tests/fdtd/test_public_spelling.py::test_a_smoothed_edge_in_an_open_face_layer_is_offered_only_what_the_public_route_admits[Cylinder]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: AbsorberProximityWarning: structures[0] is 0.05 from the inner face of the absorber on 'z+'; half a wavelength in its own medium is 0.222826. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and the PML there is matched to index 1 (the background), not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_spelling.py::test_a_smoothed_edge_in_an_open_face_layer_is_offered_only_what_the_public_route_admits[Box]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0] (Box(size=(0.2, 0.2, 0.3), center=(0.0, 0.0, 0.19999999999999998))) is 4.0 cells across its smallest extent (0.2); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.025 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_spelling.py::test_a_smoothed_edge_in_an_open_face_layer_is_offered_only_what_the_public_route_admits[Box]
+tests/fdtd/test_public_spelling.py::test_a_smoothed_edge_in_an_open_face_layer_is_offered_only_what_the_public_route_admits[Cylinder]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: AbsorberProximityWarning: structures[0] is -0.6 from the inner face of the absorber on 'z+'; half a wavelength in its own medium is 0.222826. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and the PML there is matched to index 1.5, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_spelling.py::test_a_smoothed_edge_in_an_open_face_layer_is_offered_only_what_the_public_route_admits[Cylinder]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fdtd.Box, fdtd.Cylinder, fdtd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Cylinder: 0.510743}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fdtd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_spelling.py::test_a_smoothed_edge_in_an_open_face_layer_is_offered_only_what_the_public_route_admits[Cylinder]
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0] (Cylinder(radius=0.1, height=0.3, axis='z', center=(0.0, 0.0, 0.19999999999999998))) is 4.0 cells across its smallest extent (0.2); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.025 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_public_spelling.py::test_a_planning_warning_is_spelled_for_the_public_caller
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: GeometryClippedWarning: structures[0] (SnappedBox(size=(0.3, 0.3, 0.6), center=(0.0, 0.0, 0.0))) loses 33.3% of its declared volume to the 'z-' (PEC) and 'z+' (PEC) faces: the part past a PEC or PMC wall is not in the run. A structure meant to run on out of the box needs fdtd.Open() on that face, and one meant to fill a periodic axis spans it; neither warns.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py: 42 warnings
+tests/fdtd/test_traced_background_planewave.py: 1 warning
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0]: 8.86 cells per wavelength (index 1.449); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py: 42 warnings
+tests/fdtd/test_traced_background_planewave.py: 1 warning
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[1]: 8.56 cells per wavelength (index 1.500); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py: 36 warnings
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: AbsorberProximityWarning: structures[0] is -0.4 from the inner face of the absorber on 'z-'; half a wavelength in its own medium is 0.221524. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and the PML there is matched to index 1.44914, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py: 29 warnings
+tests/fdtd/test_traced_background_planewave.py: 1 warning
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fdtd.Box, fdtd.Cylinder, fdtd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Cylinder: 0.492678}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fdtd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py: 39 warnings
+tests/fdtd/test_traced_background_planewave.py: 1 warning
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: structures[1] stands flush on structures[0] at z = -0.2375: 118 electric junction voxels (80 on the rim), 0 beside the base, take junction='split'. The substrate is layered under the pillar/background mixture. Measured second order on a flat film (16 cases, orders 2.00-2.03) and consistent with RCWA on six pillar scenes. The rim error has an unresolved order on one scene (eps 5.8). These measurements are not an error bound for this scene; see docs/validation/fdtd/fd-subpixel-occupancy.md, The junction.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py: 27 warnings
+tests/fdtd/test_traced_background_planewave.py: 1 warning
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[1] (Cylinder(radius=0.12, height=0.3, axis='z', center=(0.011, -0.007, -0.0875))) is 4.8 cells across its smallest extent (0.24); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.03 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py: 12 warnings
+  /home/user/wavebit/src/wavebit/fdtd/_execution.py:280: UnsettledFieldWarning: monitor 'T': the field in its region was still 1.00e+00 of its peak energy in the last period of its longest wavelength (the line is 1e-05). Its DFT is of a signal cut off before it decayed, so the phasors -- and every flux, order and normalisation built on them -- carry that truncation. Run longer (Duration(steps=), Duration(periods=, source=), Duration(seconds=)).
+    res = _solve(scene, p, rt, rows)
+
+tests/fdtd/test_substrate_continuation.py::test_lowering_preserves_the_smoothed_scene_and_matches_the_normalized_engine
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fd.Box, fd.Cylinder, fd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Cylinder: 0.492678}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py::test_lowering_preserves_the_smoothed_scene_and_matches_the_normalized_engine
+  /home/user/wavebit/src/wavebit/fdtd/_execution.py:280: UnsettledFieldWarning: monitor 'T': the field in its region was still 1.00e+00 of its peak energy in the last period of its longest wavelength (the line is 1e-05). Its DFT is of a signal cut off before it decayed, so the phasors -- and every flux, order and normalisation built on them -- carry that truncation. Run longer (Run(steps=), Run(periods=), Run(time=)).
+    res = _solve(scene, p, rt, rows)
+
+tests/fdtd/test_substrate_continuation.py::test_same_substrate_in_nanometres_has_identical_fields_and_seconds
+tests/fdtd/test_substrate_continuation.py::test_same_substrate_in_nanometres_has_identical_fields_and_seconds
+tests/fdtd/test_substrate_continuation.py::test_same_substrate_in_nanometres_has_identical_fields_and_seconds
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: AbsorberProximityWarning: structures[0] is -400 from the inner face of the absorber on 'z-'; half a wavelength in its own medium is 221.524. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and the PML there is matched to index 1.44914, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py::test_same_substrate_in_nanometres_has_identical_fields_and_seconds
+tests/fdtd/test_substrate_continuation.py::test_same_substrate_in_nanometres_has_identical_fields_and_seconds
+tests/fdtd/test_substrate_continuation.py::test_same_substrate_in_nanometres_has_identical_fields_and_seconds
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: structures[1] stands flush on structures[0] at z = -237.5: 118 electric junction voxels (80 on the rim), 0 beside the base, take junction='split'. The substrate is layered under the pillar/background mixture. Measured second order on a flat film (16 cases, orders 2.00-2.03) and consistent with RCWA on six pillar scenes. The rim error has an unresolved order on one scene (eps 5.8). These measurements are not an error bound for this scene; see docs/validation/fdtd/fd-subpixel-occupancy.md, The junction.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py::test_same_substrate_in_nanometres_has_identical_fields_and_seconds
+tests/fdtd/test_substrate_continuation.py::test_same_substrate_in_nanometres_has_identical_fields_and_seconds
+tests/fdtd/test_substrate_continuation.py::test_same_substrate_in_nanometres_has_identical_fields_and_seconds
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[1] (Cylinder(radius=120.0, height=300.0, axis='z', center=(11.0, -7.0, -87.5))) is 4.8 cells across its smallest extent (240); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 30 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fdtd.Box, fdtd.Cylinder, fdtd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Cylinder: 0.492747}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fdtd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[1] (Cylinder(radius=0.12000999999999999, height=0.3, axis='z', center=(0.011, -0.007, -0.0875))) is 4.8 cells across its smallest extent (0.24002); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0300025 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fdtd.Box, fdtd.Cylinder, fdtd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Cylinder: 0.492609}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fdtd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[1] (Cylinder(radius=0.11999, height=0.3, axis='z', center=(0.011, -0.007, -0.0875))) is 4.8 cells across its smallest extent (0.23998); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0299975 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fdtd.Box, fdtd.Cylinder, fdtd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Cylinder: 0.492612}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fdtd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[1] (Cylinder(radius=0.12, height=0.30001, axis='z', center=(0.011, -0.007, -0.08749499999999999))) is 4.8 cells across its smallest extent (0.24); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.03 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fdtd.Box, fdtd.Cylinder, fdtd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Cylinder: 0.492745}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fdtd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[1] (Cylinder(radius=0.12, height=0.29999, axis='z', center=(0.011, -0.007, -0.087505))) is 4.8 cells across its smallest extent (0.24); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.03 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+tests/fdtd/test_substrate_continuation.py::test_substrate_and_pillar_gradients_match_fresh_finite_differences
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: AbsorberProximityWarning: structures[0] is -0.4 from the inner face of the absorber on 'z-'; half a wavelength in its own medium is 0.221525. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and the PML there is matched to index 1.44914, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_traced_background_planewave.py: 18 warnings
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0]: 8.56 cells per wavelength (index 1.500); 12 is where the second digit starts to hold and 20 is the usual rule
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_traced_background_planewave.py::test_a_traced_background_beside_a_normal_plane_wave_differentiates_with_both_faces_fixed
+tests/fdtd/test_traced_background_planewave.py::test_a_traced_background_beside_a_normal_plane_wave_differentiates_with_both_faces_fixed
+tests/fdtd/test_traced_background_planewave.py::test_a_traced_background_beside_a_normal_plane_wave_differentiates_with_both_faces_fixed
+tests/fdtd/test_traced_background_planewave.py::test_a_traced_background_beside_a_normal_plane_wave_differentiates_with_both_faces_fixed
+tests/fdtd/test_traced_background_planewave.py::test_the_matched_face_refusal_advises_the_public_reference_and_the_advice_runs
+tests/fdtd/test_traced_background_planewave.py::test_the_matched_face_refusal_advises_the_public_reference_and_the_advice_runs
+tests/fdtd/test_traced_background_planewave.py::test_the_matched_face_refusal_advises_the_public_reference_and_the_advice_runs
+tests/fdtd/test_traced_background_planewave.py::test_the_matched_face_refusal_advises_the_public_reference_and_the_advice_runs
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: Scene(background=) has a traced value, so its cells per wavelength could not be checked
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_traced_background_planewave.py::test_a_traced_background_beside_a_normal_plane_wave_differentiates_with_both_faces_fixed
+tests/fdtd/test_traced_background_planewave.py::test_a_traced_background_beside_a_normal_plane_wave_differentiates_with_both_faces_fixed
+tests/fdtd/test_traced_background_planewave.py::test_a_traced_background_beside_a_normal_plane_wave_differentiates_with_both_faces_fixed
+tests/fdtd/test_traced_background_planewave.py::test_the_matched_face_refusal_advises_the_public_reference_and_the_advice_runs
+  /home/user/wavebit/src/wavebit/fdtd/_execution.py:280: UnsettledFieldWarning: monitor 'T': the field in its region was still 1.35e-03 of its peak energy in the last period of its longest wavelength (the line is 1e-05). Its DFT is of a signal cut off before it decayed, so the phasors -- and every flux, order and normalisation built on them -- carry that truncation. Run longer (Duration(steps=), Duration(periods=, source=), Duration(seconds=)).
+    res = _solve(scene, p, rt, rows)
+
+tests/fdtd/test_traced_background_planewave.py::test_a_traced_background_beside_a_plane_wave_is_refused_with_a_traced_geometry
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: AbsorberProximityWarning: structures[0] is -0.5 from the inner face of the absorber on 'z-'; half a wavelength in its own medium is 0.221524. The measured optimum clearance is half a wavelength (legacy PAD_WAVELENGTHS: 6.57e-4 worst per-order error at 0.5 against 8.81e-4 at 0.125), and the PML there is matched to index 1.44914, not to this structure's near field
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_traced_background_planewave.py::test_a_traced_background_beside_a_plane_wave_is_refused_with_a_traced_geometry
+  /home/user/wavebit/src/wavebit/fdtd/_execution.py:280: UnsettledFieldWarning: monitor 'T': the field in its region was still 1.74e-03 of its peak energy in the last period of its longest wavelength (the line is 1e-05). Its DFT is of a signal cut off before it decayed, so the phasors -- and every flux, order and normalisation built on them -- carry that truncation. Run longer (Duration(steps=), Duration(periods=, source=), Duration(seconds=)).
+    res = _solve(scene, p, rt, rows)
+
+tests/fdtd/test_fd_traced_material.py::test_four_magnetic_bodies_differentiate_eps_mu_and_size
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fd.Box, fd.Cylinder, fd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Box: 1, Cylinder: 0.984109, Prism: 0.591476}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_traced_material.py::test_four_magnetic_bodies_differentiate_eps_mu_and_size
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0] (Sphere(radius=0.223001, center=(-2.131, 0.017, -0.013))) is 4.5 cells across its smallest extent (0.446002); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0557503 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_traced_material.py::test_four_magnetic_bodies_differentiate_eps_mu_and_size
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[1] (Cylinder(radius=0.239, height=0.47, axis='y', center=(-0.719, -0.013, 0.023))) is 4.7 cells across its smallest extent (0.47); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.05875 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_traced_material.py::test_four_magnetic_bodies_differentiate_eps_mu_and_size
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[2] (Box(size=(0.45, 0.47, 0.49), center=(0.713, 0.019, -0.017), angle=23.0, axis='z')) is 4.5 cells across its smallest extent (0.45); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.05625 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_traced_material.py::test_four_magnetic_bodies_differentiate_eps_mu_and_size
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[3] (Prism(vertices=((-0.25, -0.21), (0.18, -0.24), (0.28, -0.03), (0.02, 0.04), (-0.04, 0.27), (-0.24, 0.14)), height=0.49, axis='z', center=(2.117, -0.019, 0.013), angle=-23.0)) is 4.9 cells across its smallest extent (0.49); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.06125 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_traced_material.py::test_four_magnetic_bodies_differentiate_eps_mu_and_size
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0] (Sphere(radius=0.222999, center=(-2.131, 0.017, -0.013))) is 4.5 cells across its smallest extent (0.445998); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0557498 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_traced_material.py::test_four_magnetic_bodies_differentiate_eps_mu_and_size
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0] (Sphere(radius=0.223, center=(-2.131, 0.017, -0.013))) is 4.5 cells across its smallest extent (0.446); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.05575 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_traced_material.py::test_four_magnetic_bodies_differentiate_eps_mu_and_size
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[1] (Cylinder(radius=0.239001, height=0.47, axis='y', center=(-0.719, -0.013, 0.023))) is 4.7 cells across its smallest extent (0.47); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.05875 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_traced_material.py::test_four_magnetic_bodies_differentiate_eps_mu_and_size
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[1] (Cylinder(radius=0.238999, height=0.47, axis='y', center=(-0.719, -0.013, 0.023))) is 4.7 cells across its smallest extent (0.47); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.05875 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_traced_material.py::test_four_magnetic_bodies_differentiate_eps_mu_and_size
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[2] (Box(size=(0.450001, 0.47, 0.49), center=(0.713, 0.019, -0.017), angle=23.0, axis='z')) is 4.5 cells across its smallest extent (0.450001); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0562501 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_traced_material.py::test_four_magnetic_bodies_differentiate_eps_mu_and_size
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[2] (Box(size=(0.44999900000000004, 0.47, 0.49), center=(0.713, 0.019, -0.017), angle=23.0, axis='z')) is 4.5 cells across its smallest extent (0.449999); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0562499 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_traced_material.py::test_four_magnetic_bodies_differentiate_eps_mu_and_size
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fd.Box, fd.Cylinder, fd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Box: 1, Cylinder: 0.984109, Prism: 0.59148}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_traced_material.py::test_four_magnetic_bodies_differentiate_eps_mu_and_size
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[3] (Prism(vertices=((-0.25, -0.21), (0.18, -0.24), (0.28, -0.03), (0.02, 0.04), (-0.04, 0.27), (-0.24, 0.14)), height=0.49000099999999996, axis='z', center=(2.117, -0.019, 0.013), angle=-23.0)) is 4.9 cells across its smallest extent (0.490001); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0612501 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_traced_material.py::test_four_magnetic_bodies_differentiate_eps_mu_and_size
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: SubpixelAccuracyWarning: Smoothed structures use adjoint inverse-material cross coupling. The controlled glass-sphere study measured convergence order 2.023 (epsilon=2.25, radius/wavelength=0.25, 20/28/40 vacuum cells per wavelength, three placements). Production validation across contrasts is incomplete. This benchmark is not an error bound for this scene. Validate its observables under refinement; exact voxel volume alone does not guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this rule has not passed the stage-4 Mie gate, which discretization='stencil' passed (C3). The cross terms of a body other than the sphere (fd.Box, fd.Cylinder, fd.Prism, or a custom body) use a nearest-surface tangent normal. At their common sampling points its squared components differ from the supplied diagonal normal moment by maxima {Box: 1, Cylinder: 0.984109, Prism: 0.591473}. These are measured geometry-proxy discrepancies, not bounds on electromagnetic error. Beyond the sphere, only the unturned fd.Box has a convergence gate of its own -- its planar faces, against the exact Airy slab (G5); turned faces, curved sides, creases and CSG cross moments are unvalidated.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_traced_material.py::test_four_magnetic_bodies_differentiate_eps_mu_and_size
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[3] (Prism(vertices=((-0.25, -0.21), (0.18, -0.24), (0.28, -0.03), (0.02, 0.04), (-0.04, 0.27), (-0.24, 0.14)), height=0.489999, axis='z', center=(2.117, -0.019, 0.013), angle=-23.0)) is 4.9 cells across its smallest extent (0.489999); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0612499 reaches 8.
+    return fn(*args, **kwargs)
+
+tests/fdtd/test_fd_traced_material.py::test_a_smoothed_body_differentiates_its_material_through_run
+  /home/user/wavebit/src/wavebit/_common/backend.py:62: CoarseMeshWarning: structures[0] (Sphere(radius=0.33, center=(0.031, -0.017, 0.012))) is 6.6 cells across its smallest extent (0.66); between 4 and 8, study S2b measured an eps-12 body's polarizability within 9.2% -- a sphere's between +1.2% and +6.3% by where the grid falls -- against 2.7% for every body tried at 8. dx <= 0.0825 reaches 8.
+    return fn(*args, **kwargs)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/fdtd/test_fd_junction_physics.py::test_public_solver_reproduces_the_measured_study[0]
+FAILED tests/fdtd/test_fd_junction_physics.py::test_public_solver_reproduces_the_measured_study[1]
+FAILED tests/fdtd/test_fd_metasurface.py::test_a_metasurface_cell_repeats_its_campaign_row_and_its_distance_from_rcwa[M1-20-p]
+FAILED tests/fdtd/test_fd_metasurface.py::test_a_metasurface_cell_repeats_its_campaign_row_and_its_distance_from_rcwa[M2-25-s]
+FAILED tests/fdtd/test_fd_cylinder_grad.py::test_all_five_public_geometry_derivatives_match_numpy[jax-y]
+FAILED tests/fdtd/test_fd_cylinder_grad.py::test_all_five_public_geometry_derivatives_match_numpy[torch-y]
+FAILED tests/fdtd/test_fd_shapes.py::test_the_plane_is_the_cylinders_moment_and_this_is_what_that_costs
+FAILED tests/fdtd/test_fd_shapes.py::test_a_crease_is_where_w_jumps_and_this_is_how_far
+FAILED tests/fdtd/test_fd_shapes.py::test_the_cap_rims_steep_gradient_is_the_planes_own_derivative
+FAILED tests/fdtd/test_fd_shapes.py::test_w_vanishes_only_where_the_fill_is_already_decided
+10 failed, 1457 passed, 8 skipped, 665 warnings in 5974.39s (1:39:34)
