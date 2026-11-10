@@ -186,7 +186,7 @@ rectangle `power_region`, as a Gaussian beam does.
 
 | Field | Default | Accepts | Refuses |
 | --- | --- | --- | --- |
-| `position` | required | `(x, y, z)`, inside a uniform layer: no regions, or a raster of one material | not three components: `source.dimension`, at construction; a host layer that is not uniform: `rcwa.invalid`, at run |
+| `position` | required | `(x, y, z)`, inside a uniform layer: no regions, or a raster of one material | not three components: `source.dimension`, at construction; a host layer that is not uniform (regions, or a raster of more than one value): `source.host_layer` at `excitation.sources[i]`, at check |
 | `moment` | required | `(px, py, pz)`, complex, in C·m | not three components: `source.dimension` |
 | `repetition` | `'periodic'` | `'periodic'`, one dipole per cell; or `'isolated'`, one dipole, by Brillouin-zone quadrature | anything else: `source.repetition`, at construction |
 | `bloch_k` | `None`, zero | periodic only: `(kx, ky)`, the phase between copies; reduced by reciprocal lattice vectors into the cell centred on the origin, since `bloch_k + G` is the same array | beside `repetition='isolated'`: `rcwa.invalid`, at check |
@@ -372,7 +372,7 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 | `scene` | `scene.type`, `scene.structure_name`, `scene.structure_name_duplicate` | `fdtd` |
 | `shape` | `shape.type`, `shape.dimension`, `shape.value`, `shape.outline`, `shape.vertices` | `rcwa`, `fdtd` (`shape.type`; `shape.dimension` for a `SnappedSlab` span or `SnappedBox` size its constructor refuses) |
 | `snapshots` | `snapshots.every`, `snapshots.components`, `snapshots.slices` | `fdtd.native`, `fdtd.periodic` |
-| `source` | `source.type`, `source.name`, `source.name_duplicate`, `source.pulse`, `source.plane`, `source.plane_span`, `source.box`, `source.outside_domain`, `source.waveform_range`; `source.amplitude`, `source.direction`, `source.polarization_value`; `source.side`, `source.repetition`, `source.dimension`, `source.direction_ambiguous`, `source.polarization`, `source.polarization_shape`, `source.weights`, `source.weights_duplicate`, `source.angular_spectrum_extent` | `fdtd`; `rcwa` and `fdtd.periodic`; `rcwa` |
+| `source` | `source.type`, `source.name`, `source.name_duplicate`, `source.pulse`, `source.plane`, `source.plane_span`, `source.box`, `source.outside_domain`, `source.waveform_range`; `source.amplitude`, `source.direction`, `source.polarization_value`; `source.side`, `source.repetition`, `source.dimension`, `source.direction_ambiguous`, `source.polarization`, `source.polarization_shape`, `source.weights`, `source.weights_duplicate`, `source.angular_spectrum_extent`, `source.host_layer` (an `ElectricDipole` in a layer that is not one material) | `fdtd`; `rcwa` and `fdtd.periodic`; `rcwa` |
 | `stack` | `stack.layers`, `stack.period`, `stack.cell_ambiguous`, `stack.mixed_layer_encoding` | `rcwa`, `fdtd.periodic` |
 | `structure` | `structure.component` (`None` on a scalar layer, one xyz pair such as `'xy'` on a tensor one), `structure.concrete`, `structure.layer`, `structure.nonfinite`, `structure.quantity`, `structure.samples`, `structure.wavelength` | `rcwa.sample_structure` |
 | `units` | `units.type`, `units.length` | every solver |

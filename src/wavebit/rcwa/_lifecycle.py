@@ -242,6 +242,40 @@ def _refuse_unreadable_power_region(problem, execution, solvers):
             expected=_POWER_REGIONS, actual=region)
 
 
+def _refuse_patterned_dipole_host(problem, execution, solvers):
+    """Refuse an ``ElectricDipole`` whose host layer is not one material, before anything runs.
+
+    The engine expands a dipole in the modes of a uniform layer and refuses one in a layer with
+    regions, or in a raster of more than one value, only when it solves (``rcwa.invalid`` at
+    ``problem``). The host layer and the uniformity are the engine's own, read from the scene
+    ``_resolve`` built at each wavelength. A dipole outside every layer, or on an interface, is
+    left to the run, which refuses it first.
+    """
+    from ._engine.source_expansion import dipole_host_layer, uniform_host_layer
+    dipoles = [(i, s) for i, s in enumerate(problem.excitation.sources) if isinstance(s, ElectricDipole)]
+    if not dipoles:
+        return
+    for solver in solvers:
+        scene = _engine_scene(solver)
+        with execution._scope(), scene._device_scope():
+            edges = np.r_[0., np.cumsum([float(np.real(_adapt.host(d, 'stack.layers.thickness')))
+                                         for d in scene.thickness])]
+            for i, dipole in dipoles:
+                z = float(np.real(_adapt.host(dipole.position, f'excitation.sources[{i}].position')[2]))
+                try:
+                    li = dipole_host_layer(edges, z, 1e-12*max(1., edges[-1]))
+                except ValueError:
+                    return
+                if not uniform_host_layer(scene, li):
+                    raise ValidationError(
+                        f'excitation.sources[{i}] is an ElectricDipole at z={z!r}, inside '
+                        f'stack.layers[{li}], which is not one material: a dipole is expanded in '
+                        'the modes of a uniform layer. Put it in a layer with no regions (or a '
+                        'raster of one value), or add a thin uniform layer around it.',
+                        code='source.host_layer', path=f'excitation.sources[{i}]',
+                        expected='a uniform host layer', actual=f'stack.layers[{li}]')
+
+
 def _report(problem, numerics, execution, solvers):
     scene = _engine_scene(solvers[0])
     window = tuple(tuple(v) for v in scene.order_window)
@@ -309,6 +343,7 @@ def check(problem, *, numerics, backend='numpy', device='cpu', precision='double
         _refuse_aliasing_grid(numerics, solvers)
         _refuse_unbounded_power_region(problem)
         _refuse_unreadable_power_region(problem, execution, solvers)
+        _refuse_patterned_dipole_host(problem, execution, solvers)
         return _report(problem, numerics, execution, solvers)
     except (ValidationError, TypeError, ValueError, NotImplementedError) as error:
         return CheckReport(issues=(_issue(error),))
@@ -586,6 +621,7 @@ def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='doub
         _refuse_aliasing_grid(numerics, solvers)
         _refuse_unbounded_power_region(problem)
         _refuse_unreadable_power_region(problem, execution, solvers)
+        _refuse_patterned_dipole_host(problem, execution, solvers)
         report = _report(problem, numerics, execution, solvers)
         partitions = _partition_guards(problem, solvers)
         host_topology = None
