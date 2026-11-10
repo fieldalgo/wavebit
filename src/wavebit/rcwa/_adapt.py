@@ -631,6 +631,9 @@ def validate_values(problem):
                 raise ValidationError('Source amplitude must be finite; a single incident plane wave must be nonzero.',
                                       code='source.amplitude', path=f'excitation.sources[{i}].amplitude')
         for name in ('theta', 'phi'):
+            # A NaN or an infinity is refused as every other non-finite input is, scalar or
+            # array, before the one-direction rule below would call it a direction.
+            _refuse_nonfinite_angle(getattr(source, name, None), f'excitation.sources[{i}].{name}')
             # One direction per source. An array here was read by the engine as one angle per
             # retained order whenever its length happened to broadcast against them, and the
             # run returned a mixture of incidences with every diagnostic clean.
@@ -708,6 +711,26 @@ def _refuse_raster_pair(layer, path):
                           '3x3 tensor per pixel). Resample whichever is coarser, or write the uniform '
                           'one as a full grid.', code='layer.raster_shape', path=f'{path}.mu',
                           expected=f'{pixels} or {pixels + (3, 3)}', actual=shape)
+
+
+def _refuse_nonfinite_angle(value, path):
+    """Refuse a NaN or infinite ``theta``/``phi`` as ``problem.nonfinite`` at ``path``.
+
+    Scalar or array, real or complex: the first non-finite entry is reported. It was refused as
+    ``source.direction`` (``_finite_scalar`` cannot tell "not one number" from "not finite"),
+    where every other non-finite RCWA input, and FDTD's own PlaneWave angles, are
+    ``problem.nonfinite``. A traced or unreadable value is left to the checks that follow.
+    """
+    if value is None or isinstance(value, (str, dict)) or opaque(value):
+        return
+    try:
+        a = host(value, path)
+        finite = np.isfinite(a)
+    except (TypeError, ValueError):
+        return
+    if not np.all(finite):
+        bad = a[~finite][0] if a.ndim else a
+        raise nonfinite_error(path, bad.item())
 
 
 def _finite_scalar(value, path):
