@@ -31,7 +31,7 @@ Targets: `src/wavebit/fdtd/_shapes/_bodies.py` (`Cylinder._exact_tensor`,
   M1 s moves from 2.925e-2 / 7.403e-3 / 2.095e-3 to 2.938e-2 / 7.425e-3 / 2.103e-3 in
   amplitude, at the same order (-1.902). Efficiency improves by 1-4%. The per-voxel
   moment error at the rim falls by 20-80x, but that does not show in the observables.
-* **It has a defect of its own: a point outlier at an exact cap tie.** When a cap lies
+* **All three variants share one defect: a point outlier at an exact cap tie.** When a cap lies
   exactly on a voxel face, `be` jumps by 1.2e-2 against a 1.6e-4 neighbour step. That fails
   V5's height-continuity gate (factor 50, measured 75). See "The tie outlier" below.
 * **Recommendation: keep.** Do not land any variant as the default now. If the rim
@@ -136,13 +136,23 @@ result was 9 failed, 1468 passed and 8 skipped, and all 9 pass under `plane`. On
 | `test_fd_shapes::test_a_crease_is_where_w_jumps_and_this_is_how_far` | cyl rim jump > 0.9 | 0.416 | pins the crease jump; the jump shrinks |
 | `test_fd_junction_physics::test_public_solver_reproduces_the_measured_study[0]` | atol 1e-10 | max diff 8.4e-4 (rel 4.8%) | stored junction study rows (provenance cc2ccf8761b414ba) |
 | `test_fd_junction_physics::test_public_solver_reproduces_the_measured_study[1]` | atol 1e-10 | max diff 8.4e-4 (rel 3.5%) | same |
-| `test_fd_junction_physics::test_height_continuity_includes_the_exact_ties[0.0-cylinder]` | max jump <= 50 x median | 1.21e-2 vs 50 x 1.60e-4 = 8.0e-3 | **a defect of `split`**, not a pin; see below |
+| `test_fd_junction_physics::test_height_continuity_includes_the_exact_ties[0.0-cylinder]` | max jump <= 50 x median | 1.21e-2 vs 50 x 1.60e-4 = 8.0e-3 | **a defect of the exact cap moment** (all three variants), not a pin; see below |
 | `test_fd_metasurface::...[M1-20-p]` | atol 1e-10 | max diff 1.3e-4 (`r -1 0 r_s`) | `tests/references/fd_metasurface_current_rows.json` |
 | `test_fd_metasurface::...[M2-25-s]` | atol 1e-10 | max diff 7.6e-4 (`r 0 0 r_s`) | same archive |
 | `examples/fdtd/pillar_gradient.py` (examples smoke job) | atol 5e-5 | dT/dR off by 7.9e-3 | the example's own assert |
 
 Under `rim` and `exact`, the same eight tests were rerun (`records/tests_failing_*.txt`):
-RIM_EXACT_RESULT
+the same eight fail under both, by similar amounts:
+
+* junction rows: `rim` max diff 8.4e-4, `exact` 7.3e-4
+* M2-25-s: `rim` 7.8e-4, `exact` 6.4e-4
+* M1-20-p: `rim` 1.3e-4, `exact` 1.2e-4
+* height tie: 1.20e-2 under both
+* plane-cost gap: 1.4e-3 under both
+* crease jump: 0.415 under both
+* rim slope: 0.327 under both
+
+All eight pass under `plane` (`records/tests_failing_plane.txt`).
 
 Not run: the remaining 9,100 or so tests in `tests/fdtd` and `tests/api` that do not
 mention a cylinder, and the research-marked tests.
@@ -150,7 +160,8 @@ mention a cylinder, and the research-marked tests.
 ### The tie outlier
 
 `test_height_continuity_includes_the_exact_ties[0.0-cylinder]` moves a pillar through a
-grid plane in 41 steps of 1e-3 dx. Under `split`, `be` at the exact tie differs from both
+grid plane in 41 steps of 1e-3 dx. It fails the same way under `rim` and `exact` (1.20e-2),
+so the outlier belongs to the exact cap moment, not to `split`'s side wall. Under `split`, `be` at the exact tie differs from both
 one-sided limits (+/-1e-9) by 1.2e-2. Under `plane` the difference is 1.6e-4. The cause is
 the hard selection between `plane` (`caps == 0`) and the split moment (`caps > 0`):
 
@@ -209,7 +220,7 @@ COST_TABLE
 1. The only demonstrated benefit is the gradient at an exactly aligned rim. That is a
    measure-zero set, reachable by rounding. Elsewhere `split`'s gradients agree with
    `plane`'s to a few percent, and its observables to 1e-3.
-2. `split` introduces a tie outlier of its own that fails an existing continuity gate. It
+2. Every variant, `split` included, introduces a tie outlier that fails an existing continuity gate. It
    would swap a known, pinned, documented spike for a new one.
 3. `rim` and `exact` remove the 1/delta spike but add a 1/sqrt(delta) one on the other side
    of tangency, so they are not fixes.

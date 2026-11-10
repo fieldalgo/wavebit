@@ -1,0 +1,1 @@
+occupancy plane numpy 0.0611s  jax 0.2895s  torch 0.0905s  peak RSS 512 MB

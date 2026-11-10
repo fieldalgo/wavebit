@@ -9,4 +9,110 @@ timeout func_only: False
 created: 2/2 workers
 2 workers [8 items]
 
-F
+FFFFFFFF                                                                 [100%]
+=================================== FAILURES ===================================
+[gw0] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+E   AssertionError: 
+    Not equal to tolerance rtol=0, atol=1e-10
+    
+    Mismatched elements: 6 / 6 (100%)
+    First 5 mismatches are at indices:
+     [0, 0]: -0.03408062003488274 (ACTUAL), -0.03335594884026219 (DESIRED)
+     [0, 1]: 0.05771532928888994 (ACTUAL), 0.057433600751094355 (DESIRED)
+     [1, 0]: -0.01741950515958821 (ACTUAL), -0.016782061224882978 (DESIRED)
+     [1, 1]: 0.009360084873785922 (ACTUAL), 0.009019897053500004 (DESIRED)
+     [2, 0]: -0.02893859970608012 (ACTUAL), -0.028378352612421033 (DESIRED)
+    Max absolute difference among violations: 0.00072467
+    Max relative difference among violations: 0.03798365
+     ACTUAL: array([[-0.034081,  0.057715],
+           [-0.01742 ,  0.00936 ],
+           [-0.028939, -0.034238]])
+     DESIRED: array([[-0.033356,  0.057434],
+           [-0.016782,  0.00902 ],
+           [-0.028378, -0.034601]])
+/home/user/wavebit/tests/fdtd/test_fd_junction_physics.py:41: AssertionError:
+[gw0] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+E   AssertionError: 
+    Not equal to tolerance rtol=0, atol=1e-10
+    
+    Mismatched elements: 6 / 6 (100%)
+    First 5 mismatches are at indices:
+     [0, 0]: -0.04045806942507261 (ACTUAL), -0.03973181296827941 (DESIRED)
+     [0, 1]: 0.059874836582348365 (ACTUAL), 0.059592652388811056 (DESIRED)
+     [1, 0]: -0.021139616501985734 (ACTUAL), -0.02050065924540975 (DESIRED)
+     [1, 1]: 0.014044667352695292 (ACTUAL), 0.013703674820957877 (DESIRED)
+     [2, 0]: -0.02976449938887503 (ACTUAL), -0.029203179187616925 (DESIRED)
+    Max absolute difference among violations: 0.00072626
+    Max relative difference among violations: 0.03116764
+     ACTUAL: array([[-0.040458,  0.059875],
+           [-0.02114 ,  0.014045],
+           [-0.029764, -0.028951]])
+     DESIRED: array([[-0.039732,  0.059593],
+           [-0.020501,  0.013704],
+           [-0.029203, -0.029316]])
+/home/user/wavebit/tests/fdtd/test_fd_junction_physics.py:41: AssertionError:
+[gw1] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+E   AssertionError: array([0.00016038, 0.00016038, 0.00016038, 0.00016038, 0.00016038,
+             0.00016038, 0.00016038, 0.00016038, 0.000160...38, 0.00016038, 0.00016038, 0.00016038, 0.00016038,
+             0.00016038, 0.00016038, 0.00016038, 0.00016038, 0.00016038])
+    assert np.float64(0.012027272446241716) <= ((50 * np.float64(0.00016037507477491275)) + 1e-12)
+     +  where np.float64(0.012027272446241716) = <built-in method max of numpy.ndarray object at 0x7f2d0bec9bf0>()
+     +    where <built-in method max of numpy.ndarray object at 0x7f2d0bec9bf0> = array([0.00016038, 0.00016038, 0.00016038, 0.00016038, 0.00016038,\n       0.00016038, 0.00016038, 0.00016038, 0.000160...38, 0.00016038, 0.00016038, 0.00016038, 0.00016038,\n       0.00016038, 0.00016038, 0.00016038, 0.00016038, 0.00016038]).max
+     +  and   np.float64(0.00016037507477491275) = <function median at 0x7f2d095676b0>(array([0.00016038, 0.00016038, 0.00016038, 0.00016038, 0.00016038,\n       0.00016038, 0.00016038, 0.00016038, 0.000160...38, 0.00016038, 0.00016038, 0.00016038, 0.00016038,\n       0.00016038, 0.00016038, 0.00016038, 0.00016038, 0.00016038]))
+     +    where <function median at 0x7f2d095676b0> = np.median
+/home/user/wavebit/tests/fdtd/test_fd_junction_physics.py:111: AssertionError: array([0.00016038, 0.00016038, 0.00016038, 0.00016038, 0.00016038,
+[gw0] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+E   AssertionError: 
+    Not equal to tolerance rtol=0, atol=1e-10
+    r|0|0|r_s
+    Mismatched elements: 3 / 3 (100%)
+    Mismatch at indices:
+     [0]: (-0.003856023676989336-0.24100110490582438j) (ACTUAL), (-0.0033953494916189896-0.24061383482476795j) (DESIRED)
+     [1]: (-0.18537751834155503-0.16315797817485408j) (ACTUAL), (-0.18534976388268865-0.16251970573402783j) (DESIRED)
+     [2]: (-0.2541811710713319-0.07547294110492471j) (ACTUAL), (-0.2540413470423175-0.07517176967991474j) (DESIRED)
+    Max absolute difference among violations: 0.00063888
+    Max relative difference among violations: 0.00259168
+     ACTUAL: array([-0.003856-0.241001j, -0.185378-0.163158j, -0.254181-0.075473j])
+     DESIRED: array([-0.003395-0.240614j, -0.18535 -0.16252j , -0.254041-0.075172j])
+/home/user/wavebit/tests/fdtd/test_fd_metasurface.py:132: AssertionError:
+[gw0] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+E   AssertionError: and the rim is what it is not
+    assert np.float64(0.0014028122173050939) > 0.3
+     +  where np.float64(0.0014028122173050939) = <built-in method max of numpy.ndarray object at 0x7f9cbeedbd50>()
+     +    where <built-in method max of numpy.ndarray object at 0x7f9cbeedbd50> = array([[5.89026698e-05, 8.60999780e-05, 1.45002648e-04],\n       [5.74469436e-05, 8.60238163e-05, 1.43470760e-04],\n    ...6952159e-07, 8.30937570e-06, 8.57632786e-06],\n       [1.19899944e-07, 8.31073072e-06, 8.43063066e-06]], shape=(456, 3)).max
+/home/user/wavebit/tests/fdtd/test_fd_shapes.py:1076: AssertionError: and the rim is what it is not
+[gw0] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+E   AssertionError: (0.001, array([0.00096355, 0.00045352]))
+    assert np.float64(0.32673645276899693) < 0.002
+     +  where np.float64(0.32673645276899693) = abs((np.float64(0.000963547231003062) - 0.3277))
+/home/user/wavebit/tests/fdtd/test_fd_shapes.py:1277: AssertionError: (0.001, array([0.00096355, 0.00045352]))
+[gw1] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+E   AssertionError: 
+    Not equal to tolerance rtol=0, atol=1e-10
+    r|-1|0|r_s
+    Mismatched elements: 3 / 3 (100%)
+    Mismatch at indices:
+     [0]: (0.0003808514791185991-0.0001478908144114218j) (ACTUAL), (0.00033866394225578344-3.684619579840738e-05j) (DESIRED)
+     [1]: (-0.00010849121608059385-0.0006362637303746789j) (ACTUAL), (-6.529207082861055e-05-0.000582433864724535j) (DESIRED)
+     [2]: (-0.0006364625562618464-8.014351142039652e-05j) (ACTUAL), (-0.0006199749968625215-5.466646966349347e-05j) (DESIRED)
+    Max absolute difference among violations: 0.00011879
+    Max relative difference among violations: 0.34869839
+     ACTUAL: array([ 0.000381-1.478908e-04j, -0.000108-6.362637e-04j,
+           -0.000636-8.014351e-05j])
+     DESIRED: array([ 3.386639e-04-3.684620e-05j, -6.529207e-05-5.824339e-04j,
+           -6.199750e-04-5.466647e-05j])
+/home/user/wavebit/tests/fdtd/test_fd_metasurface.py:132: AssertionError:
+[gw1] linux -- Python 3.12.3 /home/user/wavebit/.venv/bin/python
+E   AssertionError: ('cyl rim', np.float64(0.4150090875852605))
+    assert np.float64(0.4150090875852605) > 0.9
+/home/user/wavebit/tests/fdtd/test_fd_shapes.py:1168: AssertionError: ('cyl rim', np.float64(0.4150090875852605))
+=========================== short test summary info ============================
+FAILED tests/fdtd/test_fd_junction_physics.py::test_public_solver_reproduces_the_measured_study[0]
+FAILED tests/fdtd/test_fd_junction_physics.py::test_public_solver_reproduces_the_measured_study[1]
+FAILED tests/fdtd/test_fd_junction_physics.py::test_height_continuity_includes_the_exact_ties[0.0-cylinder]
+FAILED tests/fdtd/test_fd_metasurface.py::test_a_metasurface_cell_repeats_its_campaign_row_and_its_distance_from_rcwa[M2-25-s]
+FAILED tests/fdtd/test_fd_shapes.py::test_the_plane_is_the_cylinders_moment_and_this_is_what_that_costs
+FAILED tests/fdtd/test_fd_shapes.py::test_the_cap_rims_steep_gradient_is_the_planes_own_derivative
+FAILED tests/fdtd/test_fd_metasurface.py::test_a_metasurface_cell_repeats_its_campaign_row_and_its_distance_from_rcwa[M1-20-p]
+FAILED tests/fdtd/test_fd_shapes.py::test_a_crease_is_where_w_jumps_and_this_is_how_far
+======================== 8 failed in 121.13s (0:02:01) =========================
