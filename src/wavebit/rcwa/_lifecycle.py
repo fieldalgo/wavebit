@@ -186,13 +186,48 @@ def _refuse_unbounded_power_region(problem):
                 expected='((xmin, xmax), (ymin, ymax))', actual=region)
 
 
+def _short_tensor_grid(numerics, solvers):
+    """The ``numerics.grid`` warning for a stated grid below the floor that a tensor layer reads.
+
+    ``_refuse_aliasing_grid`` refuses such a grid wherever a build checks it against the floor.
+    A tensor-material region layer reads it without that floor (its own normal-field
+    interpolation, and its painted regions under ``fourier_coefficients='sampled'``), so it runs;
+    this says so. ``None`` when there is nothing to warn about.
+    """
+    from ..errors import Issue
+    grid = numerics.shape_nvf_grid_size
+    scene = _engine_scene(solvers[0])
+    if (grid is None or scene.factorization.value != 'nvf' or scene.modeling_path != 'parametric'
+            or not scene._has_tensor_materials()):
+        return None
+    (_, half_u), (_, half_v) = scene.order_window
+    need = max(4*half_u + 1, 4*half_v + 1)
+    layers = [i for i, layer in enumerate(scene.structure or ()) if layer.get('shapes')]
+    if grid >= need or not layers:
+        return None
+    return Issue(
+        code='numerics.grid', severity='warning', path='numerics.shape_nvf_grid_size',
+        expected=f'>= {need}', actual=grid,
+        message=f'shape_nvf_grid_size={grid} is below 4*max(orders)+1 = {need} at Numerics(orders='
+                f'({half_u}, {half_v})). A scalar shape layer refuses that grid; '
+                f'{", ".join(f"stack.layers[{i}]" for i in layers)} '
+                f'{"holds" if len(layers) == 1 else "hold"} tensor-material regions, which read it '
+                'without that floor, so this runs. Measured against the default grid, R and T moved by up to 2.6e-2 per order '
+                "below the floor (1.3e-1 under fourier_coefficients='sampled'), and material "
+                'gradients by more than 100% at most grids tested, at some with the wrong sign. Leave '
+                'shape_nvf_grid_size=None, or check convergence in the grid; see '
+                'wavebit.rcwa.diagnostics.ShapeGridWarning.')
+
+
 def _report(problem, numerics, execution, solvers):
     scene = _engine_scene(solvers[0])
     window = tuple(tuple(v) for v in scene.order_window)
     modes = (2*window[0][1]+1)*(2*window[1][1]+1)
     cbytes = 16 if execution.precision == 'double' else 8
     single = _adapt.single_plane(problem)
+    warning = _short_tensor_grid(numerics, solvers)
     return CheckReport(
+        issues=() if warning is None else (warning,),
         estimates={'retained_spatial_modes': modes,
                    'one_dense_material_matrix_bytes': modes*modes*cbytes,
                    'one_first_order_matrix_bytes': (4*modes)**2*cbytes,
@@ -255,6 +290,22 @@ def check(problem, *, numerics, backend='numpy', device='cpu', precision='double
         return _report(problem, numerics, execution, solvers)
     except (ValidationError, TypeError, ValueError, NotImplementedError) as error:
         return CheckReport(issues=(_issue(error),))
+
+
+def _warn(report):
+    """Emit each warning issue of a preparation's report as its diagnostics category."""
+    import os
+    import sys
+    import warnings
+    from .diagnostics import ShapeGridWarning
+    # Attributed to the caller's line, past this package and torch.compile's wrapper frames.
+    skip = [os.path.dirname(os.path.dirname(os.path.abspath(__file__)))]
+    dynamo = sys.modules.get('torch._dynamo')
+    if dynamo is not None:
+        skip.append(os.path.dirname(os.path.abspath(dynamo.__file__)))
+    for issue in report.issues:
+        if issue.severity == 'warning' and issue.code == 'numerics.grid':
+            warnings.warn(issue.message, ShapeGridWarning, skip_file_prefixes=tuple(skip))
 
 
 def _refuse_missing_contourpy(numerics):
@@ -529,6 +580,7 @@ def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='doub
         _refuse_aliasing_grid(numerics, solvers)
         _refuse_unbounded_power_region(problem)
         report = _report(problem, numerics, execution, solvers)
+        _warn(report)
         partitions = _partition_guards(problem, solvers)
         host_topology = None
         if numerics.topology_check == 'host':
