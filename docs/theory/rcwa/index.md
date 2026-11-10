@@ -23,5 +23,6 @@ The public `wavebit.rcwa` module is introduced in the [RCWA guide](../../guide/r
 - [Non-orthogonal (oblique) unit cells — what `lattice` does and what it costs](oblique-lattice.md)
 - [The off-diagonal permittivity slots — what they hold, and why an asymmetric tensor came out wrong](off-diagonal-slot-convention.md)
 - [Patterned anisotropic layers — the Popov–Nevière factorization](patterned-anisotropic-factorization.md)
+- [Scalar shape NVF on a short grid — why the floor was needed, and why it no longer is](scalar-nvf-short-grid-study.md)
 - [Rayleigh points — the exact graze, which paths solve it, and what `auto_detune` does](rayleigh-points.md)
 - [Li factorization for anisotropic materials](tensor-li-factorization.md)
