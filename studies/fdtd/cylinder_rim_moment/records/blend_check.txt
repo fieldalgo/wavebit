@@ -1,8 +1,8 @@
-switch: 121962 voxels beyond reach; worst |split - plane| in area or moment: 5.20e-16 dx^2
-plane height through a face: worst |dw| per 1e-04 dx step 1.00e+00 (median 1.01e-04); worst jump in dw/dvar (2nd diff / step) 1.00e+05
-plane radius through a face: worst |dw| per 1e-04 dx step 1.00e+00 (median 1.26e-04); worst jump in dw/dvar (2nd diff / step) 1.00e+05
-split height through a face: worst |dw| per 1e-04 dx step 1.00e+00 (median 3.97e-03); worst jump in dw/dvar (2nd diff / step) 1.00e+05
-split radius through a face: worst |dw| per 1e-04 dx step 1.00e+00 (median 1.65e-04); worst jump in dw/dvar (2nd diff / step) 1.00e+05
+switch: 140871 voxels beyond reach; worst |split - plane| in area or moment: 5.20e-16 dx^2
+plane height through a face: worst |d(f(1-f)w)| per 1e-04 dx step 9.23e-02 (median 9.96e-05); worst jump in its slope (2nd diff / step) 9.22e+03
+plane radius through a face: worst |d(f(1-f)w)| per 1e-04 dx step 4.10e-02 (median 9.65e-05); worst jump in its slope (2nd diff / step) 4.11e+03
+split height through a face: worst |d(f(1-f)w)| per 1e-04 dx step 7.26e-04 (median 9.99e-05); worst jump in its slope (2nd diff / step) 1.00e+01
+split radius through a face: worst |d(f(1-f)w)| per 1e-04 dx step 8.41e-02 (median 9.65e-05); worst jump in its slope (2nd diff / step) 8.41e+03
 plane H tie +1e-06: JAX -4.456936e+02 -5.790768e+02 |JAX-Torch| 8.0e-13  CD -2.475533e+07 -5.790768e+02
 plane H tie +1e-09: JAX -4.457061e+02 -5.794171e+02 |JAX-Torch| 4.0e-13
 plane H tie +1e-16: JAX -4.457061e+02 -5.794175e+02 |JAX-Torch| 1.1e-13
@@ -10,10 +10,10 @@ plane H tie +0e+00: JAX -4.457061e+02 -4.164205e+02 |JAX-Torch| 5.7e-14  CD -9.6
 plane H tie -1e-16: JAX -4.165768e+02 +9.061185e+02 |JAX-Torch| 2.8e-13
 plane H tie -1e-09: JAX -4.165768e+02 +9.061184e+02 |JAX-Torch| 5.7e-14
 plane H tie -1e-06: JAX -4.165676e+02 +9.060875e+02 |JAX-Torch| 7.4e-13  CD -3.025639e+07 +9.060875e+02
-split H tie +1e-06: JAX -3.569356e+02 -6.078990e+02 |JAX-Torch| 5.1e-13  CD +1.988681e+07 -6.078990e+02
-split H tie +1e-09: JAX -3.569470e+02 -7.799167e+01 |JAX-Torch| 0.0e+00
+split H tie +1e-06: JAX -3.569356e+02 -5.975039e+02 |JAX-Torch| 1.7e-13  CD +1.988681e+07 -5.975039e+02
+split H tie +1e-09: JAX -3.569470e+02 -7.798127e+01 |JAX-Torch| 3.4e-13
 split H tie +1e-16: JAX -3.569470e+02 -7.799175e+01 |JAX-Torch| 4.0e-13
-split H tie +0e+00: JAX -3.569470e+02 -5.555985e+01 |JAX-Torch| 4.5e-13  CD +1.438604e+07 +8.420765e+01
+split H tie +0e+00: JAX -3.569470e+02 -5.555985e+01 |JAX-Torch| 4.5e-13  CD +1.438604e+07 +8.413998e+01
 split H tie -1e-16: JAX -3.569470e+02 +1.173584e+01 |JAX-Torch| 1.1e-13
-split H tie -1e-09: JAX -3.569470e+02 +2.464075e+02 |JAX-Torch| 2.3e-13
-split H tie -1e-06: JAX -3.569411e+02 +7.759669e+02 |JAX-Torch| 4.0e-13  CD +1.438636e+07 +7.759669e+02
+split H tie -1e-09: JAX -3.569470e+02 +2.463429e+02 |JAX-Torch| 1.1e-13
+split H tie -1e-06: JAX -3.569432e+02 +7.299242e+02 |JAX-Torch| 4.5e-13  CD +1.438686e+07 +7.299243e+02
