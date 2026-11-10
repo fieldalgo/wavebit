@@ -1,0 +1,2 @@
+cylinder tie 0.0: max jump 1.604e-04, median 1.604e-04, ratio 1.00 (gate 50)
+cylinder tie 0.5: max jump 3.604e-04, median 2.521e-04, ratio 1.43 (gate 50)
