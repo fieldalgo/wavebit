@@ -13,7 +13,9 @@ Actions queue is separate from a PR merge queue.
 Full Linux acceptance includes the default/slow partitions, examples and docs.
 The independent distribution matrix builds an sdist and wheel, installs outside
 the source tree and checks public NumPy RCWA/FDTD use, bundled data and plotting
-on Linux, macOS and Windows with Python 3.12. A platform smoke pass does not imply
+on Linux, macOS and Windows with Python 3.12 and 3.13. The rest of CI runs Python 3.12
+only, so 3.13 is checked for installing and running these smokes, not for the numerical
+suite. A platform smoke pass does not imply
 that all optional backends or the full numerical suite passed on that OS. Inspect
 the exact commit's checks and artifacts before reporting validation or release
 readiness. The [contribution guide](https://github.com/fieldalgo/wavebit/blob/main/CONTRIBUTING.md) and development documents
