@@ -1,0 +1,40 @@
+== plane
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  res = _solve(scene, p, rt, rows)
+Consider using tensor.detach() first. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:820.)
+T00=0.980767387076 grad=[ 0.19333385 -0.08175337  0.00625126] pinned=(.1933,-.0818,.00625) atol 5e-5 pass=True
+== rim
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  res = _solve(scene, p, rt, rows)
+Consider using tensor.detach() first. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:820.)
+T00=0.980719988461 grad=[ 0.18512591 -0.0824359   0.00618419] pinned=(.1933,-.0818,.00625) atol 5e-5 pass=False
+== split
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  res = _solve(scene, p, rt, rows)
+Consider using tensor.detach() first. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:820.)
+T00=0.980720500011 grad=[ 0.18542885 -0.08235239  0.00618525] pinned=(.1933,-.0818,.00625) atol 5e-5 pass=False
+== exact
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  return fn(*args, **kwargs)
+  res = _solve(scene, p, rt, rows)
+Consider using tensor.detach() first. (Triggered internally at /__w/pytorch/pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:820.)
+T00=0.980731994721 grad=[ 0.18644029 -0.08243956  0.00619939] pinned=(.1933,-.0818,.00625) atol 5e-5 pass=False

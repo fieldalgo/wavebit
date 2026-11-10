@@ -1,0 +1,2 @@
+{"key": "scene=M1|n=20|pol=s|periods=120|backend=numpy", "status": "ok", "wall": 38.2}
+{"key": "scene=M1|n=20|pol=p|periods=120|backend=numpy", "status": "ok", "wall": 36.1}
