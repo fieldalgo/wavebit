@@ -906,3 +906,18 @@ tests/fdtd/test_fd_constitutive.py::test_closed_electric_and_magnetic_coupling_c
 [gw0] [ 30%] PASSED tests/fdtd/test_fd_constitutive.py::test_closed_electric_and_magnetic_coupling_conserves_energy[jit] 
 tests/fdtd/test_fd_constitutive.py::test_closed_electric_and_magnetic_coupling_conserves_energy[torch] 
 [gw0] [ 30%] PASSED tests/fdtd/test_fd_constitutive.py::test_closed_electric_and_magnetic_coupling_conserves_energy[torch] 
+tests/fdtd/test_fd_constitutive.py::test_coupled_initial_field_is_refused_before_lowering[E] 
+[gw0] [ 30%] PASSED tests/fdtd/test_fd_constitutive.py::test_coupled_initial_field_is_refused_before_lowering[E] 
+tests/fdtd/test_fd_constitutive.py::test_coupled_initial_field_is_refused_before_lowering[H] 
+[gw0] [ 30%] PASSED tests/fdtd/test_fd_constitutive.py::test_coupled_initial_field_is_refused_before_lowering[H] 
+tests/fdtd/test_fd_constitutive.py::test_check_counts_the_compact_flux_memory 
+[gw0] [ 30%] PASSED tests/fdtd/test_fd_constitutive.py::test_check_counts_the_compact_flux_memory 
+tests/fdtd/test_fd_constitutive.py::test_wall_projection_and_finite_interpolation_preserve_energy[center0] 
+[gw0] [ 30%] PASSED tests/fdtd/test_fd_constitutive.py::test_wall_projection_and_finite_interpolation_preserve_energy[center0] 
+tests/fdtd/test_fd_constitutive.py::test_wall_projection_and_finite_interpolation_preserve_energy[center1] 
+[gw0] [ 30%] PASSED tests/fdtd/test_fd_constitutive.py::test_wall_projection_and_finite_interpolation_preserve_energy[center1] 
+tests/fdtd/test_fd_constitutive.py::test_coupled_material_gradient_matches_central_differences[jax] 
+[gw1] [ 30%] PASSED tests/fdtd/test_fd_box_grad.py::test_all_six_size_and_center_derivatives_match_numpy[jax-y] 
+tests/fdtd/test_fd_box_grad.py::test_all_six_size_and_center_derivatives_match_numpy[jax-z] 
+[gw1] [ 30%] PASSED tests/fdtd/test_fd_box_grad.py::test_all_six_size_and_center_derivatives_match_numpy[jax-z] 
+tests/fdtd/test_fd_box_grad.py::test_all_six_size_and_center_derivatives_match_numpy[torch-unturned] 
