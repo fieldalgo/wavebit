@@ -1,0 +1,93 @@
+# Section (d): grid-related test files run with the prototype switch on (the pytest plugin proto_on.py, setting
+# factorization._NVF_SHORT_GRID_INTERPOLANT = True in pytest_configure).
+# Files: every tests/**/*.py matching 'shape_nvf_grid_size|normal_grid|check_normal_grid|numerics.grid|_sampled_coeffs|normal_projector_coeffs'.
+# Command per file: PYTHONPATH=studies/rcwa/scalar_nvf_short_grid python -m pytest -p proto_on -m 'not slow' -q -p no:cacheprovider <file>, OMP_NUM_THREADS=1, two files at a time.
+# Columns: pytest exit code, file, pytest's last line (rc 5 = no tests collected).
+0 tests/api/test_cell_shape_gate.py 39 passed in 9.83s
+1 tests/api/test_check_run_consistency.py 18 failed, 261 passed, 105 warnings in 30.22s
+0 tests/api/test_condition_gate.py 37 passed in 0.52s
+0 tests/api/test_host_shape_topology.py 15 passed in 292.75s (0:04:52)
+0 tests/api/test_study_bootstrap.py 34 passed, 3 skipped in 8.04s
+0 tests/api/test_unified_rcwa.py 100 passed, 2 warnings in 139.07s (0:02:19)
+0 tests/common/test_lattice_pytree.py 93 passed, 3 warnings in 273.72s (0:04:33)
+5 tests/fdtd/test_general_cuda_dipole_radiation.py 14 deselected in 0.07s
+0 tests/fdtd/test_public_grazing_guidance.py 12 passed, 6 warnings in 0.84s
+0 tests/fdtd/test_public_names.py 40 passed in 2.50s
+5 tests/fixtures/rcwa/contact_instruments.py no tests ran in 0.01s
+0 tests/materials/test_dispersive_material.py 55 passed, 3 warnings in 102.07s (0:01:42)
+0 tests/materials/test_tensor_material_api.py 34 passed in 48.07s
+1 tests/rcwa/test_boundary.py 5 failed, 94 passed, 8 warnings in 1352.97s (0:22:32)
+0 tests/rcwa/test_box_angle_gradient_multishape.py 7 passed, 2 deselected in 37.54s
+0 tests/rcwa/test_coherent_illumination.py 63 passed in 31.14s
+0 tests/rcwa/test_condition_sweep.py 145 passed in 95.82s (0:01:35)
+0 tests/rcwa/test_contact_jones_probe.py 9 passed, 1 xfailed in 77.69s (0:01:17)
+0 tests/rcwa/test_contact_reference.py 5 passed in 70.31s (0:01:10)
+0 tests/rcwa/test_ellipse_boundary_gradients.py 25 passed in 269.93s (0:04:29)
+0 tests/rcwa/test_field_geometry_precheck.py 58 passed in 306.55s (0:05:06)
+0 tests/rcwa/test_fit_geometry.py 42 passed in 1443.67s (0:24:03)
+0 tests/rcwa/test_forward_mode.py 74 passed in 866.07s (0:14:26)
+0 tests/rcwa/test_frozen_geometry.py 78 passed in 1458.31s (0:24:18)
+0 tests/rcwa/test_full_tensor_patterns.py 87 passed in 262.57s (0:04:22)
+0 tests/rcwa/test_gamma_contact_smooth.py 3 passed in 34.31s
+0 tests/rcwa/test_gamma_field.py 43 passed in 49.85s
+0 tests/rcwa/test_gamma_frozen.py 37 passed in 617.57s (0:10:17)
+0 tests/rcwa/test_gamma_layers.py 21 passed in 93.61s (0:01:33)
+0 tests/rcwa/test_gamma_plan.py 52 passed in 5.25s
+0 tests/rcwa/test_gradients.py 36 passed in 112.20s (0:01:52)
+0 tests/rcwa/test_jax_device_placement.py 4 passed, 3 skipped in 472.85s (0:07:52)
+0 tests/rcwa/test_lattice_container_solves.py 16 passed in 292.92s (0:04:52)
+0 tests/rcwa/test_laurent_factorization.py 71 passed in 58.71s
+0 tests/rcwa/test_nvf_metal_inverse_rule.py 97 passed, 1 warning in 270.69s (0:04:30)
+0 tests/rcwa/test_nvf_option_names.py 27 passed in 45.25s
+0 tests/rcwa/test_nvf_period_spanning_shape.py 26 passed in 118.75s (0:01:58)
+0 tests/rcwa/test_nvf_seam_materials.py 22 passed in 267.87s (0:04:27)
+0 tests/rcwa/test_nvf_self_coincident_faces.py 34 passed in 90.82s (0:01:30)
+0 tests/rcwa/test_oblique_lattice.py 108 passed in 311.15s (0:05:11)
+0 tests/rcwa/test_optical_scaling_gradients.py 9 passed in 103.64s (0:01:43)
+0 tests/rcwa/test_painted_circular_projector.py 14 passed, 1 warning in 220.39s (0:03:40)
+0 tests/rcwa/test_painted_material_continuity.py 24 passed, 18 warnings in 268.56s (0:04:28)
+1 tests/rcwa/test_parametric.py 1 failed, 155 passed, 1 warning in 282.66s (0:04:42)
+0 tests/rcwa/test_parametric_field_jit.py 7 passed in 114.31s (0:01:54)
+0 tests/rcwa/test_polygon_interfaces.py 29 passed in 43.34s
+0 tests/rcwa/test_polygon_region.py 55 passed, 2 deselected in 210.95s (0:03:30)
+0 tests/rcwa/test_pytree_round_trip.py 46 passed in 34.73s
+0 tests/rcwa/test_rectilinear_li.py 35 passed in 120.77s (0:02:00)
+0 tests/rcwa/test_shape_circular_projector.py 23 passed in 165.85s (0:02:45)
+0 tests/rcwa/test_shape_nvf_period_gradient.py 4 passed in 2.42s
+0 tests/rcwa/test_shape_position_gradients.py 29 passed in 138.68s (0:02:18)
+0 tests/rcwa/test_slot_order.py 28 passed in 0.85s
+0 tests/rcwa/test_solve_keywords.py 224 passed in 90.34s (0:01:30)
+0 tests/rcwa/test_tensor_curve_normals.py 75 passed, 12 warnings in 1201.16s (0:20:01)
+0 tests/rcwa/test_tensor_li.py 37 passed in 115.95s (0:01:55)
+0 tests/rcwa/test_tensor_shape_integrated.py 29 passed in 154.14s (0:02:34)
+0 tests/rcwa/test_tensor_stack_isotropic_layers.py 23 passed in 64.92s (0:01:04)
+0 tests/rcwa/test_torch_asarray_requires_grad.py 1 passed in 1.82s
+0 tests/rcwa/test_torch_vmap_autograd.py 168 passed in 42.04s
+0 tests/rcwa/test_zero_order_nvf_gradient.py 20 passed in 55.41s
+0 tests/references/test_tensor_shape_golden.py 3 passed in 68.17s (0:01:08)
+
+# Failing tests (from the per-file junit XML):
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_at_every_door[no-layers-orders0-8] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_at_every_door[no-layers-orders1-12] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_at_every_door[no-layers-orders2-4] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_at_every_door[region-orders0-8] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_at_every_door[region-orders1-12] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_at_every_door[region-orders2-4] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_at_every_door[region-free-orders0-8] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_at_every_door[region-free-orders1-12] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_at_every_door[region-free-orders2-4] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_at_every_door[tensor-beside-region-orders0-8] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_at_every_door[tensor-beside-region-orders1-12] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_at_every_door[tensor-beside-region-orders2-4] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_alike_on_each_backend[plane-wave-numpy] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_alike_on_each_backend[plane-wave-jax] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_alike_on_each_backend[plane-wave-torch] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_alike_on_each_backend[beam-numpy] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_alike_on_each_backend[beam-jax] | AssertionError: assert not True
+tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_alike_on_each_backend[beam-torch] | AssertionError: assert not True
+tests/rcwa/test_boundary.py::test_normal_grid_floor_is_enforced[3] | Failed: DID NOT RAISE ValueError
+tests/rcwa/test_boundary.py::test_normal_grid_floor_is_enforced[6] | Failed: DID NOT RAISE ValueError
+tests/rcwa/test_boundary.py::test_normal_grid_floor_is_enforced[12] | Failed: DID NOT RAISE ValueError
+tests/rcwa/test_boundary.py::test_both_shape_paths_draw_the_floor_in_the_same_place[analytic] | Failed: DID NOT RAISE ValueError
+tests/rcwa/test_boundary.py::test_both_shape_paths_draw_the_floor_in_the_same_place[boundary] | Failed: DID NOT RAISE ValueError
+tests/rcwa/test_parametric.py::test_conv_matrix_matches_grid_convention | AssertionError: the raster and analytic spellings of the sampled transform differ by 1.80e-02; a correction was applied to one of them and not the other

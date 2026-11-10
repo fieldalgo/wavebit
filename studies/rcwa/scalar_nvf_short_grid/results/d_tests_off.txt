@@ -1,0 +1,9 @@
+# Section (d): the 24 tests that fail with the prototype switch on, rerun with it off (today's code).
+# Command: python -m pytest -m 'not slow' -q -p no:cacheprovider \
+#   tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_at_every_door \
+#   tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_alike_on_each_backend \
+#   tests/rcwa/test_boundary.py::test_normal_grid_floor_is_enforced \
+#   tests/rcwa/test_boundary.py::test_both_shape_paths_draw_the_floor_in_the_same_place \
+#   tests/rcwa/test_parametric.py::test_conv_matrix_matches_grid_convention
+........................                                                 [100%]
+24 passed in 10.68s

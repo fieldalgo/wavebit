@@ -4,9 +4,12 @@ Written: 2026-11. Study only; nothing in the default arm changes. Branch
 `claude/scalar-nvf-grid-study`. Targets `src/wavebit/rcwa/_engine/parametric.py::_sampled_coeffs`,
 `factorization.check_normal_grid`, `_lifecycle._refuse_aliasing_grid`.
 
-Environment (the CI-pinned set): Python 3.12.3, NumPy 2.5.4, SciPy 1.18.1, JAX 0.12.0.1
-(`enable_x64`), PyTorch 2.14.1+cpu, contourpy 1.4.0. Scripts and raw results:
-`studies/rcwa/scalar_nvf_short_grid/` (`cases.py`, `measure.py`, `results/*.json`).
+Environment: the versions pinned in `.github/constraints/tests.txt` (NumPy 2.5.4, SciPy 1.18.1,
+JAX 0.12.0.1 with `enable_x64`, PyTorch 2.14.1+cpu, contourpy 1.4.0) on Python 3.12.3 (CI pins
+3.12), Linux x86_64, CPU only (`results/versions.json`). Scripts and raw results:
+`studies/rcwa/scalar_nvf_short_grid/` (`cases.py` and `measure.py` for (a)–(c);
+`lattice_gradients.py`, `subfloor_gradients.py` for (c); `section12_runs.py` and `proto_on.py`
+for (d); `cost_e.py` for (e); `results/*.json`, `results/*.log`, `results/*.txt`).
 
 ## The question
 
@@ -116,7 +119,10 @@ Overlap stops at grid 64 (the boundary route's cost). No solve raised an error o
   accuracy threshold. At `4M+1` the error is already 3e-5–5e-2 (14 of 20 cells within
   3e-4–2.5e-3), and even grid 256 is still 2e-8–2e-5 off the default-grid answer.
 - **Energy:** lossless cases conserve `R + T` to 1.6e-14 (orders 3) and 1.7e-13 (orders 5) at
-  every sub-floor grid on the prototype.
+  every sub-floor grid on the prototype. The tensor comparator (circle, `diag(4, 3, 2.5)`,
+  lossless) does not: `|1 - R - T|` reaches 9.8e-4 (orders 3, grid 8) and 4.5e-4 (orders 5,
+  grid 8), and is still 9.5e-5 and 7.7e-6 at grid 256 (`results/b.json`). That is the
+  integrated closure's non-Hermitian tensor, not a short-grid effect.
 - **Constant field → identity** (`M = 3`). With the interpolant, a constant field transforms to
   the identity at every grid tried (1, 2, 3, 4, 11, 12): off-diagonals ≤ 3e-17, and
   `C_xx + C_yy - I` ≤ 6.2e-17 for a random unit field. Wrapped bins give off-diagonals of
@@ -173,7 +179,7 @@ AD-versus-central-difference gap at that grid. The last column gives the default
   21 (1.3e-3) and 65 (7.6e-5), and agrees to 5e-14–5e-13 at 15, 16, 32, 64, 128 and the default.
   PyTorch backward matches the central difference to 1.7e-8–1.9e-8 at every one of those grids.
   On the square-lattice circle and pentagon and on the oblique-lattice ellipse at grids 13, 32
-  and 64, JAX and PyTorch agree to 4e-12 or better. So this is a JAX-backend gradient defect on the
+  and 64, JAX and PyTorch agree to 4.3e-12 or better. So this is a JAX-backend gradient defect on the
   hexagonal lattice in today's code, present above the floor too. It is unrelated to the floor and
   to the prototype, and is left for a separate fix.
 - **The sub-floor outliers are not the prototype's either.** With the prototype on
@@ -181,7 +187,8 @@ AD-versus-central-difference gap at that grid. The last column gives the default
   - hexagonal cell, grids 3 and 12: PyTorch matches the central difference to 1.8e-8 and 1.7e-8;
     `jax.grad` is off by 5.0e-2 and 1.9e-4. This is the same hexagonal-lattice JAX defect.
   - pentagon, grid 12: `jax.grad` and PyTorch agree to 5e-13. The gap is the central difference's:
-    it falls as `h^2` (4.6e-1, 1.7e-2, 1.7e-4, 1.7e-6 at `h` = 1e-3 … 1e-6) to 9e-8 at `h = 1e-7`.
+    it is 4.6e-1 at `h = 1e-3`, then falls as `h^2` (1.7e-2, 1.7e-4, 1.7e-6 at `h` = 1e-4 … 1e-6)
+    to 9e-8 at `h = 1e-7`.
     `T(x)` is sharply curved at that grid and point.
 
   At grid 11, both cases agree three ways (AD, PyTorch, central difference) to 2e-8 or better.
@@ -200,8 +207,9 @@ the fold; they stay true for the raster path.
 
 Tests. With the prototype switch on, every test file that mentions the grid or the projector
 (62 files matching `shape_nvf_grid_size|normal_grid|check_normal_grid|numerics.grid|_sampled_coeffs|normal_projector_coeffs`,
-`-m "not slow"`, one pytest process per file, two at a time) gave 3042 passed and 24 failed. All 24
-pass with the switch off. They are exactly the tests that assert the refusal, plus one that
+`-m "not slow"`, one pytest process per file, two at a time) gave 3042 passed and 24 failed
+(`results/d_tests_on.txt`: per-file summary and every failing test). All 24 pass with the switch
+off (`results/d_tests_off.txt`). They are exactly the tests that assert the refusal, plus one that
 compares across the floor:
 
 | test | cases | with the switch on |
@@ -217,14 +225,32 @@ The first four are the floor's own tests and would be rewritten, not loosened: s
 each backend", matching `test_a_short_grid_that_runs_today_still_runs` (the tensor arm, which
 passes unchanged), and the two `test_boundary.py` tests keep only the positive-grid refusal. The
 last one compares a 12x10 grid at orders (2, 3), below the floor on the v axis (4*3+1 = 13),
-where the raster path's lifted fold and the interpolant are meant to differ. It should either
+where the raster spelling (`fourier2d_pointwise` called directly on the unlifted 12x10 cell, a
+plain wrapped fold) and the interpolant are meant to differ. It should either
 move its grid to the floor or compare against the interpolant. No other test, tolerance, hash or
 golden changed outcome. Not run: tests marked `slow`, tests in files outside that list, and CUDA
 tests (no GPU; `test_general_cuda_dipole_radiation.py` deselects itself).
 
-Docs (English and Korean together): `docs/reference/keywords.md` (`shape_nvf_grid_size` row:
-the `numerics.grid` "below `max(4*Mu + 1, 4*Mv + 1)`" clause), `docs/guide/rcwa/boundary-modeling.md`
-("The sampled normal field needs `4*m+1` points per axis"), and the Korean pages that mirror them.
+What the rewritten section 12 would assert was run directly (`section12_runs.py`,
+`results/section12_runs.json`): its 18 problems with the prototype on, at check, prepare and run.
+- All 18 are admitted by `check` with no issue. `prepare(...).run` and `run` agree exactly.
+  Every output is finite.
+- Its 12 plane-wave problems on scalar stacks conserve energy to 1.9e-15 (`region`,
+  `region-free`, `no-layers`; three backends for `region`). The `region-free` and `no-layers`
+  stacks give the floor-grid and default-grid answer exactly (they read no grid).
+- `region` at the short grid is 3.9e-4–4.6e-4 off the default-grid T at orders (2, 2) and
+  (3, 1), and 2.0e-2 at orders (1, 0), grid 4.
+- `tensor-beside-region` shows `|1 - R - T|` of 1.7e-3–2.8e-3. That belongs to the tensor layer:
+  the same stack gives 2.2e-3–5.2e-3 at the floor and default grids, on today's code and on the
+  prototype alike.
+- The beam problems' boundary powers are finite on all three backends and within 3.7e-3
+  (relative) of the floor-grid answer; the plane-wave problems within 5.0e-3.
+
+Docs: `docs/reference/keywords.md` (`shape_nvf_grid_size` row: the `numerics.grid` "below
+`max(4*Mu + 1, 4*Mv + 1)`" clause) and `docs/guide/rcwa/boundary-modeling.md` ("The sampled
+normal field needs `4*m+1` points per axis"). Neither page has a Korean counterpart under
+`docs/locales/ko/pages`, and no Korean page states the floor, so there is no Korean text to
+change.
 
 **The raster path is not affected.** A raster's normal field is computed on the raster lifted by
 repetition to the floor (`_normal_field_floor`, `_layer_eps_for_normal_field`,
@@ -241,9 +267,11 @@ the tensor path's short-grid warning was not exercised here.
 NumPy, CPU, orders `(M, M)`, one solve with the projector cache cleared before it (so each solve
 builds its projector), `cost_e.py`. Each (case, arm) ran in its own fresh process after one
 untimed warm-up solve: 7 timed solves (5 at `M = 6`, 3 for overlap). The arms ran interleaved,
-current, prototype, current, prototype, with the machine otherwise idle. Peak memory is the
-process's resident high-water mark, interpreter and NumPy included. The overlapping-circles case
-(boundary route) is at grid 256: one solve at the default grid takes over ten minutes.
+current, prototype, current, prototype, to spread drift; no other job of this study ran
+meanwhile. Peak memory is the process's resident high-water mark, interpreter and NumPy included.
+The overlapping-circles case (boundary route) is at grid 256 only: one solve at the default grid
+did not finish within ten minutes here (and took over an hour in (a)), so the boundary route was
+not timed at the default grid.
 
 | case | M | grid | current s (median, two runs) | prototype s | prototype/current | peak RSS MiB current | prototype |
 |---|---|---|---|---|---|---|---|
@@ -256,8 +284,8 @@ process's resident high-water mark, interpreter and NumPy included. The overlapp
 
 - No cost is visible. The ratios run from 0.94 to 1.08, the prototype is faster in two of the six
   rows, and in every solve row the two arms' fastest solves (`min_s` in `results/e.json`, two per
-  arm) overlap. Resident peaks agree to 1 MiB except overlap, where the first process differs
-  from the other three by 15 MiB on the current arm.
+  arm) overlap. Resident peaks agree to 1 MiB except overlap, where they span 292–307 MiB: the first process
+  (current arm, 292 MiB) is 12–16 MiB below the other three (304–307 MiB).
 - The added work is one complex-by-real multiply on each `(4Mv+1) x (4Mu+1)` coefficient grid
   (169 entries at `M = 3`) and two weight vectors. Against a 1024 x 1024 FFT in
   `_sampled_coeffs` it is below the timer's spread (last row).
@@ -277,14 +305,17 @@ for scalar shape layers on the same terms as tensor layers.**
    `4M+1`. Then those grids are bit-exact by construction, not only equal in value as measured
    in (a), and no golden, hash or tolerance moves. The cost is two small weight vectors, their
    real outer product and one complex-by-real elementwise multiply on each `(4Mv+1) x (4Mu+1)`
-   coefficient grid, three or four per projector build ((e)). The `_sampled_coeffs` docstring
+   coefficient grid, three or four per projector build, and only below the floor. At and above
+   it the cost is building and checking the two weight vectors; even the unskipped multiply
+   measured in (e) was below the timer's spread. The `_sampled_coeffs` docstring
    claims it reproduces `fourier2d_pointwise`; that becomes true only at and above the floor.
 2. *Admission.* Stop refusing a positive `shape_nvf_grid_size` below the floor for shape layers:
    - reduce `check_normal_grid` to its positive-grid check at all three call sites:
      `parametric.normal_projector_coeffs`, `boundary.polygon_projector_coeffs` and
      `boundary.normal_projector_coeffs`;
    - delete `_lifecycle._refuse_aliasing_grid` (`numerics.grid` at check, prepare and run) and
-     `engine._stated_normal_grid_meets_its_floor`, its only consumer. The scalar case is their
+     `engine._stated_normal_grid_meets_its_floor`, which only `_refuse_aliasing_grid` consumes.
+     The scalar case is their
      only refusal. This also admits scalar stacks whose layers have no regions; they read no
      grid but are refused today.
 
@@ -300,10 +331,14 @@ for scalar shape layers on the same terms as tensor layers.**
    odd, it is often worse than `4M` (the parity effect in (b) and in the follow-up). A
    recommendation, if one is wanted, is "an even grid, and converge it".
 
-What changes with it: the tests listed in (d). Those that assert the refusal would assert the
-warning and a finite, energy-conserving result instead. The one that asserts the scalar
-transform equals the raster transform would move to a grid at or above the floor. The docs
-rows listed in (d) change in English and Korean.
+What changes with it: the tests listed in (d).
+- Section 12 of `test_check_run_consistency.py` would assert a finite result at every door, on
+  each backend, energy-conserving for its scalar stacks, and the warning once #173 lands. That
+  is what `section12_runs.py` measured.
+- The two `test_boundary.py` floor tests keep only the positive-grid refusal.
+- The test that equates the scalar transform with the raster transform would move to a grid at
+  or above the floor, or compare against the interpolant.
+- The docs rows listed in (d) change. They are English only.
 
 ## Follow-up: isotropic layers through the integrated (Popov–Nevière) builder
 
@@ -375,7 +410,7 @@ integrated arm.
 - (a): the overlapping-circles case at the default grid ran only on NumPy at orders (3, 3); on
   JAX, PyTorch and at (4, 2) its top grid is 256. Only orders (3, 3) and (4, 2) were checked.
 - (b), (c): one shape parameter per case; s polarization, one wavelength and angle; orders
-  (3, 3) and (5, 5) only. Gradients only by eager `jax.grad` (not `jit`, `vmap` or forward mode);
+  (3, 3) and (5, 5) only for (b), (3, 3) only for (c). Gradients only by eager `jax.grad` (not `jit`, `vmap` or forward mode);
   PyTorch backward only at the points of `lattice_gradients.py` and `subfloor_gradients.py`
   and one circle point. The hexagonal-lattice JAX defect was located (today's code, not tied to
   the floor) but not diagnosed.
@@ -384,7 +419,12 @@ integrated arm.
   recommendation implies was not exercised.
 - Tests: only the files that mention the normal grid (62 files, `-m "not slow"`), with the
   prototype switch on. The full suite and the slow markers were not run, nor CI.
-- (e): NumPy, CPU, one machine; no GPU, no JAX/PyTorch timings, no timing below the floor.
+- (e): NumPy, CPU, one machine; no GPU, no JAX/PyTorch timings, no timing below the floor. The
+  boundary route was timed at grid 256, not at the default grid (one solve there takes over ten
+  minutes); its default-grid claim rests on the `_sampled_coeffs` row and on the
+  skip-when-all-weights-are-1 form, which runs today's code unchanged.
+- (d): section 12's problems at a single wavelength and angle; the beam's power window is not a
+  closed surface, so its energy balance was not checked.
 - Follow-up: cost only at the five rows of its table; orders past 16
   (the metal is unconverged on both arms); an "integrated-averaged" arm with the averaged
   projector; p polarization outside the FEM row; JAX/PyTorch in the physics checks.
