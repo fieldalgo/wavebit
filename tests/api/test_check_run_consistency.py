@@ -473,13 +473,16 @@ def _placed(where, value):
         return (problem.replace(outputs=fdtd.Outputs(monitors=(
                     fdtd.TimeSeriesMonitor('e', at=(0, 0, value), component='Ey'),))), numerics,
                 'monitor.outside_domain', 'outputs.e')
-    source = (fdtd.PlaneWave if where == 'plane-wave' else fdtd.ModeSource)(
-        's', plane=fdtd.Plane(z=value), pulse=_PULSE)
+    if where == 'gaussian-beam':
+        source = fdtd.GaussianBeam('s', plane=fdtd.Plane(z=value), pulse=_PULSE, waist=.3)
+    else:
+        source = (fdtd.PlaneWave if where == 'plane-wave' else fdtd.ModeSource)(
+            's', plane=fdtd.Plane(z=value), pulse=_PULSE)
     return problem.replace(sources=(source,)), numerics, 'source.outside_domain', 'sources.s.plane'
 
 
 @pytest.mark.parametrize('value', [np.nan, np.inf, -np.inf, 5.], ids=['nan', 'inf', '-inf', 'outside'])
-@pytest.mark.parametrize('where', ['dipole', 'monitor', 'plane-wave', 'mode-source'])
+@pytest.mark.parametrize('where', ['dipole', 'monitor', 'plane-wave', 'mode-source', 'gaussian-beam'])
 def test_a_nonfinite_position_is_not_reported_as_outside_the_domain(where, value):
     problem, numerics, outside, path = _placed(where, value)
     code = outside if np.isfinite(value) else 'problem.nonfinite'
