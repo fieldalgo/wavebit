@@ -4,6 +4,8 @@ Each case here once passed ``check`` (and usually ``prepare``) and then failed a
 failed with a message that named no field, a private engine name, or advice that led to
 another refusal.
 """
+import dataclasses
+
 import numpy as np
 import pytest
 
@@ -717,3 +719,87 @@ def test_a_periodic_source_still_runs_without_a_finite_power_region(sources, reg
     problem = _localized_problem(sources, region)
     assert rcwa.check(problem, numerics=NUMERICS).ok
     assert np.isfinite(rcwa.run(problem, numerics=NUMERICS).outputs['top'].outgoing).all()
+
+
+# -- 14. A power_region a coherent-source run cannot read is refused at check, not first at run --
+
+_ORDERS = rcwa.IncidentOrders(weights=(((0, 0), 1.), ((1, 0), .5j)))
+COHERENT = {
+    'periodic-dipole': (_PERIODIC,),
+    'incident-orders': (_ORDERS,),
+    'two-planes-one-sector': (rcwa.PlaneWave(theta=.2), rcwa.PlaneWave(theta=.2, polarization='p')),
+    'beam': _BEAM['sources'],
+}
+BAD_RECTANGLES = {'inverted': ((.4, -.4), (-.45, .45)), 'zero-width': ((0., 0.), (-.45, .45)),
+                  'three-columns': ((-.4, .4, 0.), (-.45, .45, 0.)), 'one-row': ((-.4, .4),),
+                  'ragged': ((-.4, .4), (0.,)), 'complex': ((-.4 + 1j, .4), (-.45, .45)),
+                  'number': 1., 'bool': True}
+
+
+@pytest.mark.parametrize('region', sorted(BAD_RECTANGLES))
+@pytest.mark.parametrize('case', sorted(COHERENT))
+def test_a_power_region_that_is_not_a_rectangle_is_refused_at_every_door(case, region):
+    value = BAD_RECTANGLES[region]
+    issue = _refused_alike(_localized_problem(COHERENT[case], value))
+    assert (issue.code, issue.path) == ('outputs.power_region', 'outputs.power_region')
+    assert 'is not a rectangle' in issue.message and 'xmin < xmax' in issue.message
+    assert issue.actual == rcwa.Outputs(power_region=value).power_region
+
+
+@pytest.mark.parametrize('region', ['bogus', '', 'CELL', 'Infinite'])
+@pytest.mark.parametrize('case', ['periodic-dipole', 'incident-orders', 'two-planes-one-sector'])
+def test_a_power_region_string_other_than_cell_or_infinite_is_refused_at_every_door(case, region):
+    issue = _refused_alike(_localized_problem(COHERENT[case], region))
+    assert (issue.code, issue.path) == ('outputs.power_region', 'outputs.power_region')
+    assert f'power_region={region!r} names no area' in issue.message
+    assert (issue.expected, issue.actual) == ("'cell', 'infinite' or ((xmin, xmax), (ymin, ymax))", region)
+
+
+SECTORS = {
+    'two-planes': ((rcwa.PlaneWave(theta=.2), rcwa.PlaneWave(theta=.5, phi=.3)), 2),
+    'dipole-and-plane': ((_PERIODIC, rcwa.PlaneWave(theta=.2)), 2),
+    'two-dipoles': ((_PERIODIC, rcwa.ElectricDipole(position=(0., 0., .1), moment=(1e-30, 0., 0.),
+                                                     bloch_k=(1., 0.))), 2),
+}
+
+
+@pytest.mark.parametrize('case', sorted(SECTORS))
+def test_no_power_region_across_several_bloch_sectors_is_refused_at_every_door(case):
+    sources, count = SECTORS[case]
+    issue = _refused_alike(_localized_problem(sources, None))
+    assert (issue.code, issue.path) == ('outputs.power_region', 'outputs.power_region')
+    assert f'fall into {count} Bloch sectors' in issue.message and 'at wavelength 0.6' in issue.message
+    assert issue.actual is None
+    # The advice: any named region runs.
+    for region in ('cell', 'infinite', _BOX):
+        problem = _localized_problem(sources, region)
+        assert rcwa.check(problem, numerics=NUMERICS).ok
+        assert np.isfinite(rcwa.run(problem, numerics=NUMERICS).outputs['top'].outgoing).all()
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+@pytest.mark.parametrize('sources,region', [(SECTORS['two-planes'][0], None), ((_ORDERS,), ((.4, -.4), (-.45, .45))),
+                                            ((_PERIODIC,), 'bogus')], ids=['sectors', 'rectangle', 'string'])
+def test_an_unreadable_power_region_is_refused_alike_on_each_backend(backend, sources, region):
+    pytest.importorskip(backend)
+    x64 = (__import__('jax').enable_x64(True) if backend == 'jax' else __import__('contextlib').nullcontext())
+    with x64:
+        issue = _refused_alike(_localized_problem(sources, region), backend=backend)
+    assert (issue.code, issue.path) == ('outputs.power_region', 'outputs.power_region')
+
+
+@pytest.mark.parametrize('region', [None, 'cell', 'infinite', _BOX, [[-.4, .4], [-.45, .45]]],
+                         ids=['none', 'cell', 'infinite', 'box', 'list-box'])
+@pytest.mark.parametrize('case', ['periodic-dipole', 'incident-orders', 'two-planes-one-sector'])
+def test_a_readable_power_region_still_runs(case, region):
+    problem = _localized_problem(COHERENT[case], region)
+    assert rcwa.check(problem, numerics=NUMERICS).ok
+    assert np.isfinite(rcwa.run(problem, numerics=NUMERICS).outputs['top'].outgoing).all()
+
+
+@pytest.mark.parametrize('region', ['bogus', ((.4, -.4), (-.45, .45)), 1.], ids=['string', 'inverted', 'number'])
+def test_a_single_plane_wave_still_runs_beside_a_power_region_it_does_not_read(region):
+    problem = _localized_problem((rcwa.PlaneWave(theta=.2),), region)
+    problem = dataclasses.replace(problem, outputs=rcwa.Outputs(power_region=region))
+    assert rcwa.check(problem, numerics=NUMERICS).ok
+    assert np.isfinite(rcwa.run(problem, numerics=NUMERICS).T).all()

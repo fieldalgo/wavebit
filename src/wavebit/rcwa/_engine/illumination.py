@@ -502,33 +502,21 @@ class CoherentSolver:
             for name, value in held.items():
                 setattr(self, name, value)
 
-    def _solve(self, geometry, *, keep_traced=False):
-        import copy
+    def _bloch_groups(self):
+        """The Bloch sectors the sources fall into: one per in-plane wavevector modulo the lattice.
+
+        Each sector is solved once. The grouping is concrete host work that builds no layer, so
+        the public ``check`` and ``prepare`` read the sector count here, as ``_solve`` does.
+        """
         scene = self._scene
-        if scene.half_space_merge_tolerance:
-            # Forwarded like every condition, and read by nothing here: this cascade solves
-            # every layer, so a snapped scene asked for would be answered unsnapped.
-            raise NotImplementedError(
-                f'half_space_merge_tolerance={scene.half_space_merge_tolerance!r} has no reader '
-                'on a source solve: its cascade solves every layer as given, and the merge is a '
-                'plane-wave solve\'s. Leave it at 0 here.')
         xp, C = scene.xp, scene.complex_dtype
-        k0 = 2*np.pi/scene.wavelength
         lattice = as_array(xp, scene.lattice.columns, dtype=C, device=scene._array_device)
         reciprocal = 2*np.pi*xp.matrix_transpose(xp.linalg.inv(lattice))
         reciprocal_host = _host(reciprocal).real
         half = tuple(int(v) for v in scene.truncation_order)
-        groups = []
         sources = source_list(self.excitation)
         dipoles = [s for s in sources if isinstance(s, ElectricDipole)]
-        localized = any(isinstance(s, GaussianBeam) or
-                        isinstance(s, ElectricDipole) and s.repetition == 'isolated' for s in sources)
-        if localized and (self.power_region is None or isinstance(self.power_region, str)):
-            raise ValueError('GaussianBeam and isolated dipoles require a finite rectangle power_region.')
-        if dipoles and self.length_unit is None:
-            raise ValueError('ElectricDipole requires length_unit in metres per scene length.')
-        if self.length_unit is not None:
-            _positive(self.length_unit, 'length_unit')
+        groups = []
         waves = []
         for source in sources:
             if isinstance(source, GaussianBeam):
@@ -587,6 +575,35 @@ class CoherentSolver:
                 offset = np.rint(np.linalg.solve(reciprocal_host, q-_host(group['q']).real)).astype(int)
                 group['dipoles'].append((dipole, weight))
                 group.setdefault('dipole_offsets', []).append(offset)
+        return groups
+
+    def _solve(self, geometry, *, keep_traced=False):
+        import copy
+        scene = self._scene
+        if scene.half_space_merge_tolerance:
+            # Forwarded like every condition, and read by nothing here: this cascade solves
+            # every layer, so a snapped scene asked for would be answered unsnapped.
+            raise NotImplementedError(
+                f'half_space_merge_tolerance={scene.half_space_merge_tolerance!r} has no reader '
+                'on a source solve: its cascade solves every layer as given, and the merge is a '
+                'plane-wave solve\'s. Leave it at 0 here.')
+        xp, C = scene.xp, scene.complex_dtype
+        k0 = 2*np.pi/scene.wavelength
+        lattice = as_array(xp, scene.lattice.columns, dtype=C, device=scene._array_device)
+        reciprocal = 2*np.pi*xp.matrix_transpose(xp.linalg.inv(lattice))
+        reciprocal_host = _host(reciprocal).real
+        half = tuple(int(v) for v in scene.truncation_order)
+        sources = source_list(self.excitation)
+        dipoles = [s for s in sources if isinstance(s, ElectricDipole)]
+        localized = any(isinstance(s, GaussianBeam) or
+                        isinstance(s, ElectricDipole) and s.repetition == 'isolated' for s in sources)
+        if localized and (self.power_region is None or isinstance(self.power_region, str)):
+            raise ValueError('GaussianBeam and isolated dipoles require a finite rectangle power_region.')
+        if dipoles and self.length_unit is None:
+            raise ValueError('ElectricDipole requires length_unit in metres per scene length.')
+        if self.length_unit is not None:
+            _positive(self.length_unit, 'length_unit')
+        groups = self._bloch_groups()
 
         if len(groups) > 1 and self.power_region is None:
             raise ValueError("Different Bloch sectors require an explicit power_region: "

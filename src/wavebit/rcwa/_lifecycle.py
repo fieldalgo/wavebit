@@ -186,6 +186,62 @@ def _refuse_unbounded_power_region(problem):
                 expected='((xmin, xmax), (ymin, ymax))', actual=region)
 
 
+_POWER_REGIONS = "'cell', 'infinite' or ((xmin, xmax), (ymin, ymax))"
+
+
+def _refuse_unreadable_power_region(problem, execution, solvers):
+    """Refuse a ``power_region`` a coherent-source run cannot read, before anything runs.
+
+    Every run that is not a single ``PlaneWave`` takes its boundary power over the region, and
+    the engine refuses three of them only when it solves (``rcwa.invalid`` at ``problem``): ``None``
+    when the sources fall into more than one Bloch sector, a string other than ``'cell'`` or
+    ``'infinite'``, and a value that is not a ``(2, 2)`` rectangle with positive widths. The same
+    conditions are read here; the sector count is the engine's own grouping, at each wavelength.
+    A single ``PlaneWave`` does not read the region, so nothing is refused for it.
+    """
+    if _adapt.single_plane(problem):
+        return
+    region = problem.outputs.power_region
+    if region is None:
+        for wavelength, solver in zip(_adapt.wavelengths(problem), solvers):
+            try:
+                with execution._scope(), _engine_scene(solver)._device_scope():
+                    count = len(solver._bloch_groups())
+            except (TypeError, ValueError, NotImplementedError):
+                # The run's grouping refuses these sources first, in its own words.
+                return
+            if count > 1:
+                raise ValidationError(
+                    f'The sources fall into {count} Bloch sectors (in-plane wavevectors that do not '
+                    f'differ by a reciprocal lattice vector) at wavelength {float(wavelength)!r}, '
+                    'and power_region=None reads as one cell of one sector. Give '
+                    "Outputs(power_region='cell'), 'infinite', or ((xmin, xmax), (ymin, ymax)) in "
+                    'the length unit: the area their boundary power is averaged over.',
+                    code='outputs.power_region', path='outputs.power_region',
+                    expected=_POWER_REGIONS, actual=None)
+        return
+    if isinstance(region, str):
+        if region not in ('cell', 'infinite'):
+            raise ValidationError(
+                f"power_region={region!r} names no area. Give 'cell' (one lattice cell), 'infinite' "
+                '(the infinite-area mean) or ((xmin, xmax), (ymin, ymax)) in the length unit.',
+                code='outputs.power_region', path='outputs.power_region',
+                expected=_POWER_REGIONS, actual=region)
+        return
+    # As the engine reads it.
+    try:
+        box = np.asarray(region, dtype=float)
+    except (TypeError, ValueError):
+        box = None
+    if box is None or box.shape != (2, 2) or not np.all(np.isfinite(box)) or np.any(box[:, 1] <= box[:, 0]):
+        raise ValidationError(
+            f'power_region={region!r} is not a rectangle: give ((xmin, xmax), (ymin, ymax)), two '
+            'pairs of real numbers in the length unit with xmin < xmax and ymin < ymax, '
+            "or 'cell' or 'infinite'.",
+            code='outputs.power_region', path='outputs.power_region',
+            expected=_POWER_REGIONS, actual=region)
+
+
 def _report(problem, numerics, execution, solvers):
     scene = _engine_scene(solvers[0])
     window = tuple(tuple(v) for v in scene.order_window)
@@ -252,6 +308,7 @@ def check(problem, *, numerics, backend='numpy', device='cpu', precision='double
             _engine_scene(solvers[0])._check_layer_geometry()
         _refuse_aliasing_grid(numerics, solvers)
         _refuse_unbounded_power_region(problem)
+        _refuse_unreadable_power_region(problem, execution, solvers)
         return _report(problem, numerics, execution, solvers)
     except (ValidationError, TypeError, ValueError, NotImplementedError) as error:
         return CheckReport(issues=(_issue(error),))
@@ -528,6 +585,7 @@ def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='doub
         geometry = tuple(_engine_scene(solver).freeze_geometry() for solver in solvers)
         _refuse_aliasing_grid(numerics, solvers)
         _refuse_unbounded_power_region(problem)
+        _refuse_unreadable_power_region(problem, execution, solvers)
         report = _report(problem, numerics, execution, solvers)
         partitions = _partition_guards(problem, solvers)
         host_topology = None
