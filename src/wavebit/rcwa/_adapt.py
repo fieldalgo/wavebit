@@ -55,15 +55,16 @@ def named_leaves(value, path='', skip=()):
         yield path, value
 
 
-def nonfinite_leaf(problem, skip=(Rectangle, Circle, Ellipse, Polygon)):
+def nonfinite_leaf(problem, skip=(Rectangle, Circle, Ellipse, Polygon), path=''):
     """The first concrete numerical leaf holding a NaN or an infinity, as ``(path, value)``.
 
     Region geometry is skipped by default and left to the RCWA layer geometry checks, which
     name a non-finite size or angle in their own words; ``skip=()`` reads it too. A traced
     leaf under ``jax.jit`` or ``jax.vmap`` cannot be read and is left to the run's runtime
-    guard. ``None`` when every readable leaf is finite.
+    guard. ``None`` when every readable leaf is finite. ``path`` is the field path of ``problem``
+    when it is a part of one.
     """
-    for path, value in named_leaves(problem, skip=skip):
+    for path, value in named_leaves(problem, path, skip=skip):
         if opaque(value):
             continue
         try:
@@ -114,6 +115,23 @@ def refuse_nonfinite(problem):
     found = nonfinite_leaf(problem)
     if found is not None:
         raise nonfinite_error(*found)
+
+
+def refuse_nonfinite_wavevector(problem):
+    """Refuse a NaN or infinite ``kx``/``ky`` of a single ``PlaneWave`` before its solver is built.
+
+    That solver reads the wavevector when it is built, in ``check`` and ``prepare`` too, and
+    refused a non-finite one there as ``rcwa.invalid`` at ``problem``, before
+    :func:`refuse_nonfinite` names the field. Every other source keeps its wavevector for the
+    coherent solve, so that check names it already.
+    """
+    if not single_plane(problem):
+        return
+    source = problem.excitation.sources[0]
+    for name in ('kx', 'ky'):
+        found = nonfinite_leaf(getattr(source, name), path=f'excitation.sources[0].{name}')
+        if found is not None:
+            raise nonfinite_error(*found)
 
 
 def abstract(value):
