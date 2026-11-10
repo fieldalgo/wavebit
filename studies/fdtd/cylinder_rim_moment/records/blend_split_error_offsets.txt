@@ -1,0 +1,60 @@
+== eps 0.25 ramp inside
+4 | (cut voxels 68864, of which rim 25856, plane-dead 550)
+4 | plane | 4.536e-02 1.418e-02 | 6.551e-01 1.814e-01
+4 | split | 4.536e-02 1.418e-02 | 8.132e-01 1.234e-01
+8 | (cut voxels 274304, of which rim 89984, plane-dead 648)
+8 | plane | 2.281e-02 6.966e-03 | 6.674e-01 1.380e-01
+8 | split | 2.281e-02 6.966e-03 | 8.123e-01 9.363e-02
+16 | (cut voxels 1095744, of which rim 333888, plane-dead 1430)
+16 | plane | 1.162e-02 3.515e-03 | 6.781e-01 1.020e-01
+16 | split | 1.162e-02 3.515e-03 | 8.108e-01 6.873e-02
+== eps 0.1 ramp inside
+4 | (cut voxels 68864, of which rim 25856, plane-dead 550)
+4 | plane | 4.536e-02 1.418e-02 | 6.551e-01 1.814e-01
+4 | split | 4.536e-02 1.418e-02 | 6.053e-01 6.424e-02
+8 | (cut voxels 274304, of which rim 89984, plane-dead 648)
+8 | plane | 2.281e-02 6.966e-03 | 6.674e-01 1.380e-01
+8 | split | 2.281e-02 6.966e-03 | 6.082e-01 4.820e-02
+16 | (cut voxels 1095744, of which rim 333888, plane-dead 1430)
+16 | plane | 1.162e-02 3.515e-03 | 6.781e-01 1.020e-01
+16 | split | 1.162e-02 3.515e-03 | 5.933e-01 3.530e-02
+== eps 0.05 ramp inside
+4 | (cut voxels 68864, of which rim 25856, plane-dead 550)
+4 | plane | 4.536e-02 1.418e-02 | 6.551e-01 1.814e-01
+4 | split | 4.536e-02 1.418e-02 | 3.636e-01 3.448e-02
+8 | (cut voxels 274304, of which rim 89984, plane-dead 648)
+8 | plane | 2.281e-02 6.966e-03 | 6.674e-01 1.380e-01
+8 | split | 2.281e-02 6.966e-03 | 3.612e-01 2.552e-02
+16 | (cut voxels 1095744, of which rim 333888, plane-dead 1430)
+16 | plane | 1.162e-02 3.515e-03 | 6.781e-01 1.020e-01
+16 | split | 1.162e-02 3.515e-03 | 3.675e-01 1.858e-02
+== eps 0.02 ramp inside
+4 | (cut voxels 68864, of which rim 25856, plane-dead 550)
+4 | plane | 4.536e-02 1.418e-02 | 6.551e-01 1.814e-01
+4 | split | 4.536e-02 1.418e-02 | 1.019e-01 9.471e-03
+8 | (cut voxels 274304, of which rim 89984, plane-dead 648)
+8 | plane | 2.281e-02 6.966e-03 | 6.674e-01 1.380e-01
+8 | split | 2.281e-02 6.966e-03 | 8.822e-02 4.408e-03
+16 | (cut voxels 1095744, of which rim 333888, plane-dead 1430)
+16 | plane | 1.162e-02 3.515e-03 | 6.781e-01 1.020e-01
+16 | split | 1.162e-02 3.515e-03 | 6.440e-02 2.232e-03
+== eps 1e-6 ramp inside
+4 | (cut voxels 68864, of which rim 25856, plane-dead 550)
+4 | plane | 4.536e-02 1.418e-02 | 6.551e-01 1.814e-01
+4 | split | 4.536e-02 1.418e-02 | 1.019e-01 8.888e-03
+8 | (cut voxels 274304, of which rim 89984, plane-dead 648)
+8 | plane | 2.281e-02 6.966e-03 | 6.674e-01 1.380e-01
+8 | split | 2.281e-02 6.966e-03 | 7.365e-02 3.683e-03
+16 | (cut voxels 1095744, of which rim 333888, plane-dead 1430)
+16 | plane | 1.162e-02 3.515e-03 | 6.781e-01 1.020e-01
+16 | split | 1.162e-02 3.515e-03 | 4.460e-02 1.355e-03
+== eps 0.25 ramp centred
+4 | (cut voxels 68864, of which rim 25856, plane-dead 550)
+4 | plane | 4.536e-02 1.418e-02 | 6.551e-01 1.814e-01
+4 | split | 5.043e-01 2.611e-02 | 1.648e-01 1.723e-02
+8 | (cut voxels 274304, of which rim 89984, plane-dead 648)
+8 | plane | 2.281e-02 6.966e-03 | 6.674e-01 1.380e-01
+8 | split | 6.444e-01 1.751e-02 | 1.427e-01 1.173e-02
+16 | (cut voxels 1095744, of which rim 333888, plane-dead 1430)
+16 | plane | 1.162e-02 3.515e-03 | 6.781e-01 1.020e-01
+16 | split | 7.316e-01 1.144e-02 | 1.426e-01 8.285e-03
