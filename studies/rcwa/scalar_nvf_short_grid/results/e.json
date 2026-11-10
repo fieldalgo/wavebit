@@ -1,0 +1,202 @@
+[
+ {
+  "case": "rectangle",
+  "grid": "default",
+  "M": 3,
+  "arm": "current",
+  "median_s": 0.6289564600010635,
+  "min_s": 0.5674387639992347,
+  "peak_rss_MiB": 148.66796875
+ },
+ {
+  "case": "rectangle",
+  "grid": "default",
+  "M": 3,
+  "arm": "prototype",
+  "median_s": 0.5871817619990907,
+  "min_s": 0.567840977000742,
+  "peak_rss_MiB": 148.8203125
+ },
+ {
+  "case": "rectangle",
+  "grid": "default",
+  "M": 3,
+  "arm": "current",
+  "median_s": 0.620136609999463,
+  "min_s": 0.5732435860008991,
+  "peak_rss_MiB": 148.7421875
+ },
+ {
+  "case": "rectangle",
+  "grid": "default",
+  "M": 3,
+  "arm": "prototype",
+  "median_s": 0.6017311670002528,
+  "min_s": 0.5770652339997469,
+  "peak_rss_MiB": 149.21484375
+ },
+ {
+  "case": "circle",
+  "grid": "default",
+  "M": 3,
+  "arm": "current",
+  "median_s": 0.23228500099867233,
+  "min_s": 0.22092914499808103,
+  "peak_rss_MiB": 209.87109375
+ },
+ {
+  "case": "circle",
+  "grid": "default",
+  "M": 3,
+  "arm": "prototype",
+  "median_s": 0.24102621099882526,
+  "min_s": 0.2251251460002095,
+  "peak_rss_MiB": 210.03125
+ },
+ {
+  "case": "circle",
+  "grid": "default",
+  "M": 3,
+  "arm": "current",
+  "median_s": 0.22970012500081793,
+  "min_s": 0.22135162699851207,
+  "peak_rss_MiB": 210.00390625
+ },
+ {
+  "case": "circle",
+  "grid": "default",
+  "M": 3,
+  "arm": "prototype",
+  "median_s": 0.23269687599895406,
+  "min_s": 0.2197146899998188,
+  "peak_rss_MiB": 209.91796875
+ },
+ {
+  "case": "ellipse",
+  "grid": "default",
+  "M": 3,
+  "arm": "current",
+  "median_s": 0.22593892199802212,
+  "min_s": 0.21593713800029946,
+  "peak_rss_MiB": 210.32421875
+ },
+ {
+  "case": "ellipse",
+  "grid": "default",
+  "M": 3,
+  "arm": "prototype",
+  "median_s": 0.23017117199924542,
+  "min_s": 0.22603858400179888,
+  "peak_rss_MiB": 210.19921875
+ },
+ {
+  "case": "ellipse",
+  "grid": "default",
+  "M": 3,
+  "arm": "current",
+  "median_s": 0.22136766399853514,
+  "min_s": 0.2098421580012655,
+  "peak_rss_MiB": 210.16015625
+ },
+ {
+  "case": "ellipse",
+  "grid": "default",
+  "M": 3,
+  "arm": "prototype",
+  "median_s": 0.2210569709968695,
+  "min_s": 0.21095557700027712,
+  "peak_rss_MiB": 209.98046875
+ },
+ {
+  "case": "circle",
+  "grid": "default",
+  "M": 6,
+  "arm": "current",
+  "median_s": 0.5368874930027232,
+  "min_s": 0.4787659879984858,
+  "peak_rss_MiB": 213.8125
+ },
+ {
+  "case": "circle",
+  "grid": "default",
+  "M": 6,
+  "arm": "prototype",
+  "median_s": 0.5058726509996632,
+  "min_s": 0.47616770699823974,
+  "peak_rss_MiB": 213.76953125
+ },
+ {
+  "case": "circle",
+  "grid": "default",
+  "M": 6,
+  "arm": "current",
+  "median_s": 0.5536358569988806,
+  "min_s": 0.5187177299994801,
+  "peak_rss_MiB": 213.76953125
+ },
+ {
+  "case": "circle",
+  "grid": "default",
+  "M": 6,
+  "arm": "prototype",
+  "median_s": 0.5221458749983867,
+  "min_s": 0.48047950900217984,
+  "peak_rss_MiB": 213.8359375
+ },
+ {
+  "case": "overlap",
+  "grid": 256,
+  "M": 3,
+  "arm": "current",
+  "median_s": 87.60421416200188,
+  "min_s": 85.97593099899677,
+  "peak_rss_MiB": 291.66015625
+ },
+ {
+  "case": "overlap",
+  "grid": 256,
+  "M": 3,
+  "arm": "prototype",
+  "median_s": 89.63825655500113,
+  "min_s": 85.89475387700077,
+  "peak_rss_MiB": 307.26171875
+ },
+ {
+  "case": "overlap",
+  "grid": 256,
+  "M": 3,
+  "arm": "current",
+  "median_s": 87.15785288399638,
+  "min_s": 86.49632621600176,
+  "peak_rss_MiB": 307.48828125
+ },
+ {
+  "case": "overlap",
+  "grid": 256,
+  "M": 3,
+  "arm": "prototype",
+  "median_s": 88.58790592199512,
+  "min_s": 88.38551724600256,
+  "peak_rss_MiB": 303.625
+ },
+ {
+  "case": "_sampled_coeffs 1024x1024, M=3",
+  "arm": "current",
+  "median_s": 0.027713337000022875
+ },
+ {
+  "case": "_sampled_coeffs 1024x1024, M=3",
+  "arm": "prototype",
+  "median_s": 0.028263578002224676
+ },
+ {
+  "case": "_sampled_coeffs 1024x1024, M=3",
+  "arm": "current",
+  "median_s": 0.029078058501909254
+ },
+ {
+  "case": "_sampled_coeffs 1024x1024, M=3",
+  "arm": "prototype",
+  "median_s": 0.03319770500093
+ }
+]

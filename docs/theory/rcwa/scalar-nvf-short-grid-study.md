@@ -230,7 +230,34 @@ the tensor path's short-grid warning was not exercised here.
 
 ## (e) Cost at the default grid
 
-PASTE_E_TABLE
+NumPy, CPU, orders `(M, M)`, one solve with the projector cache cleared before it (so each solve
+builds its projector), `cost_e.py`. Each (case, arm) ran in its own fresh process after one
+untimed warm-up solve: 7 timed solves (5 at `M = 6`, 3 for overlap). The arms ran interleaved,
+current, prototype, current, prototype, with the machine otherwise idle. Peak memory is the
+process's resident high-water mark, interpreter and NumPy included. The overlapping-circles case
+(boundary route) is at grid 256: one solve at the default grid takes over ten minutes.
+
+| case | M | grid | current s (median, two runs) | prototype s | prototype/current | peak RSS MiB current | prototype |
+|---|---|---|---|---|---|---|---|
+| rectangle | 3 | default | 0.629 / 0.62 | 0.587 / 0.602 | 0.95 | 149/149 | 149/149 |
+| circle | 3 | default | 0.232 / 0.23 | 0.241 / 0.233 | 1.03 | 210/210 | 210/210 |
+| ellipse | 3 | default | 0.226 / 0.221 | 0.23 / 0.221 | 1.01 | 210/210 | 210/210 |
+| circle | 6 | default | 0.537 / 0.554 | 0.506 / 0.522 | 0.94 | 214/214 | 214/214 |
+| overlap | 3 | 256 | 87.6 / 87.2 | 89.6 / 88.6 | 1.02 | 292/307 | 307/304 |
+| _sampled_coeffs 1024x1024, M=3 |  |  | 27.7 ms / 29.1 ms | 28.3 ms / 33.2 ms | 1.08 | – | – |
+
+- No cost is visible. The ratios run from 0.94 to 1.08, the prototype is faster in two of the six
+  rows, and in every solve row the two arms' fastest solves (`min_s` in `results/e.json`, two per
+  arm) overlap. Resident peaks agree to 1 MiB except overlap, where the first process differs
+  from the other three by 15 MiB on the current arm.
+- The added work is one complex-by-real multiply on each `(4Mv+1) x (4Mu+1)` coefficient grid
+  (169 entries at `M = 3`) and two weight vectors. Against a 1024 x 1024 FFT in
+  `_sampled_coeffs` it is below the timer's spread (last row).
+- An earlier run with `tracemalloc` (`results/e_tracemalloc_partial.log`, stopped before the
+  overlap case) gave equal traced peaks: 88.06 against 88.05 MiB on the rectangle, 137.04 against
+  137.04 MiB on the circle.
+- With the "skip the multiply when every weight is 1" form of the recommendation, the default grid
+  runs exactly today's code, so its cost is zero by construction.
 
 ## Recommendation
 
