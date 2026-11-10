@@ -150,7 +150,7 @@ _CYLINDER_MOMENT = _os.environ.get('WAVEBIT_STUDY_CYLINDER_MOMENT', 'plane')
 if _CYLINDER_MOMENT not in ('plane', 'rim', 'exact', 'split'):
     raise ValueError(f'WAVEBIT_STUDY_CYLINDER_MOMENT={_CYLINDER_MOMENT!r}')
 #: STUDY: the width, in cells, of ``'split'``'s cap blend (:meth:`Cylinder._split_tensor`).
-_CAP_BLEND = float(_os.environ.get('WAVEBIT_STUDY_CYLINDER_CAP_BLEND', '0.25'))
+_CAP_BLEND = float(_os.environ.get('WAVEBIT_STUDY_CYLINDER_CAP_BLEND', '0.02'))
 if not 0 < _CAP_BLEND < 1:
     raise ValueError(f'WAVEBIT_STUDY_CYLINDER_CAP_BLEND={_CAP_BLEND!r} must be in (0, 1)')
 #: STUDY: where that blend sits. ``'inside'`` (default): over ``t in [-eps, 0]``, so a cap on a
