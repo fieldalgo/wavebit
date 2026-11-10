@@ -51,7 +51,7 @@ hunt for a *configuration* that separates failing from working cases found none,
 | 1D conical (`psi`/pair), `ky == 0` | **fine since the reformulation** | `V` blocks now come from the eigensystem; they used to pass through `inv(A)` of an exactly singular `A` |
 | 1D conical at `kx_m**2 = eps*mu` with `ky != 0` (an x-cutoff, `kz = abs(ky)`) | **solved in a regular basis since 2026-10-10 (§7)**, eagerly and, since 2026-10-11, under every abstract trace (`jax.jit`, `jax.vmap`, a `jax.lax.map` or `scan` body, `jax.checkpoint`, `torch.func.vmap`) | the two mode families collapse onto one field there; the layer is rebuilt with an upper-triangular propagator, exact in a uniform layer and at a patterned layer's Jordan block alike; patterned double negatives at a complex `theta` too |
 | 2D graze | **correct or loud since the rebuild (§6)** | the grazing cluster is re-derived from the coupled first-order problem: representable clusters solve exactly, numerically defective ones refuse with the detune advice |
-| 2D or first order at a patterned EP (`q = abs(ky)`) | **rebuilt as a regular pair (§§8–9; design measured 2026-10-12)**; on 2D, coincident and nearly coincident EPs **rebuilt as one cluster, eagerly and under traces (§8, 2026-11-08)** | larger or chained clusters, and the first-order path's coincidences, warn eagerly; under a trace those screens are silent, so this guarantee has limits |
+| 2D or first order at a patterned EP (`q = abs(ky)`) | **rebuilt as a regular pair (§§8–9; design measured 2026-10-12)**; on 2D, coincident and nearly coincident EPs **rebuilt as one cluster, eagerly and under traces (§8, 2026-11-08)** | larger or chained clusters, and the first-order path's coincidences, warn eagerly; under a trace the same screens run as data and the layer answers NaN (§8, 2026-11-10) |
 | any path, eigenvalue *exactly* `0.0` — and, on 2D, any cluster whose coupled rates split below ~1e-10 of the modal scale | refuses, unless the ladder clears it | the exponential mode basis is degenerate at the point itself (the limit basis is `{1, z}`) |
 
 `solve` handles the practical side by default: `auto_detune=True` retries a solve that
@@ -953,6 +953,57 @@ whose two pairs it now takes as one cluster (<= 1.3e-14 off the 1D rebuild there
 paths); the other 144 eager
 and 48 traced digests are identical.
 
+*The screens under a trace* (2026-11-10). Nothing can warn under `jit`, `vmap` or
+`torch.func.vmap`, and the unresolved and backward-error screens used to be skipped there, so what
+they warn on eagerly came back silently. On the first-order path at the y-Littrow coincidences
+(§9), every solve that warns eagerly -- PA616 and PL952, ETM and SMM, `|dtheta| <= 1e-4`, 26 of 32
+-- was 1.1e-6 .. 0.69 off under `jit`, with no NaN. Two pairs 1e-6 .. 1e-5 apart beside a root
+within `_EP_CLUSTER` -- a ball of five, which the joint rebuild leaves to the pair rebuild -- kept
+a backward error of 6.3e-13 .. 4.7e-10 under `jit`, where the backward-error screen warns
+eagerly. Both screens now run as data under a trace, and a layer whose screen would warn answers
+NaN: its `Q` (2D) or the split's eigenvalues (first order) are replaced by NaN in a selection,
+not a product, so a quiet layer keeps its bits.
+
+A trace cannot walk a connected cluster, so both screens read balls instead
+(`solve_2d.py::_traced_balls`): each mode's at most `_EP_SCREEN_BALL = 8` nearest modes within
+`_EP_CLUSTER`, read once per distinct ball (the whole set within the radius, so a degenerate
+cluster larger than eight counts once). The unresolved screen (`_unresolved_cluster_traced`)
+takes the balls of three or more modes whose unit columns' smallest singular value, from their
+Gram matrix, is below the screen's sine; the candidates with the smallest values take the defect
+measure on as many slots as the layer has, and the layer is loud where one is defective or more
+candidates qualified than the slots hold -- the cluster gate's overflow rule, under which a
+degenerate ball in a nearly dependent basis counts too. The backward-error screen
+(`_crowded_pairs_traced`) takes the balls of a pair rebuilt one at a time that hold another such
+pair, reads the eager screen's backward error on each slot's columns -- one solve with `W^T` for
+every slot's rows of `W^-1` together -- against the same threshold, and reads the propagation
+sensitivity from `k0 d` as data, which eagerly is read only where it is concrete. On 2D both take
+the cluster gate's `pair_cap // 2` slots (at most `n2 // 3` and `n2 // 4`); the first-order split
+takes `max(slots, n / 16)`, since its eigenvectors of a degenerate (normal) cluster are not
+orthonormal: a uniform layer at normal incidence, truncation `(5, 5)`, holds 11 candidate balls,
+and with the pair gate's four slots it came back NaN. A defective cluster's nearly dependent
+columns are one Jordan block's and sit in one ball; on a chain, or a cluster of more than eight
+modes, a ball is the eager measure on a part of it.
+
+*Measured* (2026-11-10, Windows NumPy 2.5.1 with OpenBLAS 0.3.33, JAX 0.11.0, PyTorch 2.14.1):
+
+| case | before (`4e5eba63`), traced | traced screens |
+| --- | --- | --- |
+| synthetic, unresolved screen: 16 named layers and the test's nine cases (chains, a length-3 chain after the pair rebuild, coincident clusters of five and six modes, clusters taken jointly, a degenerate ball in a parallel basis, a chain with its modes in separate groups, a lone Jordan pair in `eig`'s basis) and 200 random clustered layers, `jit` and `torch.func.vmap` | not read | the eager verdict on every one (129 of the random ones loud) |
+| synthetic, backward-error screen: two pairs 1e-7 .. 1e-5 apart with and without a root at 5e-5, three bases; and the eager screen's own model | silent, up to 4.7e-10 | the eager verdict on every one |
+| first order, y-Littrow, PA616 and PL952, ETM and SMM, `dtheta` 0 .. 3e-4 (32 solves) | the 26 the eager screen warns on 1.1e-6 .. 0.69 off | NaN on those 26; the six quiet ones within 2.0e-14 of the 1D rebuild |
+| 2D with the joint gate closed (pairs and clusters as before §8's joint rebuild), PL952 and PA616, ETM and SMM, `dtheta` 0 .. 3e-5 (40 solves) | silent | NaN on every solve JAX's eager screens warn on, and on PA616 at 1e-7, quiet eagerly on JAX and loud on NumPy (a backward error of 4.41e-12 against 3.0e-12): a threshold reads rounding at its edge; the rest within 7.2e-15 |
+| the thick PA616 layers, 10 and 3 um (sensitivity up to 2.0e3), ETM and SMM, 37 offsets out to 1e-3 (74 solves), where the backward-error screen once warned on exact answers | within 2.8e-13 eagerly, quiet | no NaN, within 2.3e-13 |
+
+*Bits.* On the byte-identity scenes above (the traced ones with the uniform layer at normal
+incidence added), on the 2D path and again on the first-order split: 168 eager digests each (NumPy, JAX and
+PyTorch, ETM and SMM) and 66 traced ones each (`jit` values, `jit(grad)`, `torch.func.vmap`
+values), 468 in all, identical to `4e5eba63`. A quiet traced layer keeps its bits, and eager
+solves run none of this.
+
+*Cost.* Under a trace every 2D and first-order layer now forms the balls (`O(n2**2)` per lane),
+the Gram matrices of their columns, the defect measure on its slots, and on 2D one more solve with
+`W^T`; eager solves pay nothing.
+
 *Limits.*
 
 - Not taken: clusters of more than four modes, chains (a ball that is not closed), grazing layers
@@ -962,7 +1013,7 @@ and 48 traced digests are identical.
   split). Eagerly the unresolved and backward-error screens still warn on them, except in
   complex64, where every screen's threshold scales with `eps` and stays silent too (a
   coincident cluster there is 6.9e-6 .. 5.6e-4 off, silently, at the float32 level); under a
-  trace they are silent.
+  trace they answer NaN where they would warn (*The screens under a trace*, above).
 - Off a symmetric coincidence the wide ball holds the doublets while their columns stay
   dependent to within `_EP_SINE`; beyond that (relative offsets past about 3e-6 on the C4v
   pillar) `eig`'s basis is left as it is, and was within 1.5e-13 of the oracle there. Where such
@@ -1025,13 +1076,15 @@ coincident, multi-pair, NVF, anisotropic or grazing EPs.
 - Eagerly a layer with no gated pair and no cluster keeps the product construction's
   arithmetic; the screen can add a warning. At unresolved coincidences, the old arithmetic was
   2.0e-6..5.8e-4 off.
-- Under `jit`, `vmap` or `torch.func.vmap`, the screens cannot read concrete values, so a
-  cluster the joint rebuild does not take (see its limits above) can remain silently at the old
-  error level, and pairs rebuilt one at a time at the eager path's unscreened level. A `vmap`
-  over the thickness alone leaves SMM's modes concrete: its screen then runs with the calibrated
-  threshold only, without the thickness's sensitivity. No correct-or-loud guarantee covers those
-  traced clusters. More qualifying pairs or clusters than the trace's slots, and a joint rebuild
-  that fails its check, do produce NaN.
+- Under `jit`, `vmap` or `torch.func.vmap`, the screens run as data on balls of at most eight
+  modes (*The screens under a trace*): a cluster the joint rebuild does not take, and pairs
+  rebuilt one at a time that miss the operator, answer NaN. More candidate balls than the
+  screens' slots answer NaN too, so a trace can return NaN where the eager solve only warns or
+  is quiet (a degenerate ball in a nearly dependent basis, or a value at a threshold's edge).
+  A `vmap` over the thickness alone leaves SMM's modes concrete: its screens then run eagerly,
+  with the calibrated threshold only, without the thickness's sensitivity. More qualifying pairs
+  or clusters than the gates' slots, and a joint rebuild that fails its check, produce NaN as
+  before.
 - A root below `_EP_ROOT_FLOOR = 1e-9` stays with the grazing machinery or product construction.
   A layer that both grazes and holds an EP takes the grazing path; its EP pair is not rebuilt
   (not measured). The grazing refusal, `RayleighPointWarning` and `_require_separated` remain.
@@ -1129,7 +1182,9 @@ At y-Littrow coincident EPs (`ky0 = Gy/2`), every measured offset `|dtheta| <= 1
 the old arithmetic there was up to 0.55 off. The prototype had silently missed PL952 at
 `dtheta = 1e-8` (0.39 off) because none of the mixed eigenvectors looked like a parallel pair.
 From `|dtheta| = 3e-4` the amended path was exact to 1.8e-14. The warning is eager only and
-never triggers `auto_detune`.
+never triggers `auto_detune`; under a trace the screen runs as data and the layer answers NaN
+instead (§8, *The screens under a trace*): every one of those warned solves is NaN under `jit`,
+where it was 1.1e-6 .. 0.69 off, silently.
 
 **Derivatives.** The rebuilt basis is built on stopped values, and the derivative is the modal
 rule's (`modal_gradient.py::split_generator`) in that basis. Within a direction the generator's
@@ -1210,8 +1265,9 @@ cases. This covers those measured cases, not every possible opposite-label pair.
 **Limits and unchanged behavior.**
 
 - Coincident EPs keep the eigenvector arithmetic and warn eagerly as above. Under `jit`,
-  `vmap` or `torch.func.vmap` the screen is silent, so those clusters can remain at the old
-  error level (up to 0.55 in the measured coincidence cases). Trace slots do not repair them.
+  `vmap` or `torch.func.vmap` the screen runs as data and they answer NaN; nothing repairs them.
+  The screen's slots there are `max(slots, n / 16)`, `n` the split's mode count, and more
+  candidate balls than that answer NaN as well.
 - More eligible pairs than the static slots poison the generator with NaN. A third parallel
   mode outside the screen's eigenvalue radius can instead cause a silent skip; this case
   was not observed in the measurements.

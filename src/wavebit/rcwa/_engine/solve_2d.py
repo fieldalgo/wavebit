@@ -313,6 +313,113 @@ def _unresolved_defective_cluster(xp, w, W, operator, sine, group=None):
     return False
 
 
+#: Under an abstract trace the screens read, for every mode, the ball of at most this many nearest
+#: modes within :data:`_EP_CLUSTER` instead of its whole connected cluster: twice the largest
+#: cluster the joint rebuild takes, so a ball it leaves for being too large is still read whole up
+#: to eight modes, and a larger one through its eight nearest.
+_EP_SCREEN_BALL = 8
+
+
+def _traced_balls(xp, w, group=None):
+    """Every mode's ball for the traced screens: ``(idx, scale, near, count, nbr, valid)`` -- the
+    mode indices, ``max(1, |w|)``, which modes lie within :data:`_EP_CLUSTER` of each (``group``
+    restricting it) and how many, and each ball's at most :data:`_EP_SCREEN_BALL` nearest members,
+    the mode itself first, with a lane mask (by argmin passes, as :func:`_closed_balls`)."""
+    n2 = w.shape[0]
+    m = min(_EP_SCREEN_BALL, n2)
+    idx = xp.arange(n2, device=getattr(w, 'device', None))
+    scale = xp.maximum(xp.ones_like(xp.abs(w)), xp.abs(w))
+    d = xp.abs(w[:, None] - w[None, :])
+    near = d <= _EP_CLUSTER * xp.maximum(scale[:, None], scale[None, :])
+    if group is not None:
+        near = near & (group[:, None] == group[None, :])
+    count = xp.sum(xp.astype(near, xp.int32), axis=1)
+    key = xp.where(near, d, xp.full_like(d, float('inf')))
+    del d
+    picks, found = [], []
+    for _ in range(m):
+        j = xp.argmin(key, axis=1)
+        picks.append(j)
+        found.append(xp.isfinite(xp.min(key, axis=1)))
+        key = xp.where(idx[None, :] == j[:, None], xp.full_like(key, float('inf')), key)
+    return idx, scale, near, count, xp.stack(picks, axis=1), xp.stack(found, axis=1)
+
+
+def _one_seed_per_ball(xp, cand, near, nbr, valid, idx):
+    """``cand`` less every mode whose whole ball -- every mode within the radius, not only the
+    nearest the lanes hold -- is a lower-index candidate's (every member of a closed ball, say):
+    one seed per ball, so a degenerate cluster larger than the lanes counts once."""
+    same = xp.stack([xp.all(xp.take(near, nbr[:, l], axis=0) == near, axis=1)
+                     for l in range(nbr.shape[1])], axis=1)
+    lower = valid & (nbr < idx[:, None]) & same & xp.reshape(
+        xp.take(cand, xp.reshape(nbr, (-1,))), nbr.shape)
+    return cand & ~xp.any(lower, axis=1)
+
+
+def _unresolved_cluster_traced(xp, w, W, operator, sine, group=None, slots=1):
+    """Under an abstract trace, :func:`_unresolved_defective_cluster`'s question as data: a
+    scalar boolean array, True where the layer must answer NaN.
+
+    The eager screen walks each connected cluster of three or more modes; a trace cannot size a
+    cluster, so it reads every mode's ball instead (:func:`_traced_balls`, ``group`` restricting
+    it as eagerly). A ball with three or more modes whose unit columns' smallest singular value
+    (from their Gram matrix) is below ``sine`` is a candidate, one per ball. The ``max(1,
+    min(slots, n2 // 3))`` candidates with the smallest singular values take the defect measure
+    (:data:`_DEFECT_NU`, scaled as eagerly), and the answer is True where one of them is
+    defective, or where more candidates qualified than the slots hold (a degenerate ball in a
+    nearly dependent basis counts toward that too, as in :func:`_defective_clusters`).
+
+    A defective cluster's nearly dependent columns belong to one Jordan block, so they sit inside
+    one ball; a chain's balls are read one by one, each the eager screen's measure on a part of
+    the chain. ``operator()`` builds ``A`` once, for the slots.
+    """
+    n2 = w.shape[0]
+    dev = getattr(W, 'device', None)
+    C = W.dtype
+    idx, _, near, count, nbr, valid = _traced_balls(xp, w, group)
+    m = nbr.shape[1]
+    Wn = W / xp.linalg.vector_norm(W, axis=0)[None, :]
+    lane = xp.arange(m, device=dev)
+    eye_m = xp.astype(lane[:, None] == lane[None, :], C)
+    # The Gram matrix of each ball's unit columns, entry by entry, two column gathers alive at a
+    # time (as the cluster gate builds it); padded lanes read the identity.
+    G = xp.broadcast_to(eye_m[None], (n2, m, m))
+    for i in range(m):
+        Wi = xp.conj(xp.take(Wn, nbr[:, i], axis=1))
+        for j in range(i + 1, m):
+            g = xp.sum(Wi * xp.take(Wn, nbr[:, j], axis=1), axis=0)
+            Eij = xp.astype((lane[:, None] == i) & (lane[None, :] == j), C)
+            G = (G + g[:, None, None] * Eij[None]
+                 + xp.conj(g)[:, None, None] * xp.matrix_transpose(Eij)[None])
+        del Wi
+    G = xp.where(valid[:, :, None] & valid[:, None, :], G, eye_m[None])
+    low = xp.linalg.eigvalsh(G)[:, 0]
+    sigma = xp.sqrt(xp.maximum(low, xp.zeros_like(low)))
+    del G
+    seed = _one_seed_per_ball(xp, (count >= 3) & (sigma < sine), near, nbr, valid, idx)
+    del near
+    S = max(1, min(slots, n2 // 3))
+    order = xp.argsort(xp.where(seed, sigma, xp.full_like(sigma, float('inf'))), stable=True)
+    sel = order[:S]
+    live = xp.take(seed, sel)
+    overflow = xp.sum(xp.astype(seed, xp.int32)) > S
+    members = xp.take(nbr, sel, axis=0)
+    mvalid = xp.take(valid, sel, axis=0) & live[:, None]
+    # The restriction's departure from normality on the slots, as the eager screen reads it.
+    A = operator()
+    cols = _slot_columns(xp, Wn, members)
+    Q0, _ = xp.linalg.qr(xp.where(mvalid[:, None, :], cols, xp.zeros_like(cols)))
+    T = _conj_t(xp, Q0) @ (A @ Q0)
+    T = xp.where(mvalid[:, :, None] & mvalid[:, None, :], T, xp.zeros_like(T))
+    nv = xp.sum(xp.astype(mvalid, C), axis=1)
+    lam = xp.sum(xp.linalg.diagonal(T), axis=1) / xp.where(nv != 0, nv, xp.ones_like(nv))
+    TH = _conj_t(xp, T)
+    nu = (xp.linalg.matrix_norm(T @ TH - TH @ T)
+          / xp.maximum(xp.ones_like(xp.abs(lam)), xp.abs(lam)) ** 2)
+    eps = float(xp.finfo(xp.real(T).dtype).eps) / 2.220446049250313e-16
+    return xp.any(live & (nu > _DEFECT_NU * eps * eps)) | overflow
+
+
 _UNRESOLVED_2D = (
     'a 2D layer holds three or more modes of one defective eigenvalue cluster (exceptional '
     'points that coincide) that no rebuild takes exactly -- more than four modes, a chain of '
@@ -420,6 +527,57 @@ def _crowded_pairs_imprecise(xp, w, A, W, Q, a, b, mask, k0_d=None):
         if _concrete(loud):
             return True
     return False
+
+
+def _crowded_pairs_traced(xp, w, A, W, Q, a, b, mask, k0_d=None, slots=1):
+    """Under an abstract trace, :func:`_crowded_pairs_imprecise`'s question as data: a scalar
+    boolean array, True where the layer must answer NaN.
+
+    As :func:`_unresolved_cluster_traced` reads balls for clusters: a mode that is the first of a
+    pair rebuilt one at a time (``mask``) and whose ball (:func:`_traced_balls`) holds another such
+    pair is a candidate, one per ball. The first ``max(1, min(slots, n2 // 4))`` candidates take
+    the eager screen's backward error on their ball's columns -- one solve with ``W^T`` for every
+    slot's rows of ``W^-1`` together -- against the same threshold, with the propagation
+    sensitivity read from ``k0_d`` as data; more candidates than slots answer True as well.
+    """
+    n2 = w.shape[0]
+    C = W.dtype
+    idx, scale, near, _, nbr, valid = _traced_balls(xp, w)
+    m = nbr.shape[1]
+    is_a = xp.any((idx[:, None] == a[None, :]) & mask[None, :], axis=1)
+    held = xp.sum(xp.astype(valid & xp.reshape(xp.take(is_a, xp.reshape(nbr, (-1,))), nbr.shape),
+                            xp.int32), axis=1)
+    seed = _one_seed_per_ball(xp, is_a & (held >= 2), near, nbr, valid, idx)
+    del near
+    S = max(1, min(slots, n2 // 4))
+    sel = xp.argsort(xp.astype(~seed, xp.int32), stable=True)[:S]          # seeds first
+    live = xp.take(seed, sel)
+    overflow = xp.sum(xp.astype(seed, xp.int32)) > S
+    members = xp.take(nbr, sel, axis=0)
+    mvalid = xp.take(valid, sel, axis=0) & live[:, None]
+
+    def lanes(X):
+        return xp.where(mvalid[:, None, :], X, xp.zeros_like(X))
+    # The part of A - W Q^2 W^-1 each slot's columns c carry: (A W_c - W Q Q[:, c]) W^-1[c, :].
+    R = A @ lanes(_slot_columns(xp, W, members)) - W @ lanes(Q @ _slot_columns(xp, Q, members))
+    E = xp.astype((idx[None, :, None] == members[:, None, :]) & mvalid[:, None, :], C)
+    H = linear_solve(xp, xp.matrix_transpose(W),
+                     xp.reshape(xp.permute_dims(E, (1, 0, 2)), (n2, S * m)))
+    H = xp.permute_dims(xp.reshape(H, (n2, S, m)), (1, 0, 2))              # W^-1[c, :] transposed
+    _, Sr = xp.linalg.qr(xp.conj(H))
+    miss = xp.linalg.svdvals(R @ _conj_t(xp, Sr))[:, 0]
+    eps = float(xp.finfo(xp.real(W).dtype).eps) / 2.220446049250313e-16
+    sc = xp.reshape(xp.take(scale, xp.reshape(members, (-1,))), members.shape)
+    limit = _EP_BACKWARD * eps * xp.max(xp.where(mvalid, sc, xp.zeros_like(sc)), axis=1)
+    loud = miss > limit
+    if k0_d is not None:
+        # miss * max(1, S / S0) > limit, with S = k0 d / (2 min|q|) over the slot's columns
+        roots = xp.reshape(xp.take(xp.abs(xp.linalg.diagonal(Q)), xp.reshape(members, (-1,))),
+                           members.shape)
+        low = xp.min(xp.where(mvalid, roots, xp.full_like(roots, float('inf'))), axis=1)
+        half_k0_d = xp.abs(xp.asarray(k0_d)) / 2
+        loud = loud | (miss * half_k0_d > limit * _EP_SENSITIVITY * low)
+    return xp.any(live & loud) | overflow
 
 
 def _defective_pairs(xp, w, W, q, cap):
@@ -1660,7 +1818,8 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     def _screen(W_final, operator=_operator, rebuilt=None, joint=None):
         # Eagerly loud: defective clusters no rebuild took, and nearly coincident pairs one
         # rebuild cannot separate. A jointly rebuilt cluster answers to its own check instead.
-        # One warning per layer.
+        # One warning per layer. Under an abstract trace both questions come back as data (True:
+        # the layer answers NaN); eagerly None.
         import warnings
         from wavebit._common.backend import ExceptionalPointWarning
         group = None
@@ -1670,14 +1829,26 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
             group = xp.where(joint, ii + 1, xp.zeros_like(ii))
             a_, b_, mask_ = rebuilt[2:]
             rebuilt = rebuilt[:2] + (a_, b_, mask_ & ~xp.take(joint, a_) & ~xp.take(joint, b_))
-        if _unresolved_defective_cluster(xp, _stop(w), _stop(W_final), operator, _EP_SINE,
-                                         group):
+        unresolved = _unresolved_defective_cluster(xp, _stop(w), _stop(W_final), operator,
+                                                   _EP_SINE, group)
+        if unresolved is None:
+            loud = _unresolved_cluster_traced(xp, _stop(w), _stop(W_final), operator, _EP_SINE,
+                                              group, max(1, pair_cap // 2))
+            if rebuilt is not None:
+                loud = loud | _crowded_pairs_traced(
+                    xp, _stop(w), operator(), *(_stop(x) for x in rebuilt),
+                    k0_d=k0_d if screen_k0_d is None else screen_k0_d,
+                    slots=max(1, pair_cap // 2))
+            return loud
+        if unresolved:
             warnings.warn(_UNRESOLVED_2D, ExceptionalPointWarning, stacklevel=4)
         elif rebuilt is not None and _crowded_pairs_imprecise(
                 xp, _stop(w), operator(), *(_stop(x) for x in rebuilt),
                 k0_d=k0_d if screen_k0_d is None else screen_k0_d):
             warnings.warn(_IMPRECISE_2D, ExceptionalPointWarning, stacklevel=4)
+        return None
     if pairs is None and clusters is None:
+        # Eager only: under an abstract trace both gates return their slots.
         _screen(W)
         built.clear()
     else:
@@ -1695,7 +1866,10 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
             ii = xp.arange(w.shape[0], device=getattr(W, 'device', None))
             joint = xp.any((ii[:, None] == xp.reshape(clusters[0], (-1,))[None, :])
                            & xp.reshape(clusters[1], (-1,))[None, :], axis=1)
-        _screen(W, lambda: A, (W, Q, a, b, mask), joint)
+        loud = _screen(W, lambda: A, (W, Q, a, b, mask), joint)
+        if loud is not None:
+            # A selection, not a product, so that a quiet layer keeps its bits.
+            Q = xp.where(loud, xp.full_like(Q, float('nan')), Q)
         del A
         built.clear()
         if differentiated:

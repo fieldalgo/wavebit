@@ -438,9 +438,21 @@ def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1):
     # only when the cluster it sits in is defective; a degenerate eigenspace in a nearly
     # parallel basis (uniform layers, C4 rasters at normal incidence) is exact as eig left it.
     # The same screen catches coincident exceptional points whose eig vectors no pair explains.
-    from wavebit.rcwa._engine.solve_2d import _unresolved_defective_cluster
-    if _unresolved_defective_cluster(xp, _stop(eig_lam), _stop(psi), lambda: _stop(M),
-                                     _PARALLEL_SIN, group=forward):
+    # Under an abstract trace the screen's question comes back as data and the layer answers NaN
+    # where it would warn. Its slots grow with the layer: the split's eigenvectors of a degenerate
+    # (normal) cluster are not orthonormal, so at normal incidence a uniform layer holds a
+    # candidate ball for each of its degenerate eigenvalues (11 at truncation (5, 5)).
+    from wavebit.rcwa._engine.solve_2d import (_EP_SCREEN_BALL, _unresolved_cluster_traced,
+                                               _unresolved_defective_cluster)
+    unresolved = _unresolved_defective_cluster(xp, _stop(eig_lam), _stop(psi), lambda: _stop(M),
+                                               _PARALLEL_SIN, group=forward)
+    if unresolved is None:
+        loud = _unresolved_cluster_traced(
+            xp, _stop(eig_lam), _stop(psi), lambda: _stop(M), _PARALLEL_SIN, forward,
+            max(slots, lam.shape[0] // (2 * _EP_SCREEN_BALL)))
+        # A selection, not a product, so that a quiet layer keeps its bits.
+        lam = xp.where(loud, xp.full_like(lam, float('nan')), lam)
+    elif unresolved:
         import warnings
         warnings.warn(_REFUSED_PAIR, ExceptionalPointWarning, stacklevel=3)
     modal, psi = split_generator(xp, M, lam, psi, forward)
