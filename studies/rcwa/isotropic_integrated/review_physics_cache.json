@@ -1,0 +1,19 @@
+{
+ "circle": {
+  "scalar_bitwise": true,
+  "integrated_bitwise": true,
+  "arms_differ": 0.0037616486224979484
+ },
+ "overlap": {
+  "scalar_bitwise": true,
+  "integrated_bitwise": true,
+  "arms_differ": 0.0335109289661934
+ },
+ "hexagonal": {
+  "scalar_bitwise": true,
+  "integrated_bitwise": true,
+  "arms_differ": 0.0024868860341097365
+ },
+ "tensor scalar->integrated": "IncompatibleProblemError",
+ "tensor integrated->scalar": "IncompatibleProblemError"
+}

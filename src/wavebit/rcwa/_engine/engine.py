@@ -6567,7 +6567,9 @@ class CoreFactorizationMixin:
         check_shape_record(self.structure, self._geometry_lattice_for(geometry), geometry,
                            self.factorization.value, self.nvf_projector.value)
         from wavebit.rcwa._engine import tensor_shapes as _ts
-        if _ts._ISOTROPIC_INTEGRATED or geometry.tensor_geometry is not None:
+        if ((_ts._ISOTROPIC_INTEGRATED and self.factorization == Factorization.NVF)
+                or geometry.tensor_geometry is not None):
+            # Only an NVF record carries the switch's plans; Li and Laurent never read it.
             if (geometry.tensor_geometry is None) == _ts._ISOTROPIC_INTEGRATED:
                 raise _fac.StaleGeometryError(
                     'this frozen geometry was taken under the other isotropic shape builder '

@@ -1,0 +1,147 @@
+{
+ "wavebit_file": "src/wavebit/__init__.py",
+ "energy": {
+  "high-contrast|scalar|M2": {
+   "defect": 1.9984014443252818e-15,
+   "sumT": 0.9755251767116058,
+   "layer_calls": 0
+  },
+  "high-contrast|scalar|M3": {
+   "defect": 2.220446049250313e-15,
+   "sumT": 0.9750120717735414,
+   "layer_calls": 0
+  },
+  "high-contrast|scalar|M5": {
+   "defect": 3.2862601528904634e-14,
+   "sumT": 0.9710014561823528,
+   "layer_calls": 0
+  },
+  "high-contrast|integrated|M2": {
+   "defect": 0.01414731366059696,
+   "sumT": 0.9725694569331709,
+   "layer_calls": 1
+  },
+  "high-contrast|integrated|M3": {
+   "defect": 0.016168972009114713,
+   "sumT": 0.9929167607638987,
+   "layer_calls": 1
+  },
+  "high-contrast|integrated|M5": {
+   "defect": 0.001335752218254882,
+   "sumT": 0.9718210469320004,
+   "layer_calls": 1
+  },
+  "ellipse|scalar|M2": {
+   "defect": -2.1094237467877974e-15,
+   "sumT": 0.9602492301512869,
+   "layer_calls": 0
+  },
+  "ellipse|scalar|M3": {
+   "defect": -2.6645352591003757e-15,
+   "sumT": 0.9615746027085419,
+   "layer_calls": 0
+  },
+  "ellipse|scalar|M5": {
+   "defect": 1.9984014443252818e-14,
+   "sumT": 0.9605310195598971,
+   "layer_calls": 0
+  },
+  "ellipse|integrated|M2": {
+   "defect": 0.015527771444746152,
+   "sumT": 0.9814693307251623,
+   "layer_calls": 1
+  },
+  "ellipse|integrated|M3": {
+   "defect": 0.007162847812420159,
+   "sumT": 0.9703831587085141,
+   "layer_calls": 1
+  },
+  "ellipse|integrated|M5": {
+   "defect": -0.002792088260856307,
+   "sumT": 0.9570032674564565,
+   "layer_calls": 1
+  },
+  "circle|scalar|M2": {
+   "defect": 1.5543122344752192e-15,
+   "sumT": 0.9713572387804917,
+   "layer_calls": 0
+  },
+  "circle|scalar|M3": {
+   "defect": -2.220446049250313e-16,
+   "sumT": 0.9707905342918094,
+   "layer_calls": 0
+  },
+  "circle|scalar|M5": {
+   "defect": 2.5979218776228663e-14,
+   "sumT": 0.9708228855467639,
+   "layer_calls": 0
+  },
+  "circle|integrated|M2": {
+   "defect": 0.000625761270927061,
+   "sumT": 0.9730721681628256,
+   "layer_calls": 1
+  },
+  "circle|integrated|M3": {
+   "defect": -0.00023071975819843882,
+   "sumT": 0.9701672785345973,
+   "layer_calls": 1
+  },
+  "circle|integrated|M5": {
+   "defect": 9.478337377233359e-05,
+   "sumT": 0.9710689566562734,
+   "layer_calls": 1
+  },
+  "rect-tilted|scalar|M2": {
+   "defect": -4.440892098500626e-16,
+   "sumT": 0.9913662241595852,
+   "layer_calls": 0
+  },
+  "rect-tilted|scalar|M3": {
+   "defect": 2.220446049250313e-16,
+   "sumT": 0.9909731139873371,
+   "layer_calls": 0
+  },
+  "rect-tilted|scalar|M5": {
+   "defect": 1.9984014443252818e-15,
+   "sumT": 0.9906892355128626,
+   "layer_calls": 0
+  },
+  "rect-tilted|integrated|M2": {
+   "defect": 7.765875244802878e-05,
+   "sumT": 0.9909663787092483,
+   "layer_calls": 1
+  },
+  "rect-tilted|integrated|M3": {
+   "defect": -0.0005474873734291341,
+   "sumT": 0.9897841593480082,
+   "layer_calls": 1
+  },
+  "rect-tilted|integrated|M5": {
+   "defect": 8.403566320169809e-05,
+   "sumT": 0.990704349321979,
+   "layer_calls": 1
+  }
+ },
+ "energy_p_highcontrast_M3": {
+  "scalar": 7.327471962526033e-15,
+  "integrated": 0.03455067958846536
+ },
+ "li_switch": {
+  "scalar|li": [
+   "UnsupportedFeatureError",
+   "problem: factorization='li' on shapes supports only axis-aligned rectangles; use factorization='nvf' (NVF) for other shapes"
+  ],
+  "scalar|laurent": [
+   "ok",
+   0.9522025815978707
+  ],
+  "integrated|li": [
+   "UnsupportedFeatureError",
+   "problem: factorization='li' on shapes supports only axis-aligned rectangles; use factorization='nvf' (NVF) for other shapes"
+  ],
+  "integrated|laurent": [
+   "IncompatibleProblemError",
+   "stack: this frozen geometry was taken under the other isotropic shape builder (tensor_shapes._ISOTROPIC_INTEGRATED changed); freeze_geometry() again"
+  ]
+ }
+}

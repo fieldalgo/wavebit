@@ -1,0 +1,210 @@
+== circle  M_top=16 lossless=True  arms at top: max|dR|=8.78e-06 max|dT|=5.31e-05 |dsumT|=1.88e-05
+   M | scala: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | integ: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | closer
+   1 | 0.9605235179 2.79e-03 2.79e-03 1.20e-02 2.79e-03 6.66e-16 | 0.9641797253 6.46e-03 6.45e-03 2.56e-02 4.79e-03 1.66e-03 | scalar
+   2 | 0.9584365654 6.98e-04 7.08e-04 5.30e-03 7.03e-04 2.00e-15 | 0.9602012568 2.48e-03 2.47e-03 8.29e-03 1.37e-03 1.09e-03 | scalar
+   3 | 0.9576581468 8.03e-05 7.09e-05 3.59e-04 7.59e-05 5.33e-15 | 0.9559751071 1.74e-03 1.75e-03 3.95e-03 7.32e-04 1.03e-03 | scalar
+   4 | 0.9577532834 1.48e-05 2.43e-05 2.03e-04 1.92e-05 3.66e-15 | 0.9579384238 2.19e-04 2.09e-04 1.08e-03 1.66e-04 3.84e-05 | scalar
+   5 | 0.9578074315 6.90e-05 7.84e-05 5.59e-04 7.34e-05 8.66e-15 | 0.9581935808 4.74e-04 4.65e-04 1.49e-03 2.31e-04 2.28e-04 | scalar
+   6 | 0.9577441190 5.67e-06 1.51e-05 1.48e-04 1.01e-05 5.46e-14 | 0.9574520072 2.68e-04 2.77e-04 5.69e-04 1.19e-04 1.63e-04 | scalar
+   8 | 0.9577504637 1.20e-05 2.14e-05 1.37e-04 1.64e-05 3.95e-14 | 0.9578596767 1.40e-04 1.31e-04 4.87e-04 7.49e-05 5.07e-05 | scalar
+  10 | 0.9577287426 9.71e-06 2.85e-07 1.27e-05 5.32e-06 8.55e-14 | 0.9576880750 3.15e-05 4.10e-05 9.56e-05 1.94e-05 2.66e-05 | scalar
+  12 | 0.9577421736 3.72e-06 1.31e-05 8.01e-05 8.11e-06 2.64e-14 | 0.9577477517 2.81e-05 1.87e-05 7.76e-05 8.88e-06 4.82e-06 | unresolved
+  14 | 0.9577365019 1.95e-06 7.47e-06 1.52e-05 2.44e-06 2.03e-13 | 0.9577521483 3.25e-05 2.31e-05 7.57e-05 1.22e-05 5.94e-06 | scalar
+  16 | 0.9577384491 0.00e+00 9.42e-06 2.65e-05 4.39e-06 4.95e-13 | 0.9577196065 0.00e+00 9.42e-06 2.65e-05 4.39e-06 1.01e-05 | unresolved
+  scalar     rate p (|dsumT| jnt)=3.65 (max|dT| jnt)=2.88  grow-steps=3 sign-flips=4  extrap sumT(M>=6) {'p1': 0.9577312457113185, 'p2': 0.9577357405362422}
+  scalar     geomean|dsumT|(3<=M<top)=1.37e-05 geomean max|dT|=1.03e-04 tail spread sumT(top 3 M)=5.67e-06 max|R+T-1|(M>=4)=4.95e-13
+  integrated rate p (|dsumT| jnt)=2.4 (max|dT| jnt)=2.52  grow-steps=2 sign-flips=6  extrap sumT(M>=6) {'p1': 0.9579126019750674, 'p2': 0.9578195423406481}
+  integrated geomean|dsumT|(3<=M<top)=1.35e-04 geomean max|dT|=4.21e-04 tail spread sumT(top 3 M)=3.25e-05 max|R+T-1|(M>=4)=2.28e-04
+  closer counts (joint ref, |dsumT|, resolved above top gap) {'scalar': 9, 'integrated': 0, 'unresolved': 2}
+  closer counts by reference (M<top) {'ref_scalar:dsumT': {'scalar': 10, 'integrated': 0}, 'ref_scalar:max_dT': {'scalar': 9, 'integrated': 1}, 'ref_integrated:dsumT': {'scalar': 10, 'integrated': 0}, 'ref_integrated:max_dT': {'scalar': 9, 'integrated': 1}}
+== metallic  M_top=16 lossless=False  arms at top: max|dR|=4.77e-04 max|dT|=2.81e-03 |dsumT|=2.10e-03
+   M | scala: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | integ: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | closer
+   1 | 0.5620351076 3.45e-01 3.46e-01 1.79e-01 8.58e-03 4.23e-01 | 1.1060429624 1.97e-01 1.98e-01 1.49e-01 5.53e-03 1.18e-01 | integrated
+   2 | 0.5707598989 3.36e-01 3.37e-01 1.73e-01 6.10e-02 3.61e-01 | 0.9679125588 5.90e-02 6.00e-02 8.73e-02 1.93e-02 6.05e-03 | integrated
+   3 | 0.8450506860 6.18e-02 6.28e-02 7.90e-02 2.04e-03 1.50e-01 | 0.8604178463 4.85e-02 4.75e-02 2.89e-02 3.28e-05 1.33e-01 | integrated
+   4 | 0.7725258046 1.34e-01 1.35e-01 6.75e-02 2.00e-02 2.01e-01 | 0.7639457981 1.45e-01 1.44e-01 8.37e-02 2.51e-02 2.04e-01 | scalar
+   5 | 0.8523849954 5.44e-02 5.55e-02 3.69e-02 4.71e-03 1.36e-01 | 0.8684844199 4.04e-02 3.94e-02 2.69e-02 6.35e-04 1.24e-01 | integrated
+   6 | 0.8579985474 4.88e-02 4.99e-02 2.44e-02 3.13e-03 1.32e-01 | 0.8903148990 1.86e-02 1.76e-02 9.75e-03 9.74e-04 1.02e-01 | integrated
+   8 | 0.8792459891 2.76e-02 2.86e-02 1.68e-02 8.54e-04 1.13e-01 | 0.8817027439 2.72e-02 2.62e-02 2.25e-02 9.88e-04 1.11e-01 | integrated
+  10 | 0.8814196027 2.54e-02 2.65e-02 1.36e-02 1.11e-03 1.11e-01 | 0.8989728702 9.96e-03 8.91e-03 5.36e-03 5.26e-04 9.37e-02 | integrated
+  12 | 0.8786131925 2.82e-02 2.93e-02 1.10e-02 2.08e-03 1.13e-01 | 0.8930005043 1.59e-02 1.49e-02 7.61e-03 1.69e-03 9.85e-02 | integrated
+  14 | 0.8963665488 1.05e-02 1.15e-02 5.09e-03 1.13e-04 9.68e-02 | 0.9051151091 3.81e-03 2.76e-03 2.21e-03 3.46e-04 8.78e-02 | integrated
+  16 | 0.9068293023 0.00e+00 1.05e-03 1.41e-03 2.39e-04 8.66e-02 | 0.9089278927 0.00e+00 1.05e-03 1.41e-03 2.39e-04 8.41e-02 | unresolved
+  scalar     rate p (|dsumT| jnt)=1.44 (max|dT| jnt)=1.63  grow-steps=2 sign-flips=0  extrap sumT(M>=6) {'p1': 0.9232563454184326, 'p2': 0.9025089965847577}
+  scalar     geomean|dsumT|(3<=M<top)=3.96e-02 geomean max|dT|=2.23e-02 tail spread sumT(top 3 M)=2.82e-02 max|R+T-1|(M>=4)=2.01e-01
+  integrated rate p (|dsumT| jnt)=1.16 (max|dT| jnt)=1.48  grow-steps=3 sign-flips=1  extrap sumT(M>=6) {'p1': 0.9156078233120277, 'p2': 0.9049010243465626}
+  integrated geomean|dsumT|(3<=M<top)=2.15e-02 geomean max|dT|=1.38e-02 tail spread sumT(top 3 M)=1.59e-02 max|R+T-1|(M>=4)=2.04e-01
+  closer counts (joint ref, |dsumT|, resolved above top gap) {'scalar': 1, 'integrated': 9, 'unresolved': 1}
+  closer counts by reference (M<top) {'ref_scalar:dsumT': {'scalar': 1, 'integrated': 9}, 'ref_scalar:max_dT': {'scalar': 2, 'integrated': 8}, 'ref_integrated:dsumT': {'scalar': 1, 'integrated': 9}, 'ref_integrated:max_dT': {'scalar': 2, 'integrated': 8}}
+== high-contrast  M_top=16 lossless=True  arms at top: max|dR|=4.71e-05 max|dT|=1.53e-04 |dsumT|=3.72e-04
+   M | scala: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | integ: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | closer
+   1 | 0.9468341170 2.58e-03 2.39e-03 3.22e-01 2.55e-03 4.00e-15 | 1.0396065049 9.50e-02 9.52e-02 3.57e-01 1.00e-03 9.43e-02 | scalar
+   2 | 0.9865875976 4.23e-02 4.21e-02 1.26e-01 4.23e-02 3.66e-15 | 0.9545948436 9.97e-03 1.02e-02 6.18e-02 1.78e-02 7.53e-03 | integrated
+   3 | 0.9304230178 1.38e-02 1.40e-02 4.62e-02 1.39e-02 1.73e-14 | 0.9821848831 3.76e-02 3.77e-02 2.53e-02 6.51e-04 3.73e-02 | scalar
+   4 | 0.9398019614 4.46e-03 4.64e-03 8.20e-03 4.48e-03 9.21e-15 | 0.9428682611 1.76e-03 1.58e-03 2.36e-02 1.94e-03 3.35e-03 | integrated
+   5 | 0.9431570891 1.10e-03 1.29e-03 5.92e-03 1.12e-03 1.31e-14 | 0.9313223788 1.33e-02 1.31e-02 1.02e-02 6.28e-03 6.68e-03 | scalar
+   6 | 0.9428447830 1.41e-03 1.60e-03 5.11e-03 1.44e-03 1.94e-14 | 0.9477173285 3.09e-03 3.27e-03 5.87e-03 1.23e-03 4.67e-03 | scalar
+   8 | 0.9437841919 4.73e-04 6.59e-04 9.58e-04 4.97e-04 5.24e-14 | 0.9409646318 3.66e-03 3.48e-03 1.94e-03 1.30e-03 2.01e-03 | scalar
+  10 | 0.9441101874 1.47e-04 3.33e-04 5.01e-04 1.71e-04 7.66e-14 | 0.9456122157 9.83e-04 1.17e-03 9.63e-04 1.82e-04 1.15e-03 | scalar
+  12 | 0.9441549951 1.02e-04 2.88e-04 2.42e-04 1.26e-04 1.70e-13 | 0.9438133426 8.16e-04 6.30e-04 4.53e-04 3.19e-04 1.48e-04 | scalar
+  14 | 0.9441807597 7.67e-05 2.63e-04 5.07e-04 1.00e-04 1.95e-13 | 0.9439742051 6.55e-04 4.69e-04 4.28e-04 1.19e-04 1.88e-04 | scalar
+  16 | 0.9442574921 0.00e+00 1.86e-04 7.66e-05 2.35e-05 3.44e-13 | 0.9446292019 0.00e+00 1.86e-04 7.66e-05 2.35e-05 3.25e-04 | unresolved
+  scalar     rate p (|dsumT| jnt)=3.04 (max|dT| jnt)=3.46  grow-steps=2 sign-flips=1  extrap sumT(M>=6) {'p1': 0.9452159415918528, 'p2': 0.9445658046636952}
+  scalar     geomean|dsumT|(3<=M<top)=1.11e-03 geomean max|dT|=2.26e-03 tail spread sumT(top 3 M)=1.02e-04 max|R+T-1|(M>=4)=3.44e-13
+  integrated rate p (|dsumT| jnt)=1.42 (max|dT| jnt)=2.6  grow-steps=3 sign-flips=5  extrap sumT(M>=6) {'p1': 0.942461998510564, 'p2': 0.9432589146659086}
+  integrated geomean|dsumT|(3<=M<top)=2.73e-03 geomean max|dT|=3.26e-03 tail spread sumT(top 3 M)=8.16e-04 max|R+T-1|(M>=4)=6.68e-03
+  closer counts (joint ref, |dsumT|, resolved above top gap) {'scalar': 8, 'integrated': 2, 'unresolved': 1}
+  closer counts by reference (M<top) {'ref_scalar:dsumT': {'scalar': 8, 'integrated': 2}, 'ref_scalar:max_dT': {'scalar': 7, 'integrated': 3}, 'ref_integrated:dsumT': {'scalar': 8, 'integrated': 2}, 'ref_integrated:max_dT': {'scalar': 7, 'integrated': 3}}
+== rectangle  M_top=12 lossless=True  arms at top: max|dR|=1.94e-05 max|dT|=5.78e-05 |dsumT|=1.47e-05
+   M | scala: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | integ: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | closer
+   1 | 0.9912333462 1.28e-03 1.29e-03 1.24e-02 1.29e-03 2.22e-16 | 0.9892464300 6.92e-04 6.99e-04 4.84e-03 2.08e-04 9.05e-04 | integrated
+   2 | 0.9905655036 6.12e-04 6.20e-04 5.53e-03 6.22e-04 1.55e-15 | 0.9898036725 1.35e-04 1.42e-04 4.69e-03 3.65e-04 5.05e-04 | integrated
+   3 | 0.9902593369 3.06e-04 3.14e-04 2.89e-03 3.16e-04 0.00e+00 | 0.9886868303 1.25e-03 1.26e-03 1.77e-03 4.09e-04 8.48e-04 | scalar
+   4 | 0.9899272958 2.58e-05 1.84e-05 1.59e-04 1.61e-05 1.55e-15 | 0.9892051373 7.33e-04 7.41e-04 1.95e-03 2.68e-04 4.71e-04 | scalar
+   5 | 0.9900027355 4.97e-05 5.70e-05 3.89e-04 5.93e-05 6.66e-16 | 0.9901233884 1.85e-04 1.78e-04 1.37e-04 4.66e-05 2.27e-04 | scalar
+   6 | 0.9899779133 2.48e-05 3.22e-05 2.47e-04 3.45e-05 1.03e-14 | 0.9900713677 1.33e-04 1.26e-04 3.71e-04 5.51e-06 1.22e-04 | scalar
+   8 | 0.9900145715 6.15e-05 6.89e-05 5.40e-04 7.12e-05 2.20e-14 | 0.9899689611 3.06e-05 2.32e-05 2.30e-05 3.17e-05 5.73e-05 | integrated
+  10 | 0.9899301526 2.29e-05 1.56e-05 2.12e-05 1.32e-05 1.07e-14 | 0.9898335677 1.05e-04 1.12e-04 2.76e-04 4.48e-05 6.50e-05 | scalar
+  12 | 0.9899530786 0.00e+00 7.37e-06 2.89e-05 9.69e-06 1.03e-13 | 0.9899383462 0.00e+00 7.37e-06 2.89e-05 9.69e-06 4.64e-06 | unresolved
+  scalar     rate p (|dsumT| jnt)=1.93 (max|dT| jnt)=2.08  grow-steps=2 sign-flips=3  extrap sumT(M>=6) {'p1': 0.9899085384010682, 'p2': 0.989941264025067}
+  scalar     geomean|dsumT|(3<=M<top)=4.74e-05 geomean max|dT|=2.82e-04 tail spread sumT(top 3 M)=8.44e-05 max|R+T-1|(M>=4)=1.03e-13
+  integrated rate p (|dsumT| jnt)=1.62 (max|dT| jnt)=3.61  grow-steps=2 sign-flips=2  extrap sumT(M>=6) {'p1': 0.9896960367624946, 'p2': 0.9898199025263903}
+  integrated geomean|dsumT|(3<=M<top)=1.95e-04 geomean max|dT|=3.22e-04 tail spread sumT(top 3 M)=1.35e-04 max|R+T-1|(M>=4)=4.71e-04
+  closer counts (joint ref, |dsumT|, resolved above top gap) {'scalar': 5, 'integrated': 3, 'unresolved': 1}
+  closer counts by reference (M<top) {'ref_scalar:dsumT': {'scalar': 5, 'integrated': 3}, 'ref_scalar:max_dT': {'scalar': 3, 'integrated': 5}, 'ref_integrated:dsumT': {'scalar': 5, 'integrated': 3}, 'ref_integrated:max_dT': {'scalar': 3, 'integrated': 5}}
+== rect-tilted  M_top=14 lossless=True  arms at top: max|dR|=3.63e-05 max|dT|=2.19e-04 |dsumT|=3.89e-05
+   M | scala: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | integ: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | closer
+   1 | 0.9908901256 1.23e-03 1.25e-03 1.22e-02 1.25e-03 1.78e-15 | 0.9900586020 4.40e-04 4.20e-04 5.77e-03 4.00e-04 1.92e-05 | integrated
+   2 | 0.9903392362 6.82e-04 7.01e-04 6.12e-03 7.00e-04 1.33e-15 | 0.9897594695 1.41e-04 1.21e-04 3.35e-03 1.89e-04 6.91e-05 | integrated
+   3 | 0.9899180279 2.60e-04 2.80e-04 2.64e-03 2.78e-04 8.88e-16 | 0.9885814301 1.04e-03 1.06e-03 1.69e-03 3.66e-04 6.92e-04 | scalar
+   4 | 0.9896615495 3.85e-06 2.33e-05 4.23e-04 2.20e-05 2.22e-16 | 0.9891263053 4.92e-04 5.12e-04 1.45e-03 2.25e-04 2.88e-04 | scalar
+   5 | 0.9896651199 7.42e-06 2.69e-05 2.09e-04 2.55e-05 5.55e-15 | 0.9898325386 2.14e-04 1.94e-04 2.00e-04 1.36e-05 2.07e-04 | scalar
+   6 | 0.9896784248 2.07e-05 4.02e-05 3.42e-04 3.89e-05 6.44e-15 | 0.9898764509 2.58e-04 2.38e-04 5.23e-04 4.90e-05 1.88e-04 | scalar
+   8 | 0.9896984640 4.08e-05 6.02e-05 4.44e-04 5.89e-05 1.18e-14 | 0.9895377376 8.10e-05 1.01e-04 2.55e-04 5.01e-05 5.17e-05 | scalar
+  10 | 0.9896393586 1.83e-05 1.12e-06 3.52e-05 2.15e-07 5.77e-15 | 0.9895716642 4.71e-05 6.66e-05 3.37e-04 5.35e-05 1.45e-05 | scalar
+  12 | 0.9896469517 1.08e-05 8.71e-06 5.61e-05 7.38e-06 4.61e-14 | 0.9896477890 2.90e-05 9.55e-06 4.07e-05 7.08e-06 1.53e-05 | unresolved
+  14 | 0.9896577030 0.00e+00 1.95e-05 1.10e-04 1.81e-05 4.55e-14 | 0.9896187840 0.00e+00 1.95e-05 1.10e-04 1.81e-05 2.66e-06 | unresolved
+  scalar     rate p (|dsumT| jnt)=2.09 (max|dT| jnt)=2.26  grow-steps=4 sign-flips=0  extrap sumT(M>=6) {'p1': 0.989620733864889, 'p2': 0.9896433466742935}
+  scalar     geomean|dsumT|(3<=M<top)=2.36e-05 geomean max|dT|=2.55e-04 tail spread sumT(top 3 M)=1.83e-05 max|R+T-1|(M>=4)=4.61e-14
+  integrated rate p (|dsumT| jnt)=0.51 (max|dT| jnt)=2.0  grow-steps=2 sign-flips=4  extrap sumT(M>=6) {'p1': 0.9893989031082063, 'p2': 0.989511194636929}
+  integrated geomean|dsumT|(3<=M<top)=1.49e-04 geomean max|dT|=3.67e-04 tail spread sumT(top 3 M)=7.61e-05 max|R+T-1|(M>=4)=2.88e-04
+  closer counts (joint ref, |dsumT|, resolved above top gap) {'scalar': 6, 'integrated': 2, 'unresolved': 2}
+  closer counts by reference (M<top) {'ref_scalar:dsumT': {'scalar': 6, 'integrated': 3}, 'ref_scalar:max_dT': {'scalar': 5, 'integrated': 4}, 'ref_integrated:dsumT': {'scalar': 7, 'integrated': 2}, 'ref_integrated:max_dT': {'scalar': 3, 'integrated': 6}}
+== ellipse  M_top=12 lossless=True  arms at top: max|dR|=5.63e-05 max|dT|=6.24e-04 |dsumT|=3.77e-04
+   M | scala: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | integ: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | closer
+   1 | 0.9616170673 1.38e-04 5.03e-05 9.12e-02 1.10e-04 2.22e-16 | 0.9585287693 3.33e-03 3.14e-03 6.68e-02 3.38e-03 3.98e-04 | scalar
+   2 | 0.9605046214 9.74e-04 1.16e-03 1.04e-02 1.00e-03 4.33e-15 | 0.9834612967 2.16e-02 2.18e-02 4.47e-02 4.60e-03 1.74e-02 | scalar
+   3 | 0.9620564282 5.77e-04 3.89e-04 1.21e-02 5.49e-04 7.77e-16 | 0.9709480657 9.09e-03 9.28e-03 2.39e-02 1.87e-03 7.57e-03 | scalar
+   4 | 0.9613466756 1.32e-04 3.21e-04 3.84e-03 1.61e-04 9.77e-15 | 0.9557634545 6.09e-03 5.90e-03 5.51e-03 1.54e-03 4.20e-03 | scalar
+   5 | 0.9610258050 4.53e-04 6.42e-04 1.54e-03 4.81e-04 8.48e-14 | 0.9572613526 4.59e-03 4.41e-03 7.40e-03 1.15e-03 3.09e-03 | scalar
+   6 | 0.9611375219 3.42e-04 5.30e-04 1.44e-03 3.70e-04 1.86e-13 | 0.9624088935 5.53e-04 7.42e-04 1.10e-03 4.56e-07 9.01e-04 | scalar
+   8 | 0.9615315394 5.24e-05 1.36e-04 9.09e-04 2.43e-05 1.74e-13 | 0.9614130646 4.43e-04 2.54e-04 5.94e-04 6.34e-05 3.08e-05 | unresolved
+  10 | 0.9613436624 1.35e-04 3.24e-04 1.24e-03 1.64e-04 2.65e-13 | 0.9610317603 8.24e-04 6.36e-04 1.58e-03 1.81e-04 2.94e-04 | scalar
+  12 | 0.9614790929 0.00e+00 1.88e-04 3.12e-04 2.82e-05 7.70e-13 | 0.9618556571 0.00e+00 1.88e-04 3.12e-04 2.82e-05 3.20e-04 | unresolved
+  scalar     rate p (|dsumT| jnt)=1.04 (max|dT| jnt)=2.06  grow-steps=3 sign-flips=2  extrap sumT(M>=6) {'p1': 0.9617797333255972, 'p2': 0.9615882396443063}
+  scalar     geomean|dsumT|(3<=M<top)=3.51e-04 geomean max|dT|=2.21e-03 tail spread sumT(top 3 M)=1.88e-04 max|R+T-1|(M>=4)=7.70e-13
+  integrated rate p (|dsumT| jnt)=3.16 (max|dT| jnt)=3.23  grow-steps=2 sign-flips=4  extrap sumT(M>=6) {'p1': 0.9604964311710753, 'p2': 0.9610243042766695}
+  integrated geomean|dsumT|(3<=M<top)=1.75e-03 geomean max|dT|=3.17e-03 tail spread sumT(top 3 M)=8.24e-04 max|R+T-1|(M>=4)=4.20e-03
+  closer counts (joint ref, |dsumT|, resolved above top gap) {'scalar': 7, 'integrated': 0, 'unresolved': 2}
+  closer counts by reference (M<top) {'ref_scalar:dsumT': {'scalar': 8, 'integrated': 0}, 'ref_scalar:max_dT': {'scalar': 6, 'integrated': 2}, 'ref_integrated:dsumT': {'scalar': 7, 'integrated': 1}, 'ref_integrated:max_dT': {'scalar': 5, 'integrated': 3}}
+== lossy  M_top=12 lossless=False  arms at top: max|dR|=1.83e-06 max|dT|=2.42e-05 |dsumT|=1.90e-05
+   M | scala: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | integ: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | closer
+   1 | 0.7936919158 1.23e-02 1.23e-02 1.30e-02 3.92e-05 1.79e-01 | 0.7977221574 1.63e-02 1.63e-02 1.90e-02 2.13e-04 1.75e-01 | scalar
+   2 | 0.7869306393 5.55e-03 5.54e-03 5.51e-03 3.63e-04 1.85e-01 | 0.7919305158 1.05e-02 1.05e-02 1.07e-02 1.99e-04 1.80e-01 | scalar
+   3 | 0.7820608298 6.78e-04 6.68e-04 5.60e-04 8.94e-05 1.90e-01 | 0.7795231377 1.88e-03 1.87e-03 1.97e-03 9.45e-05 1.93e-01 | scalar
+   4 | 0.7821238670 7.41e-04 7.31e-04 9.45e-04 2.11e-05 1.90e-01 | 0.7824529822 1.05e-03 1.06e-03 1.27e-03 3.49e-05 1.90e-01 | scalar
+   5 | 0.7820539392 6.71e-04 6.61e-04 6.87e-04 4.09e-05 1.90e-01 | 0.7828077704 1.41e-03 1.42e-03 1.55e-03 3.45e-05 1.90e-01 | scalar
+   6 | 0.7816542334 2.71e-04 2.61e-04 2.61e-04 2.00e-05 1.91e-01 | 0.7811685571 2.34e-04 2.24e-04 2.51e-04 2.97e-05 1.91e-01 | integrated
+   8 | 0.7815151514 1.32e-04 1.22e-04 1.41e-04 6.22e-06 1.91e-01 | 0.7817374144 3.35e-04 3.45e-04 4.02e-04 6.01e-06 1.91e-01 | scalar
+  10 | 0.7813855365 2.27e-06 7.22e-06 1.82e-05 9.52e-07 1.91e-01 | 0.7813208425 8.14e-05 7.19e-05 8.41e-05 1.83e-07 1.91e-01 | scalar
+  12 | 0.7813832695 0.00e+00 9.49e-06 1.21e-05 9.17e-07 1.91e-01 | 0.7814022434 0.00e+00 9.49e-06 1.21e-05 9.17e-07 1.91e-01 | unresolved
+  scalar     rate p (|dsumT| jnt)=2.42 (max|dT| jnt)=2.31  grow-steps=1 sign-flips=1  extrap sumT(M>=6) {'p1': 0.7810697651892111, 'p2': 0.7812763730079905}
+  scalar     geomean|dsumT|(3<=M<top)=2.05e-04 geomean max|dT|=2.50e-04 tail spread sumT(top 3 M)=1.32e-04 max|R+T-1|(M>=4)=1.91e-01
+  integrated rate p (|dsumT| jnt)=2.52 (max|dT| jnt)=2.43  grow-steps=2 sign-flips=5  extrap sumT(M>=6) {'p1': 0.7816355571106484, 'p2': 0.7815483734906967}
+  integrated geomean|dsumT|(3<=M<top)=5.00e-04 geomean max|dT|=5.66e-04 tail spread sumT(top 3 M)=4.17e-04 max|R+T-1|(M>=4)=1.91e-01
+  closer counts (joint ref, |dsumT|, resolved above top gap) {'scalar': 7, 'integrated': 1, 'unresolved': 1}
+  closer counts by reference (M<top) {'ref_scalar:dsumT': {'scalar': 7, 'integrated': 1}, 'ref_scalar:max_dT': {'scalar': 7, 'integrated': 1}, 'ref_integrated:dsumT': {'scalar': 7, 'integrated': 1}, 'ref_integrated:max_dT': {'scalar': 8, 'integrated': 0}}
+== hexagonal  M_top=12 lossless=True  arms at top: max|dR|=1.12e-05 max|dT|=9.89e-05 |dsumT|=2.00e-05
+   M | scala: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | integ: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | closer
+   1 | 0.9626869041 8.92e-05 7.92e-05 2.91e-03 8.36e-05 5.55e-16 | 0.9591609327 3.46e-03 3.45e-03 1.53e-02 2.65e-04 3.18e-03 | scalar
+   2 | 0.9626330678 3.54e-05 2.54e-05 2.84e-03 2.98e-05 2.22e-15 | 0.9644853483 1.87e-03 1.88e-03 9.04e-03 1.04e-03 8.43e-04 | scalar
+   3 | 0.9624469459 1.51e-04 1.61e-04 5.59e-04 1.56e-04 2.22e-16 | 0.9620059334 6.12e-04 6.02e-04 3.05e-03 4.35e-04 1.62e-04 | scalar
+   4 | 0.9625353698 6.23e-05 7.23e-05 4.94e-04 6.79e-05 2.66e-15 | 0.9622560565 3.62e-04 3.52e-04 8.71e-04 1.40e-04 2.07e-04 | scalar
+   5 | 0.9626057903 8.10e-06 1.89e-06 1.74e-04 2.48e-06 1.89e-15 | 0.9627249875 1.07e-04 1.17e-04 1.05e-03 1.00e-04 2.13e-05 | scalar
+   6 | 0.9625754629 2.22e-05 3.22e-05 1.57e-04 2.79e-05 7.55e-15 | 0.9626266288 8.96e-06 1.89e-05 5.84e-05 3.14e-05 5.47e-05 | integrated
+   8 | 0.9625873781 1.03e-05 2.03e-05 1.15e-04 1.59e-05 1.60e-14 | 0.9625985961 1.91e-05 9.08e-06 1.33e-04 3.47e-06 8.19e-06 | integrated
+  10 | 0.9625890015 8.69e-06 1.87e-05 7.32e-05 1.43e-05 4.55e-14 | 0.9625526351 6.50e-05 5.50e-05 2.29e-04 3.38e-05 1.69e-05 | scalar
+  12 | 0.9625976950 0.00e+00 9.99e-06 4.95e-05 5.62e-06 0.00e+00 | 0.9626176656 0.00e+00 9.99e-06 4.95e-05 5.62e-06 8.73e-06 | unresolved
+  scalar     rate p (|dsumT| jnt)=0.96 (max|dT| jnt)=2.3  grow-steps=2 sign-flips=1  extrap sumT(M>=6) {'p1': 0.9626165150761741, 'p2': 0.9626018733080246}
+  scalar     geomean|dsumT|(3<=M<top)=2.54e-05 geomean max|dT|=2.00e-04 tail spread sumT(top 3 M)=1.03e-05 max|R+T-1|(M>=4)=4.55e-14
+  integrated rate p (|dsumT| jnt)=4.01 (max|dT| jnt)=3.47  grow-steps=1 sign-flips=4  extrap sumT(M>=6) {'p1': 0.9625527905792526, 'p2': 0.9625730377636975}
+  integrated geomean|dsumT|(3<=M<top)=7.86e-05 geomean max|dT|=4.13e-04 tail spread sumT(top 3 M)=6.50e-05 max|R+T-1|(M>=4)=2.07e-04
+  closer counts (joint ref, |dsumT|, resolved above top gap) {'scalar': 6, 'integrated': 2, 'unresolved': 1}
+  closer counts by reference (M<top) {'ref_scalar:dsumT': {'scalar': 7, 'integrated': 1}, 'ref_scalar:max_dT': {'scalar': 7, 'integrated': 1}, 'ref_integrated:dsumT': {'scalar': 6, 'integrated': 2}, 'ref_integrated:max_dT': {'scalar': 6, 'integrated': 2}}
+== oblique  M_top=12 lossless=True  arms at top: max|dR|=7.49e-06 max|dT|=4.97e-05 |dsumT|=3.88e-05
+   M | scala: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | integ: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | closer
+   1 | 0.9855446004 5.10e-04 5.29e-04 1.85e-02 5.13e-04 2.22e-16 | 0.9791354315 5.86e-03 5.88e-03 6.09e-03 1.86e-03 4.03e-03 | scalar
+   2 | 0.9848937560 1.41e-04 1.22e-04 3.76e-03 1.37e-04 6.66e-16 | 0.9864851354 1.49e-03 1.47e-03 1.28e-02 1.01e-03 4.45e-04 | scalar
+   3 | 0.9852472610 2.12e-04 2.32e-04 3.71e-03 2.16e-04 6.66e-16 | 0.9880580955 3.06e-03 3.04e-03 1.05e-02 1.31e-03 1.71e-03 | scalar
+   4 | 0.9852284975 1.94e-04 2.13e-04 2.67e-03 1.97e-04 2.44e-15 | 0.9857102385 7.14e-04 6.95e-04 2.57e-03 2.61e-04 4.18e-04 | scalar
+   5 | 0.9850587076 2.37e-05 4.31e-05 5.07e-04 2.75e-05 9.33e-15 | 0.9842172979 7.79e-04 7.98e-04 2.09e-03 3.08e-04 5.06e-04 | scalar
+   6 | 0.9849650727 6.99e-05 5.05e-05 3.16e-04 6.62e-05 1.13e-14 | 0.9846172882 3.79e-04 3.98e-04 1.48e-03 2.18e-04 1.96e-04 | scalar
+   8 | 0.9850513901 1.64e-05 3.58e-05 3.10e-04 2.01e-05 5.11e-15 | 0.9852109374 2.15e-04 1.95e-04 1.16e-03 1.28e-04 5.18e-05 | scalar
+  10 | 0.9850637511 2.88e-05 4.82e-05 3.35e-04 3.25e-05 1.83e-14 | 0.9850364181 4.02e-05 2.08e-05 5.86e-05 1.35e-06 3.82e-06 | integrated
+  12 | 0.9850349902 0.00e+00 1.94e-05 2.48e-05 3.74e-06 4.06e-14 | 0.9849962116 0.00e+00 1.94e-05 2.48e-05 3.74e-06 3.13e-05 | unresolved
+  scalar     rate p (|dsumT| jnt)=1.22 (max|dT| jnt)=2.23  grow-steps=3 sign-flips=4  extrap sumT(M>=6) {'p1': 0.9851429109268706, 'p2': 0.9850897849622664}
+  scalar     geomean|dsumT|(3<=M<top)=7.55e-05 geomean max|dT|=7.40e-04 tail spread sumT(top 3 M)=2.88e-05 max|R+T-1|(M>=4)=4.06e-14
+  integrated rate p (|dsumT| jnt)=1.65 (max|dT| jnt)=1.96  grow-steps=2 sign-flips=3  extrap sumT(M>=6) {'p1': 0.9854945930707769, 'p2': 0.9852566777766547}
+  integrated geomean|dsumT|(3<=M<top)=3.74e-04 geomean max|dT|=1.34e-03 tail spread sumT(top 3 M)=2.15e-04 max|R+T-1|(M>=4)=5.06e-04
+  closer counts (joint ref, |dsumT|, resolved above top gap) {'scalar': 7, 'integrated': 1, 'unresolved': 1}
+  closer counts by reference (M<top) {'ref_scalar:dsumT': {'scalar': 7, 'integrated': 1}, 'ref_scalar:max_dT': {'scalar': 5, 'integrated': 3}, 'ref_integrated:dsumT': {'scalar': 7, 'integrated': 1}, 'ref_integrated:max_dT': {'scalar': 5, 'integrated': 3}}
+== overlap@grid64  M_top=12 lossless=True  arms at top: max|dR|=6.77e-04 max|dT|=9.38e-03 |dsumT|=6.71e-04
+   M | scala: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | integ: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | closer
+   1 | 0.9538213604 4.29e-02 4.33e-02 1.04e-01 4.33e-02 2.89e-15 | 1.0124171648 1.50e-02 1.53e-02 1.18e-01 3.58e-02 5.11e-02 | integrated
+   2 | 0.9914762611 5.26e-03 5.60e-03 2.47e-02 5.60e-03 3.11e-15 | 0.9974124384 3.88e-06 3.39e-04 4.45e-02 4.56e-03 4.89e-03 | integrated
+   3 | 0.9936066292 3.13e-03 3.47e-03 1.67e-02 3.47e-03 3.44e-15 | 0.9966192018 7.89e-04 4.54e-04 2.45e-02 1.19e-03 7.36e-04 | integrated
+   4 | 0.9955289578 1.21e-03 1.54e-03 8.96e-03 1.55e-03 3.89e-15 | 0.9906090075 6.80e-03 6.46e-03 1.33e-02 4.84e-04 6.95e-03 | scalar
+   5 | 0.9961950334 5.43e-04 8.78e-04 8.70e-03 8.81e-04 1.89e-15 | 0.9926683363 4.74e-03 4.40e-03 3.95e-03 2.06e-04 4.61e-03 | scalar
+   6 | 0.9962313302 5.06e-04 8.42e-04 9.00e-03 8.45e-04 4.75e-14 | 1.0017927778 4.38e-03 4.72e-03 7.66e-03 2.74e-04 4.44e-03 | scalar
+   8 | 0.9964556730 2.82e-04 6.17e-04 6.47e-03 6.21e-04 2.05e-14 | 0.9981171152 7.09e-04 1.04e-03 5.01e-03 1.81e-04 8.59e-04 | scalar
+  10 | 0.9966101020 1.28e-04 4.63e-04 5.45e-03 4.66e-04 6.28e-14 | 0.9975470502 1.38e-04 4.74e-04 5.78e-03 3.39e-04 1.32e-04 | unresolved
+  12 | 0.9967376809 0.00e+00 3.35e-04 4.69e-03 3.39e-04 1.76e-13 | 0.9974085546 0.00e+00 3.35e-04 4.69e-03 3.39e-04 6.58e-06 | unresolved
+  scalar     rate p (|dsumT| jnt)=1.72 (max|dT| jnt)=0.96  grow-steps=0 sign-flips=0  extrap sumT(M>=6) {'p1': 0.9972208122384756, 'p2': 0.9968615150410776}
+  scalar     geomean|dsumT|(3<=M<top)=1.02e-03 geomean max|dT|=8.63e-03 tail spread sumT(top 3 M)=2.82e-04 max|R+T-1|(M>=4)=1.76e-13
+  integrated rate p (|dsumT| jnt)=-1.45 (max|dT| jnt)=1.72  grow-steps=3 sign-flips=2  extrap sumT(M>=6) {'p1': 0.9923310966885912, 'p2': 0.99542455564169}
+  integrated geomean|dsumT|(3<=M<top)=1.76e-03 geomean max|dT|=8.12e-03 tail spread sumT(top 3 M)=7.09e-04 max|R+T-1|(M>=4)=6.95e-03
+  closer counts (joint ref, |dsumT|, resolved above top gap) {'scalar': 4, 'integrated': 3, 'unresolved': 2}
+  closer counts by reference (M<top) {'ref_scalar:dsumT': {'scalar': 5, 'integrated': 3}, 'ref_scalar:max_dT': {'scalar': 8, 'integrated': 0}, 'ref_integrated:dsumT': {'scalar': 3, 'integrated': 5}, 'ref_integrated:max_dT': {'scalar': 2, 'integrated': 6}}
+== polygon  M_top=12 lossless=True  arms at top: max|dR|=1.05e-05 max|dT|=1.61e-05 |dsumT|=3.02e-05
+   M | scala: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | integ: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | closer
+   1 | 0.9739092725 2.17e-03 2.16e-03 1.30e-02 2.18e-03 2.22e-16 | 0.9745431054 2.78e-03 2.79e-03 1.26e-02 1.03e-03 1.79e-03 | scalar
+   2 | 0.9719973562 2.62e-04 2.47e-04 2.62e-03 2.67e-04 4.44e-16 | 0.9721158968 3.50e-04 3.65e-04 4.69e-03 4.05e-05 4.26e-04 | scalar
+   3 | 0.9718136015 7.83e-05 6.32e-05 9.74e-04 8.35e-05 1.55e-15 | 0.9697368856 2.03e-03 2.01e-03 1.91e-03 2.93e-04 1.70e-03 | scalar
+   4 | 0.9717376285 2.29e-06 1.28e-05 2.18e-04 7.55e-06 1.89e-15 | 0.9725774755 8.12e-04 8.27e-04 4.42e-04 8.69e-05 9.34e-04 | scalar
+   5 | 0.9717370920 1.76e-06 1.33e-05 1.07e-04 7.01e-06 2.33e-15 | 0.9722325459 4.67e-04 4.82e-04 6.67e-04 4.37e-05 5.46e-04 | scalar
+   6 | 0.9717553651 2.00e-05 4.93e-06 2.22e-04 2.53e-05 3.46e-14 | 0.9710445235 7.21e-04 7.06e-04 5.09e-04 6.59e-05 6.20e-04 | scalar
+   8 | 0.9717311088 4.23e-06 1.93e-05 1.49e-05 1.03e-06 1.64e-14 | 0.9719797569 2.14e-04 2.29e-04 1.72e-04 2.45e-05 2.74e-04 | scalar
+  10 | 0.9717400478 4.71e-06 1.04e-05 3.22e-05 9.97e-06 1.16e-13 | 0.9716034265 1.62e-04 1.47e-04 1.99e-04 3.81e-05 8.85e-05 | scalar
+  12 | 0.9717353367 0.00e+00 1.51e-05 8.07e-06 5.26e-06 1.04e-13 | 0.9717655331 0.00e+00 1.51e-05 8.07e-06 5.26e-06 4.07e-05 | unresolved
+  scalar     rate p (|dsumT| jnt)=2.29 (max|dT| jnt)=3.39  grow-steps=2 sign-flips=3  extrap sumT(M>=6) {'p1': 0.9717150047173829, 'p2': 0.9717269001912059}
+  scalar     geomean|dsumT|(3<=M<top)=1.48e-05 geomean max|dT|=1.16e-04 tail spread sumT(top 3 M)=8.94e-06 max|R+T-1|(M>=4)=1.16e-13
+  integrated rate p (|dsumT| jnt)=0.53 (max|dT| jnt)=2.23  grow-steps=2 sign-flips=5  extrap sumT(M>=6) {'p1': 0.9725073966498922, 'p2': 0.9720868984422657}
+  integrated geomean|dsumT|(3<=M<top)=5.17e-04 geomean max|dT|=4.62e-04 tail spread sumT(top 3 M)=3.76e-04 max|R+T-1|(M>=4)=9.34e-04
+  closer counts (joint ref, |dsumT|, resolved above top gap) {'scalar': 8, 'integrated': 0, 'unresolved': 1}
+  closer counts by reference (M<top) {'ref_scalar:dsumT': {'scalar': 8, 'integrated': 0}, 'ref_scalar:max_dT': {'scalar': 7, 'integrated': 1}, 'ref_integrated:dsumT': {'scalar': 8, 'integrated': 0}, 'ref_integrated:max_dT': {'scalar': 7, 'integrated': 1}}
+== overlap@grid128  M_top=12 lossless=True  arms at top: max|dR|=3.91e-04 max|dT|=5.82e-03 |dsumT|=2.66e-04
+   M | scala: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | integ: sumT        |dsT|own  |dsT|jnt  mxdT_jnt  mxdR_jnt  |R+T-1| | closer
+   1 | 0.9571741493 3.99e-02 4.00e-02 1.02e-01 4.01e-02 6.66e-16 | 1.0126773191 1.54e-02 1.55e-02 1.18e-01 3.61e-02 5.15e-02 | integrated
+   2 | 0.9930117382 4.03e-03 4.16e-03 1.76e-02 4.22e-03 2.89e-15 | 0.9970810286 2.22e-04 8.93e-05 4.28e-02 4.70e-03 4.55e-03 | integrated
+   3 | 0.9946709763 2.37e-03 2.50e-03 1.09e-02 2.56e-03 4.44e-16 | 0.9967463422 5.57e-04 4.24e-04 2.27e-02 1.32e-03 8.32e-04 | integrated
+   4 | 0.9963364797 7.01e-04 8.34e-04 3.20e-03 8.97e-04 3.00e-15 | 0.9903482775 6.95e-03 6.82e-03 1.15e-02 3.34e-04 7.22e-03 | scalar
+   6 | 0.9967765574 2.61e-04 3.94e-04 4.46e-03 4.57e-04 2.66e-15 | 1.0015659739 4.26e-03 4.40e-03 5.73e-03 1.52e-04 4.18e-03 | scalar
+   8 | 0.9968809631 1.57e-04 2.89e-04 3.39e-03 3.52e-04 1.38e-14 | 0.9979389184 6.36e-04 7.69e-04 3.12e-03 3.65e-05 6.69e-04 | scalar
+  10 | 0.9969845106 5.30e-05 1.86e-04 3.29e-03 2.49e-04 4.88e-14 | 0.9973595916 5.64e-05 1.89e-04 3.89e-03 1.90e-04 6.39e-05 | unresolved
+  12 | 0.9970375252 0.00e+00 1.33e-04 2.91e-03 1.96e-04 7.98e-14 | 0.9973032250 0.00e+00 1.33e-04 2.91e-03 1.96e-04 1.26e-04 | unresolved
+  scalar     rate p (|dsumT| jnt)=2.06 (max|dT| jnt)=1.19  grow-steps=0 sign-flips=0  extrap sumT(M>=6) {'p1': 0.9972962155119527, 'p2': 0.9971059432576678}
+  scalar     geomean|dsumT|(3<=M<top)=5.36e-04 geomean max|dT|=4.44e-03 tail spread sumT(top 3 M)=1.57e-04 max|R+T-1|(M>=4)=7.98e-14
+  integrated rate p (|dsumT| jnt)=-1.94 (max|dT| jnt)=1.9  grow-steps=2 sign-flips=2  extrap sumT(M>=6) {'p1': 0.9922993597602262, 'p2': 0.9953193208125302}
+  integrated geomean|dsumT|(3<=M<top)=1.13e-03 geomean max|dT|=7.11e-03 tail spread sumT(top 3 M)=6.36e-04 max|R+T-1|(M>=4)=7.22e-03
+  closer counts (joint ref, |dsumT|, resolved above top gap) {'scalar': 3, 'integrated': 3, 'unresolved': 2}
+  closer counts by reference (M<top) {'ref_scalar:dsumT': {'scalar': 4, 'integrated': 3}, 'ref_scalar:max_dT': {'scalar': 7, 'integrated': 0}, 'ref_integrated:dsumT': {'scalar': 3, 'integrated': 4}, 'ref_integrated:max_dT': {'scalar': 4, 'integrated': 3}}

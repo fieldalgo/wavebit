@@ -1,0 +1,226 @@
+[
+ {
+  "arm": "scalar",
+  "orders": [
+   4,
+   5
+  ],
+  "pol": "p",
+  "layer_calls": 0,
+  "sumT": 0.8522933061776077,
+  "sumR": 0.14770669382240068,
+  "energy": -8.326672684688674e-15,
+  "dT_vs_fem_V7": 4.237669827533708e-05,
+  "incidental_cpu_s": 25.7
+ },
+ {
+  "arm": "scalar",
+  "orders": [
+   4,
+   5
+  ],
+  "pol": "s",
+  "layer_calls": 0,
+  "sumT": 0.7317644861240123,
+  "sumR": 0.26823551387599015,
+  "energy": -2.55351295663786e-15,
+  "dT_vs_fem_V7": 0.0008470943100985506,
+  "incidental_cpu_s": 24.3
+ },
+ {
+  "arm": "integrated",
+  "orders": [
+   4,
+   5
+  ],
+  "pol": "p",
+  "layer_calls": 1,
+  "sumT": 0.8625858561924982,
+  "sumR": 0.1477157107719787,
+  "energy": -0.010301566964476816,
+  "dT_vs_fem_V7": 0.010334926713165826,
+  "incidental_cpu_s": 16.2
+ },
+ {
+  "arm": "integrated",
+  "orders": [
+   4,
+   5
+  ],
+  "pol": "s",
+  "layer_calls": 1,
+  "sumT": 0.716113252335498,
+  "sumR": 0.2801792842083869,
+  "energy": 0.0037074634561150566,
+  "dT_vs_fem_V7": -0.014804139478415745,
+  "incidental_cpu_s": 16.1
+ },
+ {
+  "arm": "scalar",
+  "orders": [
+   8,
+   10
+  ],
+  "pol": "p",
+  "layer_calls": 0,
+  "sumT": 0.8521427395304662,
+  "sumR": 0.14785726046957928,
+  "energy": -4.54081217071689e-14,
+  "dT_vs_fem_V7": -0.0001081899488661886,
+  "incidental_cpu_s": 28.2
+ },
+ {
+  "arm": "scalar",
+  "orders": [
+   8,
+   10
+  ],
+  "pol": "s",
+  "layer_calls": 0,
+  "sumT": 0.7284899825009339,
+  "sumR": 0.27151001749907777,
+  "energy": -1.1657341758564144e-14,
+  "dT_vs_fem_V7": -0.0024274093129799112,
+  "incidental_cpu_s": 29.1
+ },
+ {
+  "arm": "integrated",
+  "orders": [
+   8,
+   10
+  ],
+  "pol": "p",
+  "layer_calls": 1,
+  "sumT": 0.8518025689832048,
+  "sumR": 0.14792247728784402,
+  "energy": 0.0002749537289511439,
+  "dT_vs_fem_V7": -0.00044836049612750895,
+  "incidental_cpu_s": 21.3
+ },
+ {
+  "arm": "integrated",
+  "orders": [
+   8,
+   10
+  ],
+  "pol": "s",
+  "layer_calls": 1,
+  "sumT": 0.7274738362049786,
+  "sumR": 0.2726754458675661,
+  "energy": -0.0001492820725447208,
+  "dT_vs_fem_V7": -0.003443555608935167,
+  "incidental_cpu_s": 22.5
+ },
+ {
+  "arm": "scalar",
+  "orders": [
+   12,
+   16
+  ],
+  "pol": "p",
+  "layer_calls": 0,
+  "sumT": 0.8523176354607984,
+  "sumR": 0.14768236454042,
+  "energy": -1.2183587472236468e-12,
+  "dT_vs_fem_V7": 6.670598146607531e-05,
+  "incidental_cpu_s": 77.1
+ },
+ {
+  "arm": "scalar",
+  "orders": [
+   12,
+   16
+  ],
+  "pol": "s",
+  "layer_calls": 0,
+  "sumT": 0.7295466127994458,
+  "sumR": 0.2704533872003296,
+  "energy": 2.2459811788166917e-13,
+  "dT_vs_fem_V7": -0.0013707790144680265,
+  "incidental_cpu_s": 78.0
+ },
+ {
+  "arm": "integrated",
+  "orders": [
+   12,
+   16
+  ],
+  "pol": "p",
+  "layer_calls": 1,
+  "sumT": 0.8526862000239578,
+  "sumR": 0.1477558689721243,
+  "energy": -0.00044206899608212336,
+  "dT_vs_fem_V7": 0.00043527054462544346,
+  "incidental_cpu_s": 70.9
+ },
+ {
+  "arm": "integrated",
+  "orders": [
+   12,
+   16
+  ],
+  "pol": "s",
+  "layer_calls": 1,
+  "sumT": 0.7297013500509999,
+  "sumR": 0.27014826402094666,
+  "energy": 0.00015038592805338702,
+  "dT_vs_fem_V7": -0.0012160417629138998,
+  "incidental_cpu_s": 68.0
+ },
+ {
+  "arm": "scalar",
+  "orders": [
+   16,
+   21
+  ],
+  "pol": "p",
+  "layer_calls": 0,
+  "sumT": 0.8523237788698544,
+  "sumR": 0.14767622112852952,
+  "energy": 1.6160406346443779e-12,
+  "dT_vs_fem_V7": 7.28493905221006e-05,
+  "incidental_cpu_s": 279.5
+ },
+ {
+  "arm": "scalar",
+  "orders": [
+   16,
+   21
+  ],
+  "pol": "s",
+  "layer_calls": 0,
+  "sumT": 0.7304175042716617,
+  "sumR": 0.26958249572850995,
+  "energy": -1.7175150190951172e-13,
+  "dT_vs_fem_V7": -0.0004998875422520532,
+  "incidental_cpu_s": 277.6
+ },
+ {
+  "arm": "integrated",
+  "orders": [
+   16,
+   21
+  ],
+  "pol": "p",
+  "layer_calls": 1,
+  "sumT": 0.8523685454412213,
+  "sumR": 0.14775510766488067,
+  "energy": -0.0001236531061019619,
+  "dT_vs_fem_V7": 0.00011761596188897272,
+  "incidental_cpu_s": 273.0
+ },
+ {
+  "arm": "integrated",
+  "orders": [
+   16,
+   21
+  ],
+  "pol": "s",
+  "layer_calls": 1,
+  "sumT": 0.7307321294311567,
+  "sumR": 0.26938368664397516,
+  "energy": -0.00011581607513189152,
+  "dT_vs_fem_V7": -0.00018526238275706763,
+  "incidental_cpu_s": 277.6
+ }
+]

@@ -1,0 +1,20 @@
+{
+ "scalar/laurent": "UnsupportedFeatureError: problem: shape_nvf_grid_size=256 has no reader here: factorization='laurent' builds no normal field at all -- it takes the direct rule for every product. It sizes the grid shape NVF samples its normal",
+ "scalar/nvf circular": [
+  0.9576532774715454,
+  0
+ ],
+ "scalar/nvf linear": [
+  0.9576581383917496,
+  0
+ ],
+ "integrated/laurent": "UnsupportedFeatureError: problem: shape_nvf_grid_size=256 has no reader here: factorization='laurent' builds no normal field at all -- it takes the direct rule for every product. It sizes the grid shape NVF samples its normal",
+ "integrated/nvf circular": [
+  0.9559750935644149,
+  1
+ ],
+ "integrated/nvf linear": [
+  0.9559750935644149,
+  1
+ ]
+}

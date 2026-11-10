@@ -1,0 +1,102 @@
+[
+ {
+  "case": "lam-x metal/air",
+  "arm": "scalar",
+  "orders": [
+   3,
+   3
+  ],
+  "max_d_vs_li": 0.002296986554598174,
+  "floor": {
+   "n": 49,
+   "smin": 0.007673392813617537,
+   "floor": 0.024929982747211407,
+   "below": 7
+  }
+ },
+ {
+  "case": "lam-x metal/air",
+  "arm": "scalar-unfloored",
+  "orders": [
+   3,
+   3
+  ],
+  "max_d_vs_li": 4.474198789239381e-14,
+  "floor": null
+ },
+ {
+  "case": "lam-x metal/air",
+  "arm": "scalar",
+  "orders": [
+   10,
+   0
+  ],
+  "max_d_vs_li": 2.719074326362758e-06,
+  "floor": {
+   "n": 21,
+   "smin": 0.024672204612889125,
+   "floor": 0.024929982747211407,
+   "below": 1
+  }
+ },
+ {
+  "case": "lam-x metal/air",
+  "arm": "scalar-unfloored",
+  "orders": [
+   10,
+   0
+  ],
+  "max_d_vs_li": 1.1191048088221578e-13,
+  "floor": null
+ },
+ {
+  "case": "lam-x metal/air",
+  "arm": "scalar",
+  "orders": [
+   20,
+   0
+  ],
+  "max_d_vs_li": 7.481273161363822e-05,
+  "floor": {
+   "n": 41,
+   "smin": 0.009725935975223022,
+   "floor": 0.024929982747211407,
+   "below": 1
+  }
+ },
+ {
+  "case": "lam-x metal/air",
+  "arm": "scalar-unfloored",
+  "orders": [
+   20,
+   0
+  ],
+  "max_d_vs_li": 2.2792878695554464e-13,
+  "floor": null
+ },
+ {
+  "case": "lam-x metal/air",
+  "arm": "scalar",
+  "orders": [
+   40,
+   0
+  ],
+  "max_d_vs_li": 6.780481602425281e-05,
+  "floor": {
+   "n": 81,
+   "smin": 0.008841232002718793,
+   "floor": 0.024929982747211407,
+   "below": 1
+  }
+ },
+ {
+  "case": "lam-x metal/air",
+  "arm": "scalar-unfloored",
+  "orders": [
+   40,
+   0
+  ],
+  "max_d_vs_li": 4.832245714680994e-13,
+  "floor": null
+ }
+]

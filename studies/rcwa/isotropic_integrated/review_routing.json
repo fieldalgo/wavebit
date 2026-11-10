@@ -1,0 +1,333 @@
+{
+ "rectangle/scalar": {
+  "calls": {
+   "to_conv_mat_parametric_layers": 1,
+   "to_conv_mat_parametric_nvf": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "to_conv_mat_parametric_layers": [
+    "('grid', 1024)"
+   ]
+  },
+  "sumR": 0.00974066311648875,
+  "sumT": 0.9902593368835112,
+  "RT": 1.0
+ },
+ "rectangle/integrated": {
+  "calls": {
+   "_layer": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "_layer": [
+    "('primitive', 2, 'epsilon', 1024)"
+   ]
+  },
+  "sumR": 0.010465138493550711,
+  "sumT": 0.9886868302670959,
+  "RT": 0.9991519687606466
+ },
+ "rect-tilted/scalar": {
+  "calls": {
+   "to_conv_mat_parametric_layers": 1,
+   "to_conv_mat_parametric_nvf": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "to_conv_mat_parametric_layers": [
+    "('grid', 1024)"
+   ]
+  },
+  "sumR": 0.010081972110205957,
+  "sumT": 0.989918027889795,
+  "RT": 1.0000000000000009
+ },
+ "rect-tilted/integrated": {
+  "calls": {
+   "_layer": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "_layer": [
+    "('primitive', 2, 'epsilon', 1024)"
+   ]
+  },
+  "sumR": 0.010726233915048046,
+  "sumT": 0.9885814301169666,
+  "RT": 0.9993076640320147
+ },
+ "circle/scalar": {
+  "calls": {
+   "to_conv_mat_parametric_layers": 1,
+   "to_conv_mat_parametric_nvf": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "to_conv_mat_parametric_layers": [
+    "('grid', 1024)"
+   ]
+  },
+  "sumR": 0.042341853236179054,
+  "sumT": 0.9576581467638157,
+  "RT": 0.9999999999999947
+ },
+ "circle/integrated": {
+  "calls": {
+   "_layer": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "_layer": [
+    "('primitive', 2, 'epsilon', 1024)"
+   ]
+  },
+  "sumR": 0.04299761576453916,
+  "sumT": 0.95597510712185,
+  "RT": 0.9989727228863892
+ },
+ "ellipse/scalar": {
+  "calls": {
+   "to_conv_mat_parametric_layers": 1,
+   "to_conv_mat_parametric_nvf": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "to_conv_mat_parametric_layers": [
+    "('grid', 1024)"
+   ]
+  },
+  "sumR": 0.037943571839269837,
+  "sumT": 0.9620564281607293,
+  "RT": 0.9999999999999992
+ },
+ "ellipse/integrated": {
+  "calls": {
+   "_layer": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "_layer": [
+    "('primitive', 2, 'epsilon', 1024)"
+   ]
+  },
+  "sumR": 0.036622384744187865,
+  "sumT": 0.9709480657448926,
+  "RT": 1.0075704504890803
+ },
+ "polygon/scalar": {
+  "calls": {
+   "to_conv_mat_parametric_layers": 1,
+   "to_conv_mat_boundary_layer": 1,
+   "material_projector_fields": 1
+  },
+  "detail": {
+   "to_conv_mat_parametric_layers": [
+    "('grid', 128)"
+   ],
+   "material_projector_fields": [
+    "('average', True)"
+   ]
+  },
+  "sumR": 0.02820078285901708,
+  "sumT": 0.9717992171409863,
+  "RT": 1.0000000000000033
+ },
+ "polygon/integrated": {
+  "calls": {
+   "_layer": 1,
+   "material_projector_fields": 1
+  },
+  "detail": {
+   "_layer": [
+    "('painted', 2, 'epsilon', 128)"
+   ],
+   "material_projector_fields": [
+    "('average', False)"
+   ]
+  },
+  "sumR": 0.028571757140855168,
+  "sumT": 0.9697323568420446,
+  "RT": 0.9983041139828998
+ },
+ "overlap/scalar": {
+  "calls": {
+   "to_conv_mat_parametric_layers": 1,
+   "to_conv_mat_boundary_layer": 1,
+   "material_projector_fields": 1
+  },
+  "detail": {
+   "to_conv_mat_parametric_layers": [
+    "('grid', 64)"
+   ],
+   "material_projector_fields": [
+    "('average', True)"
+   ]
+  },
+  "sumR": 0.006393370833452271,
+  "sumT": 0.9936066291665443,
+  "RT": 0.9999999999999966
+ },
+ "overlap/integrated": {
+  "calls": {
+   "_layer": 1,
+   "material_projector_fields": 1
+  },
+  "detail": {
+   "_layer": [
+    "('painted', 2, 'epsilon', 64)"
+   ],
+   "material_projector_fields": [
+    "('average', False)"
+   ]
+  },
+  "sumR": 0.004117160804568637,
+  "sumT": 0.9966192018422428,
+  "RT": 1.0007363626468115
+ },
+ "hexagonal/scalar": {
+  "calls": {
+   "to_conv_mat_parametric_layers": 1,
+   "to_conv_mat_parametric_nvf": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "to_conv_mat_parametric_layers": [
+    "('grid', 1024)"
+   ]
+  },
+  "sumR": 0.037553054120637176,
+  "sumT": 0.9624469458793631,
+  "RT": 1.0000000000000002
+ },
+ "hexagonal/integrated": {
+  "calls": {
+   "_layer": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "_layer": [
+    "('primitive', 2, 'epsilon', 1024)"
+   ]
+  },
+  "sumR": 0.03783210080095367,
+  "sumT": 0.9620059333963192,
+  "RT": 0.9998380341972729
+ },
+ "oblique/scalar": {
+  "calls": {
+   "to_conv_mat_parametric_layers": 1,
+   "to_conv_mat_parametric_nvf": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "to_conv_mat_parametric_layers": [
+    "('grid', 1024)"
+   ]
+  },
+  "sumR": 0.01475273899567237,
+  "sumT": 0.9852472610043284,
+  "RT": 1.0000000000000007
+ },
+ "oblique/integrated": {
+  "calls": {
+   "_layer": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "_layer": [
+    "('primitive', 2, 'epsilon', 1024)"
+   ]
+  },
+  "sumR": 0.01365664229980402,
+  "sumT": 0.9880580955065463,
+  "RT": 1.0017147378063505
+ },
+ "lossy/scalar": {
+  "calls": {
+   "to_conv_mat_parametric_layers": 1,
+   "to_conv_mat_parametric_nvf": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "to_conv_mat_parametric_layers": [
+    "('grid', 1024)"
+   ]
+  },
+  "sumR": 0.027509301511447683,
+  "sumT": 0.7820608298400004,
+  "RT": 0.8095701313514481
+ },
+ "lossy/integrated": {
+  "calls": {
+   "_layer": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "_layer": [
+    "('primitive', 2, 'epsilon', 1024)"
+   ]
+  },
+  "sumR": 0.02751440381903043,
+  "sumT": 0.7795231377056343,
+  "RT": 0.8070375415246648
+ },
+ "metallic/scalar": {
+  "calls": {
+   "to_conv_mat_parametric_layers": 1,
+   "to_conv_mat_parametric_nvf": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "to_conv_mat_parametric_layers": [
+    "('grid', 1024)"
+   ]
+  },
+  "sumR": 0.004721489340181469,
+  "sumT": 0.8450506859773531,
+  "RT": 0.8497721753175346
+ },
+ "metallic/integrated": {
+  "calls": {
+   "_layer": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "_layer": [
+    "('primitive', 2, 'epsilon', 1024)"
+   ]
+  },
+  "sumR": 0.006731051497530945,
+  "sumT": 0.8604178463404989,
+  "RT": 0.8671488978380298
+ },
+ "high-contrast/scalar": {
+  "calls": {
+   "to_conv_mat_parametric_layers": 1,
+   "to_conv_mat_parametric_nvf": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "to_conv_mat_parametric_layers": [
+    "('grid', 1024)"
+   ]
+  },
+  "sumR": 0.06957698219794298,
+  "sumT": 0.9304230178020743,
+  "RT": 1.0000000000000173
+ },
+ "high-contrast/integrated": {
+  "calls": {
+   "_layer": 1,
+   "normal_vector_field_analytical": 1
+  },
+  "detail": {
+   "_layer": [
+    "('primitive', 2, 'epsilon', 1024)"
+   ]
+  },
+  "sumR": 0.05506835813449639,
+  "sumT": 0.9821848831018243,
+  "RT": 1.0372532412363207
+ }
+}

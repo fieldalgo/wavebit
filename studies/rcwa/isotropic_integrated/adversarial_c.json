@@ -1,0 +1,132 @@
+{
+ "li_rect_switch": {
+  "scalar|li": [
+   "ok",
+   0.9901831961244996
+  ],
+  "scalar|laurent": [
+   "ok",
+   0.9874477252175222
+  ],
+  "scalar|nvf": [
+   "ok",
+   0.990565503557381
+  ],
+  "integrated|li": [
+   "IncompatibleProblemError",
+   "stack: this frozen geometry was taken under the other isotropic shape builder (tensor_shapes._ISOTROPIC_INTEGRATED changed); freeze_geometry() again"
+  ],
+  "integrated|laurent": [
+   "IncompatibleProblemError",
+   "stack: this frozen geometry was taken under the other isotropic shape builder (tensor_shapes._ISOTROPIC_INTEGRATED changed); freeze_geometry() again"
+  ],
+  "integrated|nvf": [
+   "ok",
+   0.989803672499536
+  ]
+ },
+ "metal_lamella": [
+  {
+   "orders": [
+    2,
+    2
+   ],
+   "arm": "scalar",
+   "max_d_vs_li": 3.114175584073564e-14
+  },
+  {
+   "orders": [
+    2,
+    2
+   ],
+   "arm": "integrated",
+   "max_d_vs_li": 3.172462292866385e-14
+  },
+  {
+   "orders": [
+    3,
+    3
+   ],
+   "arm": "scalar",
+   "max_d_vs_li": 3.5493830097266255e-13
+  },
+  {
+   "orders": [
+    3,
+    3
+   ],
+   "arm": "integrated",
+   "max_d_vs_li": 5.904166044956582e-13
+  },
+  {
+   "orders": [
+    10,
+    0
+   ],
+   "arm": "scalar",
+   "max_d_vs_li": 8.537615059367454e-13
+  },
+  {
+   "orders": [
+    10,
+    0
+   ],
+   "arm": "integrated",
+   "max_d_vs_li": 4.941602682606572e-13
+  },
+  {
+   "orders": [
+    20,
+    0
+   ],
+   "arm": "scalar",
+   "max_d_vs_li": 4.722640820142843e-05
+  },
+  {
+   "orders": [
+    20,
+    0
+   ],
+   "arm": "integrated",
+   "max_d_vs_li": 1.3881673588400645e-12
+  }
+ ],
+ "odd_even": {
+  "circle|scalar|63": 9.106515639789592e-06,
+  "circle|scalar|64": 2.93042384233444e-07,
+  "circle|scalar|65": 8.551569864678754e-06,
+  "circle|scalar|127": 2.231055327595044e-06,
+  "circle|scalar|128": 6.538644709702668e-08,
+  "circle|scalar|129": 2.162334987287906e-06,
+  "circle|scalar|255": 5.533821245684578e-07,
+  "circle|scalar|256": 1.5150769229477223e-08,
+  "circle|scalar|257": 5.448123154838669e-07,
+  "circle|integrated|63": 5.28226435455581e-05,
+  "circle|integrated|64": 4.6298251344528696e-07,
+  "circle|integrated|65": 3.2372740151664914e-05,
+  "circle|integrated|127": 7.45502503607387e-06,
+  "circle|integrated|128": 5.844142536570729e-08,
+  "circle|integrated|129": 1.007822426646321e-05,
+  "circle|integrated|255": 2.4034510518466945e-06,
+  "circle|integrated|256": 1.761364381430708e-08,
+  "circle|integrated|257": 2.229841142620259e-06,
+  "high-contrast|scalar|63": 2.75165293990888e-05,
+  "high-contrast|scalar|64": 3.260342765709634e-06,
+  "high-contrast|scalar|65": 2.584956324016771e-05,
+  "high-contrast|scalar|127": 6.7668560794591215e-06,
+  "high-contrast|scalar|128": 8.932435583974829e-07,
+  "high-contrast|scalar|129": 6.558388157929668e-06,
+  "high-contrast|scalar|255": 1.6713610794666378e-06,
+  "high-contrast|scalar|256": 2.178981765021959e-07,
+  "high-contrast|scalar|257": 1.6452994737251037e-06,
+  "high-contrast|integrated|63": 0.00014365759982409854,
+  "high-contrast|integrated|64": 3.4283488214437163e-06,
+  "high-contrast|integrated|65": 0.00010759420151773558,
+  "high-contrast|integrated|127": 3.071243982361027e-05,
+  "high-contrast|integrated|128": 1.5468579211974642e-07,
+  "high-contrast|integrated|129": 2.9645469549477443e-05,
+  "high-contrast|integrated|255": 8.04155718886479e-06,
+  "high-contrast|integrated|256": 2.463707371447299e-08,
+  "high-contrast|integrated|257": 8.007715428859363e-06
+ }
+}
