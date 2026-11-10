@@ -176,8 +176,16 @@ AD-versus-central-difference gap at that grid. The last column gives the default
   and 64, JAX and PyTorch agree to 4e-12 or better. So this is a JAX-backend gradient defect on the
   hexagonal lattice in today's code, present above the floor too. It is unrelated to the floor and
   to the prototype, and is left for a separate fix.
-  The sub-floor gaps (hexagonal grids 3 and 12, pentagon grid 12) cannot be compared with
-  today's code, which refuses those grids, and were not separated from the prototype.
+- **The sub-floor outliers are not the prototype's either.** With the prototype on
+  (`subfloor_gradients.py`), PyTorch backward was run beside `jax.grad` at the three bold cells:
+  - hexagonal cell, grids 3 and 12: PyTorch matches the central difference to 1.8e-8 and 1.7e-8;
+    `jax.grad` is off by 5.0e-2 and 1.9e-4. This is the same hexagonal-lattice JAX defect.
+  - pentagon, grid 12: `jax.grad` and PyTorch agree to 5e-13. The gap is the central difference's:
+    it falls as `h^2` (4.6e-1, 1.7e-2, 1.7e-4, 1.7e-6 at `h` = 1e-3 … 1e-6) to 9e-8 at `h = 1e-7`.
+    `T(x)` is sharply curved at that grid and point.
+
+  At grid 11, both cases agree three ways (AD, PyTorch, central difference) to 2e-8 or better.
+  No gradient defect attributable to the prototype was found.
 - PyTorch backward runs below the floor (circle, grid 8: 0.8017).
 
 ## (d) What admitting short grids would touch
@@ -325,6 +333,7 @@ tree, and the tensor-stack test files pass (52). Scripts and raw numbers:
 | short grids | refused today (the subject of this note) | accepted |
 | metal disk (−20+1.5j) | unconverged at `M = 16` on both arms; the floor bounds gain | unconverged, but closer at 9 of 10 `M` under either arm's reference (geometric-mean error about 1.8x smaller; 1.4–5x at r = 0.28); the `M = 16` reference itself is unconverged (tail spread 1.6e-2); `sum T = 1.08` at `M = 2` on the same metal disk (r = 0.28), i.e. gain |
 | independent 3D FEM (two-piece affine profile) | p within 4e-5–1.1e-4 at every order; s 5e-4–2.4e-3 off | p off by 1e-2 at (4, 5), 1.2e-4 (within the FEM spread of about 1e-4) at (16, 21); s off by 1.5e-2 at (4, 5), but closer than the scalar arm at (12, 16) and (16, 21) (1.9e-4 against 5.0e-4) |
+| cost: one NumPy solve (mean of two per-process medians), default grid (painted overlap at grid 64), `cost.py` | rectangle 0.61 s; circle 0.25 s (`M = 3`) and 0.52 s (`M = 6`); polygon 16.5 s; painted overlap 7.6 s. Peak resident memory 148–318 MiB | 4.0x slower on the rectangle, 8.8x and 5.1x on the circle; 0.68x on the polygon and 0.54x on the painted overlap. Peak resident memory 413–491 MiB (207 MiB on the painted overlap) |
 
 All numbers are NumPy, at orders up to 16 for 2D shapes (lamellae to (40, 0), FEM to (16, 21)),
 s polarization unless noted. Where AD is exact, JAX and PyTorch agree with each other to 6e-12
@@ -367,14 +376,15 @@ integrated arm.
   JAX, PyTorch and at (4, 2) its top grid is 256. Only orders (3, 3) and (4, 2) were checked.
 - (b), (c): one shape parameter per case; s polarization, one wavelength and angle; orders
   (3, 3) and (5, 5) only. Gradients only by eager `jax.grad` (not `jit`, `vmap` or forward mode);
-  PyTorch backward at one point. The polygon grid-12 AD-versus-FD gap (2e-4) was not
-  investigated.
+  PyTorch backward only at the points of `lattice_gradients.py` and `subfloor_gradients.py`
+  and one circle point. The hexagonal-lattice JAX defect was located (today's code, not tied to
+  the floor) but not diagnosed.
 - Lifting the raster path's floor through the same interpolant.
 - `ShapeGridWarning` (#173) is not on the starting commit, so the warning behaviour the
   recommendation implies was not exercised.
 - Tests: only the files that mention the normal grid (62 files, `-m "not slow"`), with the
   prototype switch on. The full suite and the slow markers were not run, nor CI.
-- (e): NumPy, CPU, one machine shared with other work; no GPU, no JAX/PyTorch timings.
-- Follow-up: wall-clock cost of the integrated arm (beyond the one row in (e)); orders past 16
+- (e): NumPy, CPU, one machine; no GPU, no JAX/PyTorch timings, no timing below the floor.
+- Follow-up: cost only at the five rows of its table; orders past 16
   (the metal is unconverged on both arms); an "integrated-averaged" arm with the averaged
   projector; p polarization outside the FEM row; JAX/PyTorch in the physics checks.

@@ -1,0 +1,21 @@
+{'case': 'rectangle', 'M': 3, 'grid': 'default', 'arm': 'scalar', 'median_s': 0.6265110109961824, 'min_s': 0.6081498969942913, 'peak_rss_MiB': 148.26953125}
+{'case': 'rectangle', 'M': 3, 'grid': 'default', 'arm': 'integrated', 'median_s': 2.5011165350006195, 'min_s': 2.3268109480050043, 'peak_rss_MiB': 417.75}
+{'case': 'rectangle', 'M': 3, 'grid': 'default', 'arm': 'scalar', 'median_s': 0.592011057997297, 'min_s': 0.5761261220031884, 'peak_rss_MiB': 148.44140625}
+{'case': 'rectangle', 'M': 3, 'grid': 'default', 'arm': 'integrated', 'median_s': 2.379475708003156, 'min_s': 2.3599628830052097, 'peak_rss_MiB': 417.75}
+{'case': 'circle', 'M': 3, 'grid': 'default', 'arm': 'scalar', 'median_s': 0.2688748769942322, 'min_s': 0.23773516499932157, 'peak_rss_MiB': 209.62890625}
+{'case': 'circle', 'M': 3, 'grid': 'default', 'arm': 'integrated', 'median_s': 2.310497858998133, 'min_s': 2.015784574999998, 'peak_rss_MiB': 425.9375}
+{'case': 'circle', 'M': 3, 'grid': 'default', 'arm': 'scalar', 'median_s': 0.23411307700007455, 'min_s': 0.22915264299808769, 'peak_rss_MiB': 209.69140625}
+{'case': 'circle', 'M': 3, 'grid': 'default', 'arm': 'integrated', 'median_s': 2.095848475000821, 'min_s': 2.0272258059994783, 'peak_rss_MiB': 426.078125}
+{'case': 'polygon', 'M': 3, 'grid': 'default', 'arm': 'scalar', 'median_s': 16.637845887002186, 'min_s': 15.887998762998905, 'peak_rss_MiB': 318.08203125}
+{'case': 'polygon', 'M': 3, 'grid': 'default', 'arm': 'integrated', 'median_s': 11.325675887004763, 'min_s': 11.034558144005132, 'peak_rss_MiB': 490.51171875}
+{'case': 'polygon', 'M': 3, 'grid': 'default', 'arm': 'scalar', 'median_s': 16.29973725000309, 'min_s': 16.117663924000226, 'peak_rss_MiB': 317.83984375}
+{'case': 'polygon', 'M': 3, 'grid': 'default', 'arm': 'integrated', 'median_s': 11.109247583997785, 'min_s': 10.836282440002833, 'peak_rss_MiB': 490.46875}
+{'case': 'circle', 'M': 6, 'grid': 'default', 'arm': 'scalar', 'median_s': 0.5355965260023368, 'min_s': 0.4829330700013088, 'peak_rss_MiB': 213.49609375}
+{'case': 'circle', 'M': 6, 'grid': 'default', 'arm': 'integrated', 'median_s': 2.710933563001163, 'min_s': 2.6598755390004953, 'peak_rss_MiB': 414.87890625}
+{'case': 'circle', 'M': 6, 'grid': 'default', 'arm': 'scalar', 'median_s': 0.5110692900052527, 'min_s': 0.49600354799622437, 'peak_rss_MiB': 213.4921875}
+{'case': 'circle', 'M': 6, 'grid': 'default', 'arm': 'integrated', 'median_s': 2.5886712279971107, 'min_s': 2.49957346800511, 'peak_rss_MiB': 413.21875}
+{'case': 'overlap', 'M': 3, 'grid': 64, 'arm': 'scalar', 'median_s': 7.609651442995528, 'min_s': 7.5168269150017295, 'peak_rss_MiB': 298.1640625}
+{'case': 'overlap', 'M': 3, 'grid': 64, 'arm': 'integrated', 'median_s': 4.125380148994736, 'min_s': 4.121992073000001, 'peak_rss_MiB': 207.40625}
+{'case': 'overlap', 'M': 3, 'grid': 64, 'arm': 'scalar', 'median_s': 7.62572087499575, 'min_s': 7.579570203000912, 'peak_rss_MiB': 298.1171875}
+{'case': 'overlap', 'M': 3, 'grid': 64, 'arm': 'integrated', 'median_s': 4.142872214993986, 'min_s': 4.120702494998113, 'peak_rss_MiB': 207.37890625}
+rc=0
