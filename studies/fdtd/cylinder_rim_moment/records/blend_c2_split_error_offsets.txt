@@ -1,0 +1,10 @@
+R/h | law | away from the rim: worst rms | on the rim: worst rms
+4 | (cut voxels 68864, of which rim 25856, plane-dead 550)
+4 | plane | 4.536e-02 1.418e-02 | 6.551e-01 1.814e-01
+4 | split | 4.536e-02 1.418e-02 | 1.019e-01 9.103e-03
+8 | (cut voxels 274304, of which rim 89984, plane-dead 648)
+8 | plane | 2.281e-02 6.966e-03 | 6.674e-01 1.380e-01
+8 | split | 2.281e-02 6.966e-03 | 8.231e-02 3.948e-03
+16 | (cut voxels 1095744, of which rim 333888, plane-dead 1430)
+16 | plane | 1.162e-02 3.515e-03 | 6.781e-01 1.020e-01
+16 | split | 1.162e-02 3.515e-03 | 5.633e-02 1.705e-03
