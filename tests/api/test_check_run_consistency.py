@@ -665,9 +665,64 @@ def test_an_aliasing_shape_nvf_grid_is_refused_alike_on_each_backend(backend, be
 def test_a_short_grid_that_runs_today_still_runs(layers):
     # A tensor layer reads the grid through its own interpolation, with no aliasing floor, and a
     # tensor stack's region-free layer reads no grid: these ran below the floor and still do.
+    import warnings
     problem, numerics = _grid_problem(layers), rcwa.Numerics(orders=(2, 2), shape_nvf_grid_size=8)
     assert rcwa.check(problem, numerics=numerics).ok
-    assert np.isfinite(rcwa.run(problem, numerics=numerics).T).all()
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', rcwa.diagnostics.ShapeGridWarning)
+        assert np.isfinite(rcwa.run(problem, numerics=numerics).T).all()
+
+
+# -- 12b. ... and a tensor region layer that reads such a grid warns, at every door ------------
+
+_TENSOR_GRID_WARNS = {
+    'tensor-region': ((rcwa.Layer(thickness=.2, background=Material(1.5), regions=_TENSOR),), [0]),
+    'tensor-beside-region-free': ((rcwa.Layer(thickness=.2, background=Material(1.5)),
+                                   rcwa.Layer(thickness=.2, background=Material(1.5), regions=_TENSOR)), [1]),
+}
+
+
+@pytest.mark.parametrize('coefficients', [None, 'sampled'])
+@pytest.mark.parametrize('orders,grid', [((2, 2), 8), ((3, 1), 1)])
+@pytest.mark.parametrize('case', sorted(_TENSOR_GRID_WARNS))
+def test_a_tensor_layer_below_the_grid_floor_warns_and_runs(case, orders, grid, coefficients):
+    layers, warned = _TENSOR_GRID_WARNS[case]
+    problem = _grid_problem(layers)
+    numerics = rcwa.Numerics(orders=orders, shape_nvf_grid_size=grid, fourier_coefficients=coefficients)
+    need = 4*max(orders) + 1
+    report = rcwa.check(problem, numerics=numerics)
+    assert report.ok
+    (issue,) = report.issues
+    assert (issue.code, issue.path, issue.severity) == ('numerics.grid', 'numerics.shape_nvf_grid_size', 'warning')
+    assert (issue.expected, issue.actual) == (f'>= {need}', grid)
+    assert f'4*max(orders)+1 = {need}' in issue.message
+    assert ', '.join(f'stack.layers[{i}]' for i in warned) in issue.message
+    with pytest.warns(rcwa.diagnostics.ShapeGridWarning, match=f'shape_nvf_grid_size={grid} is below') as caught:
+        prepared = rcwa.prepare(problem, numerics=numerics)
+    assert caught[0].filename == __file__        # the caller's line, not the package's
+    assert prepared.report.issues == report.issues
+    with pytest.warns(rcwa.diagnostics.ShapeGridWarning):
+        assert np.isfinite(rcwa.run(problem, numerics=numerics).T).all()
+
+
+@pytest.mark.parametrize('grid', [9, None])
+@pytest.mark.parametrize('layers', [
+    (rcwa.Layer(thickness=.2, background=Material(1.5), regions=_TENSOR),),
+    (rcwa.Layer(thickness=.2, background=Material(np.diag([2., 2.5, 3.]))),),
+], ids=['tensor-region', 'tensor-background'])
+def test_a_tensor_stack_at_the_floor_or_without_regions_does_not_warn(layers, grid):
+    import warnings
+    problem = _grid_problem(layers)
+    numerics = rcwa.Numerics(orders=(2, 2), shape_nvf_grid_size=grid)
+    assert rcwa.check(problem, numerics=numerics).issues == ()
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', rcwa.diagnostics.ShapeGridWarning)
+        rcwa.run(problem, numerics=numerics)
+    if grid == 9:
+        # A tensor background has no region to sample: grid 8 reads nothing, and says nothing.
+        short = rcwa.Numerics(orders=(2, 2), shape_nvf_grid_size=8)
+        if not any(layer.regions for layer in layers):
+            assert rcwa.check(problem, numerics=short).issues == ()
 
 
 # -- 13. A localized source without a finite power_region is refused at check, not first at run -

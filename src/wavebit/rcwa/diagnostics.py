@@ -10,7 +10,9 @@ has its own category, so a sweep can silence or escalate one without touching th
     warnings.simplefilter('error', diagnostics.RayleighPointWarning)
 """
 from .._common.backend import (AutoDetuneWarning, ComplexIncidenceWarning, ExceptionalPointWarning,
-                               GainCutoffWarning, RayleighPointWarning, SvdConvergenceWarning)
+                               GainCutoffWarning, RayleighPointWarning, ShapeGridWarning,
+                               SvdConvergenceWarning)
 
 __all__ = ['AutoDetuneWarning', 'ComplexIncidenceWarning', 'ExceptionalPointWarning',
-           'GainCutoffWarning', 'RayleighPointWarning', 'SvdConvergenceWarning']
+           'GainCutoffWarning', 'RayleighPointWarning', 'ShapeGridWarning', 'SvdConvergenceWarning']
+

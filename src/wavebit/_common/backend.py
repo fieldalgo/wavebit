@@ -1261,6 +1261,35 @@ class AutoDetuneWarning(UserWarning):
     """
 
 
+class ShapeGridWarning(UserWarning):
+    """A tensor-material region layer reads a ``shape_nvf_grid_size`` below ``4*max(orders)+1``.
+
+    Public path: ``wavebit.rcwa.diagnostics.ShapeGridWarning``.
+
+    A scalar shape layer refuses such a grid (``numerics.grid``): its normal field aliases there.
+    A layer whose regions hold a tensor material reads the grid through its own interpolation of
+    the normal field (and, with ``fourier_coefficients='sampled'``, paints its regions on it), with
+    no floor, so it runs; ``check`` and ``prepare`` report it as a ``numerics.grid`` warning and
+    ``prepare`` (so ``run``) emits this.
+
+    Measured against the default grid (1024) on three tensor layers (a diagonal rectangle, a
+    rotated off-diagonal circle, an ellipse beside a rectangle) at orders (1, 1) to (3, 3), NumPy
+    and JAX alike, the largest per-order R or T error:
+
+        grid                 integrated (default)   fourier_coefficients='sampled'
+        1 to 3               3.3e-3 .. 2.6e-2       3.6e-2 .. 1.3e-1
+        4 to the floor - 1   1.4e-3 .. 8.6e-3       7.6e-3 .. 9.0e-2
+        the floor            3.0e-4 .. 5.1e-3       1.7e-3 .. 4.7e-2
+        64                   8.4e-6 .. 1.4e-4       8.9e-4 .. 3.1e-3
+
+    There is no cliff at the floor, which is why this warns rather than refuses. A material
+    derivative converges far later: at orders (2, 2), ``d(sum T)/d(eps_xx)`` was off by more than
+    100% at most grids tested below the floor (by 42% to 13 times its value), with the wrong sign
+    at some, and by 3-35% even at 64. Leave the
+    grid at ``None`` (the default), or check convergence in it, before trusting a gradient.
+    """
+
+
 class SvdConvergenceWarning(UserWarning):
     """The divide-and-conquer SVD of an NVF ``<1/eps>`` matrix did not converge.
 
