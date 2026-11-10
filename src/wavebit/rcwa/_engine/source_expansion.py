@@ -186,6 +186,26 @@ def _uniform_tolerance(a):
     return dict(atol=tol*float(np.max(np.abs(a), initial=0.)), rtol=tol)
 
 
+def dipole_host_layer(edges, z, tol):
+    """The index of the layer that holds a dipole at height ``z``, strictly inside it."""
+    if z <= 0 or z >= edges[-1] or np.any(np.abs(edges-z) <= tol):
+        raise ValueError('ElectricDipole must be strictly inside a layer, away from its interfaces.')
+    return int(np.searchsorted(edges, z)-1)
+
+
+def uniform_host_layer(scene, li):
+    """Whether layer ``li`` of ``scene`` is one material: no shapes, or a raster of one value."""
+    from wavebit.rcwa._engine.illumination import _host
+    if isinstance(scene.structure, list):
+        return not scene.structure[li].get('shapes', [])
+    uniform = True
+    for raster in (scene.structure, scene.mu):
+        if raster is not None:
+            a = _host(raster[li])
+            uniform = uniform and np.allclose(a, a[0, 0], **_uniform_tolerance(a))
+    return uniform
+
+
 def dipole_layers(solver, group, layers, k0, kxy):
     """Split source-bearing layers and integrate the electric-current delta in z.
 
@@ -207,18 +227,8 @@ def dipole_layers(solver, group, layers, k0, kxy):
         # stays live in the segment thicknesses below. Choosing the layer is discrete.
         z = (float(_host(dipole.position[2]).real) if _carries_derivative(dipole.position)
              else float(np.asarray(dipole.position)[2].real))
-        if z <= 0 or z >= edges[-1] or np.any(np.abs(edges-z) <= tol):
-            raise ValueError('ElectricDipole must be strictly inside a layer, away from its interfaces.')
-        li = int(np.searchsorted(edges, z)-1)
-        if isinstance(scene.structure, list):
-            uniform = not scene.structure[li].get('shapes', [])
-        else:
-            uniform = True
-            for raster in (scene.structure, scene.mu):
-                if raster is not None:
-                    a = _host(raster[li])
-                    uniform = uniform and np.allclose(a, a[0, 0], **_uniform_tolerance(a))
-        if not uniform:
+        li = dipole_host_layer(edges, z, tol)
+        if not uniform_host_layer(scene, li):
             raise ValueError('ElectricDipole requires a uniform host layer: shapes=[] or a '
                              'raster with the same material in every spatial cell.')
         material = layers[li][0]
