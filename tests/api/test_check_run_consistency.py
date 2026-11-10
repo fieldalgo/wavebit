@@ -803,3 +803,59 @@ def test_a_single_plane_wave_still_runs_beside_a_power_region_it_does_not_read(r
     problem = dataclasses.replace(problem, outputs=rcwa.Outputs(power_region=region))
     assert rcwa.check(problem, numerics=NUMERICS).ok
     assert np.isfinite(rcwa.run(problem, numerics=NUMERICS).T).all()
+
+
+# -- 15. An ElectricDipole in a layer that is not one material is refused at check, not at run --
+
+_PATTERNED = rcwa.Layer(thickness=.2, background=Material(2.25), regions=(
+    rcwa.Region(geometry=rcwa.Rectangle(size=(.3, .4)), material=Material(4.)),))
+_FILM = rcwa.Layer(thickness=.2, background=Material(2.25))
+HOSTS = {
+    'region': ((_PATTERNED,), 0),
+    'raster': ((rcwa.Layer(thickness=.2, epsilon=np.where(np.eye(8) > 0, 4., 2.25)),), 0),
+    'second-of-two': ((_FILM, _PATTERNED), 1),
+}
+
+
+def _dipole_problem(layers, sources, z, region=_BOX):
+    sources = tuple(dataclasses.replace(s, position=(0., 0., z)) if isinstance(s, rcwa.ElectricDipole) else s
+                    for s in sources)
+    return rcwa.Problem(units=Units(length='um'), stack=rcwa.Stack(period=(.8, .9), layers=layers),
+                        excitation=rcwa.Excitation(wavelength=.6, sources=sources),
+                        outputs=rcwa.Outputs(diffraction=False, power_region=region))
+
+
+@pytest.mark.parametrize('sources,index', [((_PERIODIC,), 0), ((_ISOLATED,), 0),
+                                           ((rcwa.PlaneWave(theta=.2), _PERIODIC), 1)],
+                         ids=['periodic', 'isolated', 'after-a-plane-wave'])
+@pytest.mark.parametrize('host', sorted(HOSTS))
+def test_a_dipole_in_a_patterned_layer_is_refused_at_every_door(host, sources, index):
+    layers, layer = HOSTS[host]
+    issue = _refused_alike(_dipole_problem(layers, sources, z=.2*layer + .1))
+    assert (issue.code, issue.path) == ('source.host_layer', f'excitation.sources[{index}]')
+    assert f'excitation.sources[{index}] is an ElectricDipole' in issue.message
+    assert f'inside stack.layers[{layer}], which is not one material' in issue.message
+    assert (issue.expected, issue.actual) == ('a uniform host layer', f'stack.layers[{layer}]')
+    # The advice: the same dipole in a uniform layer runs (a raster stack keeps rasters throughout).
+    uniform = rcwa.Layer(thickness=.2, epsilon=np.full((8, 8), 2.25)) if host == 'raster' else _FILM
+    problem = _dipole_problem(layers + (uniform,), sources, z=.2*len(layers) + .1)
+    assert np.isfinite(rcwa.run(problem, numerics=NUMERICS).outputs['top'].outgoing).all()
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_a_dipole_in_a_patterned_layer_is_refused_alike_on_each_backend(backend):
+    pytest.importorskip(backend)
+    x64 = (__import__('jax').enable_x64(True) if backend == 'jax' else __import__('contextlib').nullcontext())
+    with x64:
+        issue = _refused_alike(_dipole_problem((_PATTERNED,), (_PERIODIC,), z=.1), backend=backend)
+    assert (issue.code, issue.path) == ('source.host_layer', 'excitation.sources[0]')
+
+
+@pytest.mark.parametrize('layers,z', [((_PATTERNED, _FILM), .3), ((_FILM, _PATTERNED), .1),
+                                      ((rcwa.Layer(thickness=.2, epsilon=np.full((8, 8), 2.25)),), .1)],
+                         ids=['above-a-patterned-layer', 'below-a-patterned-layer', 'raster-of-one-value'])
+def test_a_dipole_in_a_uniform_layer_still_runs(layers, z):
+    problem = _dipole_problem(layers, (_PERIODIC,), z)
+    assert rcwa.check(problem, numerics=NUMERICS).ok
+    assert np.isfinite(rcwa.run(problem, numerics=NUMERICS).outputs['top'].outgoing).all()
+
