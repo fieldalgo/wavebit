@@ -693,3 +693,14 @@
 {'orders': (5, 5), 'case': 'tensor-circle', 'arm': 'tensor', 'grid': 4, 'dR': 0.00015921411966061255, 'dT': 0.00014932249707450343, 'energy': 5.106441904545456e-06}
 {'orders': (5, 5), 'case': 'tensor-circle', 'arm': 'tensor', 'grid': 5, 'dR': 0.0005323985426579914, 'dT': 0.0026575836822453347, 'energy': 0.00010842623360929338}
 {'orders': (5, 5), 'case': 'tensor-circle', 'arm': 'tensor', 'grid': 7, 'dR': 0.00025411549474805076, 'dT': 0.001505029246972267, 'energy': 0.00018683754198545177}
+{'orders': (5, 5), 'case': 'tensor-circle', 'arm': 'tensor', 'grid': 8, 'dR': 3.430532310162021e-05, 'dT': 0.0004394982832133104, 'energy': 0.00045451907203486464}
+{'orders': (5, 5), 'case': 'tensor-circle', 'arm': 'tensor', 'grid': 9, 'dR': 0.0003694643563464453, 'dT': 0.002257675016675953, 'energy': 0.0002544048331301063}
+{'orders': (5, 5), 'case': 'tensor-circle', 'arm': 'tensor', 'grid': 16, 'dR': 8.59340305501069e-06, 'dT': 4.476621844855949e-05, 'energy': 6.946297453014338e-05}
+{'orders': (5, 5), 'case': 'tensor-circle', 'arm': 'tensor', 'grid': 19, 'dR': 4.1074354953249403e-05, 'dT': 0.00023283078841551674, 'energy': 1.9352011824791404e-05}
+{'orders': (5, 5), 'case': 'tensor-circle', 'arm': 'tensor', 'grid': 20, 'dR': 7.946825926363754e-06, 'dT': 2.4313799732444963e-05, 'energy': 2.6763802203122466e-05}
+{'orders': (5, 5), 'case': 'tensor-circle', 'arm': 'tensor', 'grid': 21, 'dR': 2.9736951837014414e-05, 'dT': 0.0001761743541404126, 'energy': 2.2687390257569717e-05}
+{'orders': (5, 5), 'case': 'tensor-circle', 'arm': 'tensor', 'grid': 25, 'dR': 4.5009835477130555e-06, 'dT': 2.6161285337167328e-05, 'energy': 1.539762241620224e-05}
+{'orders': (5, 5), 'case': 'tensor-circle', 'arm': 'tensor', 'grid': 32, 'dR': 4.812727221921442e-07, 'dT': 2.938708454261474e-06, 'energy': 1.1225000432713017e-05}
+{'orders': (5, 5), 'case': 'tensor-circle', 'arm': 'tensor', 'grid': 64, 'dR': 1.025815409769204e-07, 'dT': 3.8493210208212503e-07, 'energy': 8.11843369308285e-06}
+{'orders': (5, 5), 'case': 'tensor-circle', 'arm': 'tensor', 'grid': 128, 'dR': 5.191904179149831e-08, 'dT': 2.5250840607338176e-07, 'energy': 7.803526148375539e-06}
+{'orders': (5, 5), 'case': 'tensor-circle', 'arm': 'tensor', 'grid': 256, 'dR': 1.0758673809480035e-08, 'dT': 5.3021881440962204e-08, 'energy': 7.73615185756249e-06}
