@@ -156,10 +156,8 @@ _DIRECTED_SOURCES = {
     ('theta', [.05, .175, .3]),
     ('theta', np.array([.2])),
     ('phi', np.linspace(0., .3, 3)),
-    ('theta', float('nan')),
-    ('phi', float('inf')),
 ])
-def test_an_incidence_angle_is_one_finite_number(kind, name, value):
+def test_an_incidence_angle_is_one_number(kind, name, value):
     from wavebit.errors import ValidationError
     angles = dict(theta=.2, phi=.1)
     angles[name] = value
@@ -172,6 +170,30 @@ def test_an_incidence_angle_is_one_finite_number(kind, name, value):
     with pytest.raises(ValidationError) as caught:
         rcwa.run(problem, numerics=numerics)
     assert caught.value.code == 'source.direction'
+
+
+@pytest.mark.parametrize('kind', sorted(_DIRECTED_SOURCES))
+@pytest.mark.parametrize('name,value', [
+    ('theta', float('nan')),
+    ('phi', float('inf')),
+    ('theta', complex(1., float('nan'))),
+    ('phi', np.array([.1, float('nan')])),
+])
+def test_a_nonfinite_incidence_angle_is_problem_nonfinite(kind, name, value):
+    # A NaN or an infinity is refused as every other non-finite input is, even inside an array
+    # that the one-angle rule would also refuse: the code says what is wrong with the value.
+    from wavebit.errors import ValidationError
+    angles = dict(theta=.2, phi=.1)
+    angles[name] = value
+    problem = _crossed_grating(_DIRECTED_SOURCES[kind](**angles))
+    numerics = rcwa.Numerics(orders=(1, 1))
+    (issue,) = rcwa.check(problem, numerics=numerics).issues
+    assert (issue.code, issue.path) == ('problem.nonfinite', f'excitation.sources[0].{name}')
+    assert 'non-finite' in issue.message
+    for door in (rcwa.prepare, rcwa.run):
+        with pytest.raises(ValidationError) as caught:
+            door(problem, numerics=numerics)
+        assert (caught.value.code, caught.value.path) == (issue.code, issue.path)
 
 
 def test_scalar_angles_of_every_spelling_still_run_and_agree():
