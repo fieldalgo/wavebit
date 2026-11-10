@@ -1,0 +1,2312 @@
+[
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "rectangle",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "rectangle",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "rectangle",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "rectangle",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "rectangle",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "rect-tilted",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "rect-tilted",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "rect-tilted",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "rect-tilted",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "rect-tilted",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "circle",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "circle",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "circle",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "circle",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "circle",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "ellipse",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "ellipse",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "ellipse",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "ellipse",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "ellipse",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "polygon",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "polygon",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "polygon",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "polygon",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "polygon",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "overlap",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "overlap",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "overlap",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "overlap",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "overlap",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "hexagonal",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "hexagonal",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "hexagonal",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "hexagonal",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "hexagonal",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "oblique",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "oblique",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "oblique",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "oblique",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "oblique",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "lossy",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "lossy",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "lossy",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "lossy",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "lossy",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "metallic",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "metallic",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "metallic",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "metallic",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "numpy",
+  "case": "metallic",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "rectangle",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "rectangle",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "rectangle",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "rectangle",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "rectangle",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "rect-tilted",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "rect-tilted",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "rect-tilted",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "rect-tilted",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "rect-tilted",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "circle",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "circle",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "circle",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "circle",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "circle",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "ellipse",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "ellipse",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "ellipse",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "ellipse",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "ellipse",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "polygon",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "polygon",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "polygon",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "polygon",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "polygon",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "overlap",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "overlap",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "overlap",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "overlap",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "overlap",
+  "grid": 256,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "hexagonal",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "hexagonal",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "hexagonal",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "hexagonal",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "hexagonal",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "oblique",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "oblique",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "oblique",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "oblique",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "oblique",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "lossy",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "lossy",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "lossy",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "lossy",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "lossy",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "metallic",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "metallic",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "metallic",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "metallic",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "jax",
+  "case": "metallic",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "rectangle",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "rectangle",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "rectangle",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "rectangle",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "rectangle",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "rect-tilted",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "rect-tilted",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "rect-tilted",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "rect-tilted",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "rect-tilted",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "circle",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "circle",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "circle",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "circle",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "circle",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "ellipse",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "ellipse",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "ellipse",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "ellipse",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "ellipse",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "polygon",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "polygon",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "polygon",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "polygon",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "polygon",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "overlap",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "overlap",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "overlap",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "overlap",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "overlap",
+  "grid": 256,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "hexagonal",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "hexagonal",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "hexagonal",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "hexagonal",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "hexagonal",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "oblique",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "oblique",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "oblique",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "oblique",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "oblique",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "lossy",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "lossy",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "lossy",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "lossy",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "lossy",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "metallic",
+  "grid": 13,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "metallic",
+  "grid": 14,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "metallic",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "metallic",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   3,
+   3
+  ],
+  "backend": "torch",
+  "case": "metallic",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "circle",
+  "grid": 17,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "circle",
+  "grid": 18,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "circle",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "circle",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "circle",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "rect-tilted",
+  "grid": 17,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "rect-tilted",
+  "grid": 18,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "rect-tilted",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "rect-tilted",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "rect-tilted",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "overlap",
+  "grid": 17,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "overlap",
+  "grid": 18,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "overlap",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "overlap",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "overlap",
+  "grid": 256,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "oblique",
+  "grid": 17,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "oblique",
+  "grid": 18,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "oblique",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "oblique",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "numpy",
+  "case": "oblique",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "circle",
+  "grid": 17,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "circle",
+  "grid": 18,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "circle",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "circle",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "circle",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "rect-tilted",
+  "grid": 17,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "rect-tilted",
+  "grid": 18,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "rect-tilted",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "rect-tilted",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "rect-tilted",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "overlap",
+  "grid": 17,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "overlap",
+  "grid": 18,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "overlap",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "overlap",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "overlap",
+  "grid": 256,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "oblique",
+  "grid": 17,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "oblique",
+  "grid": 18,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "oblique",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "oblique",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "jax",
+  "case": "oblique",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "circle",
+  "grid": 17,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "circle",
+  "grid": 18,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "circle",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "circle",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "circle",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "rect-tilted",
+  "grid": 17,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "rect-tilted",
+  "grid": 18,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "rect-tilted",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "rect-tilted",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "rect-tilted",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "overlap",
+  "grid": 17,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "overlap",
+  "grid": 18,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "overlap",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "overlap",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "overlap",
+  "grid": 256,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "oblique",
+  "grid": 17,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "oblique",
+  "grid": 18,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "oblique",
+  "grid": 64,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "oblique",
+  "grid": 128,
+  "identical": true,
+  "max_diff": 0.0
+ },
+ {
+  "orders": [
+   4,
+   2
+  ],
+  "backend": "torch",
+  "case": "oblique",
+  "grid": null,
+  "identical": true,
+  "max_diff": 0.0
+ }
+]

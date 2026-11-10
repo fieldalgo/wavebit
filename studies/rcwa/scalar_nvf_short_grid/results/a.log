@@ -173,3 +173,9 @@
 {'orders': (4, 2), 'backend': 'torch', 'case': 'overlap', 'grid': 18, 'identical': True, 'max_diff': 0.0}
 {'orders': (4, 2), 'backend': 'torch', 'case': 'overlap', 'grid': 64, 'identical': True, 'max_diff': 0.0}
 {'orders': (4, 2), 'backend': 'torch', 'case': 'overlap', 'grid': 128, 'identical': True, 'max_diff': 0.0}
+{'orders': (4, 2), 'backend': 'torch', 'case': 'overlap', 'grid': 256, 'identical': True, 'max_diff': 0.0}
+{'orders': (4, 2), 'backend': 'torch', 'case': 'oblique', 'grid': 17, 'identical': True, 'max_diff': 0.0}
+{'orders': (4, 2), 'backend': 'torch', 'case': 'oblique', 'grid': 18, 'identical': True, 'max_diff': 0.0}
+{'orders': (4, 2), 'backend': 'torch', 'case': 'oblique', 'grid': 64, 'identical': True, 'max_diff': 0.0}
+{'orders': (4, 2), 'backend': 'torch', 'case': 'oblique', 'grid': 128, 'identical': True, 'max_diff': 0.0}
+{'orders': (4, 2), 'backend': 'torch', 'case': 'oblique', 'grid': None, 'identical': True, 'max_diff': 0.0}
