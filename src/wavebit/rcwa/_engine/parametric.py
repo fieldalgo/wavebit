@@ -1931,6 +1931,29 @@ def _fold_to_nearest_image(xp, dx, dy, reduced):
     su = xp.round((a2y * dx - a2x * dy) / det)
     sv = xp.round((-a1y * dx + a1x * dy) / det)
 
+    # A sample on the Wigner-Seitz boundary is equidistant from two images (three at a
+    # vertex), and a grid lands there exactly: on the hexagonal cell at N = 13, four samples
+    # of a centred shape do. The two distances are then equal up to rounding, and rounding is
+    # not backend-neutral, so a strict `<` let each backend pick its own image there and the
+    # normal it read flipped. `sample_grid` puts the samples at the same bits on every backend
+    # since 2026-11-10, which settled eager JAX; under `jax.jit` XLA still fuses this `d2`
+    # arithmetic and rounds one of two tied candidates an ulp apart, and the jitted
+    # permittivity gradient of a hexagonal circle missed PyTorch's by 2.6e-6 at N = 21 and
+    # 5.5e-6 at N = 65. A candidate now replaces the best only when nearer by more than rounding can
+    # make it, so a tie keeps the first image of the sweep -- the lowest absolute (mu, mv),
+    # since the sweep is lexicographic in them whatever `su`, `sv` rounded to -- on every
+    # backend. That is the image a strict `<` kept on an exact tie, so an exactly tied sample
+    # reads what NumPy always read. The margin bounds the rounding in `d2`: a few ulps of
+    # `|e| (|d| + cell)`, here `64 eps (cell^2 + |d|^2)`; a sample that much off the
+    # boundary is ~1e-14 of a cell from it, where the field is discontinuous anyway. Unlike
+    # the lone box's centre (`_piece_field`, which keeps its tie exact), this is a bound on
+    # rounding rather than a width in the rule, and the locus is a whole set of lines that a
+    # grid commensurate with the cell lands on at many samples, not one point.
+    # On the N = 13 hexagonal grid the margin moves NumPy's own sum(T) by 5e-6 (1.8e-8 at
+    # N = 1024): those near-ties had been decided by NumPy's rounding, now by the rule.
+    eps = xp.finfo(dx.dtype).eps
+    margin = 64.0 * eps * (a1x * a1x + a1y * a1y + a2x * a2x + a2y * a2y + dx * dx + dy * dy)
+
     best_x = best_y = best_d2 = None
     for du in (-1.0, 0.0, 1.0):
         for dv in (-1.0, 0.0, 1.0):
@@ -1941,7 +1964,7 @@ def _fold_to_nearest_image(xp, dx, dy, reduced):
             if best_d2 is None:
                 best_x, best_y, best_d2 = ex, ey, d2
             else:
-                take = d2 < best_d2
+                take = d2 < best_d2 - margin
                 best_x = xp.where(take, ex, best_x)
                 best_y = xp.where(take, ey, best_y)
                 best_d2 = xp.where(take, d2, best_d2)
