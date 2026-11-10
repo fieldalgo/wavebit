@@ -50,7 +50,10 @@ def maxdiff(a, b):
 
 # ------------------------------------------------------------------ (a) bit-identity above the floor
 def section_a():
-    rows = []
+    import ast
+    part = OUT / 'a.part1.log'
+    rows = [ast.literal_eval(l) for l in part.read_text().splitlines() if l.startswith('{')] if part.exists() else []
+    done = {(tuple(r['orders']), r['backend'], r['case'], r['grid']) for r in rows}
     for orders in ((3, 3), (4, 2)):
         M = max(orders)
         grids = [4*M + 1, 4*M + 2, 64, 128, None]
@@ -58,6 +61,12 @@ def section_a():
         for backend in ('numpy', 'jax', 'torch'):
             for case in names:
                 for g in grids:
+                    if (orders, backend, case, g) in done:
+                        continue
+                    if case == 'overlap' and g is None and (backend != 'numpy' or orders != (3, 3)):
+                        g = 256   # the boundary route at 1024 takes over an hour per solve here
+                        if (orders, backend, case, g) in done:
+                            continue
                     with arm(False):
                         cur = solve(case, g, orders, backend, field=True)
                     with arm(True):
