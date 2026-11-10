@@ -146,11 +146,12 @@ _PAIR_SEPARATION = 1e-4
 
 _REFUSED_PAIR = (
     'a first-order layer holds three or more same-direction modes in a defective eigenvalue '
-    'cluster (including coincident exceptional points) that no regular pair rebuild spans: '
-    'the eigenvector basis was kept for them, and the answer can be inaccurate. Move the '
-    'wavelength or angle by more than a relative 1e-4 to check it.')
+    'cluster that neither a regular pair rebuild nor the joint rebuild of a cluster of up to '
+    'four modes spans (a larger cluster, a chain of nearby roots, or a Jordan chain of length '
+    'three): the eigenvector basis was kept for them, and the answer can be inaccurate. Move '
+    'the wavelength or angle by more than a relative 1e-4 to check it.')
 
-def _pair_gate(xp, lam, psi, forward, *, slots=1):
+def _pair_gate(xp, lam, psi, forward, *, slots=1, exclude=None):
     """``(pairs, refused, overflow)``: defective same-direction pairs of one layer.
 
     Within each direction the pairs are taken greedily, most parallel first, by ``argmax`` over
@@ -172,6 +173,11 @@ def _pair_gate(xp, lam, psi, forward, *, slots=1):
     ``refused`` is eager-only (``None`` under a trace): ``True`` when a gated pair had to be kept.
     ``overflow`` is trace-only (``None`` eagerly): after the last slot, one more greedy
     candidate is checked, and an eligible remainder poisons the layer's generator.
+
+    ``exclude`` (optional, one flag per mode) marks the modes of the defective clusters the joint
+    rebuild takes (:func:`_regular_clusters`). They start out taken, so no candidate holds one;
+    under a trace a refused candidate inside a cluster would otherwise take a slot, and the slots
+    of a layer with two clusters a direction ran out before the pair beside them.
     """
     from wavebit._common.backend import _concrete
     n = psi.shape[1]
@@ -188,7 +194,7 @@ def _pair_gate(xp, lam, psi, forward, *, slots=1):
     traced = False
     for side in (forward, ~forward):
         Cs = xp.where(side[:, None] & side[None, :] & ~eye, C, xp.zeros_like(C))
-        taken = xp.zeros((n,), dtype=xp.bool, device=dev)
+        taken = xp.zeros((n,), dtype=xp.bool, device=dev) if exclude is None else exclude
         for k in range(n // 2 + 1):
             free = xp.where(~taken[:, None] & ~taken[None, :], Cs, xp.zeros_like(Cs))
             flat = xp.reshape(xp.argmax(xp.reshape(free, (-1,))), (1,))
@@ -325,6 +331,94 @@ def _regular_pair(xp, M, values, psi, a, b, engaged):
     return unit * diagonal + coupling, psi
 
 
+def _regular_clusters(xp, M, values, psi, w, clusters):
+    """Rebuild each defective cluster of a first-order layer jointly, in a regular basis.
+
+    ``clusters`` is :func:`~wavebit.rcwa._engine.solve_2d._defective_clusters`' answer for the
+    layer's ``eig`` eigenvalues ``w``, read within each direction: three or four same-direction
+    modes in one closed ball, nearly dependent and not normal. That is what ``eig`` hands back at
+    coincident exceptional points -- two order rows of a y-invariant raster at one x-cutoff,
+    ``ky0 = Gy / 2``, where it mixes four vectors of which no two are nearly parallel, so the pair
+    gate sees nothing (or refuses the pair it sees) -- and near them, and for a pair with a third
+    root within :data:`_PAIR_SEPARATION`, which :func:`_pair_gate` refuses. ``values`` and ``psi``
+    are the generator and basis after the pair rebuild, whose gate never sees a cluster's modes;
+    both come back with each cluster's columns replaced.
+
+    In the basis ``W0`` -- ``psi`` with each cluster's unit columns orthonormalised -- the rest of
+    ``W0^-1 M W0`` is block diagonal to rounding: ``values`` on the plain modes and on the rebuilt
+    pairs, whose columns :func:`_regular_pair` already made an invariant subspace. So the clusters
+    take the 2D path's joint rebuild (:func:`~wavebit.rcwa._engine.solve_2d._joint_cluster_bases`):
+    one Newton step for each cluster's invariant subspace in that basis, ``k x k`` systems where a
+    pair would divide by a gap, the chord step after it, and the split ``X^-1 T X = L + B`` with
+    ``B`` on rows ``J`` and columns ``K``, disjoint (:func:`~wavebit.rcwa._engine.solve_2d.
+    _cluster_split`). The cluster's columns become ``Q1 X`` and its block of the generator
+    ``L + B``, placed entry by entry: a coupling on rows and columns disjoint from every other,
+    which :func:`~wavebit.rcwa._engine.modal_gradient.exponential` and
+    :func:`~wavebit.rcwa._engine.modal_gradient.split_generator` take exactly, as they take a
+    pair's. The first-order generator is the eigenvalue itself, so no root is taken.
+
+    Returns ``(values, psi, bad)``: ``bad`` per slot where the rebuild fails the 2D path's check
+    (the corrected subspace misses ``M`` by more than rounding, or the split drops more than the
+    threshold allows). Everything is on stopped values; a slot nothing took changes nothing.
+    """
+    from wavebit.rcwa._engine.solve_2d import _conj_t, _joint_cluster_bases
+    members, cvalid, Q0, _ = clusters
+    n = psi.shape[0]
+    C = psi.dtype
+    dev = getattr(psi, 'device', None)
+    idx = xp.arange(n, device=dev)
+    S, k = members.shape
+    mflat = xp.reshape(members, (-1,))
+    Oc = (idx[:, None] == mflat[None, :]) & xp.reshape(cvalid, (-1,))[None, :]   # (n, S k)
+    is_c = xp.any(Oc, axis=1)
+    pc = xp.argmax(xp.astype(Oc, xp.int32), axis=1)                    # a member's flat lane
+
+    def place_c(cols, base):                     # (S, n, k) -> the members' columns
+        flat = xp.reshape(xp.permute_dims(cols, (1, 0, 2)), (n, S * k))
+        return xp.where(is_c[None, :], xp.take(flat, pc, axis=1), base)
+
+    vv = cvalid[:, :, None] & cvalid[:, None, :]
+    # A stand-in eigenvalue for padded lanes, far from every mode's.
+    F = 10.0 * (1.0 + xp.max(xp.abs(w)))
+    W0 = place_c(Q0, psi)
+    AQ0 = M @ Q0
+    Mc = xp.where(vv, _conj_t(xp, Q0) @ AQ0, xp.zeros_like(vv, dtype=C))
+    Rc = xp.where(cvalid[:, None, :], AQ0 - Q0 @ Mc, xp.zeros_like(AQ0))
+    del AQ0
+    eye = xp.eye(n, dtype=C, device=dev)
+    Gc = linear_solve(xp, xp.where(xp.any(cvalid), W0, eye),
+                      xp.reshape(xp.permute_dims(Rc, (1, 0, 2)), (n, S * k)))
+    del Rc
+    # W0^-1 M W0 off the clusters: each row's diagonal, and a rebuilt pair's `a` row coupled to
+    # its `b` row -- an exact zero everywhere else, so the read needs no threshold.
+    diagonal = xp.linalg.diagonal(values)
+    coupling = values - eye * diagonal
+    is_a = xp.any(coupling != 0, axis=1)
+    partner = xp.where(is_a, xp.argmax(xp.abs(coupling), axis=1), idx)
+    m01_row = xp.sum(xp.where(idx[None, :] == partner[:, None], coupling, xp.zeros_like(coupling)),
+                     axis=1)
+    del coupling
+    Q1, X, Mx, dg, JK, res1, tau, tau_res, cond, dropped = _joint_cluster_bases(
+        xp, M, W0, Q0, Mc, Gc, members, cvalid, diagonal, is_a, m01_row, partner, F)
+    del W0, Gc
+    psi = place_c(Q1 @ X, psi)
+    # The clusters' blocks by placement, never by a sum: `values` keeps its bits elsewhere.
+    on_diagonal = (idx[:, None] == idx[None, :]) & is_c[:, None]
+    values = xp.where(on_diagonal, xp.take(xp.reshape(dg, (-1,)), pc)[:, None], values)
+    blk = xp.arange(S * k, device=dev) // k
+    JKf = (xp.reshape(xp.broadcast_to(JK[:, :, None, :], (S, k, S, k)), (S * k, S * k))
+           & (blk[:, None] == blk[None, :]))
+    Mf = xp.reshape(xp.broadcast_to(Mx[:, :, None, :], (S, k, S, k)), (S * k, S * k))
+    Ocf = xp.astype(Oc, C)
+    OcT = xp.matrix_transpose(Ocf)
+    pos = (Ocf @ xp.astype(JKf, C) @ OcT) != 0
+    values = xp.where(pos, Ocf @ xp.where(JKf, Mf, xp.zeros_like(Mf)) @ OcT, values)
+    finite = xp.isfinite(cond)
+    bad = xp.any(cvalid, axis=1) & (~finite | (res1 > tau_res)
+                                    | (xp.where(finite, cond, xp.zeros_like(cond)) * dropped > tau))
+    return values, psi, bad
+
+
 #: A layer mode counts as grazing when its eigenvalue is within this of zero, relative to the
 #: layer's largest (and at least 1, the modal scale ``k0``). An exact grazing order of a uniform
 #: layer gives an exact zero; a patterned one's defective pair comes out of ``eig`` about
@@ -365,6 +459,9 @@ def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1):
     abstract trace this layout is structural even when no pair engages. ``slots``
     bounds greedy candidates per direction; an eligible candidate beyond that
     capacity poisons both generators with NaN. Eagerly all eligible pairs are rebuilt.
+    Defective clusters of three or four modes are rebuilt jointly
+    (:func:`_regular_clusters`); then ``coupled`` is a count, the coupled rows one
+    direction can hold, which the exponential's traced rule gathers to.
 
     ``k0_d`` is ``k0`` times the thickness of the layer's run of identical layers
     (:func:`_run_k0_ds`), given by the two stack algorithms (ETM and SMM) and by the coherent
@@ -422,14 +519,46 @@ def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1):
     # A defective pair -- a patterned conical x-cutoff is a 2x2 Jordan block -- is rebuilt in a
     # regular basis (:func:`_regular_pair`); off the band nothing here runs and the split is the
     # eigenvector one, to the bit. `coupled` is structural: True wherever the layout was taken.
-    pairs, refused, overflow = _pair_gate(xp, lam, psi, forward, slots=slots)
-    coupled = bool(pairs)
+    # Coincident exceptional points, and a pair beside a root it nearly shares, are a defective
+    # cluster of three or four same-direction modes: no pair spans it, and it is rebuilt jointly
+    # (:func:`_regular_clusters`). Eagerly a layer with none returns from the gate after one look
+    # at its eigenvalues' distances; under a trace its slots hold the balls, masked as data. The
+    # gate reads first, and the pair gate never sees a cluster's modes. So, unlike on 2D, a ball of
+    # three holding a pair is a cluster too: the joint rebuild is exact there as well.
+    from wavebit._common.backend import _concrete
+    from wavebit.rcwa._engine.solve_2d import _JOINT_IMPRECISE_2D, _defective_clusters
+    dev = getattr(lam, 'device', None)
+    clusters = _defective_clusters(xp, lam, psi, lam, None, lambda: _stop(M), slots,
+                                   group=forward)
+    exclude = None
+    if clusters is not None:
+        members, cvalid, _, c_over = clusters
+        exclude = xp.any((xp.arange(lam.shape[0], device=dev)[:, None]
+                          == xp.reshape(members, (-1,))[None, :])
+                         & xp.reshape(cvalid, (-1,))[None, :], axis=1)
+    pairs, refused, overflow = _pair_gate(xp, lam, psi, forward, slots=slots, exclude=exclude)
+    coupled = bool(pairs) or clusters is not None
     eig_lam = lam
     if coupled:
         frozen = _stop(M)
-        values = xp.eye(lam.shape[0], dtype=lam.dtype, device=getattr(lam, 'device', None)) * lam
+        values = xp.eye(lam.shape[0], dtype=lam.dtype, device=dev) * lam
         for a, b, engaged in pairs:
             values, psi = _regular_pair(xp, frozen, values, psi, a, b, engaged)
+        if clusters is not None:
+            values, psi, bad = _regular_clusters(xp, frozen, values, psi, eig_lam, clusters)
+            if c_over is None:
+                if _concrete(xp.any(bad)):
+                    import warnings
+                    warnings.warn(_JOINT_IMPRECISE_2D, ExceptionalPointWarning, stacklevel=3)
+            else:
+                # More clusters than the trace's slots, or a failed check: loud, never silent.
+                overflow = overflow | c_over | xp.any(bad)
+            # The coupled rows one direction can hold -- a pair slot's one, a cluster's J (at
+            # most k - 1) -- for the exponential's traced rule, which gathers them to a static
+            # count (`modal_gradient._coupled_frechet`): a count in place of `True`.
+            from wavebit.rcwa._engine.modal_gradient import _COUPLED_CAP
+            S, k = clusters[0].shape
+            coupled = max(_COUPLED_CAP, slots + (k - 1) * S)
         if overflow is not None:
             # A trace must not leave an eligible pair in the ill-conditioned eigenvector basis.
             values = values * xp.where(overflow, float('nan'), 1.0)
@@ -613,8 +742,9 @@ _SLOTS = ('exx', 'exy', 'exz', 'eyx', 'eyy', 'eyz', 'ezx', 'ezy', 'ezz_i')
 
 #: What a layer record gains when its split took the regular-pair layout (:func:`_layer_split`):
 #: a ninth slot, so the record's *length* tells :func:`~wavebit.rcwa._engine.fields.field_2d_first_order`
-#: to pass ``coupled=True`` -- a structural word a traced record keeps (a pytree child could not
-#: be branched on). Its content is unused; ``None`` adds no leaf.
+#: to pass ``coupled`` on -- a structural word a traced record keeps (a pytree child could not
+#: be branched on). A split that rebuilt clusters jointly says a count, and the record gains that
+#: many slots. Their content is unused; ``None`` adds no leaf.
 _COUPLED_RECORD = [None]
 
 

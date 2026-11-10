@@ -854,9 +854,11 @@ def field_2d_first_order(wavelength, kx, ky, T1, layer_info_list, lattice,
     cells = []
     for spec, record in zip(z_per_layer, layer_info_list[::-1]):
         eps, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i = record[:8]
-        # A ninth slot says the layer's split took the regular-pair layout
-        # (`solve_2d_first_order._COUPLED_RECORD`): structural, so a traced record answers it.
-        coupled = len(record) > 8
+        # A ninth slot says the layer's split took the regular-pair layout, and more slots the
+        # count a joint rebuild of clusters gave (`solve_2d_first_order._COUPLED_RECORD`):
+        # structural, so a traced record answers it. One slot passes 1, which `exponential` reads
+        # as it reads True.
+        coupled = len(record) - 8
         nz = _n_samples(spec)
         # The layer's unknown is its forward amplitude at its own top face -- that is what the
         # ETM redefinition `t' = X_f^-1 P t` bought. The backward half is referenced at the

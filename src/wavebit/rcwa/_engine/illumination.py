@@ -179,9 +179,10 @@ def _cascade(xp, k0, kx, ky, layers, bottom, top, keep_field, jumps=None, *, slo
             emitted = (v[:2*n], v[2*n:])
         parts.extend([(_interface_s(xp, prev_f, prev_b, pf, pb), emitted),
                       (_propagate_s(xp, lf, lb, k0, d, n, coupled), (zero, zero))])
-        # A trailing `None` when the split took the regular-pair layout: structural, so the
-        # field's exponential (field_result) reads it off the record's length under a trace too.
-        modes.append((material, d, lf, pf, lb, pb) + ((None,) if coupled else ()))
+        # A trailing `None` when the split took the regular-pair layout, one per count where it
+        # rebuilt clusters jointly: structural, so the field's exponential (field_result) reads
+        # it off the record's length under a trace too.
+        modes.append((material, d, lf, pf, lb, pb) + (None,) * int(coupled))
         prev_f, prev_b = pf, pb
     parts.append((_interface_s(xp, prev_f, prev_b, *top), (zero, zero)))
     suffix = [None] * len(parts)
