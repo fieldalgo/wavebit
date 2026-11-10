@@ -95,3 +95,22 @@ def test_a_matched_pml_reference_is_advised_in_public_spelling():
     advice = 'Give every PML face a concrete reference, fd.PML(background=...), or'
     assert to_public(advice) == ('Give every PML face a concrete reference, '
                                  'fdtd.PML(reference_media=...) with an entry for every Open face, or')
+
+
+def test_the_matched_face_refusal_advises_the_public_reference_and_the_advice_runs():
+    # The film scene, no reference on the Open z faces: params._cpml refuses the face whose PML
+    # is matched to the traced background. Its advice is spelled for a public caller ...
+    prepared = fdtd.prepare(_film(1.), numerics=_numerics(), backend='torch')
+    with pytest.raises(ValidationError, match='is matched to a background whose permittivity') as caught:
+        prepared.run(_film(torch.tensor(1., dtype=torch.float64, requires_grad=True)))
+    message = caught.value.message
+    assert 'PML(background' not in message
+    assert ('Give the face a concrete reference, fdtd.PML(reference_media=...) with an entry for '
+            'every Open face, or differentiate a structure instead.') in message
+    # ... and followed -- a reference for each Open face -- the same traced background runs.
+    reference_media = {'z-': Material(1.), 'z+': Material(1.)}
+    prepared = fdtd.prepare(_film(1.), numerics=_numerics(reference_media), backend='torch')
+    background = torch.tensor(1., dtype=torch.float64, requires_grad=True)
+    (derivative,) = torch.autograd.grad(prepared.run(_film(background))['T'].efficiency[0, 0, 0],
+                                        background)
+    assert bool(torch.isfinite(derivative)) and float(derivative) != 0.

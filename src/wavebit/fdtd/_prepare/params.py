@@ -321,8 +321,8 @@ def _cpml(scene, plan, rt):
                 f'PML on {face.name!r} is matched to a background whose permittivity or '
                 f'permeability is traced. The stretch profile is static -- it fixes the '
                 f'params\' shapes and is built once per plan -- so the background it is '
-                f'matched to is a static value, not a leaf. Give PML(background=...) a '
-                f'concrete material, or differentiate a structure instead.')
+                f'matched to is a static value, not a leaf. Give the face a concrete '
+                f'reference, fd.PML(background=...), or differentiate a structure instead.')
         table = profiles(face.cells, plan.dx, plan.dt, wavelengths[face.name], eps_r,
                          face.side, boundary.reflection, kappa_max=boundary.kappa_max)
         shape = [1, 1, 1]
