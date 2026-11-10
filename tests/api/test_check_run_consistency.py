@@ -891,3 +891,24 @@ def test_a_finite_plane_wave_wavevector_still_runs():
     problem = _direct(kx=1., ky=.5)
     assert rcwa.check(problem, numerics=NUMERICS).ok
     assert np.isfinite(rcwa.run(problem, numerics=NUMERICS).T).all()
+
+
+# -- 17. A NaN or infinite RCWA incidence angle is problem.nonfinite on every backend ----------
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('name,value', [('theta', np.nan), ('phi', -np.inf)])
+def test_a_nonfinite_rcwa_angle_is_refused_alike_on_each_backend(backend, name, value):
+    pytest.importorskip(backend)
+    angles = dict(theta=.2, phi=.1)
+    angles[name] = value
+    problem = _rcwa().replace(excitation=rcwa.Excitation(wavelength=1.3, sources=(rcwa.PlaneWave(**angles),)))
+    x64 = (__import__('jax').enable_x64(True) if backend == 'jax' else __import__('contextlib').nullcontext())
+    with x64:
+        issue = _refused_alike(problem, backend=backend)
+    assert (issue.code, issue.path) == ('problem.nonfinite', f'excitation.sources[0].{name}')
+
+
+@pytest.mark.parametrize('theta', [2., [.1, .2]], ids=['out-of-range', 'sequence'])
+def test_a_finite_bad_rcwa_angle_keeps_source_direction(theta):
+    problem = _rcwa().replace(excitation=rcwa.Excitation(wavelength=1.3, sources=(rcwa.PlaneWave(theta=theta),)))
+    assert _refused_alike(problem).code == 'source.direction'
