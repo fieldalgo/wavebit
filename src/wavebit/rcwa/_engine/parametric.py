@@ -2251,6 +2251,14 @@ def _sampled_coeffs(xp, field, half_width_u, half_width_v):
     iy = xp.asarray([k % Ny for k in range(-2 * half_width_v, 2 * half_width_v + 1)], device=dev)
     ix = xp.asarray([k % Nx for k in range(-2 * half_width_u, 2 * half_width_u + 1)], device=dev)
     coeff = F[iy[:, None], ix[None, :]]
+    from wavebit.rcwa._engine import factorization as _fz
+    if _fz._NVF_SHORT_GRID_INTERPOLANT:
+        # Study prototype: the interpolant's coefficients, not wrapped bins. Real weights,
+        # exactly 1.0 at every order when the grid meets the floor.
+        real = xp.real(coeff).dtype
+        wy = xp.asarray(_fz.interpolant_weights(Ny, half_width_v), dtype=real, device=dev)
+        wx = xp.asarray(_fz.interpolant_weights(Nx, half_width_u), dtype=real, device=dev)
+        coeff = coeff * (wy[:, None] * wx[None, :])
     # The cell-centre half-pixel shift, the same one
     # :func:`~wavebit.rcwa._engine.factorization._half_pixel_phase` applies on the raster side. The
     # samples come from `sample_grid`, which places index `i` at `(i + 0.5)/N` -- so a bare DFT,
@@ -2542,6 +2550,10 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
                                plan)
     if nvf_projector == 'circular' and key is not None:
         key = ('dyadic-projector', key)
+    if key is not None:
+        from wavebit.rcwa._engine import factorization as _fz
+        if _fz._NVF_SHORT_GRID_INTERPOLANT:
+            key = ('interpolant', key)
     coeffs = _PROJECTOR_CACHE.pop(key, None) if key is not None else None
     if coeffs is None:
         if nvf_projector == 'circular':

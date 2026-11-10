@@ -146,6 +146,9 @@ def _refuse_aliasing_grid(numerics, solvers):
     layers have no regions, except a tensor layer, which reads the grid without that floor. The
     default is resolved at or above the floor, so only a stated value can trip it.
     """
+    from wavebit.rcwa._engine import factorization as _fz
+    if _fz._NVF_SHORT_GRID_INTERPOLANT:    # study switch: short grids are read, not refused
+        return
     grid = numerics.shape_nvf_grid_size
     scene = _engine_scene(solvers[0])
     if grid is None or not scene._stated_normal_grid_meets_its_floor():

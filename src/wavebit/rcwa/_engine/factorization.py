@@ -750,6 +750,22 @@ def _layer_eps(xp, structure):
         yield xp.astype(layer, _complex_dtype(xp, layer))
 
 
+#: STUDY SWITCH (docs/theory/rcwa/scalar-nvf-short-grid-study.md), off by default. When on,
+#: the scalar shape NVF projector takes its coefficients from the cell-centre trigonometric
+#: interpolant of the sampled field (zero past Nyquist, the Nyquist mode split between its two
+#: signs), as the tensor builder does, instead of wrapped DFT bins; and
+#: :func:`check_normal_grid` stops refusing short grids. At or above the floor every order the
+#: circulant reads is below Nyquist and every weight is exactly 1.
+_NVF_SHORT_GRID_INTERPOLANT = False
+
+
+def interpolant_weights(n, half_width):
+    """Per-order weight of the trigonometric interpolant on an ``n``-point axis: 1, 1/2 at
+    Nyquist (even ``n``), 0 past it -- for orders ``-2*half_width..2*half_width``."""
+    return [1.0 if 2 * abs(k) < n else (0.5 if 2 * abs(k) == n else 0.0)
+            for k in range(-2 * half_width, 2 * half_width + 1)]
+
+
 def check_normal_grid(grid_shape, half_width_u, half_width_v):
     """``4*truncation_order+1`` points per axis, or reading the field off the grid aliases.
 
@@ -769,6 +785,8 @@ def check_normal_grid(grid_shape, half_width_u, half_width_v):
     """
     Ny, Nx = grid_shape
     need_v, need_u = 4 * half_width_v + 1, 4 * half_width_u + 1
+    if _NVF_SHORT_GRID_INTERPOLANT and Ny >= 1 and Nx >= 1:
+        return
     if Ny < need_v or Nx < need_u:
         raise ValueError(
             f'normal-field grid {Ny}x{Nx} aliases at truncation_order=({half_width_u}, '
