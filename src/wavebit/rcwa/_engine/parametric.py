@@ -2284,6 +2284,28 @@ def _coeffs_hold_tracer(coeffs):
     return any(isinstance(c, jax.core.Tracer) for c in coeffs)
 
 
+def _coeffs_hold_functorch_wrapper(coeffs):
+    """Whether any coefficient grid is a ``torch.func`` wrapper -- built inside a transform.
+
+    :func:`_coeffs_hold_tracer`'s PyTorch twin, and structural the same way: ``False`` whenever
+    PyTorch is not in the process, and ``False`` with no call into ``torch._C._functorch`` while
+    no transform is active, since wrappers exist only inside one -- so eager PyTorch takes the
+    path it took before (:func:`~wavebit._common.backend.torch_autodiff` reads the same probe).
+    ``is_functorch_wrapped_tensor`` counts a grad or jvp level's ``GradTrackingTensor`` and a
+    ``vmap`` ``BatchedTensor`` alike: either holds a level that dies with its transform.
+    """
+    import sys
+    torch = sys.modules.get('torch')
+    if torch is None:
+        return False
+    from wavebit._common.backend import _functorch, _functorch_active
+    if not _functorch_active(torch):
+        return False
+    functorch = _functorch(torch)
+    return any(isinstance(c, torch.Tensor) and functorch.is_functorch_wrapped_tensor(c)
+               for c in coeffs)
+
+
 def _static_float(v):
     """``v`` as a plain float, refusing anything a cache must not key on.
 
@@ -2559,6 +2581,7 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
                        for f in fields)
     here = _device(xp.zeros(())) if key is not None else None
     if (key is not None and not _coeffs_hold_tracer(coeffs)
+            and not _coeffs_hold_functorch_wrapper(coeffs)
             and all(_device(c) == here for c in coeffs)):
         # Least-recently-used: the read above is a `pop`, so a hit takes the entry out and this
         # puts it back at the end, and a full cache evicts only on a genuine miss. The case that
@@ -2575,6 +2598,18 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
         # wavelength as the FIRST solve on the key, then `solve()` -- every eager call raised.
         # An eager solve before the jit hid it by warming the key, which is why the recipe
         # tests passed. A miss inside a trace is computed and discarded, as a traced key is.
+        #
+        # Nor coefficients built inside a `torch.func` grad or jvp transform, for the same
+        # reason: there every new tensor is that level's wrapper, these grids built from Python
+        # floats included, and once the transform exits they are dead wrappers under a concrete
+        # key. Measured 2026-11-10 on PyTorch 2.14.1 with the gold disks of
+        # `tests/rcwa/test_torch_vmap_autograd.py`: a refused `torch.func.hessian` as the FIRST
+        # solve on the key left a dead wrapper inside a dead wrapper; the next transform's front
+        # door unwraps only one, so `grad`, `jvp`, `jacrev` and four more raised PyTorch's
+        # `level <= current_level INTERNAL ASSERT FAILED ... escaped?` at `c * phase` instead of
+        # their refusal, until the cache was cleared. A refused `grad` or `jvp` first left one
+        # dead level, which the door unwraps, so nothing failed yet. A `vmap` alone wraps only
+        # what it batches, so its grids are plain and still kept.
         #
         # Never stored either: coefficients that are not where the key says. The key reads the
         # device a fresh array lands on -- the scope's -- but the build follows any committed

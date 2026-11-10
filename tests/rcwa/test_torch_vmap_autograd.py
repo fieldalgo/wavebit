@@ -33,6 +33,9 @@ What else is pinned here, each against the change that would break it:
   levels by their type, the mixed partials included that read a tangent beneath another level
   and returned a number without the eigen-derivative -- and every second order through the
   first-order rules is refused, through ``vmap`` as well;
+* a refused transform as a geometry's first solve keeps no ``torch.func`` wrapper in the NVF
+  projector cache, where a later transform raised PyTorch's internal assert, while a ``vmap``
+  alone still keeps its coefficients;
 * the NVF floor on lanes that disagree about binding: the lane where it does not bind is handed
   back bit for bit;
 * the two ``vmap`` rules alone, in every batching of their inputs, where no solve reaches;
@@ -490,6 +493,64 @@ def test_torch_func_grad_and_jvp_levels_are_refused_by_name(name, route):
     g = _scalar(name)
     with pytest.raises(NotImplementedError, match='not differentiable under torch.func'):
         FUNC_ROUTES[route](g, _t(at), _t(_lanes(at, h)))
+
+
+GOLD_DISKS = 'gold disks, floor binds, Re eps'
+
+
+def _held_wrappers(P):
+    """How many coefficient grids in the projector cache are ``torch.func`` wrappers."""
+    wrapped = torch._C._functorch.is_functorch_wrapped_tensor
+    return sum(wrapped(c) for coeffs in P._PROJECTOR_CACHE.values() for c in coeffs)
+
+
+@pytest.mark.parametrize('route', ['grad', 'jvp', 'hessian'])
+def test_a_refused_first_solve_leaves_no_wrapper_in_the_projector_cache(route):
+    """The cold order: the geometry's first PyTorch solve is a refused ``torch.func`` transform.
+
+    Inside a grad or jvp level every tensor made is that level's wrapper, the coefficient grids
+    built from Python floats included, and ``normal_projector_coeffs`` stored them under their
+    concrete key; once the transform exits they are dead wrappers, served to every later solve of
+    the geometry in the process. Measured 2026-11-10 on PyTorch 2.14.1: ``grad`` or ``jvp`` first
+    leaves one dead level, which the next transform's front door unwraps, so nothing failed yet;
+    ``hessian`` first leaves a dead wrapper inside a dead wrapper, the door unwraps only the outer
+    one, and ``grad``, ``vjp``, ``jvp``, ``jacrev``, ``jacfwd``, ``hessian`` and ``vmap(grad)``
+    on the gold disks then raised PyTorch's ``level <= current_level INTERNAL ASSERT FAILED ...
+    escaped?`` at ``c * phase`` instead of their refusal. That is the error a ``pytest -n 3`` run
+    raised in 12 gold-disk refusal cases of this file, which pass when it runs alone because an
+    earlier plain solve warms the key. The JAX twin is
+    ``test_gamma_frozen.test_a_jitted_first_solve_leaves_no_tracer_in_the_projector_cache``.
+    """
+    from wavebit.rcwa._engine import parametric as P
+    _, at, h = ALL[GOLD_DISKS]
+    g = _scalar(GOLD_DISKS)
+    P._PROJECTOR_CACHE.clear()
+    reference = float(g(_t(at)))
+
+    P._PROJECTOR_CACHE.clear()                             # the transform's miss is the first
+    with pytest.raises(NotImplementedError, match='not differentiable under torch.func'):
+        FUNC_ROUTES[route](g, _t(at), _t(_lanes(at, h)))
+    assert _held_wrappers(P) == 0
+    with pytest.raises(NotImplementedError, match='not differentiable under torch.func'):
+        FUNC_ROUTES['grad'](g, _t(at), None)               # raised the assert after `hessian`
+    assert float(g(_t(at))) == reference
+    assert len(P._PROJECTOR_CACHE) == 1 and _held_wrappers(P) == 0    # eager is still kept
+
+
+def test_a_vmap_with_no_derivative_keeps_its_projector_coefficients():
+    """``vmap`` alone wraps only what it batches, and the gold disks' grids are built from Python
+    floats, so they are plain tensors and kept: a second ``vmap`` and an eager solve build nothing.
+    This is what refusing every coefficient made while any transform is active would lose."""
+    from wavebit.rcwa._engine import parametric as P
+    _, at, h = ALL[GOLD_DISKS]
+    g = _scalar(GOLD_DISKS)
+    P._PROJECTOR_CACHE.clear()
+    first = func.vmap(g)(_t(_lanes(at, h)))
+    assert len(P._PROJECTOR_CACHE) == 1 and _held_wrappers(P) == 0
+    held = next(iter(P._PROJECTOR_CACHE.values()))
+    assert torch.equal(func.vmap(g)(_t(_lanes(at, h))), first)
+    g(_t(at))
+    assert next(iter(P._PROJECTOR_CACHE.values())) is held
 
 
 def _create_graph_through_vmap(g, lanes):
