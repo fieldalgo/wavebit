@@ -1,0 +1,74 @@
+[
+ {
+  "case": "rectangle",
+  "factorization": "li",
+  "arm": "scalar",
+  "sum_T": 0.9901831961244996
+ },
+ {
+  "case": "rectangle",
+  "factorization": "li",
+  "arm": "integrated",
+  "sum_T": 0.9901831961244996
+ },
+ {
+  "case": "rectangle",
+  "factorization": "laurent",
+  "arm": "scalar",
+  "sum_T": 0.9874477252175222
+ },
+ {
+  "case": "rectangle",
+  "factorization": "laurent",
+  "arm": "integrated",
+  "sum_T": 0.9874477252175222
+ },
+ {
+  "case": "circle",
+  "factorization": "li",
+  "arm": "scalar",
+  "error": "UnsupportedFeatureError(\"problem: factorization='li' on shapes supports only axis-aligned rectangles; use factorization='nvf' (NVF) for other shapes\")"
+ },
+ {
+  "case": "circle",
+  "factorization": "li",
+  "arm": "integrated",
+  "error": "UnsupportedFeatureError(\"problem: factorization='li' on shapes supports only axis-aligned rectangles; use factorization='nvf' (NVF) for other shapes\")"
+ },
+ {
+  "case": "circle",
+  "factorization": "laurent",
+  "arm": "scalar",
+  "sum_T": 0.9522025815978707
+ },
+ {
+  "case": "circle",
+  "factorization": "laurent",
+  "arm": "integrated",
+  "sum_T": 0.9522025815978707
+ },
+ {
+  "case": "polygon",
+  "factorization": "li",
+  "arm": "scalar",
+  "error": "UnsupportedFeatureError(\"problem: factorization='li' on shapes supports only axis-aligned rectangles; use factorization='nvf' (NVF) for other shapes\")"
+ },
+ {
+  "case": "polygon",
+  "factorization": "li",
+  "arm": "integrated",
+  "error": "UnsupportedFeatureError(\"problem: factorization='li' on shapes supports only axis-aligned rectangles; use factorization='nvf' (NVF) for other shapes\")"
+ },
+ {
+  "case": "polygon",
+  "factorization": "laurent",
+  "arm": "scalar",
+  "sum_T": 0.9668352890057635
+ },
+ {
+  "case": "polygon",
+  "factorization": "laurent",
+  "arm": "integrated",
+  "sum_T": 0.9668352890057635
+ }
+]

@@ -39,11 +39,12 @@ def grads(case, grid):
                 jax_vs_torch=abs(g_jax - g_torch)/abs(g_torch), torch_vs_fd5=abs(g_torch - fd[1e-5])/abs(fd[1e-5]))
 
 
-rows = []
-plan = [('hexagonal', g) for g in (13, 14, 15, 16, 17, 21, 32, 64, 65, 128, None)]
-plan += [(c, g) for c in ('circle', 'polygon', 'oblique') for g in (13, 32, 64)]
-with arm(False):
-    for case, grid in plan:
-        rows.append(grads(case, grid))
-        print(rows[-1], flush=True)
-(OUT / 'lattice_gradients.json').write_text(json.dumps(rows, indent=1, default=str))
+if __name__ == '__main__':
+    rows = []
+    plan = [('hexagonal', g) for g in (13, 14, 15, 16, 17, 21, 32, 64, 65, 128, None)]
+    plan += [(c, g) for c in ('circle', 'polygon', 'oblique') for g in (13, 32, 64)]
+    with arm(False):
+        for case, grid in plan:
+            rows.append(grads(case, grid))
+            print(rows[-1], flush=True)
+    (OUT / 'lattice_gradients.json').write_text(json.dumps(rows, indent=1, default=str))
