@@ -1,0 +1,12 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+rootdir: /home/user/wavebit
+configfile: pyproject.toml
+plugins: xdist-3.8.0, timeout-2.4.0
+timeout: 3600.0s
+timeout method: signal
+timeout func_only: False
+created: 2/2 workers
+2 workers [8 items]
+
+.......

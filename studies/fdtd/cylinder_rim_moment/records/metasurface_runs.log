@@ -2,3 +2,4 @@
 {"key": "scene=M1|n=20|pol=p|periods=120|backend=numpy", "status": "ok", "wall": 36.1}
 {"key": "scene=M1|n=40|pol=s|periods=120|backend=numpy", "status": "ok", "wall": 436.8}
 {"key": "scene=M1|n=40|pol=p|periods=120|backend=numpy", "status": "ok", "wall": 445.2}
+{"key": "scene=M1|n=80|pol=s|periods=120|backend=jax", "status": "ok", "wall": 3369.6}
