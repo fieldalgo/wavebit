@@ -495,6 +495,52 @@ def test_a_nonfinite_position_is_not_reported_as_outside_the_domain(where, value
         assert (caught.value.code, caught.value.path) == (code, path)
 
 
+
+def _plane_wave_angles(theta, phi):
+    problem = fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
+        domain=fdtd.Domain(size=(.1, .1, 1.6)),
+        boundaries=fdtd.Boundaries(x=fdtd.Periodic(), y=fdtd.Periodic(), z=fdtd.Open())),
+        sources=(fdtd.PlaneWave('pw', plane=fdtd.Plane(z=.5), theta=theta, phi=phi, pulse=fdtd.GaussianPulse(
+            wavelength=.8, frequency_sigma_hz=4e13)),),
+        outputs=fdtd.Outputs(monitors=tuple(fdtd.TimeSeriesMonitor(c.lower(), at=(0, 0, 0), component=c)
+                                            for c in ('Ex', 'Ey'))))
+    return problem, fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05), duration=fdtd.Duration(steps=200),
+                                  absorber=fdtd.PML(cells=12))
+
+
+@pytest.mark.parametrize('value', [np.nan, np.inf, -np.inf], ids=['nan', 'inf', '-inf'])
+@pytest.mark.parametrize('theta', [0., .2], ids=['normal', 'oblique'])
+def test_a_nonfinite_plane_wave_phi_is_refused_even_at_normal_incidence(theta, value):
+    # phi sets the polarization frame at theta = 0 too (0 drives Ey, pi/2 Ex), so it is read
+    # there. A NaN passed check and ran to NaN monitors; an infinity was refused only because
+    # math.cos raises on it.
+    problem, numerics = _plane_wave_angles(theta, value)
+    (issue,) = fdtd.check(problem, numerics=numerics).issues
+    assert (issue.code, issue.path) == ('problem.nonfinite', 'sources.pw.phi')
+    for door in (fdtd.prepare, fdtd.run):
+        with pytest.raises(ValidationError) as caught:
+            door(problem, numerics=numerics)
+        assert (caught.value.code, caught.value.path) == (issue.code, issue.path)
+    # A finite phi at normal incidence still turns the field: Ey at 0, Ex at pi/2.
+    for phi, lit in ((0., 'ey'), (np.pi/2, 'ex')):
+        result = fdtd.run(*_plane_wave_angles(0., phi)[:1], numerics=numerics)
+        values = {c: np.asarray(result[c].values) for c in ('ex', 'ey')}
+        assert all(np.isfinite(v).all() for v in values.values())
+        assert np.abs(values[lit]).max() > 0 and np.abs(values['ey' if lit == 'ex' else 'ex']).max() == 0
+
+
+@pytest.mark.parametrize('value', [np.nan, np.inf], ids=['nan', 'inf'])
+def test_periodic_refuses_a_nonfinite_phi_at_normal_incidence(value):
+    problem = _periodic_nonfinite('raster', 2.25).replace(excitation=periodic.Excitation(
+        wavelength=(.85, .9, .95), sources=(periodic.PlaneWave(theta=0., phi=value),)))
+    numerics = periodic.Numerics(spacing=1/30, duration_seconds=55*.9e-6/C0, orders=(0, 0))
+    (issue,) = periodic.check(problem, numerics=numerics).issues
+    assert (issue.code, issue.path) == ('problem.nonfinite', 'excitation.sources[0].phi')
+    for door in (periodic.prepare, periodic.run):
+        with pytest.raises(ValidationError) as caught:
+            door(problem, numerics=numerics)
+        assert (caught.value.code, caught.value.path) == (issue.code, issue.path)
+
 def test_a_prepared_fdtd_run_names_the_nonfinite_live_material():
     problem, numerics = _absorbed()
     prepared = fdtd.prepare(problem, numerics=numerics)

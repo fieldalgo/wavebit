@@ -26,6 +26,20 @@ def _number(value, path):
         raise ValidationError(str(exc), code='prepared.static_input', path=path) from exc
 
 
+
+def _angle(value, path):
+    """A static angle, refused as ``problem.nonfinite`` at ``path`` when NaN or infinite.
+
+    Read even at normal incidence: ``phi`` sets the polarization frame there (``0`` drives Ey,
+    ``pi/2`` Ex). Without this, an infinite angle was refused only because ``math.cos`` raises on
+    it, and a NaN one ran, its plane wave all NaN.
+    """
+    number = _number(value, path)
+    if not math.isfinite(number):
+        from wavebit.rcwa._adapt import nonfinite_error
+        raise nonfinite_error(path, value)
+    return number
+
 #: Each public smoothed body and the engine body it lowers to. Explicit, never by class name:
 #: the public and engine names differ, and the engine's are what its plans record.
 _SMOOTHED = ((geometry.Sphere, old_geometry.Sphere), (geometry.Box, old_geometry.Box),
@@ -166,8 +180,8 @@ def _source(source, units, problem=None, numerics=None):
         _full_cell_plane(source.plane, 'sources.'+source.name+'.plane')
         kw['xyz'[source.plane.axis]] = source.plane.position
         return old_sources.PlaneWave(**kw, direction=source.direction,
-            theta=math.degrees(_number(source.theta, 'sources.'+source.name+'.theta')),
-            phi=math.degrees(_number(source.phi, 'sources.'+source.name+'.phi')),
+            theta=math.degrees(_angle(source.theta, 'sources.'+source.name+'.theta')),
+            phi=math.degrees(_angle(source.phi, 'sources.'+source.name+'.phi')),
             polarization=source.polarization)
     if isinstance(source, sources.TFSF):
         return old_sources.TFSF(**kw, box=_geometry(source.box), direction=source.direction,
