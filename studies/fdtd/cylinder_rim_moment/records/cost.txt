@@ -1,1 +1,8 @@
 occupancy plane numpy 0.0611s  jax 0.2895s  torch 0.0905s  peak RSS 512 MB
+occupancy rim   numpy 0.1125s  jax 0.5351s  torch 0.1414s  peak RSS 522 MB
+occupancy exact numpy 0.0889s  jax 0.4148s  torch 0.1220s  peak RSS 511 MB
+occupancy split numpy 0.1587s  jax 0.6860s  torch 0.1767s  peak RSS 528 MB
+fdtd plane plan 0.302s  first value_and_grad 16.32s  repeat 1.702s  peak RSS 643 MB  grad [-1165.60222769  -126.50948229]
+fdtd rim   plan 0.387s  first value_and_grad 18.88s  repeat 2.686s  peak RSS 765 MB  grad [-1171.29777052  -126.10982236]
+fdtd exact plan 0.361s  first value_and_grad 17.83s  repeat 2.225s  peak RSS 749 MB  grad [-1172.81127024  -126.16590957]
+fdtd split plan 0.341s  first value_and_grad 20.86s  repeat 3.166s  peak RSS 751 MB  grad [-1171.32289654  -126.20527993]

@@ -1,0 +1,12 @@
+== M1 s
+  split (this study)       A 2.9383e-02 7.4252e-03 2.1031e-03 (slope -1.902)  F 1.7174e-02 4.4577e-03 1.3150e-03 (slope -1.854)  consistent=True second=True
+== M1 p
+  split (this study)       rungs [20, 40]: A 2.7930e-02 6.7209e-03  F 1.3638e-02 3.4758e-03
+== M2 s
+  split (this study)       rungs [25]: A 7.3654e-02  F 1.2412e-02
+== M2 p
+  split (this study)       rungs [25]: A 3.4589e-02  F 1.9575e-02
+  move split (this study)   scene=M1|n=20|pol=p|periods=120|backend=numpy: max |d amp/eff| 1.144e-03, max rel (|ref|>1e-3) 4.305e-02
+  move split (this study)   scene=M1|n=20|pol=s|periods=120|backend=numpy: max |d amp/eff| 1.847e-03, max rel (|ref|>1e-3) 3.169e-02
+  move split (this study)   scene=M2|n=25|pol=p|periods=120|backend=numpy: max |d amp/eff| 1.972e-03, max rel (|ref|>1e-3) 5.042e-01
+  move split (this study)   scene=M2|n=25|pol=s|periods=120|backend=numpy: max |d amp/eff| 1.173e-03, max rel (|ref|>1e-3) 3.117e-01

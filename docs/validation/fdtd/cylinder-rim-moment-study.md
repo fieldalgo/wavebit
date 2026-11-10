@@ -202,16 +202,40 @@ reproduce the stored C7 rows: M1 s A 2.9253e-2, M2 s A 7.4079e-2.
 | M1 s | 20 / 40 / 80 | 2.925e-2 / 7.403e-3 / 2.095e-3 | 2.938e-2 / 7.425e-3 / 2.103e-3 | 1.739e-2 / 4.581e-3 / 1.363e-3 | 1.717e-2 / 4.458e-3 / 1.315e-3 |
 | M1 s order | | -1.902 | -1.902 | -1.837 | -1.854 |
 | M1 p | 20 / 40 | 2.775e-2 / 6.603e-3 | 2.793e-2 / 6.721e-3 | 1.363e-2 / 3.495e-3 | 1.364e-2 / 3.476e-3 |
-METASURFACE_EXTRA
+| M2 s | 25 | 7.408e-2 | 7.365e-2 | 1.207e-2 | 1.241e-2 |
+| M2 p | 25 | 3.478e-2 | 3.459e-2 | 1.802e-2 | 1.958e-2 |
 
-Every M1 s cell under `split` stays consistent with RCWA (C7's criterion 4). Errors in A are up to 2% worse and errors in
-F up to 4% better, at the same order. The 20-80x better rim moment does not show at this
+At M2 25, the largest change `split` makes in any amplitude or efficiency is 2.0e-3
+absolute. Relative to the reference this reaches 30-50%, but only in cells that RCWA puts
+near 1e-3 (`records/metasurface_report.txt`).
+
+Every M1 s cell under `split` stays consistent with RCWA (C7's criterion 4). Errors in A move by -1% to +2% and errors in F by -4% to +9% (M2 p).
+The M1 s order is unchanged. The 20-80x better rim moment does not show at this
 contrast (eps 4) and resolution. The observable error is dominated by something else,
 probably the field's own staircase and the crease at the rim, which no moment rule fixes.
 
 ## (d) Cost
 
-COST_TABLE
+`cost.py` (`records/cost.txt`) measures one process per mode, 1 thread each. A C7 run was
+using two other cores at the time, so read the ratios, not the absolute times.
+
+* Geometry: `component_occupancy`, all six components, cylinder R = 12 cells, best of 5.
+* Forward + gradient: the PEC cylinder scene, 48 steps, JAX `value_and_grad` over (R, H).
+
+| | `plane` | `rim` | `exact` | `split` |
+|---|---|---|---|---|
+| occupancy, NumPy | 0.061 s | 0.113 s (1.8x) | 0.089 s (1.5x) | 0.159 s (2.6x) |
+| occupancy, JAX | 0.290 s | 0.535 s (1.8x) | 0.415 s (1.4x) | 0.686 s (2.4x) |
+| occupancy, Torch | 0.091 s | 0.141 s (1.6x) | 0.122 s (1.3x) | 0.177 s (2.0x) |
+| occupancy peak RSS | 512 MB | 522 MB | 511 MB | 528 MB |
+| plan | 0.30 s | 0.39 s | 0.36 s | 0.34 s |
+| first value_and_grad (with compile) | 16.3 s | 18.9 s | 17.8 s | 20.9 s |
+| repeat value_and_grad | 1.70 s | 2.69 s (1.6x) | 2.23 s (1.3x) | 3.17 s (1.9x) |
+| peak RSS, fdtd | 643 MB | 765 MB | 749 MB | 751 MB (+17%) |
+
+`split` evaluates the plane, the exact tensor and the side wall's own plane, and computes
+the constitutive tensor twice. None of this was optimised. A landed version would compute
+only the cap voxels.
 
 ## Recommendation
 
@@ -244,7 +268,8 @@ Tests ran with `-n 2`.
   37 cylinder-touching files were run under `split`, and only the eight `split` failures
   were rerun under `rim` and `exact`.
 * Research-marked tests.
-* M2 at 100 cells per wavelength, and M1 p at 80.
+* M1 p at 80 cells per wavelength (stopped after an hour) and M2 at 50 and 100. M2 has
+  no order under `split`.
 * `rim` and `exact` C7 ladders.
 * A Mie-like convergence gate for a cylinder: none exists, and none was built.
 * Cylinders inside CSG nodes. `study_tensor` is looked up on the structure's own body, so a
