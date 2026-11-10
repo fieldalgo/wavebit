@@ -586,6 +586,43 @@ def test_importing_wavebit_does_not_drag_jax_in():
     """)
 
 
+def test_a_private_jax_solver_after_a_public_run_is_double_precision():
+    """The private factory lifts the cap for each JAX solver, not only on the backend's import.
+
+    A public run imports the JAX backend inside ``Execution``'s scope, where the lift only reads
+    the setting. With x64 on just for that run (``jax.enable_x64(True)``), the module was then
+    imported and never lifted again, and a private solver built afterwards ran at JAX's 32-bit
+    cap while asking for complex128: ``T`` came back float32, about 1e-6 from the double answer.
+    That is what made ``test_nvf_option_names`` fail after ``tests/api/test_unified_rcwa.py``.
+    The public door is unchanged: it still refuses double precision with the cap in place.
+    """
+    pytest.importorskip('jax')
+    assert 'OK' in _in_subprocess("""
+import jax, numpy as np
+jax.config.update('jax_enable_x64', False)
+from wavebit import Material, rcwa
+from wavebit.errors import UnsupportedFeatureError
+from wavebit.rcwa._factory import rcwa as legacy
+p = rcwa.Problem(stack=rcwa.Stack(period=(1., 1.), layers=(rcwa.Layer(thickness=.2, background=Material(2.25)),)),
+                 excitation=rcwa.Excitation(wavelength=1.3, sources=(rcwa.PlaneWave(),)))
+with jax.enable_x64(True):
+    rcwa.run(p, numerics=rcwa.Numerics(), backend='jax')
+assert not jax.config.jax_enable_x64
+try:
+    rcwa.run(p, numerics=rcwa.Numerics(), backend='jax')
+    raise AssertionError('the public double run ran under the cap')
+except UnsupportedFeatureError as error:
+    assert error.code == 'execution.jax_x64'
+kw = dict(structure=[dict(background=1., shapes=[dict(type='circle', cx=0., cy=0., lx=.4, material=4.)])],
+          period=(1., 1.), wavelength=1.3, thickness=(.2,), truncation_order=(1, 1), factorization='nvf')
+T = legacy(backend='jax', **kw).solve().T
+assert jax.config.jax_enable_x64
+assert str(T.dtype) == 'float64', T.dtype
+np.testing.assert_allclose(np.asarray(T), legacy(backend='numpy', **kw).solve().T, rtol=1e-12, atol=1e-12)
+print('OK')
+""")
+
+
 def test_the_remaining_x64_ordering_gap_is_reported():
     """JAX arriving *after* wavebit is the ordering the early lift cannot reach.
 

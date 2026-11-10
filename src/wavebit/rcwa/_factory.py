@@ -54,6 +54,12 @@ def rcwa(backend='numpy', *args, stack=None, incidence=None, **kwargs):
         solver = SolverNumpy(backend=backend, *args, **kwargs)
     elif backend is Backend.JAX:
         from wavebit.rcwa._backends.jax_backend import SolverJax
+        from wavebit._common.backend import lift_jax_x64
+        # On every JAX solver, not only on the backend's import: a public run imports that module
+        # inside Execution's scope, where the lift only reads the setting, so a private solver
+        # built afterwards would otherwise run at JAX's 32-bit cap while asking for complex128.
+        # Under that scope (the public lifecycle builds its solvers here) this stays a read.
+        lift_jax_x64(required=True)
         solver = SolverJax(backend=backend, *args, **kwargs)
     else:
         from wavebit.rcwa._backends.torch_backend import SolverTorch
