@@ -153,6 +153,13 @@ if _CYLINDER_MOMENT not in ('plane', 'rim', 'exact', 'split'):
 _CAP_BLEND = float(_os.environ.get('WAVEBIT_STUDY_CYLINDER_CAP_BLEND', '0.25'))
 if not 0 < _CAP_BLEND < 1:
     raise ValueError(f'WAVEBIT_STUDY_CYLINDER_CAP_BLEND={_CAP_BLEND!r} must be in (0, 1)')
+#: STUDY: where that blend sits. ``'inside'`` (default): over ``t in [-eps, 0]``, so a cap on a
+#: voxel face has share 0 on both sides, the plane's own one-sided limit and the limit the
+#: junction rule hands over to. ``'centred'``: over ``t in [-eps/2, eps/2]``, 1/2 on the face, area
+#: conserved between neighbours -- measured to keep the tie outlier at a junction (1.21e-2).
+_CAP_RAMP = _os.environ.get('WAVEBIT_STUDY_CYLINDER_CAP_RAMP', 'inside')
+if _CAP_RAMP not in ('inside', 'centred'):
+    raise ValueError(f'WAVEBIT_STUDY_CYLINDER_CAP_RAMP={_CAP_RAMP!r}')
 #: STUDY: beyond this many cells from a cap plane, the side wall's own plane and the nearest-
 #: surface plane are the same moment (see :meth:`Cylinder._split_tensor`).
 _SPLIT_REACH = (2 ** .5 - 1) / 2
@@ -1501,14 +1508,19 @@ class Cylinder(_Extrusion):
         share** ``S(t)``. No normal is selected and no arc is clipped.
 
         ``t = |cap - s| - dx/2`` is how far the cap plane lies outside the voxel's axial span
-        (negative inside). ``S`` is the C1 smoothstep ``y^2 (3 - 2y)``, ``y = clip(1/2 - t/eps,
-        0, 1)``, ``eps = _CAP_BLEND * dx``: exactly 1 for ``t <= -eps/2``, 1/2 on the face,
-        exactly 0 for ``t >= eps/2``, and ``S(t) + S(-t) = 1``, so the two voxels that share the
-        face always hold the whole cap between them. ``|dS/dt| <= 1.5/eps``: a fixed number
-        per cell, not a function of how close the cap is to the face. The step it replaces
-        (:func:`plane_share`: 1, 1/2, 0) is what made the tie a point outlier.
+        (negative inside). ``S`` is the C1 smoothstep ``y^2 (3 - 2y)``, ``eps = _CAP_BLEND * dx``.
+        With :data:`_CAP_RAMP` ``'inside'`` (default), ``y = clip(-t/eps, 0, 1)``: exactly 0 for
+        ``t >= 0`` -- a cap on the face or beyond it -- and exactly 1 for ``t <= -eps``. That
+        is the plane's own one-sided limit at a tie (the nearest-surface plane at ``|d| = dx/2``
+        holds no area), and the one the junction rule hands over to when the cap stands on
+        another body's face. The price: a cap within ``eps`` of a face is under-counted, and on
+        the face counted nowhere, as the plane counts it. With ``'centred'``, ``y = clip(1/2 -
+        t/eps, 0, 1)``: 1/2 on the face, ``S(t) + S(-t) = 1``, area conserved; measured to keep
+        the junction outlier. Either way ``|dS/dt| <= 1.5/eps``: a fixed number per cell, not a
+        function of how close the cap is to the face. The step it replaces (:func:`plane_share`:
+        1, 1/2, 0) is what made the tie a point outlier.
 
-        ``near`` is ``min(t_lo, t_hi) < (_SPLIT_REACH + _CAP_BLEND/2) dx``; outside it the
+        ``near`` is ``min(t_lo, t_hi) < _SPLIT_REACH dx`` (plus ``eps/2`` centred); outside it the
         caller takes the nearest-surface plane. The switch is continuous because there the two
         are the same moment: with ``S = 0`` this one is the side wall's plane alone, and the
         nearest-surface plane is that same plane wherever its normal is radial (identical
@@ -1524,12 +1536,14 @@ class Cylinder(_Extrusion):
         area_2d = clipped_disc_area(centre[..., u], centre[..., v], radius, *box, xp)
         width = _CAP_BLEND * dx
 
+        shift = 0. if _CAP_RAMP == 'inside' else .5
+
         def share(t):
-            y = xp.minimum(xp.maximum(.5 - t / width, xp.zeros_like(t)), xp.ones_like(t))
+            y = xp.minimum(xp.maximum(shift - t / width, xp.zeros_like(t)), xp.ones_like(t))
             return y * y * (3 - 2 * y)
 
         t_lo, t_hi = xp.abs(lo - s) - dx / 2, xp.abs(hi - s) - dx / 2
-        near = xp.minimum(t_lo, t_hi) < (_SPLIT_REACH * dx + width / 2)
+        near = xp.minimum(t_lo, t_hi) < (_SPLIT_REACH * dx + (1 - shift) * width)
         cap_area = (share(t_lo) + share(t_hi)) * area_2d
         q = xp.stack([points[..., u], points[..., v]], axis=-1)
         d_r, g = self._transverse_surface(q)

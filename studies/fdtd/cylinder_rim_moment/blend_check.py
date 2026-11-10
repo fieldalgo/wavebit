@@ -4,10 +4,11 @@
    random voxels whose nearest cap plane lies beyond (sqrt 2 - 1)/2 dx of the voxel's axial
    span, the side wall's own plane (cap share 0) and the nearest-surface plane are the same
    (area, moment). Prints the worst difference.
-2. ``sweep``: moves a cap through a voxel face (the tie) in steps of 1e-4 dx, for several
-   radii and Yee staggerings, and prints, per mode, the worst first difference of w and the
-   worst |second difference| / step -- the jump in dw/dH -- with the median for scale. Also
-   radius sweeps across an aligned rim with the cap on the face.
+2. ``sweep``: moves a cap through a voxel face (the tie) in steps of 1e-4 dx, for three
+   radii (one aligned with a face) and every Yee staggering, and prints, per mode, the worst
+   first difference of f(1-f) w -- w as the mixing rule weights it -- and the worst
+   |second difference| / step, the jump in its derivative, with the median for scale.
+   Then the same for the radius through face tangency with the cap on a face.
 3. ``ad``: dw/dH and dw/dR by JAX and Torch against a NumPy central difference at the exact
    tie and +/-1e-16, 1e-9, 1e-6 around it.
 
@@ -42,8 +43,8 @@ def switch():
 
 
 def w_of(R, H, points, dx):
-    _, w = occupancy(Cylinder(R, H, 'z', (0., 0., 0.)), points, dx)
-    return w
+    fill, w = occupancy(Cylinder(R, H, 'z', (0., 0., 0.)), points, dx)
+    return (fill * (1 - fill))[..., None] * w
 
 
 def sweep():
@@ -71,8 +72,8 @@ def sweep():
                     meds.append(np.median(d1))
                     if var == 'R':
                         break
-            print(f'{mode:5s} {label}: worst |dw| per {step / dx:.0e} dx step {worst1:.2e} '
-                  f'(median {np.median(meds):.2e}); worst jump in dw/dvar (2nd diff / step) '
+            print(f'{mode:5s} {label}: worst |d(f(1-f)w)| per {step / dx:.0e} dx step {worst1:.2e} '
+                  f'(median {np.median(meds):.2e}); worst jump in its slope (2nd diff / step) '
                   f'{worst2:.2e}', flush=True)
     bodies._CYLINDER_MOMENT = 'plane'
 
