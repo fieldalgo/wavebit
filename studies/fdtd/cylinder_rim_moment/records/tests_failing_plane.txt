@@ -9,4 +9,5 @@ timeout func_only: False
 created: 2/2 workers
 2 workers [8 items]
 
-.......
+........                                                                 [100%]
+======================== 8 passed in 167.02s (0:02:47) =========================
