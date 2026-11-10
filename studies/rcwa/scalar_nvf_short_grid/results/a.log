@@ -97,3 +97,4 @@
 {'orders': (3, 3), 'backend': 'torch', 'case': 'overlap', 'grid': 13, 'identical': True, 'max_diff': 0.0}
 {'orders': (3, 3), 'backend': 'torch', 'case': 'overlap', 'grid': 14, 'identical': True, 'max_diff': 0.0}
 {'orders': (3, 3), 'backend': 'torch', 'case': 'overlap', 'grid': 64, 'identical': True, 'max_diff': 0.0}
+{'orders': (3, 3), 'backend': 'torch', 'case': 'overlap', 'grid': 128, 'identical': True, 'max_diff': 0.0}
