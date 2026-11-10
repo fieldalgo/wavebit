@@ -167,7 +167,15 @@ AD-versus-central-difference gap at that grid. The last column gives the default
   gradient is as differentiable as the default arm's; it is just as inaccurate as the short grid
   makes the forward value.
 - **The grid-13 outlier is not the prototype's.** The hexagonal case disagrees at grid 13, which
-  is at the floor, where the prototype equals today's code. PASTE_HEX
+  is at the floor, where the prototype equals today's code. With the
+  switch off (today's code, `lattice_gradients.py`, orders (3, 3)), eager `jax.grad` on the
+  hexagonal cell disagrees with PyTorch backward at grids 13 (1.9e-3), 14 (5.7e-4), 17 (1.8e-4),
+  21 (1.3e-3) and 65 (7.6e-5), and agrees to 5e-14–5e-13 at 15, 16, 32, 64, 128 and the default.
+  PyTorch backward matches the central difference to 1.7e-8–1.9e-8 at every one of those grids.
+  On the square-lattice circle and pentagon and on the oblique-lattice ellipse at grids 13, 32
+  and 64, JAX and PyTorch agree to 4e-12 or better. So this is a JAX-backend gradient defect on the
+  hexagonal lattice in today's code, present above the floor too. It is unrelated to the floor and
+  to the prototype, and is left for a separate fix.
   The sub-floor gaps (hexagonal grids 3 and 12, pentagon grid 12) cannot be compared with
   today's code, which refuses those grids, and were not separated from the prototype.
 - PyTorch backward runs below the floor (circle, grid 8: 0.8017).
@@ -182,7 +190,29 @@ floor"), both boundary callers (`boundary.py` lines calling `check_normal_grid`)
 of `fourier2d_pointwise`, `_normal_field_floor` and `_tensor_at_the_normal_field_floor` describe
 the fold; they stay true for the raster path.
 
-PASTE_D_TESTS
+Tests. With the prototype switch on, every test file that mentions the grid or the projector
+(62 files matching `shape_nvf_grid_size|normal_grid|check_normal_grid|numerics.grid|_sampled_coeffs|normal_projector_coeffs`,
+`-m "not slow"`, one pytest process per file, two at a time) gave 3042 passed and 24 failed. All 24
+pass with the switch off. They are exactly the tests that assert the refusal, plus one that
+compares across the floor:
+
+| test | cases | with the switch on |
+|---|---|---|
+| `tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_at_every_door` | 12 (4 stacks x 3 orders/grids) | `check` reports no issue; the test expects a refusal |
+| `tests/api/test_check_run_consistency.py::test_an_aliasing_shape_nvf_grid_is_refused_alike_on_each_backend` | 6 (plane wave and beam x 3 backends) | same |
+| `tests/rcwa/test_boundary.py::test_normal_grid_floor_is_enforced` | 3 (orders 3, 6, 12) | `check_normal_grid` does not raise |
+| `tests/rcwa/test_boundary.py::test_both_shape_paths_draw_the_floor_in_the_same_place` | 2 (analytic, boundary) | neither path raises |
+| `tests/rcwa/test_parametric.py::test_conv_matrix_matches_grid_convention` | 1 | raster and analytic spellings differ by 1.8e-2 (tolerance 1e-12) |
+
+The first four are the floor's own tests and would be rewritten, not loosened: section 12 of
+`test_check_run_consistency.py` becomes "a short scalar shape grid runs at every door, alike on
+each backend", matching `test_a_short_grid_that_runs_today_still_runs` (the tensor arm, which
+passes unchanged), and the two `test_boundary.py` tests keep only the positive-grid refusal. The
+last one compares a 12x10 grid at orders (2, 3), below the floor on the v axis (4*3+1 = 13),
+where the raster path's lifted fold and the interpolant are meant to differ. It should either
+move its grid to the floor or compare against the interpolant. No other test, tolerance, hash or
+golden changed outcome. Not run: tests marked `slow`, tests in files outside that list, and CUDA
+tests (no GPU; `test_general_cuda_dipole_radiation.py` deselects itself).
 
 Docs (English and Korean together): `docs/reference/keywords.md` (`shape_nvf_grid_size` row:
 the `numerics.grid` "below `max(4*Mu + 1, 4*Mv + 1)`" clause), `docs/guide/rcwa/boundary-modeling.md`

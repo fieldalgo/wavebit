@@ -1,0 +1,8 @@
+{'case': 'rectangle', 'arm': 'current', 'median_s': 0.6752199450020271, 'min_s': 0.5664534130009997, 'peak_MiB': 88.06419372558594}
+{'case': 'rectangle', 'arm': 'prototype', 'median_s': 0.6907245270012936, 'min_s': 0.5918246879991784, 'peak_MiB': 88.05316162109375}
+{'case': 'rectangle', 'arm': 'current', 'median_s': 0.626552054000058, 'min_s': 0.5561711430018477, 'peak_MiB': 88.05308151245117}
+{'case': 'rectangle', 'arm': 'prototype', 'median_s': 0.6376357499975711, 'min_s': 0.5954272799972387, 'peak_MiB': 88.05145168304443}
+{'case': 'circle', 'arm': 'current', 'median_s': 0.24674966400198173, 'min_s': 0.23262251200139872, 'peak_MiB': 137.0443820953369}
+{'case': 'circle', 'arm': 'prototype', 'median_s': 0.23385600700203213, 'min_s': 0.220831510003336, 'peak_MiB': 137.04322719573975}
+{'case': 'circle', 'arm': 'current', 'median_s': 0.2486893470013456, 'min_s': 0.22620789900247473, 'peak_MiB': 137.04282569885254}
+{'case': 'circle', 'arm': 'prototype', 'median_s': 0.22585370300294016, 'min_s': 0.2154591149992484, 'peak_MiB': 137.04216289520264}
