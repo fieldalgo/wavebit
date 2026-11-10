@@ -70,6 +70,9 @@ def _shifted(layer):
     shapes = layer.get('shapes', [])
     if not shapes:
         return dict(layer), (0.,0.)
+    if _ISOTROPIC_INTEGRATED and any(s.get('type') == 'polygon' for s in shapes):
+        # Study switch: a polygon is placed by its vertices and refuses a cx/cy; build in place.
+        return dict(layer), (0.,0.)
     shift = shapes[0].get('cx',0.), shapes[0].get('cy',0.)
     return {**layer, 'shapes': [dict(s, cx=s.get('cx',0.)-shift[0],
                                    cy=s.get('cy',0.)-shift[1]) for s in shapes]}, shift
@@ -85,7 +88,8 @@ def _plan(layer, lattice, index):
     if not shapes:
         return None
     overlap = P.layer_needs_resolving(layer,lattice)
-    if len(shapes) == 1:
+    polygon = _ISOTROPIC_INTEGRATED and any(s.get('type') == 'polygon' for s in shapes)
+    if len(shapes) == 1 and not polygon:
         gamma = P.plan_gamma(shapes,lattice)
         if gamma is None:
             raise ValueError('freeze_geometry() with concrete tensor shape geometry before tracing')
@@ -101,8 +105,20 @@ def _plan(layer, lattice, index):
     return ('painted' if overlap else 'disjoint', interfaces)
 
 
+#: STUDY SWITCH (studies/rcwa/isotropic_integrated), off by default. When on, a patterned
+#: isotropic shape layer is built by this module's integrated Popov--Neviere route
+#: (:func:`_layer`, closed as ``[[A]] [[B]]^-1``) instead of the scalar shape NVF builder: in a
+#: tensor stack (:func:`_isotropic` answers ``None``) and in an ordinary scalar stack under
+#: ``factorization='nvf'`` (the engine's ``_slots_for`` hands the stack to :func:`build`, and
+#: its freeze records this module's plans in ``tensor_geometry``). A record frozen under one
+#: setting is refused under the other. Off, no code path changes.
+_ISOTROPIC_INTEGRATED = False
+
+
 def _isotropic(layer):
     """The scalar view of a patterned isotropic layer (:func:`~.anisotropy.isotropic_layer`), or ``None``."""
+    if _ISOTROPIC_INTEGRATED:
+        return None
     from wavebit.rcwa._engine.anisotropy import isotropic_layer
     return isotropic_layer(layer) if layer.get('shapes') else None
 

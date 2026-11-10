@@ -5640,6 +5640,10 @@ class CoreFactorizationMixin:
         if (self._normal_grid is None or self._modeling_path != ModelingPath.PARAMETRIC
                 or self.factorization != Factorization.NVF):
             return False
+        from wavebit.rcwa._engine import tensor_shapes as _ts
+        if _ts._ISOTROPIC_INTEGRATED:
+            # Study switch: every patterned layer reads the grid as a tensor layer does.
+            return False
         if not self._has_tensor_materials():
             return True
         if not _anisotropy.integrated_shapes(self):
@@ -5922,6 +5926,11 @@ class CoreFactorizationMixin:
             geometry.gamma_plans = [None if holds_polygon(layer)
                                     else _parametric.plan_gamma(layer.get('shapes', []), basis)
                                     for layer in self.structure]
+            from wavebit.rcwa._engine import tensor_shapes as _ts
+            if _ts._ISOTROPIC_INTEGRATED:
+                # Study switch: the integrated route's own plans, beside the scalar record
+                # (whose topology checks a traced replay still runs).
+                geometry.tensor_geometry = _ts.freeze(self).tensor_geometry
         return geometry
 
     def _check_layer_geometry(self):
@@ -6557,6 +6566,14 @@ class CoreFactorizationMixin:
         from .topology import check_shape_record
         check_shape_record(self.structure, self._geometry_lattice_for(geometry), geometry,
                            self.factorization.value, self.nvf_projector.value)
+        from wavebit.rcwa._engine import tensor_shapes as _ts
+        if _ts._ISOTROPIC_INTEGRATED or geometry.tensor_geometry is not None:
+            if (geometry.tensor_geometry is None) == _ts._ISOTROPIC_INTEGRATED:
+                raise _fac.StaleGeometryError(
+                    'this frozen geometry was taken under the other isotropic shape builder '
+                    '(tensor_shapes._ISOTROPIC_INTEGRATED changed); freeze_geometry() again')
+            with self._eager():
+                list(_ts.checked_layers(self, geometry))
 
     def _refuse_a_stale_raster_record(self, geometry):
         """Run the raster builders' record checks now, without building -- for a traced build.
@@ -6593,6 +6610,20 @@ class CoreFactorizationMixin:
                 normal_field_source=source if nvf and field is not None and concrete_cell else None,
                 compression=compression if integrated else None,
                 lattice=self._geometry_lattice_for(geometry), normal_method=self.raster_normal_method)
+
+    def _isotropic_integrated_slots(self, geometry, mu_pass):
+        """Study switch ``tensor_shapes._ISOTROPIC_INTEGRATED``: the scalar NVF stack built by the
+        integrated Popov--Neviere route (:func:`~wavebit.rcwa._engine.tensor_shapes.build`).
+
+        A record is replayed only under the setting it was frozen under: the integrated arm's
+        carries ``tensor_geometry`` (:meth:`_freeze_geometry`), the scalar arm's does not.
+        """
+        from wavebit.rcwa._engine import tensor_shapes as _ts
+        if geometry is not None and (geometry.tensor_geometry is None) == _ts._ISOTROPIC_INTEGRATED:
+            raise _fac.StaleGeometryError(
+                'this frozen geometry was taken under the other isotropic shape builder '
+                '(tensor_shapes._ISOTROPIC_INTEGRATED changed); freeze_geometry() again')
+        return _ts.build(self, geometry, 'mu' if mu_pass else 'epsilon')
 
     def _slots_for(self, structure, geometry, quantity):
         """Five convolution slots for one *quantity* of the current structure.
@@ -6682,6 +6713,10 @@ class CoreFactorizationMixin:
             else:
                 if geometry is not None and geometry.rectilinear_plans is not None:
                     raise _fac.StaleGeometryError("Cartesian Li geometry cannot be replayed with NVF; freeze_geometry() again")
+                from wavebit.rcwa._engine import tensor_shapes as _ts
+                if _ts._ISOTROPIC_INTEGRATED or (geometry is not None
+                                                 and geometry.tensor_geometry is not None):
+                    return self._isotropic_integrated_slots(geometry, mu_pass)
                 xp = self.xp
                 conv = _parametric.to_conv_mat_parametric_layers(
                     structure, half_width_u, half_width_v,
