@@ -121,6 +121,7 @@ def _resolve(problem, numerics, execution):
         for wavelength in _adapt.wavelengths(problem):
             _adapt.refuse_zero_permittivity_layers(problem, execution, wavelength)
             _adapt.refuse_near_zero_smm_layers(problem, numerics, execution, wavelength)
+            _adapt.refuse_nonfinite_wavevector(problem)
             solver = _adapt.build_solver(problem, numerics, execution, wavelength)
             scene = _engine_scene(solver)
             if numerics.topology_check == 'host' and (

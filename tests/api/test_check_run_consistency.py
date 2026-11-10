@@ -859,3 +859,35 @@ def test_a_dipole_in_a_uniform_layer_still_runs(layers, z):
     assert rcwa.check(problem, numerics=NUMERICS).ok
     assert np.isfinite(rcwa.run(problem, numerics=NUMERICS).outputs['top'].outgoing).all()
 
+
+
+# -- 16. A NaN or infinite PlaneWave kx or ky is refused at its field, as every non-finite input --
+
+def _direct(**k):
+    return rcwa.Problem(stack=rcwa.Stack(period=(1., 1.), layers=(_FILM,)),
+                        excitation=rcwa.Excitation(wavelength=1.3, sources=(rcwa.PlaneWave(**k),)))
+
+
+@pytest.mark.parametrize('value', [np.nan, np.inf, -np.inf, complex(np.nan, 0.)],
+                         ids=['nan', 'inf', 'minus-inf', 'complex-nan'])
+@pytest.mark.parametrize('name,other', [('kx', None), ('ky', None), ('kx', 'ky'), ('ky', 'kx')],
+                         ids=['kx', 'ky', 'kx-beside-ky', 'ky-beside-kx'])
+def test_a_nonfinite_plane_wave_wavevector_is_refused_at_its_field(name, other, value):
+    issue = _refused_alike(_direct(**{name: value, **({other: .5} if other else {})}))
+    assert (issue.code, issue.path) == ('problem.nonfinite', f'excitation.sources[0].{name}')
+    assert 'non-finite' in issue.message
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_a_nonfinite_plane_wave_wavevector_is_refused_at_its_field_on_each_backend(backend):
+    pytest.importorskip(backend)
+    x64 = (__import__('jax').enable_x64(True) if backend == 'jax' else __import__('contextlib').nullcontext())
+    with x64:
+        issue = _refused_alike(_direct(kx=np.nan), backend=backend)
+    assert (issue.code, issue.path) == ('problem.nonfinite', 'excitation.sources[0].kx')
+
+
+def test_a_finite_plane_wave_wavevector_still_runs():
+    problem = _direct(kx=1., ky=.5)
+    assert rcwa.check(problem, numerics=NUMERICS).ok
+    assert np.isfinite(rcwa.run(problem, numerics=NUMERICS).T).all()
