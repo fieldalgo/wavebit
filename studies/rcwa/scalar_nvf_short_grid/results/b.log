@@ -168,3 +168,13 @@
 {'orders': (3, 3), 'case': 'polygon', 'arm': 'wrapped', 'grid': 64, 'dR': 4.13651511679651e-05, 'dT': 0.00018758848144928564, 'energy': 3.885780586188048e-15}
 {'orders': (3, 3), 'case': 'polygon', 'arm': 'wrapped', 'grid': 128, 'dR': 1.4384359709108951e-05, 'dT': 6.402144182671154e-05, 'energy': 2.6645352591003757e-15}
 {'orders': (3, 3), 'case': 'polygon', 'arm': 'wrapped', 'grid': 256, 'dR': 4.454639574706654e-06, 'dT': 1.931317088332829e-05, 'energy': 1.6653345369377348e-15}
+{'orders': (3, 3), 'case': 'overlap', 'arm': 'prototype', 'grid': 1, 'dR': 0.005318865843046109, 'dT': 0.03980560223670715, 'energy': 3.1086244689504383e-15}
+{'orders': (3, 3), 'case': 'overlap', 'arm': 'prototype', 'grid': 2, 'dR': 0.005497387284440583, 'dT': 0.041412857405708575, 'energy': 1.2212453270876722e-15}
+{'orders': (3, 3), 'case': 'overlap', 'arm': 'prototype', 'grid': 3, 'dR': 0.005970851857645688, 'dT': 0.03597244348560508, 'energy': 1.9984014443252818e-15}
+{'orders': (3, 3), 'case': 'overlap', 'arm': 'prototype', 'grid': 4, 'dR': 0.004387491338879224, 'dT': 0.03546578068252909, 'energy': 6.772360450213455e-15}
+{'orders': (3, 3), 'case': 'overlap', 'arm': 'prototype', 'grid': 5, 'dR': 0.0033777806999732898, 'dT': 0.04023965119726866, 'energy': 4.884981308350689e-15}
+{'orders': (3, 3), 'case': 'overlap', 'arm': 'prototype', 'grid': 7, 'dR': 0.0063395599667475395, 'dT': 0.04956727391096541, 'energy': 1.1102230246251565e-15}
+{'orders': (3, 3), 'case': 'overlap', 'arm': 'prototype', 'grid': 8, 'dR': 0.0066399900449264585, 'dT': 0.05156575707371652, 'energy': 2.886579864025407e-15}
+{'orders': (3, 3), 'case': 'overlap', 'arm': 'prototype', 'grid': 9, 'dR': 0.007414215457033987, 'dT': 0.05422687946478977, 'energy': 2.886579864025407e-15}
+{'orders': (3, 3), 'case': 'overlap', 'arm': 'prototype', 'grid': 11, 'dR': 0.0075144810677149464, 'dT': 0.05242717284088477, 'energy': 2.6645352591003757e-15}
+{'orders': (3, 3), 'case': 'overlap', 'arm': 'prototype', 'grid': 12, 'dR': 0.007144915907418493, 'dT': 0.04995192076551014, 'energy': 1.6653345369377348e-15}
