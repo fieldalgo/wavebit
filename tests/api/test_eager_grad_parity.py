@@ -13,7 +13,7 @@ import dataclasses
 import numpy as np
 import pytest
 
-from wavebit import Material, Units, rcwa
+from wavebit import Lattice, Material, Units, rcwa
 from wavebit.errors import (IncompatibleProblemError, NumericalError, UnsupportedFeatureError,
                             ValidationError)
 
@@ -147,6 +147,35 @@ def test_a_raster_with_more_than_256_phases_stays_refused_under_jit_and_vmap():
     codes = refused_under_jit_and_vmap(lambda s: raster(s, MANY_PHASES), 1., 1.01, lambda r: r.T.sum(),
                                        RECORDING['integrated li'])
     assert codes == ['rcwa.raster_partition_transform'] * 2
+
+
+# ------------------------------------------------------------------ hexagonal sample ties
+
+def hexagonal(radius):
+    """A circle on a 60-degree cell, the scalar shape-NVF layer of the short-grid study."""
+    region = rcwa.Region(geometry=rcwa.Circle(radius=radius), material=Material(4.))
+    return rcwa.Problem(
+        stack=rcwa.Stack(lattice=Lattice.hexagonal(1.), bottom=Material(2.25),
+                         layers=(rcwa.Layer(thickness=.25, background=Material(1.5), regions=(region,)),)),
+        excitation=rcwa.Excitation(wavelength=1.3, sources=(rcwa.PlaneWave(theta=.2, phi=.3, polarization='s'),)))
+
+
+@pytest.mark.parametrize('grid', [13, 14, 17, 21, 65])
+def test_a_hexagonal_shape_gradient_agrees_on_grids_with_samples_on_a_cell_edge(grid):
+    # These grids put samples exactly on the Wigner-Seitz edge between two images of the centre,
+    # where the nearest-image fold breaks a tie. JAX divided `(i + 0.5)/N` by a reciprocal multiply,
+    # one ulp off NumPy and PyTorch, broke the tie the other way and solved a different layer:
+    # sum(T) off by up to 2.9e-5 and its radius derivative by 7.6e-5 to 1.9e-3 (until 2026-11-10).
+    numerics = rcwa.Numerics(orders=(3, 3), shape_nvf_grid_size=grid)
+    loss = lambda result: result.T.sum()
+    through_jax, through_torch, finite_difference = derivatives(hexagonal, .28, .28, loss, numerics,
+                                                                step=1e-5)
+    assert through_jax == pytest.approx(through_torch, rel=1e-10)      # measured 9.4e-13 at worst
+    assert through_torch == pytest.approx(finite_difference, rel=1e-6)  # measured 1.9e-8 at worst
+    with jax.enable_x64(True):
+        on_jax = np.asarray(rcwa.run(hexagonal(.28), numerics=numerics, backend='jax').T)
+    on_numpy = np.asarray(rcwa.run(hexagonal(.28), numerics=numerics).T)
+    np.testing.assert_allclose(on_jax, on_numpy, rtol=0, atol=1e-12)    # measured 2.9e-15 at worst
 
 
 # ------------------------------------------------------------------ failures raise alike

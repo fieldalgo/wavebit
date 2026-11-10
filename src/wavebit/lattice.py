@@ -879,8 +879,18 @@ def sample_grid(xp, grid_shape, lattice, dtype):
     not take, and it takes two to hold the convention.
     """
     Ny, Nx = grid_shape
-    u = (xp.asarray([float(i) for i in range(Nx)], dtype=dtype) + 0.5) / Nx
-    v = (xp.asarray([float(i) for i in range(Ny)], dtype=dtype) + 0.5) / Ny
+    # The fractions `(i + 0.5)/N` are divided in NumPy, in float64, and only then handed to
+    # `xp`. XLA turns an array divided by a constant into a multiply by its reciprocal, which
+    # is not correctly rounded, so JAX placed about a third of the samples one ulp off the
+    # NumPy and PyTorch positions. On a hexagonal cell some samples sit exactly on the
+    # Wigner-Seitz edge between two images of a shape's centre, and the nearest-image fold
+    # (:func:`~wavebit.rcwa._engine.parametric._fold_to_nearest_image`) broke that tie the
+    # other way: the normal flipped there, and at `shape_nvf_grid_size` 13 / 14 / 17 / 21 / 65
+    # JAX solved a different layer (`T` off by up to 2.9e-5, the shape gradient by up to 1.9e-3).
+    # Dividing in float64 and casting is exact for float32 as well (53 >= 2 * 24 + 2 bits, so
+    # the double rounding is innocuous), so NumPy and PyTorch positions are unchanged to the bit.
+    u = xp.asarray((np.arange(Nx, dtype=np.float64) + 0.5) / Nx, dtype=dtype)
+    v = xp.asarray((np.arange(Ny, dtype=np.float64) + 0.5) / Ny, dtype=dtype)
     a1x, a2x = lattice[0][0], lattice[0][1]
     a1y, a2y = lattice[1][0], lattice[1][1]
     return u[None, :] * a1x + v[:, None] * a2x, u[None, :] * a1y + v[:, None] * a2y
