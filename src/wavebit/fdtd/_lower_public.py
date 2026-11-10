@@ -388,7 +388,13 @@ def lower_problem(problem, numerics, *, plan=None):
     if isinstance(numerics.absorber, PML):
         old_boundaries.PML(cells=numerics.absorber.cells, allow_thin=numerics.absorber.allow_thin)
     else:
-        old_boundaries.Absorber(cells=numerics.absorber.cells)
+        # A ConductiveAbsorber's own refusal names the field to change, as its coupling's do
+        # (``_api._absorber``); its class and message stay.
+        try:
+            old_boundaries.Absorber(cells=numerics.absorber.cells)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError(str(exc), code='numerics.absorber',
+                                  path='numerics.absorber.cells') from exc
     size = tuple(s+(pad[a+'-']+pad[a+'+'])*dx for a,s in zip('xyz', physical_size))
     center = tuple(c+(pad[a+'+']-pad[a+'-'])*dx/2 for a,c in zip('xyz', scene.domain.center))
     allocated_low = tuple(c-s/2 for c,s in zip(center,size))

@@ -81,8 +81,10 @@ lossless isotropic materials (one positive real `epsilon`, no `mu`), electric
 `CurrentDipole` sources, Open faces on one axis with `PEC`, `PMC`, `Periodic` or `Bloch`
 elsewhere, `Numerics(discretization='voxel')` without `geometry_ranges`, a fixed duration
 (no `DecayStop`), no `InitialField`, plain numbers rather than traced or differentiated
-ones, and the CPU. Anything else is refused at `check()` with a message that names which
-of these it is. Moving the smoothed structures at least three grid cells clear of every
+ones, and the CPU. Anything else is refused at `check()`, and at `prepare`, `run` and
+`Prepared.validate` alike, with `numerics.absorber` at `numerics.absorber` and a message that
+names which of these it is. A `ConductiveAbsorber(cells=...)` that is not an integer of at
+least two is refused with the same code at `numerics.absorber.cells`. Moving the smoothed structures at least three grid cells clear of every
 Open face keeps their support out of the layer and lifts all of these; two cells were not
 always enough. Differentiating such a structure's material then goes through
 `Prepared.run` of a problem prepared from plain numbers, as everywhere else.
