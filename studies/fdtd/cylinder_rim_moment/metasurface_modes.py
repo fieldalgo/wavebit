@@ -71,7 +71,8 @@ def stored_plane():
 def report():
     setup()
     sets = {'plane (stored C7 rows)': stored_plane()}
-    for mode in ('plane', 'rim', 'split', 'exact'):
+    # 'split-hard': the first prototype's split (step cap share), kept as its record.
+    for mode in ('plane', 'rim', 'split-hard', 'split', 'exact'):
         p = RECORDS / f'metasurface_{mode}.jsonl'
         if p.exists():
             sets[f'{mode} (this study)'] = rows(p)

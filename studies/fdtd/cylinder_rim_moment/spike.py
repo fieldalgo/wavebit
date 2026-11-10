@@ -18,6 +18,7 @@ Usage: python spike.py voxel|lattice|fdtd [w2|mix]
 body barely touches as in a half-full one. ``mix`` sums (1/eps_c)^2 from the default mixing
 rule (eps 12 in vacuum), where w enters multiplied by the contrast term, i.e. by f(1 - f).
 """
+import os
 import sys
 import warnings
 
@@ -28,7 +29,8 @@ from wavebit.fdtd._shapes import Cylinder, occupancy
 
 DELTAS = (1e-3, 1e-5, 1e-7, 1e-9, 1e-11, 1e-13, 1e-15, 1e-16, 0.,
           -1e-16, -1e-15, -1e-13, -1e-11, -1e-9, -1e-7, -1e-5, -1e-3)
-MODES = ('plane', 'rim', 'exact', 'split')
+# STUDY_MODES=split,plane reruns a subset (the blend study reran 'split' and 'plane').
+MODES = tuple(os.environ.get('STUDY_MODES', 'plane,rim,exact,split').split(','))
 
 
 def jax_setup():
