@@ -879,8 +879,12 @@ def sample_grid(xp, grid_shape, lattice, dtype):
     not take, and it takes two to hold the convention.
     """
     Ny, Nx = grid_shape
-    u = (xp.asarray([float(i) for i in range(Nx)], dtype=dtype) + 0.5) / Nx
-    v = (xp.asarray([float(i) for i in range(Ny)], dtype=dtype) + 0.5) / Ny
+    # Divided in Python, which rounds correctly, and only then made an array: JAX's array
+    # division is an ulp off NumPy's and Torch's for some `(i + 0.5) / N`, so the same grid
+    # put its samples an ulp apart per backend -- enough to read a different image where a
+    # sample sits on a Wigner-Seitz boundary (`parametric._fold_to_nearest_image`).
+    u = xp.asarray([(i + 0.5) / Nx for i in range(Nx)], dtype=dtype)
+    v = xp.asarray([(i + 0.5) / Ny for i in range(Ny)], dtype=dtype)
     a1x, a2x = lattice[0][0], lattice[0][1]
     a1y, a2y = lattice[1][0], lattice[1][1]
     return u[None, :] * a1x + v[:, None] * a2x, u[None, :] * a1y + v[:, None] * a2y

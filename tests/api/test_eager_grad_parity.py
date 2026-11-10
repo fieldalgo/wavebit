@@ -13,7 +13,7 @@ import dataclasses
 import numpy as np
 import pytest
 
-from wavebit import Material, Units, rcwa
+from wavebit import Lattice, Material, Units, rcwa
 from wavebit.errors import (IncompatibleProblemError, NumericalError, UnsupportedFeatureError,
                             ValidationError)
 
@@ -203,6 +203,34 @@ def test_nonfinite_observables_raise_on_both_backends(monkeypatch):
     seen = {b: failure(b, lambda v: patterned(thickness=v), 200., 204., NUMERICS, NumericalError)
             for b in ('jax', 'torch')}
     assert seen['jax'] == seen['torch'] == ('rcwa.nonfinite', 'result')
+
+
+# ------------------------------------------------------------------ the hexagonal fold
+
+def hexagonal_circle(radius):
+    """A circle on the unit hexagonal cell, whose short NVF grids sample the Wigner-Seitz edge."""
+    region = rcwa.Region(geometry=rcwa.Circle(radius=radius), material=Material(4.))
+    return rcwa.Problem(
+        stack=rcwa.Stack(lattice=Lattice.hexagonal(1.), bottom=Material(2.25),
+                         layers=(rcwa.Layer(thickness=.25, background=Material(1.5), regions=(region,)),)),
+        excitation=rcwa.Excitation(wavelength=1.3, sources=(rcwa.PlaneWave(theta=.2, phi=.3, polarization='s'),)))
+
+
+@pytest.mark.parametrize('grid', [13, 21])
+def test_a_hexagonal_circle_differentiates_alike_on_both_backends(grid):
+    """The normal field's fold reads one image on the Wigner-Seitz edge on every backend.
+
+    Samples at grids 13 and 21 sit exactly on the edge, equidistant from two images. JAX
+    placed them an ulp from NumPy and PyTorch, and the fold's strict ``<`` then read the other
+    image there, so JAX solved a slightly different structure: ``jax.grad`` missed PyTorch by
+    1.9e-3 at 13 and 1.3e-3 at 21 while PyTorch matched the central difference (2026-11-10).
+    """
+    numerics = rcwa.Numerics(orders=(3, 3), shape_nvf_grid_size=grid)
+    through_jax, through_torch, finite_difference = derivatives(
+        hexagonal_circle, .28, .28, lambda result: result.T.sum(), numerics, step=1e-6)
+    assert abs(finite_difference) > 1e-2
+    assert through_jax == pytest.approx(through_torch, rel=1e-10)        # measured 1.7e-13, 5.2e-13
+    assert through_jax == pytest.approx(finite_difference, rel=1e-7)     # measured 5.3e-9, 7.8e-9
 
 
 # ------------------------------------------------------------------ the eager doors
