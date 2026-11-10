@@ -178,6 +178,34 @@ def test_a_hexagonal_shape_gradient_agrees_on_grids_with_samples_on_a_cell_edge(
     np.testing.assert_allclose(on_jax, on_numpy, rtol=0, atol=1e-12)    # measured 2.9e-15 at worst
 
 
+def hexagonal_permittivity(eps):
+    """``hexagonal(.28)`` with the circle's permittivity as the variable, traceable under jit."""
+    region = rcwa.Region(geometry=rcwa.Circle(radius=.28), material=Material(eps))
+    return rcwa.Problem(
+        stack=rcwa.Stack(lattice=Lattice.hexagonal(1.), bottom=Material(2.25),
+                         layers=(rcwa.Layer(thickness=.25, background=Material(1.5), regions=(region,)),)),
+        excitation=rcwa.Excitation(wavelength=1.3, sources=(rcwa.PlaneWave(theta=.2, phi=.3, polarization='s'),)))
+
+
+@pytest.mark.parametrize('grid', [21, 65])
+def test_a_hexagonal_layer_reads_the_same_cell_edge_image_under_jit(grid):
+    # The sample positions agree to the bit since 2026-11-10, but under jax.jit XLA fuses the
+    # fold's d2 arithmetic and rounds one of two tied candidates an ulp apart, so a strict `<`
+    # still read the other image there: jit(grad) of sum(T) by the permittivity missed PyTorch
+    # by 2.6e-6 at grid 21 and 5.5e-6 at 65. The fold now replaces its image only when a
+    # candidate is nearer by more than rounding (`parametric._fold_to_nearest_image`).
+    numerics = rcwa.Numerics(orders=(3, 3), shape_nvf_grid_size=grid)
+    with jax.enable_x64(True):
+        prepared = rcwa.prepare(hexagonal_permittivity(4.), numerics=numerics, backend='jax')
+        through_jit = float(jax.jit(jax.grad(
+            lambda v: prepared.run(hexagonal_permittivity(v)).T.sum()))(jnp.asarray(4.)))
+    on_torch = rcwa.prepare(hexagonal_permittivity(torch.tensor(4., dtype=torch.float64)),
+                            numerics=numerics, backend='torch')
+    live = torch.tensor(4., dtype=torch.float64, requires_grad=True)
+    on_torch.run(hexagonal_permittivity(live)).T.sum().backward()
+    assert through_jit == pytest.approx(float(live.grad), rel=1e-10)    # measured 3.9e-13, 3.8e-13
+
+
 # ------------------------------------------------------------------ failures raise alike
 
 def failure(backend, build, prepared_at, at, numerics, error_type, run_build=None):

@@ -1179,6 +1179,49 @@ The pair loop is still quadratic in the number of pieces. Real inputs retain the
 real arrays and three components. Complex seams require complex arrays and a fourth Fourier
 component; the previously measured 2026-09-11 runtime ratios do not quantify this extra cost.
 
+### 8f. A sample on the Wigner-Seitz edge read its image by rounding — FIXED (2026-11-10)
+
+**Measured on main at `b2f30f3`, CPU, float64, all three backends.** Eager `jax.grad` of
+`sum(T)` for a radius-0.28 circle on `Lattice.hexagonal(1.)` (orders `(3, 3)`) missed PyTorch's
+reverse mode and a NumPy central difference at many `shape_nvf_grid_size` values: 1.9e-3
+relative at 13, 5.7e-4 at 14, 1.3e-3 at 21, 7.6e-5 at 65, and agreed only at grids such as
+15, 16 and 128. PyTorch matched the central difference to ~1e-9 everywhere. No derivative
+term was missing. JAX solved a slightly different structure (`sum(T)` 6e-6 apart at grid 13),
+and its gradient was the exact gradient of that structure.
+
+**Cause.** A grid commensurate with the hexagonal cell puts samples exactly on the
+Wigner-Seitz edge, where two images of the centre are equally near: four of 169 at grid 13.
+`_fold_to_nearest_image` picked the image with a strict `<`, so rounding decided the tie.
+JAX's array division `(i + 0.5) / N` is an ulp off NumPy's and PyTorch's for some `i`, which
+put its samples an ulp away and flipped the normal at those samples. The square and oblique
+cells in the report showed no mismatch at grids 13, 32 and 64.
+
+**Fix, in two parts.** `6ab2520` (2026-11-10) made `lattice.py::sample_grid` divide the
+fractions in NumPy float64 before handing them to the backend, so the samples sit at the same
+bits on every backend; that settled eager JAX
+(`test_a_hexagonal_shape_gradient_agrees_on_grids_with_samples_on_a_cell_edge`). It left
+`jax.jit` open: XLA fuses the fold's `d2` arithmetic and rounds one of two tied candidates an
+ulp apart, and `jit(grad)` of `sum(T)` by the circle's permittivity still missed PyTorch by
+2.6e-6 at grid 21 and 5.5e-6 at 65. The second part, `parametric.py::_fold_to_nearest_image`,
+now replaces its best image only when a candidate is nearer by more than a rounding bound,
+`64 eps (|a1|^2 + |a2|^2 + |d|^2)`. A tie therefore keeps the lowest absolute image index on
+every backend, eager or jitted, and an exactly tied sample keeps the image a strict `<` kept.
+The tensor curve candidates share the fold through `_nearest_centre_displacement`.
+
+**What moved.** Near-ties that NumPy and PyTorch had been resolving by their own rounding are
+now resolved by the rule, so NumPy's `sum(T)` for the scene above moved by 5.0e-6 at grid 13,
+2.9e-7 at 64, 7.6e-8 at 256 and 1.8e-8 at 1024. The jitted permittivity gradient now agrees
+with PyTorch to 4e-13 at grids 21 and 65. Pinned by
+`tests/api/test_eager_grad_parity.py::test_a_hexagonal_layer_reads_the_same_cell_edge_image_under_jit`
+and by the two `test_the_fold_reads_*` tests in `tests/rcwa/test_gamma_plan.py`: one nudges
+every grid-13 sample one ulp each way, the other compares NumPy, PyTorch, eager JAX and jitted
+JAX.
+
+**Still outside this fix.** The hard minimum over a round piece's ring of instances
+(`_round_instances`, and the tensor ellipse candidates) also picks a direction by a strict `<`
+between two distances. It is reached only by a shape that leaves its Wigner-Seitz cell, and it
+is not changed here.
+
 ## 9. The cases, A to L, as of 2026-09-11
 
 The letters are the design's. "Exact" means the field equals the geometry's on the interface

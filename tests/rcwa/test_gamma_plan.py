@@ -29,7 +29,7 @@ import pytest
 
 from wavebit._common.geometry import overlap as O
 from wavebit.rcwa._engine import parametric as P
-from wavebit.lattice import as_lattice, reduced_basis
+from wavebit.lattice import as_lattice, reduced_basis, sample_grid
 
 sys.path.insert(0, str(repository_path('tests')))
 from tests.fixtures.rcwa.gamma_instruments import band_error, gamma_points  # noqa: E402
@@ -653,6 +653,66 @@ def test_a_round_shape_on_an_unreduced_basis_reads_its_own_level_set(name, shape
         n_x, n_y = P._piece_field(np, x, y, [shape], plan, None, A, np.float64)
         angle = _angle_deg(n_x, n_y, ox, oy)
         assert angle.mean() < 1e-5 and angle.max() < 1e-4, (name, k, angle.mean(), angle.max())
+
+
+def _fold_candidates(dx, dy, reduced):
+    """Squared distance to every image the fold sweeps, ``(9, ...)``: an independent count."""
+    (a1x, a2x), (a1y, a2y) = np.asarray(reduced, dtype=float)
+    det = a1x * a2y - a2x * a1y
+    su = np.round((a2y * dx - a2x * dy) / det)
+    sv = np.round((-a1y * dx + a1x * dy) / det)
+    return np.stack([(dx - (su + du) * a1x - (sv + dv) * a2x) ** 2
+                     + (dy - (su + du) * a1y - (sv + dv) * a2y) ** 2
+                     for du in (-1, 0, 1) for dv in (-1, 0, 1)])
+
+
+def test_the_fold_reads_one_image_on_a_wigner_seitz_boundary_whatever_the_rounding():
+    """A sample equidistant from two images folds to the same one, an ulp either way.
+
+    The hexagonal cell's N = 13 grid puts samples of a centred shape exactly on its
+    Wigner-Seitz boundary. The fold used to pick by a strict ``<``, so rounding chose the image
+    there: JAX's array division put its samples an ulp from NumPy's, read the other image at 4
+    of 169 samples, and its ``jax.grad`` of ``sum(T)`` missed PyTorch's and the central difference
+    by 1.9e-3 (2026-11-10, ``test_eager_grad_parity``). Nudged one ulp each way in both
+    coordinates, every sample here must fold to the same displacement.
+    """
+    A = as_lattice(lattice=np.array([[1.0, -0.5], [0.0, np.sqrt(3.0) / 2.0]]))
+    reduced = reduced_basis(A, ((1, 0), (0, 1)))
+    X, Y = sample_grid(np, (13, 13), A, np.float64)
+    centre = 0.5 * (np.asarray(A[:, 0]) + np.asarray(A[:, 1]))
+    dx, dy = X - centre[0], Y - centre[1]
+    d2 = np.sort(_fold_candidates(dx, dy, reduced), axis=0)
+    assert np.count_nonzero(d2[1] - d2[0] < 1e-12) >= 4      # the boundary is on the grid
+    fx, fy = P._fold_to_nearest_image(np, dx, dy, reduced)
+    for ex in (-np.inf, np.inf):
+        for ey in (-np.inf, np.inf):
+            gx, gy = P._fold_to_nearest_image(np, np.nextafter(dx, ex), np.nextafter(dy, ey),
+                                              reduced)
+            assert np.abs(gx - fx).max() < 1e-12 and np.abs(gy - fy).max() < 1e-12
+
+
+def test_the_fold_reads_the_same_image_on_every_backend_and_under_jit():
+    """NumPy, PyTorch, eager JAX and jitted JAX fold the N = 13 hexagonal grid alike."""
+    torch = pytest.importorskip('torch')
+    jax = pytest.importorskip('jax')
+    import array_api_compat.numpy as anp
+    import array_api_compat.torch as atorch
+    jnp = pytest.importorskip('jax.numpy')
+    A = as_lattice(lattice=np.array([[1.0, -0.5], [0.0, np.sqrt(3.0) / 2.0]]))
+    reduced = reduced_basis(A, ((1, 0), (0, 1)))
+    centre = 0.5 * (np.asarray(A[:, 0]) + np.asarray(A[:, 1]))
+
+    def fold(xp):
+        X, Y = sample_grid(xp, (13, 13), A, xp.float64)
+        return P._fold_to_nearest_image(xp, X - float(centre[0]), Y - float(centre[1]), reduced)
+
+    want = fold(anp)
+    with jax.enable_x64(True):
+        got = {'torch': [t.numpy() for t in fold(atorch)],
+               'jax': [np.asarray(t) for t in fold(jnp)],
+               'jax.jit': [np.asarray(t) for t in jax.jit(lambda: fold(jnp))()]}
+    for name, (gx, gy) in got.items():
+        assert np.abs(gx - want[0]).max() < 1e-12 and np.abs(gy - want[1]).max() < 1e-12, name
 
 
 @pytest.mark.parametrize('name, shape', [('350 box', _box(lx=350.0, ly=350.0)),
