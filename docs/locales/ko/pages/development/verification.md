@@ -12,8 +12,9 @@ PR 병합 큐와 별개입니다.
 
 전체 Linux 수용에는 default/slow 범위, 예제, 문서 검증이 포함됩니다.
 독립 배포 검증표는 sdist와 wheel을 만들고 소스 트리 밖에 설치하여
-Python 3.12의 Linux·macOS·Windows에서 공개 NumPy RCWA/FDTD 사용, 번들 데이터와
-plotting을 확인합니다. 플랫폼 smoke 통과가 그 OS에서 모든 선택적 backend나
+Python 3.12와 3.13의 Linux·macOS·Windows에서 공개 NumPy RCWA/FDTD 사용, 번들 데이터와
+plotting을 확인합니다. 나머지 CI는 Python 3.12만 쓰므로, 3.13은 설치와 이 smoke 실행만
+확인하고 전체 수치 시험은 확인하지 않습니다. 플랫폼 smoke 통과가 그 OS에서 모든 선택적 backend나
 전체 수치 시험을 통과했다는 뜻은 아닙니다. 검증이나 릴리스 준비를 보고하기 전에
 정확 커밋의 검사와 artifact를 확인합니다. [기여 안내](https://github.com/fieldalgo/wavebit/blob/main/CONTRIBUTING.md)와
 개발 문서가 공통 정책의 원본입니다. AGENTS.md는 짧은 기술 안내이며 CLAUDE.md는

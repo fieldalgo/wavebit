@@ -15,7 +15,8 @@
 #              that neither half runs into the job limit.
 #   minimal  — builds an sdist and its wheel, installs in an isolated venv, and
 #              checks NumPy RCWA/FDTD, bundled data and the optional plot extra.
-#              Runs on Linux, macOS and Windows; no source-tree import fallback.
+#              Runs on Linux, macOS and Windows, on Python 3.12 and 3.13; no
+#              source-tree import fallback.
 #   examples — runs every script under `examples/` and checks it did not fail.
 #              The suite imports the library the way the library likes to be
 #              imported; the examples are the only thing here that exercises the
@@ -559,7 +560,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ['3.12']
+        # pyproject admits Python >= 3.12. Every other job runs 3.12; 3.13 here catches an
+        # install, import or packaging break on it, on all three OSes, for three runners.
+        # It does not run the numerical suite on 3.13.
+        python-version: ['3.12', '3.13']
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
