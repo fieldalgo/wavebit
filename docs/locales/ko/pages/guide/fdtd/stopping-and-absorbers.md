@@ -74,7 +74,10 @@ PML은 전도성·분산성 배경에 정합할 수 없으므로, 그런 배경�
 하나, `mu` 없음), 전기 `CurrentDipole` 광원, 한 축에만 있는 Open 면(나머지는 `PEC`, `PMC`,
 `Periodic`, `Bloch`), `geometry_ranges` 없는 `Numerics(discretization='voxel')`, 고정 실행
 길이(`DecayStop` 없음), `InitialField` 없음, 추적·미분 값이 아닌 일반 숫자, CPU에서만
-허용됩니다. 그 밖의 경우는 `check()`에서 어느 조건인지 밝히는 메시지로 거절됩니다.
+허용됩니다. 그 밖의 경우는 `check()`에서, 그리고 `prepare`, `run`, `Prepared.validate`에서도
+똑같이 `numerics.absorber` 경로의 `numerics.absorber` 코드와 어느 조건인지 밝히는 메시지로
+거절됩니다. 2 이상의 정수가 아닌 `ConductiveAbsorber(cells=...)`는 같은 코드로
+`numerics.absorber.cells`에서 거절됩니다.
 스무딩 구조를 모든 Open 면에서 세 격자 셀 이상 떨어뜨리면 지지 영역이 층 밖에 머물러 이
 조건이 모두 풀립니다. 두 셀로는 충분하지 않은 경우가 있었습니다. 그런 구조의 재료를
 미분하려면 다른 경우와 같이 일반 숫자로 준비한 문제의 `Prepared.run`을 사용합니다.

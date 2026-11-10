@@ -12,7 +12,7 @@ from ._lower_public import lower_problem, validate_sources
 from ._execution import _planned, run as execute
 from ._prepare.report import report as legacy_report
 from ._result import adapt_result
-from ._spelling import public as _public_spelling, public_error, to_public
+from ._spelling import public as _public_spelling, public_error, to_public, _ABSORBER
 
 
 def _static(v,path):
@@ -510,20 +510,40 @@ def _nonfinite(exc,problem):
     return nonfinite_error(_nonfinite_path(problem,path),value)
 
 
+def _absorber(exc,engine):
+    """``numerics.absorber`` at ``numerics.absorber`` for a ConductiveAbsorber coupling refusal.
+
+    The engine's refusals of a smoothed structure whose support reaches the absorber
+    (``_prepare/constitutive_absorber.py``, ``_kernel/constitutive_absorber.py``) all open with
+    ``ConstitutiveAbsorber``, and in the public vocabulary with ``_spelling._ABSORBER``. Each is a
+    rule of the ConductiveAbsorber's coupling, checked over merged interpolation supports that
+    can hold several structures, so the absorber is the one declaration every one of them names.
+    Only the catch-all is renamed: its class and message stay, and what is refused does not change.
+    """
+    if (getattr(exc,'code',None),getattr(exc,'path',None))!=_UNPLACED[0]:
+        return exc
+    if not (str(engine).startswith('ConstitutiveAbsorber') or exc.message.startswith(_ABSORBER)):
+        return exc
+    return type(exc)(exc.message,code='numerics.absorber',path='numerics.absorber',
+                     expected=exc.expected,actual=exc.actual)
+
+
 def _issue(exc,problem=None):
     """``exc`` as a structured error, in the public vocabulary (``_spelling``).
 
     An engine refusal that is not one already carries the catch-all code: ``fdtd.unsupported``
     for a ``NotImplementedError``, ``fdtd.invalid`` otherwise; its message is kept. Given the
     ``problem``, a refusal that names no field becomes ``problem.nonfinite`` where the problem
-    holds a NaN or an infinity (:func:`_nonfinite`).
+    holds a NaN or an infinity (:func:`_nonfinite`); a ConductiveAbsorber coupling refusal that
+    is not one becomes ``numerics.absorber`` (:func:`_absorber`).
     """
+    engine=exc
     exc=public_error(exc)
     if isinstance(exc,NotImplementedError) and not isinstance(exc,ValidationError):
         return UnsupportedFeatureError(str(exc),code='fdtd.unsupported',path='problem')
     if not isinstance(exc,ValidationError):
         exc=ValidationError(str(exc),code='fdtd.invalid',path='problem')
-    return (_nonfinite(exc,problem) if problem is not None else None) or exc
+    return (_nonfinite(exc,problem) if problem is not None else None) or _absorber(exc,engine)
 
 
 def _check_mode_monitors(problem,numerics):
