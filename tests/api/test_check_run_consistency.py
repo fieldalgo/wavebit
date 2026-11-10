@@ -666,3 +666,54 @@ def test_a_short_grid_that_runs_today_still_runs(layers):
     problem, numerics = _grid_problem(layers), rcwa.Numerics(orders=(2, 2), shape_nvf_grid_size=8)
     assert rcwa.check(problem, numerics=numerics).ok
     assert np.isfinite(rcwa.run(problem, numerics=numerics).T).all()
+
+
+# -- 13. A localized source without a finite power_region is refused at check, not first at run -
+
+_ISOLATED = rcwa.ElectricDipole(position=(0., 0., .1), moment=(1e-30, 0., 0.), repetition='isolated',
+                                sampling=(2, 2))
+_PERIODIC = rcwa.ElectricDipole(position=(0., 0., .1), moment=(1e-30, 0., 0.))
+_BOX = ((-.4, .4), (-.45, .45))
+LOCALIZED = {
+    'beam': ((_BEAM['sources'][0],), 0, 'GaussianBeam'),
+    'isolated-dipole': ((_ISOLATED,), 0, "ElectricDipole(repetition='isolated')"),
+    'plane-then-beam': ((rcwa.PlaneWave(theta=.2), _BEAM['sources'][0]), 1, 'GaussianBeam'),
+    'periodic-then-isolated': ((_PERIODIC, _ISOLATED), 1, "ElectricDipole(repetition='isolated')"),
+}
+
+
+def _localized_problem(sources, region):
+    return rcwa.Problem(units=Units(length='um'), stack=rcwa.Stack(period=(.8, .9), layers=(
+        rcwa.Layer(thickness=.2, background=Material(2.25)),)),
+        excitation=rcwa.Excitation(wavelength=.6, sources=sources),
+        outputs=rcwa.Outputs(diffraction=False, power_region=region))
+
+
+@pytest.mark.parametrize('region', [None, 'cell', 'infinite', 'bogus'])
+@pytest.mark.parametrize('case', sorted(LOCALIZED))
+def test_a_localized_source_without_a_finite_power_region_is_refused_at_every_door(case, region):
+    sources, index, name = LOCALIZED[case]
+    issue = _refused_alike(_localized_problem(sources, region))
+    assert (issue.code, issue.path) == ('outputs.power_region', 'outputs.power_region')
+    assert f'excitation.sources[{index}] is a {name}' in issue.message
+    assert (issue.expected, issue.actual) == ('((xmin, xmax), (ymin, ymax))', region)
+    # The advice: the same sources with a finite rectangle run.
+    assert np.isfinite(rcwa.run(_localized_problem(sources, _BOX), numerics=NUMERICS).outputs['top'].outgoing).all()
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_a_localized_source_without_a_finite_power_region_is_refused_alike_on_each_backend(backend):
+    pytest.importorskip(backend)
+    x64 = (__import__('jax').enable_x64(True) if backend == 'jax' else __import__('contextlib').nullcontext())
+    with x64:
+        issue = _refused_alike(_localized_problem(_BEAM['sources'], 'cell'), backend=backend)
+    assert (issue.code, issue.path) == ('outputs.power_region', 'outputs.power_region')
+
+
+@pytest.mark.parametrize('region', [None, 'cell', 'infinite'])
+@pytest.mark.parametrize('sources', [(_PERIODIC,), (rcwa.IncidentOrders(weights=(((0, 0), 1.), ((1, 0), .5j))),)],
+                         ids=['periodic-dipole', 'incident-orders'])
+def test_a_periodic_source_still_runs_without_a_finite_power_region(sources, region):
+    problem = _localized_problem(sources, region)
+    assert rcwa.check(problem, numerics=NUMERICS).ok
+    assert np.isfinite(rcwa.run(problem, numerics=NUMERICS).outputs['top'].outgoing).all()

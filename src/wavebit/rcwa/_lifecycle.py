@@ -10,6 +10,7 @@ from .._common.backend import eager_under_torch_compile
 from ..errors import (ValidationError, UnsupportedFeatureError, IncompatibleProblemError, NumericalError,
                       WavebitError)
 from .problem import Problem
+from .sources import ElectricDipole, GaussianBeam
 from .numerics import Numerics
 from ._engine.geometry import StaleGeometryError
 from . import _adapt
@@ -159,6 +160,32 @@ def _refuse_aliasing_grid(numerics, solvers):
             code='numerics.grid', path='numerics.shape_nvf_grid_size', expected=f'>= {need}', actual=grid)
 
 
+def _refuse_unbounded_power_region(problem):
+    """Refuse a localized source without a finite rectangle ``power_region`` before anything runs.
+
+    A ``GaussianBeam`` or an isolated ``ElectricDipole`` has finite extent, so the engine sums
+    its boundary power over a finite rectangle and refuses ``None``, ``'cell'``, ``'infinite'``
+    or any other string when it solves. ``check`` and ``prepare`` solve nothing, so they passed
+    it and ``run`` refused it (``rcwa.invalid`` at ``problem``). The same condition is read here,
+    from the public declarations; a rectangle is left to the engine's own value checks.
+    """
+    region = problem.outputs.power_region
+    if region is not None and not isinstance(region, str):
+        return
+    for i, source in enumerate(problem.excitation.sources):
+        if isinstance(source, GaussianBeam) or (isinstance(source, ElectricDipole)
+                                                and source.repetition == 'isolated'):
+            name = 'GaussianBeam' if isinstance(source, GaussianBeam) else "ElectricDipole(repetition='isolated')"
+            raise ValidationError(
+                f'excitation.sources[{i}] is a {name}, which has finite extent: its boundary power '
+                f'is taken over a finite area, and power_region={region!r} names none. Give '
+                'Outputs(power_region=((xmin, xmax), (ymin, ymax))) in the length unit, a '
+                "rectangle that holds the beam or the dipole's emission; 'cell' and 'infinite' are "
+                'for periodic sources.',
+                code='outputs.power_region', path='outputs.power_region',
+                expected='((xmin, xmax), (ymin, ymax))', actual=region)
+
+
 def _report(problem, numerics, execution, solvers):
     scene = _engine_scene(solvers[0])
     window = tuple(tuple(v) for v in scene.order_window)
@@ -224,6 +251,7 @@ def check(problem, *, numerics, backend='numpy', device='cpu', precision='double
         with execution._scope():
             _engine_scene(solvers[0])._check_layer_geometry()
         _refuse_aliasing_grid(numerics, solvers)
+        _refuse_unbounded_power_region(problem)
         return _report(problem, numerics, execution, solvers)
     except (ValidationError, TypeError, ValueError, NotImplementedError) as error:
         return CheckReport(issues=(_issue(error),))
@@ -499,6 +527,7 @@ def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='doub
         _adapt.refuse_nonfinite(problem)
         geometry = tuple(_engine_scene(solver).freeze_geometry() for solver in solvers)
         _refuse_aliasing_grid(numerics, solvers)
+        _refuse_unbounded_power_region(problem)
         report = _report(problem, numerics, execution, solvers)
         partitions = _partition_guards(problem, solvers)
         host_topology = None
