@@ -158,6 +158,17 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, n
                 contrast = fill*(1-fill)*(value-old)**2 / (value*old*arithmetic)
                 weights = xp.stack([normal[..., i]*normal[..., j]
                                     for i, j in ((0, 1), (0, 2), (1, 2))])
+                squares = xp.stack([normal[..., a]**2 for a in range(3)])
+                # STUDY (claude/cylinder-exact-rim-study): a Cylinder may carry the exact
+                # <n n^T> instead of its nearest-surface normal's outer product.
+                study = getattr(body, 'study_tensor', None)
+                study = None if study is None else study(points, plan.dx)
+                if study is not None:
+                    use, s_area, s_diag, s_off = study
+                    live = use & (s_area > 1e-12*plan.dx*plan.dx)
+                    safe = xp.where(live, s_area, xp.ones_like(s_area))
+                    weights = xp.where(live[None], xp.stack([s_off[..., i] for i in range(3)])/safe[None], weights)
+                    squares = xp.where(live[None], xp.stack([s_diag[..., i] for i in range(3)])/safe[None], squares)
                 if cross_free(body):
                     # Every face of an axis-aligned box has n_i*n_j=0 for i!=j,
                     # including voxels that contain more than one face; this one
@@ -189,7 +200,7 @@ def lower(scene, plan, rt, report=None, proxy_stats=None, proxy_by_index=None, n
                 off = xp.where(empty[None], cross[(slice(None),) + view],
                                contrast[None]*weights)
                 diagonal = xp.where(empty[None], tensor[(slice(None),) + view],
-                                    xp.stack([1.0/arithmetic + contrast*normal[..., a]**2
+                                    xp.stack([1.0/arithmetic + contrast*squares[a]
                                               for a in range(3)]))
                 fresh = xp.where(empty, old, arithmetic)
             held = _paste(xp, held, local, fresh)

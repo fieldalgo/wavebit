@@ -122,6 +122,7 @@ random grid origins and could not fire at all under ``jax.jit``, where the same 
 against a true 1.0. What a node cannot answer exactly it now brackets, ships the safe end of, and
 **counts** -- see :class:`Approximations`, which is the interface C2 and C5 warn from.
 """
+import os as _os
 from collections import namedtuple
 
 import numpy as _np
@@ -137,6 +138,17 @@ from wavebit.fdtd._shapes._exact import clipped_polygon_area
 from wavebit.fdtd._shapes._exact import overlap
 from wavebit.fdtd._shapes._exact import plane_share
 from wavebit.fdtd._shapes._exact import polygon_edge_moments
+
+#: STUDY SWITCH (branch claude/cylinder-exact-rim-study), not an option. Which moment a smoothed
+#: :class:`Cylinder` uses: ``'plane'`` (the shipped tangent plane), ``'rim'`` (the exact
+#: clipped-arc + cap moment in every voxel that holds part of a cap plane, the plane elsewhere)
+#: or ``'exact'`` (the exact moment in every voxel), or ``'split'`` (in the same voxels as
+#: ``'rim'``: the side wall's OWN tangent plane times the axial overlap, plus the exact cap --
+#: both surfaces by their areas, no normal selected, no exact arc). Read once at import; a
+#: study script may also assign it. See ``docs/validation/fdtd/cylinder-rim-moment-study.md``.
+_CYLINDER_MOMENT = _os.environ.get('WAVEBIT_STUDY_CYLINDER_MOMENT', 'plane')
+if _CYLINDER_MOMENT not in ('plane', 'rim', 'exact', 'split'):
+    raise ValueError(f'WAVEBIT_STUDY_CYLINDER_MOMENT={_CYLINDER_MOMENT!r}')
 
 #: The axis names a body may be extruded along, and the index each one is on a typed x-first
 #: triple. Arrays in this package are ``[component, z, y, x]``; the triples here are x-first.
@@ -1417,6 +1429,92 @@ class Cylinder(_Extrusion):
         centre = _as(xp, self.center, points)
         return clipped_disc_area(centre[..., u], centre[..., v], _as(xp, self.radius, points),
                                  *box, xp)
+
+    # ---- study prototype: the exact clipped-arc moment -------------------------------------
+
+    def _exact_tensor(self, points, dx):
+        """``(caps, area, diag, off)``: the exact ``<n n^T>`` moments of the surface in the voxel.
+
+        The side wall's arc moments come from the 2-D divergence theorem on the clipped disc
+        ``D`` (disc-centred coordinates, box ``[X0, X1] x [Y0, Y1]``): with ``F = (x, 0)``,
+        ``div F = 1`` and ``F.n = R cos^2`` on the arc, so ``R M_uu = A - X1 L(X1) + X0 L(X0)``,
+        ``L(X)`` the chord of the line ``x = X`` inside the disc and the box. ``F = (0, x)`` is
+        divergence free and gives ``R M_uv = m(Y0) - m(Y1)``, ``m`` the chord's first moment.
+        A cap is a plane: its clipped disc area, shared half and half on a voxel face as
+        :func:`plane_share` does for a polygon's cap. ``diag`` is x-first, ``off`` is
+        ``(xy, xz, yz)``. Nothing here selects a normal, so nothing jumps at the rim.
+        """
+        xp, (u, v, k), box, (lo, hi, s) = self._boxes(points, dx)
+        centre = _as(xp, self.center, points)
+        radius = _as(xp, self.radius, points)
+        cu, cv = centre[..., u], centre[..., v]
+        x0, x1, y0, y1 = box
+        X0, X1, Y0, Y1 = x0 - cu, x1 - cu, y0 - cv, y1 - cv
+        area_2d = clipped_disc_area(cu, cv, radius, x0, x1, y0, y1, xp)
+        zero = xp.zeros_like(X0)
+        r2 = radius * radius
+
+        def chord(a, b0, b1):
+            live = r2 - a * a > 0
+            half = xp.where(live, xp.sqrt(xp.where(live, r2 - a * a, zero + 1)), zero)
+            low, high = xp.maximum(b0, -half), xp.minimum(b1, half)
+            seg = high > low
+            return (xp.where(seg, high - low, zero),
+                    xp.where(seg, (high * high - low * low) / 2, zero))
+
+        lx0, _ = chord(X0, Y0, Y1)
+        lx1, _ = chord(X1, Y0, Y1)
+        ly0, my0 = chord(Y0, X0, X1)
+        ly1, my1 = chord(Y1, X0, X1)
+        # The arc is absent when the box is wholly inside or wholly outside the circle; say so
+        # exactly rather than leave the divergence identity's round-off as a phantom arc.
+        nearest = (xp.maximum(xp.maximum(X0, -X1), zero) ** 2
+                   + xp.maximum(xp.maximum(Y0, -Y1), zero) ** 2)
+        farthest = xp.maximum(X0 * X0, X1 * X1) + xp.maximum(Y0 * Y0, Y1 * Y1)
+        arc = (nearest < r2) & (farthest > r2)
+        safe = xp.where(arc, radius + zero, zero + 1)
+        muu = xp.where(arc, xp.maximum((area_2d - X1 * lx1 + X0 * lx0) / safe, zero), zero)
+        mvv = xp.where(arc, xp.maximum((area_2d - Y1 * ly1 + Y0 * ly0) / safe, zero), zero)
+        muv = xp.where(arc, (my0 - my1) / safe, zero)
+        along = overlap(lo, hi, s, dx, xp)
+        caps = plane_share(lo, s, dx, xp) + plane_share(hi, s, dx, xp)
+        cap_area = caps * area_2d
+        if _CYLINDER_MOMENT == 'split':
+            # The side wall's own tangent plane at the point: radial normal g, distance d_r.
+            # Its normal has no axial part, so its area in the voxel is dx * (its line in the
+            # transverse square), and the wall's share of it is that times along / dx.
+            q = xp.stack([points[..., u], points[..., v]], axis=-1)
+            d_r, g = self._transverse_surface(q)
+            _, line, _ = _parts(d_r, _stack3(xp, (g[..., 0], g[..., 1]), (u, v), d_r), dx)
+            side = line * along / dx
+            muu, mvv, muv = side * g[..., 0] ** 2, side * g[..., 1] ** 2, side * g[..., 0] * g[..., 1]
+            along = xp.ones_like(along)
+        area = (muu + mvv) * along + cap_area
+        diag = _stack3(xp, (muu * along, mvv * along, cap_area), (u, v, k), area)
+        pair = (min(u, v), max(u, v))
+        offs = [zero, zero, zero]
+        offs[((0, 1), (0, 2), (1, 2)).index(pair)] = muv * along
+        return caps, area, diag, xp.stack(offs, axis=-1)
+
+    def exact_moment(self, points, dx):
+        if _CYLINDER_MOMENT == 'plane':
+            return None
+        caps, area, diag, _ = self._exact_tensor(points, dx)
+        if _CYLINDER_MOMENT == 'exact':
+            return area, diag
+        xp = array_namespace(points)
+        _, plane_area, plane_moment = self.plane(points, dx)
+        rim = caps > 0
+        return (xp.where(rim, area, plane_area),
+                xp.where(rim[..., None], diag, plane_moment))
+
+    def study_tensor(self, points, dx):
+        """``(use, area, diag, off)`` for the constitutive cross term, or ``None`` (plane)."""
+        if _CYLINDER_MOMENT == 'plane':
+            return None
+        caps, area, diag, off = self._exact_tensor(points, dx)
+        use = caps >= 0 if _CYLINDER_MOMENT == 'exact' else caps > 0
+        return use, area, diag, off
 
 
 class _Combination(Body):
