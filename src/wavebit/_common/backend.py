@@ -194,8 +194,9 @@ def lift_jax_x64(required=False):
     :class:`PrecisionLossWarning` and ``docs/theory/rcwa/branch-cuts.md``.
 
     Historical numerical engine entry points call this after JAX is loaded and
-    before building their first array: the private JAX RCWA backend, the periodic
-    JaxTimeLoop, lattice sampling and the explicit _enable_x64 instrument helper.
+    before building their first array: the private JAX RCWA backend (on import, and again
+    in the private factory for each JAX solver), the periodic JaxTimeLoop, lattice sampling
+    and the explicit _enable_x64 instrument helper.
     The current physical lifecycle uses Execution.scope to disable those automatic
     changes and validates the user's explicit precision configuration instead.
     Importing wavebit never lifts the cap.

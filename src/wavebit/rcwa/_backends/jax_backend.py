@@ -14,7 +14,10 @@ in the package this module replaces: whatever runs first must not build an array
 JAX arrays *before* the first solve needs -- see :class:`~wavebit._common.backend.PrecisionLossWarning`.
 
 The lift itself lives in :func:`wavebit._common.backend.lift_jax_x64`, the only body that performs
-it, which lists every door that calls it. That module imports nothing but `array_api_compat`
+it, which lists every door that calls it. Under the public lifecycle's ``Execution`` scope it
+only reads the setting, so when a public run is the first to import this module the lift here
+does nothing; the private factory (``wavebit.rcwa._factory.rcwa``) therefore lifts again for
+each JAX solver it builds outside that scope. That module imports nothing but `array_api_compat`
 and NumPy, so naming it here pulls in no JAX of its own.
 """
 
