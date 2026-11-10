@@ -51,7 +51,7 @@ hunt for a *configuration* that separates failing from working cases found none,
 | 1D conical (`psi`/pair), `ky == 0` | **fine since the reformulation** | `V` blocks now come from the eigensystem; they used to pass through `inv(A)` of an exactly singular `A` |
 | 1D conical at `kx_m**2 = eps*mu` with `ky != 0` (an x-cutoff, `kz = abs(ky)`) | **solved in a regular basis since 2026-10-10 (§7)**, eagerly and, since 2026-10-11, under every abstract trace (`jax.jit`, `jax.vmap`, a `jax.lax.map` or `scan` body, `jax.checkpoint`, `torch.func.vmap`) | the two mode families collapse onto one field there; the layer is rebuilt with an upper-triangular propagator, exact in a uniform layer and at a patterned layer's Jordan block alike; patterned double negatives at a complex `theta` too |
 | 2D graze | **correct or loud since the rebuild (§6)** | the grazing cluster is re-derived from the coupled first-order problem: representable clusters solve exactly, numerically defective ones refuse with the detune advice |
-| 2D or first order at a patterned EP (`q = abs(ky)`) | **rebuilt as a regular pair (§§8–9; design measured 2026-10-12)**; coincident and nearly coincident EPs **rebuilt as one cluster, eagerly and under traces**, on 2D (§8, 2026-11-08) and on the first-order formulation (§9, 2026-11-11) | larger or chained clusters warn eagerly; under a trace the same screens run as data and the layer answers NaN (§8, 2026-11-10) |
+| 2D or first order at a patterned EP (`q = abs(ky)`) | **rebuilt as a regular pair (§§8–9; design measured 2026-10-12)**; coincident and nearly coincident EPs **rebuilt as one cluster, eagerly and under traces**, on 2D (§8, 2026-11-08) and on the first-order formulation (§9, 2026-11-10) | larger or chained clusters warn eagerly; under a trace the same screens run as data and the layer answers NaN (§8, 2026-11-10) |
 | any path, eigenvalue *exactly* `0.0` — and, on 2D, any cluster whose coupled rates split below ~1e-10 of the modal scale | refuses, unless the ladder clears it | the exponential mode basis is degenerate at the point itself (the limit basis is `{1, z}`) |
 
 `solve` handles the practical side by default: `auto_detune=True` retries a solve that
@@ -823,7 +823,7 @@ digest claim: byte identity applies outside the gates, not to every non-exceptio
 `solve_2d.py::_cluster_split` splits, `solve_2d.py::_rebuild_defective_clusters` rebuilds (called
 through `_rebuild_defective_pairs`); its core, the Newton and chord steps, the split and the check,
 is `solve_2d.py::_joint_cluster_bases`, which the first-order split calls too (§9, since
-2026-11-11). Tests: `tests/rcwa/test_exceptional_point_clusters.py`.
+2026-11-10). Tests: `tests/rcwa/test_exceptional_point_clusters.py`.
 
 *The gate.* A cluster is a ball of `Omega2`'s eigenvalues: the modes within a radius (relative to
 `max(1, |w|)`) of its lowest-index member, read at two radii. Balls of `_EP_JOINT_RADIUS = 3e-3`
@@ -996,7 +996,7 @@ modes, a ball is the eager measure on a part of it.
 | 2D with the joint gate closed (pairs and clusters as before §8's joint rebuild), PL952 and PA616, ETM and SMM, `dtheta` 0 .. 3e-5 (40 solves) | silent | NaN on every solve JAX's eager screens warn on, and on PA616 at 1e-7, quiet eagerly on JAX and loud on NumPy (a backward error of 4.41e-12 against 3.0e-12): a threshold reads rounding at its edge; the rest within 7.2e-15 |
 | the thick PA616 layers, 10 and 3 um (sensitivity up to 2.0e3), ETM and SMM, 37 offsets out to 1e-3 (74 solves), where the backward-error screen once warned on exact answers | within 2.8e-13 eagerly, quiet | no NaN, within 2.3e-13 |
 
-The first-order row describes the split before its joint rebuild: since 2026-11-11 it takes
+The first-order row describes the split before its joint rebuild: since 2026-11-10 it takes
 those clusters as the 2D path does (§9, *Coincident exceptional points, rebuilt jointly*), the
 26 solves are exact and quiet eagerly and under `jit`, and its screens read only what that
 rebuild leaves.
@@ -1017,7 +1017,7 @@ the Gram matrices of their columns, the defect measure on its slots, and on 2D o
   (§6 runs first), and complex64 (the defect measure's `eps**2` scaling keeps the gate closed below
   double precision: PL952 and PA616 in complex64 on NumPy, JAX and PyTorch gave the pair
   rebuild's answers, and under `jit` its bytes). The first-order formulation takes the same
-  rebuild in its own split since 2026-11-11 (§9, *Coincident exceptional points, rebuilt
+  rebuild in its own split since 2026-11-10 (§9, *Coincident exceptional points, rebuilt
   jointly*). Eagerly the unresolved and backward-error screens still warn on what is not
   taken, except in complex64, where every screen's threshold scales with `eps` and stays silent
   too (a coincident cluster there is 6.9e-6 .. 5.6e-4 off, silently, at the float32 level);
@@ -1178,7 +1178,7 @@ third mode of its direction is as parallel to either member, or another root lie
 by itself. The bordered Newton solve loses accuracy beside a third root: with the separation
 guard disabled, its residual was 1.5e-7, 2.7e-9 and 6.0e-11 at distances 1e-7, 1e-6 and 1e-5,
 and at most 1.2e-12 from 1e-4 on. Unlike §8's simultaneous Sylvester correction, this method
-therefore keeps the 1e-4 guard for every third root. Since 2026-11-11 a pair skipped that way,
+therefore keeps the 1e-4 guard for every third root. Since 2026-11-10 a pair skipped that way,
 with the root beside it, is a defective cluster of three modes, which the joint rebuild below
 takes.
 
@@ -1198,7 +1198,7 @@ never triggers `auto_detune`; under a trace the screen runs as data and the laye
 instead (§8, *The screens under a trace*): every one of those warned solves is NaN under `jit`,
 where it was 1.1e-6 .. 0.69 off, silently.
 
-**Coincident exceptional points, rebuilt jointly** (2026-11-11). At a coincidence `eig` mixes
+**Coincident exceptional points, rebuilt jointly** (2026-11-10). At a coincidence `eig` mixes
 the four vectors of the two Jordan blocks so that no two look parallel: the pair gate takes none,
 or refuses the one it takes, and the split above kept the four in `eig`'s nearly dependent basis,
 warned, and was up to 1.1 off (SMM, PA616 at `dtheta = 1e-4`). The split now takes them as §8's
@@ -1234,7 +1234,7 @@ field reconstructions read it too (`len(record) - 8`, where a pair-only record s
 read as `True` was). At truncation `(5, 2)` each direction holds two clusters beside a pair, five
 coupled rows.
 
-*Measured* (2026-11-11, Windows NumPy 2.5.1 with OpenBLAS 0.3.33, JAX 0.11.0, PyTorch 2.14.1;
+*Measured* (2026-11-10, Windows NumPy 2.5.1 with OpenBLAS 0.3.33, JAX 0.11.0, PyTorch 2.14.1;
 oracles: the §7 1D rebuild for the y-invariant scenes, §8's Cauchy circle for the C4v pillar):
 
 | case | before | joint rebuild |
