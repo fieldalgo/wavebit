@@ -2,7 +2,7 @@
 
 `wavebit.postprocess.propagation`은 RCWA/FDTD의 공통 결과를 받는 후처리 계층이다.
 첫 구현은 continuum 회절차수의 복소 전기장을 균일 외부 매질에서 직접 전파한다.
-호출 예제와 정확한 계약은 [영문 원문](../../../../guide/postprocess/propagation.md)을 따른다.
+호출 예제와 정확한 계약은 언어 메뉴의 영문 원문을 따른다.
 
 입력은 Cartesian CW 진폭(V/m), 파수, 기준면·횡방향 원점·외향 법선·단위·시간 규약을
 가진 `DiffractionOrders`다. RCWA의 reflection/transmission을 연결할 수 있다.
