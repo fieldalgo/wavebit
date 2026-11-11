@@ -500,7 +500,7 @@ def refuse_extra_incidences(incidences):
 
 def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
              sample_x=20, sample_y=1, sample_z=20, incidences=('incident',), interface_side='right',
-             _coefficients=False, eps_rows=None):
+             _coefficients=False, rule_rows=None):
     """Field of a pure TE/TM 1D stack.
 
     Returns ``(nz, sample_y, sample_x, 3)``, where ``nz`` is ``sample_z * n_layers`` for a count
@@ -510,10 +510,11 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
     polarization away, so this path solved one incidence and ``T1`` holds one column. Asking
     for another is refused rather than ignored -- see :func:`refuse_extra_incidences`.
 
-    ``eps_rows`` selects the continuity reconstruction of TM's ``E_x``: one entry per layer record,
-    ``eps`` at the x samples or ``None`` (see the engine's ``_continuity_rows``). The ``D_x`` series
-    is summed and divided by ``eps(x)`` -- P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357
-    (1998). ``None`` keeps the Fourier sum. TE has no component normal to a vertical wall.
+    ``rule_rows`` selects the Lalanne reconstruction of TM's ``E_x`` and TE's ``H_x``: one entry
+    per layer record, ``None`` or a :data:`~wavebit.rcwa._engine.lalanne.LayerRule` holding
+    ``eps`` and ``mu`` at the x samples (see the engine's ``_lalanne_rows``). The ``D_x`` or
+    ``B_x`` series is summed and divided by that value -- P. Lalanne and M. P. Jurek, J. Mod. Opt.
+    45, 1357 (1998). ``None`` keeps the Fourier sum.
     """
     refuse_extra_incidences(incidences)
     _require_solved(T1, layer_info_list)
@@ -527,10 +528,12 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
 
     T_layer = T1
     cells = []
-    rows = [None] * len(layer_info_list) if eps_rows is None else eps_rows
-    for spec, (epz_conv_i, W, V, q, d, A_i, B, muz_conv_i, amplitudes), eps_row in zip(
+    rows = [None] * len(layer_info_list) if rule_rows is None else rule_rows
+    for spec, (epz_conv_i, W, V, q, d, A_i, B, muz_conv_i, amplitudes), row in zip(
             z_per_layer, layer_info_list[::-1], rows[::-1]):
         nz = _n_samples(spec)
+        # The one component normal to a wall: TM's E_x, or under the duality TE's H_x.
+        wall_value = None if row is None else row.electric if tetm_index else row.magnetic
         from wavebit.rcwa._engine.modal_gradient import exponential
         if amplitudes is None:
             # The ETM's record: `T_layer` is this layer's `+` amplitude at its top.
@@ -557,9 +560,10 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
             bwd = _diag_exp(xp, k0 * Qd, n_orders)
         My = W @ (fwd @ c1 + bwd @ c2)
         Mx = V @ (-fwd @ c1 + bwd @ c2)
-        if tetm_index and eps_row is not None:
+        if wall_value is not None:
             # TM's `V` is `epx_conv^-1 W q`, so `epx_conv @ Mx` -- the D_x series in Mx's
             # normalization -- is `W q u`: no inverse, and exactly the continuous quantity.
+            # TE's `V` is `mux_conv^-1 W q`, and the same line is its B_x series.
             u = -fwd @ c1 + bwd @ c2
             Mx = W @ (q @ u if q.ndim == 2 else xp.reshape(q, (-1, 1)) * u)
         # The longitudinal component, and **the whole reason a permeability had to reach this
@@ -604,8 +608,8 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
             sgn = -1j if tetm_index == 0 else 1j
             Fy = inv_f[:, :, None, :] @ My[:, None, None, :, :]
             Fx = sgn * (inv_f[:, :, None, :] @ Mx[:, None, None, :, :])
-            if tetm_index and eps_row is not None:
-                Fx = Fx / xp.reshape(eps_row, (1, 1, -1, 1, 1))
+            if wall_value is not None:
+                Fx = Fx / xp.reshape(wall_value, (1, 1, -1, 1, 1))
             Fz = sgn * (inv_f[:, :, None, :] @ Mz[:, None, None, :, :])
             # Into the declared frame (module docstring): E_z, H_x, H_y flip, E_t and H_z do not.
             # The two layouts fill the same three slots with different components, so the pattern
@@ -623,7 +627,7 @@ def field_1d(wavelength, kx, T1, layer_info_list, lattice, tetm_index,
 
 def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, sample_y,
                    sample_z, incidences, conical, interface_side, _coefficients=False,
-                   eps_rows=None):
+                   rule_rows=None):
     """Shared body of the conical and 2D reconstructions.
 
     They differ only in how the layer's mode matrices assemble into ``(Sx, Sy, Ux, Uy)``; the
@@ -674,8 +678,9 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
     z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 4, interface_side)
 
     cells = []
-    rows = [None] * len(layer_info_list) if eps_rows is None else eps_rows
-    for spec, entry, eps_row in zip(z_per_layer, layer_info_list[::-1], rows[::-1]):
+    rows = [None] * len(layer_info_list) if rule_rows is None else rule_rows
+    for spec, entry, row in zip(z_per_layer, layer_info_list[::-1], rows[::-1]):
+        electric, magnetic = (None, None) if row is None else row
         epz_conv_i, W, V, q, d, big_A_i, big_B, muz_conv_i, amplitudes = entry[:9]
         nz = _n_samples(spec)
         q_1, q_2 = q[:n_orders], q[n_orders:]
@@ -746,7 +751,20 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
         # (`is not None`), which is the one form a traced `muz_conv_i` can answer.
         if muz_conv_i is not None:
             Uz = muz_conv_i @ Uz
-        if eps_row is not None and conical:
+        if magnetic is not None and conical:
+            # Faraday's x row is Ampere's under the duality, mu_x H_x = i Ky E_z + d(E_y)/d(k0 z)
+            # in `U = i H`; it puts the B_x series in Ux's place below, as Ampere's does D_x. E_y
+            # runs on (a+ + a-), and d/d(k0 z) of that is q (-a+ + a-). Read before Sx changes.
+            if q.ndim == 2:
+                qu = q @ (-ap + am)
+                qu1, qu2 = qu[..., :n_orders, :], qu[..., n_orders:, :]
+            else:
+                qu1 = xp.reshape(q_1, (-1, 1)) * (-a1p + a1m)
+                qu2 = xp.reshape(q_2, (-1, 1)) * (-a2p + a2m)
+            Sy_1, Sy_2 = ((W[n_orders:, :n_orders], W[n_orders:, n_orders:]) if rebuilt else
+                          (V[:n_orders, :n_orders], V[:n_orders, n_orders:]))
+            Bx = 1j * (Ky @ Sz) + (Sy_1 @ qu1 + Sy_2 @ qu2)
+        if electric is not None and conical:
             # Ampere's x row puts the D_x series in Sx's place: it is continuous across the
             # grating's walls, so its sum does not ring, and the jump of E_x enters exactly when
             # the sum is divided by eps(x) below. In this frame z runs into the stack, which
@@ -760,6 +778,8 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
                 qs2 = xp.reshape(q_2, (-1, 1)) * (a2p + a2m)
             V_21, V_22 = V[n_orders:, :n_orders], V[n_orders:, n_orders:]
             Sx = 1j * (Ky @ Uz) + (V_21 @ qs1 + V_22 @ qs2)
+        if magnetic is not None and conical:
+            Ux = Bx
 
         if _coefficients:
             cells.append(xp.stack([M[..., 0] for M in
@@ -769,13 +789,19 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
             # `-1j` converts out of `U = i H`; the three minus signs on top of it are the parity
             # into the declared frame (module docstring), so `H_z` keeps the bare conversion.
             comps = [inv_f @ M[:, :, None, None, :, :] for M in (Sx, Sy, -Sz)]
-            if eps_row is not None and conical:
-                comps[0] = comps[0] / xp.reshape(eps_row, (1, 1, 1, -1, 1, 1))
-            elif eps_row is not None:
-                ex, ey = _continuity_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C,
-                                        Sx, Sy, eps_row)
+            if electric is not None and conical:
+                comps[0] = comps[0] / xp.reshape(electric, (1, 1, 1, -1, 1, 1))
+            elif electric is not None:
+                ex, ey = _lalanne_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C,
+                                     Sx, Sy, electric)
                 comps[0], comps[1] = ex[..., None, None], ey[..., None, None]
             comps += [-1j * (inv_f @ M[:, :, None, None, :, :]) for M in (-Ux, -Uy, Uz)]
+            if magnetic is not None and conical:
+                comps[3] = comps[3] / xp.reshape(magnetic, (1, 1, 1, -1, 1, 1))
+            elif magnetic is not None:
+                hx, hy = _lalanne_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C,
+                                     -Ux, -Uy, magnetic)
+                comps[3], comps[4] = -1j * hx[..., None, None], -1j * hy[..., None, None]
             val = xp.concat([c[..., 0] for c in comps], axis=-1)
             cells.append(xp.moveaxis(val, 1, 0))
         T_layer = T_next
@@ -787,7 +813,7 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
 
 def field_2d_first_order(wavelength, kx, ky, T1, layer_info_list, lattice,
                          sample_x=20, sample_y=20, sample_z=20, incidences=('incident',),
-                         interface_side='right', _coefficients=False):
+                         interface_side='right', _coefficients=False, rule_rows=None):
     """Field of a stack solved on the first-order path. Same shape as :func:`field_2d`.
 
     The transverse half is *simpler* than the second-order reconstruction, not harder. There
@@ -818,6 +844,9 @@ def field_2d_first_order(wavelength, kx, ky, T1, layer_info_list, lattice,
 
     The second-order twin's ``H_z = muz_conv_i (Kx Ey - Ky Ex)`` is that line at
     ``muzx = muzy = 0``.
+
+    ``rule_rows`` selects the Lalanne reconstruction, as :func:`field_2d` describes. It reads the
+    transverse coefficients and the structure alone, so it is :func:`_lalanne_2d` here too.
 
     The returned components are ``(Ex, Ey, Ez, Hx, Hy, Hz)``, matching :func:`field_2d`. This
     path needs **no** parity at the output, and it is the only one that does not:
@@ -852,7 +881,9 @@ def field_2d_first_order(wavelength, kx, ky, T1, layer_info_list, lattice,
     z_per_layer, unshuffle = _z_plan(sample_z, layer_info_list, 5, interface_side)
 
     cells = []
-    for spec, record in zip(z_per_layer, layer_info_list[::-1]):
+    rows = [None] * len(layer_info_list) if rule_rows is None else rule_rows
+    for spec, record, row in zip(z_per_layer, layer_info_list[::-1], rows[::-1], strict=True):
+        electric, magnetic = (None, None) if row is None else row
         eps, psi_f, lam_f, psi_b, lam_b, d, P_i, QP_i = record[:8]
         # A ninth slot says the layer's split took the regular-pair layout, and more slots the
         # count a joint rebuild of clusters gave (`solve_2d_first_order._COUPLED_RECORD`):
@@ -889,6 +920,12 @@ def field_2d_first_order(wavelength, kx, ky, T1, layer_info_list, lattice,
             # declared frame.
             comps = [inv_f @ M[:, :, None, None, :, :]
                      for M in (Ex, Ey, Ez, Hx, Hy, Hz)]
+            if electric is not None:
+                ex, ey = _lalanne_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Ex, Ey, electric)
+                comps[0], comps[1] = ex[..., None, None], ey[..., None, None]
+            if magnetic is not None:
+                hx, hy = _lalanne_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Hx, Hy, magnetic)
+                comps[3], comps[4] = hx[..., None, None], hy[..., None, None]
             val = xp.concat([c[..., 0] for c in comps], axis=-1)
             cells.append(xp.moveaxis(val, 1, 0))
         T_layer = (P_i @ X_f) @ T_layer
@@ -900,52 +937,56 @@ def field_2d_first_order(wavelength, kx, ky, T1, layer_info_list, lattice,
 
 def field_1d_conical(wavelength, kx, ky, T1, layer_info_list, lattice,
                      sample_x=20, sample_y=20, sample_z=20, incidences=('incident',), interface_side='right',
-                 _coefficients=False, eps_rows=None):
+                 _coefficients=False, rule_rows=None):
     """Field of a general 1D (conical) stack. ``(n_selected, nz, sample_y, sample_x, 6)``.
 
     ``nz`` is ``sample_z * n_layers`` for a count, ``len(sample_z)`` for explicit coordinates.
-    ``eps_rows`` selects the continuity reconstruction of ``E_x``, as :func:`field_1d` describes.
+    ``rule_rows`` selects the Lalanne reconstruction of ``E_x`` and ``H_x``, as
+    :func:`field_1d` describes.
     """
     return _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice,
                           sample_x, sample_y, sample_z, incidences, conical=True,
                           interface_side=interface_side, _coefficients=_coefficients,
-                          eps_rows=eps_rows)
+                          rule_rows=rule_rows)
 
 
 def field_2d(wavelength, kx, ky, T1, layer_info_list, lattice,
              sample_x=20, sample_y=20, sample_z=20, incidences=('incident',), interface_side='right',
-             _coefficients=False, eps_rows=None):
+             _coefficients=False, rule_rows=None):
     """Field of a 2D stack. ``(n_selected, nz, sample_y, sample_x, 6)``.
 
     ``nz`` is ``sample_z * n_layers`` for a count, ``len(sample_z)`` for explicit coordinates.
-    ``eps_rows`` selects the continuity reconstruction of ``E_x`` and ``E_y``: one entry per
-    layer record, ``None`` or the engine's ``(ops_x, ops_y, eps)`` (:func:`_continuity_2d`).
+    ``rule_rows`` selects the Lalanne reconstruction of ``E_x``, ``E_y``, ``H_x`` and ``H_y``:
+    one entry per layer record, ``None`` or a :data:`~wavebit.rcwa._engine.lalanne.LayerRule`
+    of the engine's ``(ops_x, ops_y, eps_x, eps_y)`` (:func:`_lalanne_2d`).
     """
     return _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice,
                           sample_x, sample_y, sample_z, incidences, conical=False,
                           interface_side=interface_side, _coefficients=_coefficients,
-                          eps_rows=eps_rows)
+                          rule_rows=rule_rows)
 
 
-def _continuity_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, eps_row):
-    """``E_x`` and ``E_y`` of a patterned 2D layer by the line-wise continuity rule.
+def _lalanne_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, half):
+    """``E_x`` and ``E_y`` of a patterned 2D layer by the line-wise Lalanne rule.
 
     ``E_x`` jumps across walls normal to x and is continuous across walls normal to y, so its
     series is summed one sample row at a time: over the y orders first, which is a series of a
-    function continuous in y, then Li's inverse rule ``[[1/eps]]_x^-1`` of the raster row under
+    function continuous in y, then Li's inverse rule ``[[1/eps]]_x^-1`` of the row through
     that sample turns the x coefficients of ``E_x`` into those of ``D_x``, continuous along the
     row; that sum is divided by ``eps`` at each sample. ``E_y`` is the same with the axes
     swapped, line by line along the column under each x sample. This is the near-field rule of
     P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357 (1998), as RETICOLO's ``res3`` applies it
     to a Li-factorized texture (``champ=1``); pinned by
-    ``tests/references/test_reticolo_2d_field_golden.py``.
+    ``tests/references/test_reticolo_2d_field_golden.py``. Under the duality it is ``H_x`` and
+    ``H_y`` with ``mu``'s operators for ``eps``'s, as RETICOLO's ``fhx`` and ``fhy`` are. A diagonal
+    tensor reads ``eps_xx`` for ``E_x`` and ``eps_yy`` for ``E_y``, as its ``fex`` and ``fey`` do.
 
     ``Sx`` / ``Sy`` are ``(nz, n_selected, n_orders, 1)``, orders flattened ``v``-major as the
-    BTTB layout has them, and ``eps_row`` is the engine's ``(ops_x, ops_y, eps)``. The phases
-    are :func:`_inv_fourier`'s separable branch, split by axis. Returns two
-    ``(nz, n_selected, n_y, n_x)`` arrays.
+    BTTB layout has them, and ``half`` is a :data:`~wavebit.rcwa._engine.lalanne.LayerRule`'s
+    ``(ops_x, ops_y, eps_x, eps_y)``. The phases are :func:`_inv_fourier`'s separable branch, split by axis.
+    Returns two ``(nz, n_selected, n_y, n_x)`` arrays.
     """
-    ops_x, ops_y, eps = eps_row
+    ops_x, ops_y, eps_x, eps_y = half
     dev = _dev(kx)
     period = periods_of(lattice)
     x = _axis_samples(xp, sample_x, period[0], C, dev)
@@ -956,15 +997,14 @@ def _continuity_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, eps_r
     lead = Sx.shape[:2]
     gx = xp.reshape(Sx, (*lead, n_v, n_u))
     gy = xp.reshape(Sy, (*lead, n_v, n_u))
-    eps = xp.astype(eps, C)
 
     ex_rows = py @ gx                                              # (.., n_y, n_u)
     dx = (ops_x @ ex_rows[..., None])[..., 0]
-    ex = (dx @ xp.permute_dims(px, (1, 0))) / eps                  # (.., n_y, n_x)
+    ex = (dx @ xp.permute_dims(px, (1, 0))) / xp.astype(eps_x, C)  # (.., n_y, n_x)
 
     ey_cols = xp.moveaxis(gy @ xp.permute_dims(px, (1, 0)), -1, -2)  # (.., n_x, n_v)
     dy = (ops_y @ ey_cols[..., None])[..., 0]
-    ey = xp.moveaxis(dy @ xp.permute_dims(py, (1, 0)), -1, -2) / eps  # (.., n_y, n_x)
+    ey = xp.moveaxis(dy @ xp.permute_dims(py, (1, 0)), -1, -2) / xp.astype(eps_y, C)  # (.., n_y, n_x)
     return ex, ey
 
 

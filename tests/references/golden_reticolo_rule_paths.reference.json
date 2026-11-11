@@ -1,0 +1,154 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_reticolo_rule_paths",
+  "physics": "rcwa",
+  "comparison": "same-discretization",
+  "role": "external oracle for the Lalanne rule off its first paths: diagonal tensors, a uniform tensor beside a patterned layer, merged layers, one order along an axis, incidence from below, and a dipole, under both of RETICOLO's rules",
+  "references": [
+    {
+      "tool": "RETICOLO",
+      "version": "V10",
+      "build": "V10_2025",
+      "modified": {
+        "value": false,
+        "description": "the V10_2025 tree as unpacked from the published archive"
+      },
+      "spdx": "CC-BY-4.0",
+      "source": "https://doi.org/10.5281/zenodo.14631951",
+      "install": {
+        "kind": "manual",
+        "command": "download V10 from the source record and point RETICOLO_PATH at reticolo_allege_v10"
+      },
+      "settings": "res3 raw cell for the cases of tests/references/_reticolo_rule_paths_cases.py, champ=1 and champ=0, with materials put in through parm.res1.change_index, run in Octave through tests/references/interface/reticolo_res3_magnetic.m; a dipole through rets and retchamp in tests/references/interface/reticolo_source.m, with no apodization",
+      "discretization": "same truncation on both sides, and the same exact rectangles and bars (cases module)",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_reticolo_rule_paths.py",
+    "sha256": "aa87e209a1264b854e68117a525f566029bece710a7223df55c3e3685fc16c8a",
+    "command": "RETICOLO_PATH=... python tests/references/gen_goldens_reticolo_rule_paths.py",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-11-01",
+  "environment": {
+    "python": "3.12.9",
+    "numpy": "2.5.1",
+    "octave": "9.4.0"
+  },
+  "cost": {
+    "wall_seconds": 25.0
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_reticolo_rule_paths.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_reticolo_rule_paths.npz",
+    "format": "npz",
+    "file_sha256": "d1c6bb89e69a10678c1a03075b2556c872092e29b2a9c5bf93e149081342ee96",
+    "arrays": [
+      "champ0__bottom_2d_p",
+      "champ0__bottom_2d_s",
+      "champ0__merged_2d_p",
+      "champ0__merged_2d_s",
+      "champ0__merged_conical_p",
+      "champ0__merged_conical_s",
+      "champ0__merged_te_s",
+      "champ0__merged_tm_p",
+      "champ0__one_x_p",
+      "champ0__one_x_s",
+      "champ0__one_y_p",
+      "champ0__one_y_s",
+      "champ0__tensor_2d_p",
+      "champ0__tensor_2d_s",
+      "champ0__tensor_conical_p",
+      "champ0__tensor_conical_s",
+      "champ0__tensor_te_s",
+      "champ0__tensor_tm_p",
+      "champ0__uniform_xy_p",
+      "champ0__uniform_xy_s",
+      "champ0__uniform_xz_p",
+      "champ0__uniform_xz_s",
+      "champ1__bottom_2d_p",
+      "champ1__bottom_2d_s",
+      "champ1__merged_2d_p",
+      "champ1__merged_2d_s",
+      "champ1__merged_conical_p",
+      "champ1__merged_conical_s",
+      "champ1__merged_te_s",
+      "champ1__merged_tm_p",
+      "champ1__one_x_p",
+      "champ1__one_x_s",
+      "champ1__one_y_p",
+      "champ1__one_y_s",
+      "champ1__tensor_2d_p",
+      "champ1__tensor_2d_s",
+      "champ1__tensor_conical_p",
+      "champ1__tensor_conical_s",
+      "champ1__tensor_te_s",
+      "champ1__tensor_tm_p",
+      "champ1__uniform_xy_p",
+      "champ1__uniform_xy_s",
+      "champ1__uniform_xz_p",
+      "champ1__uniform_xz_s",
+      "source_1_0",
+      "source_1_1",
+      "source_2_0",
+      "source_2_1",
+      "source_3_0",
+      "source_3_1",
+      "x_1d",
+      "x_2d",
+      "y_2d",
+      "z_bottom_2d",
+      "z_merged_2d",
+      "z_merged_conical",
+      "z_merged_te",
+      "z_merged_tm",
+      "z_one_x",
+      "z_one_y",
+      "z_source",
+      "z_tensor_2d",
+      "z_tensor_conical",
+      "z_tensor_te",
+      "z_tensor_tm",
+      "z_uniform_xy",
+      "z_uniform_xz"
+    ]
+  },
+  "values_sha256": "eec2f3eeb05d10af8ac4368153634b84869f0f80508151f908f092a2ce480e54",
+  "content_sha256": "52198b6b2c6cb1dfc1f711757665d8191f6f6e0a3fafaedfac9759c4a3a5965b",
+  "consumers": [
+    "tests/references/test_reticolo_rule_paths_golden.py"
+  ],
+  "provenance_status": "complete",
+  "sources": {
+    "references[0].independence": "the generator process imports numpy, scipy and the cases module only; the cases module imports numpy only",
+    "comparison": "tests/references/README.md row 'RETICOLO, the rule's other paths'"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "generator.product_commit": "the generator does not load the product and records no commit",
+    "generator.clean_tree": "the generator does not load the product and records no commit",
+    "outcomes.matched": "what the comparison found is in the consumer test and tests/references/README.md",
+    "outcomes.not_matched": "what the comparison found is in the consumer test and tests/references/README.md",
+    "outcomes.reference_self_check": "what the comparison found is in the consumer test and tests/references/README.md",
+    "outcomes.failed_or_discarded": "what the comparison found is in the consumer test and tests/references/README.md",
+    "outcomes.not_run": "what the comparison found is in the consumer test and tests/references/README.md"
+  }
+}

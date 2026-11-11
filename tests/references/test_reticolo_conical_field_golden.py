@@ -105,7 +105,7 @@ def _in_our_frame(e, theta, phi):
     return _depth_frame(e) * np.exp(-1j * (kx + ky) * PERIOD / 2)
 
 
-def _reconstruct(stack, theta, phi, pol, discontinuous='fourier'):
+def _reconstruct(stack, theta, phi, pol, reconstruction='plain'):
     # STACKS and the comparison use downward depth, top layer first; public Wavebit uses
     # height, bottom layer first, as RETICOLO's raw archive does.
     thickness, structure = STACKS[stack]
@@ -119,7 +119,7 @@ def _reconstruct(stack, theta, phi, pol, discontinuous='fourier'):
                           fourier_coefficients='integrated', answers='field')
     solver.solve()
     cell = np.asarray(solver.reconstruct_field(sample_x=RES_X, sample_y=1, sample_z=RES_Z,
-                                               discontinuous=discontinuous))
+                                               reconstruction=reconstruction))
     return cell[0, ::-1] * Z_PARITY                                 # the one incidence requested
 
 
@@ -194,9 +194,9 @@ def test_the_discontinuous_component_is_the_known_exception(stack, theta, phi, p
     agrees to machine precision, this fails and whoever did it has to rewrite the story rather
     than inherit a stale caveat.
 
-    The cause is RETICOLO's continuity rule for ``E_x`` (``champ=1``: the ``D_x`` series divided by
-    ``eps(x)``), not truncation noise; ``discontinuous='continuity'`` agrees to 1e-13 --
-    :func:`test_the_continuity_rule_matches_reticolo_on_every_slot`. This bounds the default.
+    The cause is RETICOLO's rule for ``E_x`` (``champ=1``: the ``D_x`` series divided by
+    ``eps(x)``), not truncation noise; ``reconstruction='lalanne'`` agrees to 1e-13 --
+    :func:`test_the_lalanne_rule_matches_reticolo_on_every_slot`. This bounds the default.
     """
     g = _golden()
     ref = _in_our_frame(g[key(stack, theta, phi, pol)], theta, phi)
@@ -322,11 +322,11 @@ def test_the_patterned_stacks_are_actually_patterned(stack):
 
 
 @pytest.mark.parametrize('stack,theta,phi,pol', CASES, ids=IDS)
-def test_the_continuity_rule_matches_reticolo_on_every_slot(stack, theta, phi, pol):
-    """``discontinuous='continuity'`` is RETICOLO's ``champ=1``: six slots at 1e-12, ``E_x`` included."""
+def test_the_lalanne_rule_matches_reticolo_on_every_slot(stack, theta, phi, pol):
+    """``reconstruction='lalanne'`` is RETICOLO's ``champ=1``: six slots at 1e-12, ``E_x`` included."""
     g = _golden()
     ref = _in_our_frame(g[key(stack, theta, phi, pol)], theta, phi)
-    got = _reconstruct(stack, theta, phi, pol, discontinuous='continuity')
+    got = _reconstruct(stack, theta, phi, pol, reconstruction='lalanne')
     cell = np.max(np.abs(ref))
     for c in range(6):
         amp = np.max(np.abs(ref[..., c]))

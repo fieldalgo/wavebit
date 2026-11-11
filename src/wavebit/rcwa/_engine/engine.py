@@ -58,6 +58,10 @@ from wavebit.materials.response import refractive_index_from_eps
 from wavebit.materials._tabulated import TabulatedMaterial
 from wavebit.materials._tabulated import evaluate_material
 from wavebit.materials._tabulated import evaluate_structure
+from wavebit.rcwa._engine.lalanne import lalanne_rows
+from wavebit.rcwa._engine.lalanne import layers_holding
+from wavebit.rcwa._engine.lalanne import refusal as lalanne_refusal
+from wavebit.rcwa._engine.lalanne import solved_structure
 from wavebit.rcwa._engine.enums import Answers
 from wavebit.rcwa._engine.enums import DEFAULT_ANSWERS
 from wavebit.rcwa._engine.enums import DEFAULT_FACTORIZATION
@@ -84,6 +88,7 @@ from wavebit.rcwa._engine.enums import coefficients_of
 from wavebit.rcwa._engine.enums import factorization_of
 from wavebit.rcwa._engine.enums import formulation_of
 from wavebit.rcwa._engine.enums import resolve_fourier_options
+from wavebit.rcwa._engine.fields import _require_solved
 from wavebit.rcwa._engine.fields import field_1d
 from wavebit.rcwa._engine.fields import field_1d_conical
 from wavebit.rcwa._engine.fields import field_2d
@@ -750,7 +755,8 @@ def _centred(a, odd):
 
 
 #: The attributes a solve leaves behind for reconstruction, as opposed to the scene's conditions.
-_SOLVE_STATE = ('layer_info_list', 'T1', '_scattering', '_merged_field_state')
+_SOLVE_STATE = ('layer_info_list', 'T1', '_scattering', '_merged_field_state', '_solved_structure',
+                '_solved_mu')
 
 
 def _efficiency_only(de_ri, de_ti, power_entering):
@@ -1105,6 +1111,12 @@ class CoreSolveMixin:
             raise ValueError(
                 f"incidence_side must be 'top' or 'bottom', got {value!r}")
         self._incidence_side = value
+
+    def _field_kind(self):
+        """Which reconstruction this solve's field takes, as ``FieldState`` names them."""
+        if self._grating_type == 0:
+            return 'te' if self.tetm_index == 0 else 'tm'
+        return 'conical' if self._grating_type == 1 else self._formulation_assigned.value
 
     @property
     def _kernel_incidence_side(self):
@@ -2587,6 +2599,23 @@ class CoreSolveMixin:
         """Recast the stored lengths without choosing a new cell or changing its basis."""
         self._period = self._as_lengths(period, pair=True)
 
+    def _refuse_a_negative_period(self):
+        """A negative length is not ``lattice=diag(...)``, which takes the positive basis.
+
+        It reversed kx against the same raster, a mirrored solve, while everything read off the
+        raster stayed where it was drawn. Measured: the Lalanne rule divided H_x by mu=3 on the
+        wrong side. A trace has no sign to read here; the rule masks that case instead.
+
+        Asked by the solve and not by the setter. ``SolverJax._tree_unflatten`` rebuilds through
+        ``__init__``, and ``jax.grad`` hands back a solver with gradients in its slots, which have
+        any sign: the setter refused ``jax.grad`` of ``T`` on an ordinary positive cell.
+        """
+        from wavebit.rcwa._engine.field_result import _host_value
+        host = _host_value(self._period)
+        if host is not None and _np.any(_np.real(host) < 0):
+            raise ValueError(f'period: a length is positive; got {host.tolist()}. '
+                             'A cell with a negative side is given as `lattice=`.')
+
     @property
     def thickness(self):
         return self._thickness
@@ -2829,7 +2858,10 @@ class CoreSolveMixin:
         k_x, k_y = self._incident_kxy(self.wavelength)
         A = as_array(xp, self.lattice.columns, dtype=xp.real(k_x).dtype, device=_device_of(k_x))
         k0 = 2 * _np.pi / self.wavelength
-        phase = -0.5j * k0 * (k_x * (A[0, 0] + A[0, 1]) + k_y * (A[1, 0] + A[1, 1]))
+        # A separable cell's kernels sample from its corner half a positive period below the centre,
+        # whichever way a side was written (`fields._axis_samples`): a skewed one walks its basis.
+        a, b = (xp.abs(A[0, 0]), xp.abs(A[1, 1])) if self.lattice_is_axis_aligned else (A[0, 0], A[1, 1])
+        phase = -0.5j * k0 * (k_x * (a + A[0, 1]) + k_y * (A[1, 0] + b))
         return xp.astype(xp.exp(phase), self.complex_dtype)
 
     @device_scoped
@@ -2942,6 +2974,12 @@ class CoreSolveMixin:
         #: The scene this solve was posed with, so `reconstruct_field` can tell whether it is
         #: still being asked about the same one. See `_reconstruction_scene`.
         self._solved_scene = self._reconstruction_scene()
+        #: The structure this solve was posed with, which the Lalanne rule reads. Under
+        #: `answers='field'` alone, the one rung that can reach the rule.
+        self._solved_structure = (solved_structure(self.structure)
+                                  if self._answers.covers(Answers.FIELD) else None)
+        self._solved_mu = (solved_structure(self._mu)
+                           if self._answers.covers(Answers.FIELD) else None)
         odd = centre_parity(*self.order_window)
         for key in ('incident', 's_inc', 'p_inc'):
             sub = out.get(key)
@@ -4127,10 +4165,16 @@ class CoreFactorizationMixin:
             (epx_conv_all, epy_conv_all, epz_conv_i_all, epxy_conv_all, epyx_conv_all,
              epxz_conv_all, epyz_conv_all, epzx_conv_all, epzy_conv_all), *window)
         mu = swap_fourier_origin(mu, *window)
-        return self._solve_conv(
+        out = self._solve_conv(
             *eps, mu=mu,
             mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
             layer_dng=self._layer_double_negative(like=epx_conv_all) if mu is not None else None)
+        # These matrices need not be the solver's structure, so nothing read off it describes them.
+        self._solved_structure = self._solved_mu = None
+        state = getattr(out, '_field_state', None)
+        if state is not None:
+            state.structure = state.mu = None
+        return out
 
     @device_scoped
     def _solve_conv(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
@@ -4148,6 +4192,7 @@ class CoreFactorizationMixin:
         ``_uniform`` likewise carries raw scalar materials only for scene-built matrices;
         it never substitutes the scene for caller-supplied convolution matrices.
         """
+        self._refuse_a_negative_period()
         # Half-space terms handed in here need not be the scene's materials, which the setters
         # already checked; a magnetic pair is held to the same refusal of an active, propagating
         # double negative.
@@ -4757,6 +4802,11 @@ class CoreFactorizationMixin:
     #: The third non-scene: this solver's conditions moved in a call whose solve stayed inside
     #: it -- JAX's compiled `solve_field`. Set by `_forget_the_solve`.
     _SOLVED_ELSEWHERE = object()
+    #: A copy of the last solve's structure (:func:`~wavebit.rcwa._engine.lalanne.
+    #: solved_structure`), and of a raster's ``mu``; ``None`` when it answered less than the field
+    #: or was handed matrices.
+    _solved_structure = None
+    _solved_mu = None
 
     @_contextlib.contextmanager
     def _solve_state_scope(self):
@@ -4806,6 +4856,7 @@ class CoreFactorizationMixin:
         self._scattering = None
         self._merged_field_state = None
         self._solved_scene = self._SOLVED_ELSEWHERE
+        self._solved_structure = self._solved_mu = None
 
     def _reconstruction_scene(self):
         """The live conditions a reconstruction reads, as concrete numbers -- or ``None``.
@@ -4934,97 +4985,34 @@ class CoreFactorizationMixin:
             'the field after re-solving. Call solve() again first.')
 
     @device_scoped
-    def _refuse_continuity(self):
-        """Refuse ``discontinuous='continuity'`` where it is not built yet, by name."""
-        if self._grating_type == 2 and self._formulation_assigned == Formulation.FIRST_ORDER:
-            raise NotImplementedError(
-                "discontinuous='continuity' is built on the second-order 2D reconstruction; the "
-                'first-order formulation still takes the Fourier sum.')
-        if self._grating_type == 2 and _np.ndim(self.order_kxy()[0]) != 1:
-            raise NotImplementedError(
-                "discontinuous='continuity' applies its rule along the cell's x and y lines; a "
-                'skewed lattice has no such lines and is refused.')
-        if self.modeling_path != ModelingPath.RASTER:
-            raise NotImplementedError(
-                "discontinuous='continuity' reads eps at the sample points from a raster "
-                'structure; a shape structure is not supported yet.')
-        if self._has_tensor_materials():
-            raise NotImplementedError(
-                "discontinuous='continuity' divides D_x by a scalar eps; a tensor material "
-                'couples D_x to more than E_x and is refused.')
+    def _refuse_lalanne(self):
+        """Refuse ``reconstruction='lalanne'`` where it is not built yet, by name."""
+        # A solve that merged layers answers from its field state, which refuses for itself.
         if self._merged_field_state is not None:
-            raise NotImplementedError(
-                "discontinuous='continuity' is not available after a solve that merged layers "
-                'into its half-spaces.')
+            return
+        # First what any reconstruction asks, so a solve that kept no field state says so and a
+        # structure of `None` past this point can only be matrices handed to `solve_conv`.
+        _require_solved(self.T1, self.layer_info_list)
+        kx, ky = self.order_kxy()
+        message = lalanne_refusal(self._field_kind(), self._solved_structure, self.lattice, kx, ky,
+                                  self._solved_mu)
+        if message is not None:
+            raise NotImplementedError(message)
 
-    @staticmethod
-    def _sample_pixels(spec, period, n_pixels, axis):
-        """The raster pixel under each sample along one axis, for the continuity rule.
+    def _lalanne_rows(self, sample_x, sample_y, backside, held=None):
+        """:func:`~wavebit.rcwa._engine.lalanne.lalanne_rows` in the kernels' record order.
 
-        Pixel ``j`` covers ``[j, j+1) * period / n_pixels`` from the cell's negative edge, so a
-        sample is read from the pixel it falls in, periodically. A sample exactly on a wall
-        between two permittivities belongs to the pixel on its positive side.
+        The kernels append records from the top public layer down; a backside (public top)
+        incidence solves the mirrored scene, which reverses that.
         """
-        from wavebit.rcwa._engine.field_result import _host_value
-        if is_count(spec):
-            corner = _np.linspace(0., 1., int(spec))
-        else:
-            points = _host_value(spec)
-            if points is None or period is None:
-                raise ValueError(f"discontinuous='continuity' needs concrete {axis} and period "
-                                 'to choose the raster pixel under each sample.')
-            corner = _np.asarray(points, dtype=float) / float(period) + 0.5
-        # Half a part in 1e9 lifts a sample that rounding put just below a pixel edge it sits on.
-        return _np.floor(corner * n_pixels + 1e-9).astype(int) % n_pixels
-
-    def _continuity_rows(self, sample_x, sample_y, backside):
-        """What the continuity rule reads off each kernel layer record, in its order.
-
-        ``None`` where the layer is uniform -- it keeps the Fourier sum, bit for bit, since there
-        is nothing for the rule to change there. Otherwise, on the 1D paths, ``eps`` at the x
-        samples ``(n_x,)``; on the 2D path a triple ``(ops_x, ops_y, eps)``: ``ops_x[j]`` is Li's
-        inverse rule ``[[1/eps]]_x^-1`` along the raster row under the ``j``-th y sample,
-        ``ops_y[i]`` the same along the column under the ``i``-th x sample, and ``eps`` the
-        ``(n_y, n_x)`` permittivity at the samples
-        (:func:`wavebit.rcwa._engine.fields._continuity_2d`).
-        """
-        from wavebit.rcwa._engine.factorization import line_inverse_rules
-        from wavebit.rcwa._engine.field_result import _host_value
-        xp = self.xp
-        structure = self.structure
-        periods = _lattice.periods_of(self.lattice)
-        columns = self._sample_pixels(sample_x, _host_value(periods[0]), structure.shape[-1],
-                                      'sample_x')
-        two_d = self._grating_type == 2
-        if two_d:
-            lines = self._sample_pixels(sample_y, _host_value(periods[1]), structure.shape[-2],
-                                        'sample_y')
-            kx, ky = self.order_kxy()
-            half_u, half_v = (kx.shape[0] - 1) // 2, (ky.shape[0] - 1) // 2
-        rows = []
-        for layer in range(structure.shape[0]):
-            grid = structure[layer] if two_d else structure[layer, 0]
-            values = _host_value(grid)
-            if values is not None and _np.all(values == values.flat[0]):
-                rows.append(None)
-                continue
-            dev = _device_of(grid)
-            at_x = as_array(xp, columns, device=dev)
-            if not two_d:
-                rows.append(xp.take(grid, at_x, axis=0))
-                continue
-            at_y = as_array(xp, lines, device=dev)
-            ops_x = xp.take(line_inverse_rules(xp, grid, half_u), at_y, axis=0)
-            ops_y = xp.take(line_inverse_rules(xp, xp.permute_dims(grid, (1, 0)), half_v),
-                            at_x, axis=0)
-            eps = xp.take(xp.take(grid, at_y, axis=0), at_x, axis=1)
-            rows.append((ops_x, ops_y, eps))
-        # The kernels append records from the top public layer down; a backside (public
-        # top) incidence solves the mirrored scene, which reverses that.
+        kx, ky = self.order_kxy()
+        rows = lalanne_rows(self.xp, self._solved_structure, self._solved_mu, self.lattice, kx, ky,
+                            self.float_dtype, self.complex_dtype, self._grating_type == 2,
+                            sample_x, sample_y, held)
         return rows if backside else rows[::-1]
 
     def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('incident',),
-                          discontinuous='fourier'):
+                          reconstruction='plain'):
         """Reconstruct the field from the state left behind by the last solve.
 
         ``sample_x`` / ``sample_y`` / ``sample_z`` each take either a **count** -- a uniform
@@ -5042,14 +5030,19 @@ class CoreFactorizationMixin:
         may jump across material interfaces. With explicit ``sample_z`` the returned z axis is
         exactly the request, in the caller's order, rather than ``sample_z * n_layers``.
 
-        ``discontinuous`` chooses how the component normal to a patterned layer's walls is
-        rebuilt: ``'fourier'`` (the default) sums its own coefficients, which ring at every wall;
-        ``'continuity'`` sums the continuous ``D_x`` series and divides by ``eps`` at each sample
+        ``reconstruction`` chooses how the component normal to a patterned layer's walls is
+        rebuilt: ``'plain'`` (the default) sums its own coefficients, which ring at every wall;
+        ``'lalanne'`` sums the continuous ``D_x`` series and divides by ``eps`` at each sample
         (P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357 (1998); RETICOLO's ``champ=1``). It
         changes ``E_x`` in patterned layers only on the 1D TM and conical paths, and ``E_x`` and
-        ``E_y`` on the 2D path, each summed line by line (``E_x`` along the row under the sample,
-        ``E_y`` along the column); it needs a raster structure and is refused elsewhere
-        (:meth:`_refuse_continuity`).
+        ``E_y`` on the 2D path, each summed line by line (``E_x`` along the row through the sample,
+        ``E_y`` along the column). A layer that names a permeability takes the same rule for ``H``
+        with ``B`` and ``mu``: ``H_x`` on the 1D TE and conical paths, ``H_x`` and ``H_y`` on the
+        2D path. A diagonal tensor reads each axis's own entry. On a shape structure it takes walls
+        along x and y; what it does not take is refused by name (:meth:`_refuse_lalanne`). It reads the structure the
+        solve was posed with, whatever has been assigned since. Its derivative holds each
+        sample fixed, so it leaves out a wall sweeping across a sample: an objective over an area
+        takes ``'plain'``.
 
         ``incidences`` names which of the incidences the solve carries to reconstruct, one
         leading axis entry each, **in the order asked for**: ``'incident'`` is the incidence the
@@ -5087,24 +5080,25 @@ class CoreFactorizationMixin:
         """
         self._require_field_declaration()
         self._reject_stale_field_scene()
-        if discontinuous not in ('fourier', 'continuity'):
-            raise ValueError(f"discontinuous must be 'fourier' or 'continuity', not {discontinuous!r}.")
-        continuity = discontinuous == 'continuity'
-        if continuity:
-            self._refuse_continuity()
+        if reconstruction not in ('plain', 'lalanne'):
+            raise ValueError(f"reconstruction must be 'plain' or 'lalanne', not {reconstruction!r}.")
+        lalanne = reconstruction == 'lalanne'
+        if lalanne:
+            self._refuse_lalanne()
         if self._merged_field_state is not None:
-            return self._merged_field_cell(sample_x, sample_y, sample_z, incidences)
+            return self._merged_field_cell(sample_x, sample_y, sample_z, incidences, reconstruction)
         # Top illumination walks downward, so restate public heights in that propagation
         # frame before assigning samples to layers. `backside` is the kernels' word -- their
         # 'bottom' port -- and since 2026-09-21 it means public TOP incidence; public bottom
         # incidence walks the scene as given (see `_kernel_incidence_side`).
         backside = self._kernel_incidence_side == 'bottom'
         counted_z = is_count(sample_z)
+        held = layers_holding(sample_z, self.thickness) if lalanne else None
         if backside:
             sample_z = to_mirrored_z(sample_z, self.thickness)
         kx, ky = self.order_kxy()
 
-        eps_rows = self._continuity_rows(sample_x, sample_y, backside) if continuity else None
+        rule_rows = self._lalanne_rows(sample_x, sample_y, backside, held) if lalanne else None
         if self._grating_type == 0:
             sample_y = 1
             field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list,
@@ -5112,14 +5106,14 @@ class CoreFactorizationMixin:
                                   sample_x=sample_x, sample_y=sample_y, sample_z=sample_z,
                                   incidences=incidences,
                                   interface_side='left' if backside else 'right',
-                                  eps_rows=eps_rows)
+                                  rule_rows=rule_rows)
         elif self._grating_type == 1:
             field_cell = field_1d_conical(self.wavelength, kx, ky, self.T1,
                                           self.layer_info_list, self.lattice,
                                           sample_x=sample_x, sample_y=sample_y,
                                           sample_z=sample_z, incidences=incidences,
                                           interface_side='left' if backside else 'right',
-                                          eps_rows=eps_rows)
+                                          rule_rows=rule_rows)
         elif self._formulation_assigned == Formulation.FIRST_ORDER:
             # The grating type cannot answer this: the first-order path sets it to 2 as well,
             # so branching on it alone would hand a first-order solve to the second-order
@@ -5130,14 +5124,15 @@ class CoreFactorizationMixin:
                                               self.layer_info_list, self.lattice,
                                               sample_x=sample_x, sample_y=sample_y,
                                               sample_z=sample_z, incidences=incidences,
-                                              interface_side='left' if backside else 'right')
+                                              interface_side='left' if backside else 'right',
+                                              rule_rows=rule_rows)
         else:
             field_cell = field_2d(self.wavelength, kx, ky, self.T1,
                                   self.layer_info_list, self.lattice,
                                   sample_x=sample_x, sample_y=sample_y,
                                   sample_z=sample_z, incidences=incidences,
                                   interface_side='left' if backside else 'right',
-                                  eps_rows=eps_rows)
+                                  rule_rows=rule_rows)
 
         # The kernels' state describes the field of their corner column (`_kernel_lit`), whose
         # incident wave is unit at the cell corner; the public incidence is unit at the centre.
@@ -5154,7 +5149,7 @@ class CoreFactorizationMixin:
 
         return field_cell
 
-    def _merged_field_cell(self, sample_x, sample_y, sample_z, incidences):
+    def _merged_field_cell(self, sample_x, sample_y, sample_z, incidences, reconstruction='plain'):
         """:meth:`reconstruct_field` after a solve that merged layers into its half-spaces.
 
         The kernels' records cover the remaining stack alone, so the cell comes from the solve's
@@ -5176,10 +5171,11 @@ class CoreFactorizationMixin:
             incidence_indices(incidences)
         grid = self._door_grid(state.data['lattice'], sample_x, sample_y)
         sample_z = self._door_heights(sample_z)
+        rule = state._lalanne_rule(self.xp, sample_x, sample_y, reconstruction, sample_z)
         if self._grating_type == 0:
-            cell = state.reconstruct_on(grid, sample_z, 'incident')
+            cell = state.reconstruct_on(grid, sample_z, 'incident', rule)
             return cell[..., [1, 3, 5] if self.tetm_index == 0 else [4, 0, 2]]
-        return self.xp.stack([state.reconstruct_on(grid, sample_z, name) for name in incidences],
+        return self.xp.stack([state.reconstruct_on(grid, sample_z, name, rule) for name in incidences],
                              axis=0)
 
     def _door_grid(self, lattice, sample_x, sample_y):
@@ -5777,6 +5773,7 @@ class CoreFactorizationMixin:
 
     def _freeze_geometry(self):
         """:meth:`freeze_geometry` past its conditions."""
+        self._refuse_a_negative_period()
         if self._has_tensor_materials():
             geometry = _anisotropy.freeze(self)
             # Stamped like the scalar records below, so one check covers both kinds of scene.

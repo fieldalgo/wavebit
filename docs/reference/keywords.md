@@ -349,7 +349,7 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 | `execution` | `execution.backend`, `execution.backend_unavailable`, `execution.device`, `execution.device_unavailable`, `execution.precision`, `execution.jax_x64`, `execution.backend_autodiff` (`rcwa`); `execution.cuda_scope` (outside the qualified FDTD CUDA route) | every solver; `fdtd` |
 | `experimental` | `experimental.orders` | `rcwa.experimental` |
 | `fdtd` | `fdtd.invalid` (also a `Domain`, `Plane` or `TimeSeriesMonitor` name or component its constructor refuses), `fdtd.unsupported`, `fdtd.padding_continuation`, `fdtd.torch_transform` (a Torch run under `torch.func.vmap`, `jacfwd` or `hessian`, or a checkpointed one under `jacrev`) | `fdtd` |
-| `field` | `field.coordinates`, `field.side`, `field.part` (`result.boundary_fields`) | `rcwa` |
+| `field` | `field.coordinates`, `field.side`, `field.part` (`result.boundary_fields`), `field.reconstruction` | `rcwa` |
 | `geometry` | `geometry.cell_snapped` (a warning) | `fdtd` |
 | `initial` | `initial.type` | `fdtd` |
 | `job`, `record` | `job.encoding` (also a saved declaration or material table its constructor refuses), `job.schema`, `record.format` | `wavebit.Job`, run records |
