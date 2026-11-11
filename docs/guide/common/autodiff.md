@@ -86,6 +86,24 @@ This is the lifecycle's stated contract, not a defect. The [unified API design](
 
 Current examples for [contact](../../../examples/rcwa/nvf_contact.py), [tangent ellipses](../../../examples/rcwa/nvf_curved_contact.py) and [painted curves](../../../examples/rcwa/nvf_curved_painting.py) use the explicit host policy. The [compatibility autodiff manual](../../migration/autodiff-v1.md) preserves the earlier unchecked traced-replay workflow for historical reproduction; its performance measurements do not establish the callback policy's speed.
 
+### Tied samples on a non-rectangular cell under jit
+
+*Measured 2026-11-11: CPU, JAX 0.12.0.1 with x64, NumPy 2.5.4.*
+
+On a hexagonal or other non-rectangular cell, the shape NVF normal field carries each sample to the nearest periodic image of a shape's centre. Some samples sit exactly on a Wigner–Seitz edge, equidistant from two images. Either image is valid there; the fold keeps the first candidate unless another is strictly nearer. NumPy, PyTorch and eager JAX place the samples at the same bits and make the same choice. Under `jax.jit`, XLA fuses the squared-distance arithmetic and can round one tied candidate an ulp apart, so the fold keeps the other image. On a hexagonal cell with a centred shape, that happened on 1 of 441 samples at `shape_nvf_grid_size=21`, 2 of 4,225 at 65 and 8 of 1,048,576 at the default grid (1024). The normal flips at those samples, so a jitted run solves a very slightly different layer.
+
+Measured on a circle (radius 0.28) and a tilted ellipse in a unit hexagonal cell, orders (3, 3), one s-polarized plane wave. The table compares `jax.jit` with eager JAX through one preparation:
+
+| Quantity | Grid 21 | Grid 65 | Default grid |
+| --- | --- | --- | --- |
+| `d(sum T)/d(eps)` of the region, relative (circle, ellipse) | 2.6e-6, 3.4e-6 | 5.5e-6, 2.4e-6 | 9.2e-8, 4.1e-8 |
+| `sum T`, absolute (circle, ellipse) | 1.4e-7, 1.0e-8 | 2.2e-7, 8.9e-8 | 3.0e-9, 6.8e-10 |
+| `d(sum T)/d(radius)` under `topology_check='host'`, relative (circle) | 6.0e-5 | 6.5e-5 | 5.9e-8 |
+
+The derivative differences are smaller than the grid's own discretization error. At grids 21 and 65 they are 1.2–315 times smaller than the derivative's change from that grid to the default grid. At the default grid, the permittivity derivative's difference is 4.6 (circle) and 15 (ellipse) times smaller than its change from 1024 to 2048 points. `sum T` is not always below that error: at grid 65 the circle's jit difference (2.2e-7) exceeds the change from grid 65 to the default grid (1.4e-7). On a square cell and on an oblique cell (`Lattice.oblique(1., 1.1, 1.3)`), which put no sample on a tie at the default grid, the same comparison gives 4e-14 and 6e-14.
+
+It can occur only on a non-rectangular cell (a rectangular cell folds without candidates), on a grid that puts samples on a cell edge, and only under `jax.jit`, including `jax.jit(jax.grad(...))`. Eager JAX agrees with NumPy (`sum T` to 5.6e-15 here) and with PyTorch ([`tests/api/test_eager_grad_parity.py`](../../../tests/api/test_eager_grad_parity.py) checks hexagonal grids with samples on a cell edge). A traced radius or centre under `jax.jit` is refused by the default `topology_check='device'` (`prepared.host_topology`). Under `topology_check='host'`, where it is admitted, the shape derivative carries the same tie, as the last row shows. The tie rule is kept by design: a rule that is bit-reproducible under jit would change the NumPy and PyTorch values at tied samples. If a jitted result must match eager JAX more closely than this, run it eagerly or converge the grid.
+
 ### A held raster preparation under jit
 
 Raster values stay live, but some Fourier paths record which pixels share a phase when they are prepared. Under `jax.jit`, a run given a traced pattern whose phase partition differs from the prepared one returns NaN outputs, and `result.validity.checks['raster_partition']` is false. It does not return a stale answer. On PyTorch, the same run raises `IncompatibleProblemError`. A pattern that is a constant of the trace, with only the wavelength, an angle or a thickness traced, is checked as an eager run checks it: on a recording path a moved one raises `IncompatibleProblemError` with code `prepared.topology`, the error an eager run gives.
