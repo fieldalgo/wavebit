@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 
 from tests.references._reticolo_magnetic_field_cases import (
-    ANGLE_1D, ANGLE_2D, ANGLE_CONICAL, EINC, GRID_2D, MATERIALS, NAMES, NPTS, N_BOT, N_TOP, ORDER_1D, ORDER_2D,
+    ANGLE_1D, ANGLE_2D, ANGLE_CONICAL, EINC, MATERIALS, NAMES, NPTS, N_BOT, N_TOP, ORDER_1D, ORDER_2D,
     PERIOD_1D, PERIOD_2D, STACK_1D, STACK_2D, WL, fields_1d, grid_fields, key)
 from tools.repository_paths import repository_path
 from wavebit import Material, Units
