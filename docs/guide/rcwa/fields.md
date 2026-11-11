@@ -323,11 +323,15 @@ metadata records the rule under `'reconstruction'` when it is not the default.
   material, a derivative holds each sample point fixed, and agrees with a finite difference off
   the walls. The choice of pixel, or which side of a wall a sample is on, is not differentiated. So
   it is not the derivative of an integral over an area: a wall sweeping across a sample is left
-  out, and `E_n` jumps by the contrast there. On that block at order 8, with `'p'` light, off centre
-  at `cx = 13` and a 32 by 32 grid of samples, moving the shape cannot change the mean of `|E_x|^2`
-  over the cell, and the default's derivative is 1e-17 where the rule's is 2.4e-4; growing it gives
-  +3.7e-3 where a fine finite difference of the mean gives -1.8e-3. For an objective over an area,
-  take `'plain'`. An outline's derivative moves vertices it does not check: move both ends of a
+  out, and `E_n` jumps by the contrast there. And the rule's field jumps, so a sampled mean of it
+  is not the integral. On that block at order 8, with `'p'` light, off centre at `cx = 13` and a
+  32 by 32 grid of samples, moving the shape cannot change the mean of `|E_x|^2` over the cell.
+  The default's derivative is 1e-17. The rule's is 2.4e-4: the swept walls' parts cancel on a
+  move, block to air on one face and air to block on the other, and what remains is the slope of
+  the sampled mean, which wobbles as each face nears or leaves its neighbouring samples. Growing
+  the shape, the swept parts add: +3.7e-3 where the integral's slope is about -1.9e-3 (a
+  straight-line fit over dense samples gives -1.95e-3). For an objective over an area, take
+  `'plain'`. An outline's derivative moves vertices it does not check: move both ends of a
   wall together, or the wall leaves the shapes the rule answers for. A read takes the derivative
   its solve took: with the solve outside the differentiated call the derivative is zero, as it is
   for the default. A rectangular cell differentiates through `period=`; a `lattice=` differentiated

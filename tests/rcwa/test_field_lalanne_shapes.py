@@ -678,11 +678,17 @@ def test_an_outline_written_in_grad_tracers_is_read_by_value():
 def test_the_derivative_of_an_area_objective_misses_the_wall_crossing_a_sample():
     """Stated limit, not a target: ``eps`` at a sample is locally constant in the shape.
 
-    Moving a whole shape cannot change ``|E_x|^2`` averaged over the cell, so the true derivative
-    is 0. The Fourier sum's is, to rounding. The rule's derivative holds each point fixed, so it
-    leaves out what a wall sweeping across a sample does, and that term is large: ``E_n`` jumps by
-    the contrast there. On a rectangle growing in ``lx`` the sign itself comes out wrong
-    (+4.2e-4 against -2.7e-4 for a fine finite difference of the mean, at this order).
+    Moving a whole shape cannot change ``|E_x|^2`` integrated over the cell, so the true
+    derivative is 0. The Fourier sum's is 0 to rounding: its ``|E_x|^2`` holds orders up to
+    2N = 6, fewer than the 32 samples per axis, so its sampled mean is the integral. The rule's
+    field jumps at the walls, so its 32x32 mean is not the integral. As the shape moves, one face
+    nears the samples beside it and the other leaves its own, at different distances here (6.75
+    and 5.75 nm at ``cx = 13``), and the field there is steep, so the mean wobbles with the
+    position; the fixed-point derivative is that wobble's slope. The rule's derivative also
+    leaves out what a wall sweeping across samples does, but on a move the two faces' parts
+    cancel, block to air on one side and air to block on the other, so they are not what makes
+    it nonzero. On a rectangle growing in ``lx`` they add instead, and the sign itself comes out
+    wrong (+4.2e-4 against -2.7e-4 for a fine finite difference of the mean, at this order).
     ``docs/guide/rcwa/fields.md`` tells an area objective to take ``'plain'``.
     """
     jax = pytest.importorskip('jax')
