@@ -369,6 +369,19 @@ def _shared_half_space_plan(problem, execution):
     return MergePlan(bottom, top) if bottom or top else None
 
 
+def _unit_mu(xp, epsilon, named):
+    """The permeability of a sampled layer that names none, in the spelling the others' take.
+
+    A tensor layer's raster axes are ``(y, x, 3, 3)``, and its unit ``mu`` is the identity at each
+    pixel, not ones in all nine entries. A layer's ``epsilon`` says nothing about the other layers'
+    ``mu``: a tensor ``epsilon`` may sit beside a scalar ``mu``, and the reverse.
+    """
+    ones = xp.ones_like(epsilon[..., 0, 0] if epsilon.ndim == 4 else epsilon)
+    if all(m is None or m.ndim == 2 for m in named):
+        return ones
+    return ones[..., None, None] * xp.eye(3, dtype=epsilon.dtype, device=getattr(epsilon, 'device', None))
+
+
 def build_solver(problem, numerics, execution, wavelength):
     from ._factory import rcwa as legacy_rcwa
     xp = _namespace(execution)
@@ -398,8 +411,9 @@ def build_solver(problem, numerics, execution, wavelength):
         with _concrete_materials(execution):
             kwargs['structure'] = xp.stack([_array(xp, l.epsilon, execution, True) for l in problem.stack.layers])
             if any(l.mu is not None for l in problem.stack.layers):
-                kwargs['mu'] = xp.stack([xp.ones_like(_array(xp, l.epsilon, execution, True)) if l.mu is None
-                                        else _array(xp, l.mu, execution, True) for l in problem.stack.layers])
+                named = [None if l.mu is None else _array(xp, l.mu, execution, True) for l in problem.stack.layers]
+                kwargs['mu'] = xp.stack([_unit_mu(xp, _array(xp, l.epsilon, execution, True), named) if m is None else m
+                                         for l, m in zip(problem.stack.layers, named)])
     else:
         kwargs['structure'] = [dict(background=physical_material(l.background, wavelength, problem.units, execution),
                                     shapes=[region_recipe(r, wavelength, problem.units, execution) for r in l.regions])

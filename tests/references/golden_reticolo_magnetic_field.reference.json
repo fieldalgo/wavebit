@@ -1,0 +1,116 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_reticolo_magnetic_field",
+  "physics": "rcwa",
+  "comparison": "same-discretization",
+  "role": "external oracle for the Lalanne rule on H: a permeability varying over a layer, on the 2D, pure 1D and conical paths, under both of RETICOLO res3's rules",
+  "references": [
+    {
+      "tool": "RETICOLO",
+      "version": "V10",
+      "build": "V10_2025",
+      "modified": {
+        "value": false,
+        "description": "the V10_2025 tree as unpacked from the published archive"
+      },
+      "spdx": "CC-BY-4.0",
+      "source": "https://doi.org/10.5281/zenodo.14631951",
+      "install": {
+        "kind": "manual",
+        "command": "download V10 from the source record and point RETICOLO_PATH at reticolo_allege_v10"
+      },
+      "settings": "res3 raw cell for the cases of tests/references/_reticolo_magnetic_field_cases.py, champ=1 and champ=0, with mu put in through parm.res1.change_index; run in Octave through tests/references/interface/reticolo_res3_magnetic.m",
+      "discretization": "same truncation on both sides, and the same exact rectangles and bars (cases module)",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "tests/references/gen_goldens_reticolo_magnetic_field.py",
+    "sha256": "4474af0bedff0937c0d21b38fbaba108713378cda005da99505c2ca0f10d3478",
+    "command": "RETICOLO_PATH=... python tests/references/gen_goldens_reticolo_magnetic_field.py",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-10-31",
+  "environment": {
+    "python": "3.12.9",
+    "numpy": "2.5.1",
+    "octave": "9.4.0"
+  },
+  "cost": {
+    "wall_seconds": 12.0
+  },
+  "inputs": {
+    "described_by": "tests/references/gen_goldens_reticolo_magnetic_field.py"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": null,
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_reticolo_magnetic_field.npz",
+    "format": "npz",
+    "file_sha256": "8393ed9210f1e4d39be81e43015243bff6ca31e5fa560fb4adc361c180d07de1",
+    "arrays": [
+      "champ0__conical_p",
+      "champ0__conical_s",
+      "champ0__raster_p",
+      "champ0__raster_s",
+      "champ0__shapes_p",
+      "champ0__shapes_s",
+      "champ0__te_s",
+      "champ0__tm_p",
+      "champ1__conical_p",
+      "champ1__conical_s",
+      "champ1__raster_p",
+      "champ1__raster_s",
+      "champ1__shapes_p",
+      "champ1__shapes_s",
+      "champ1__te_s",
+      "champ1__tm_p",
+      "o_conical",
+      "o_raster",
+      "o_shapes",
+      "o_te",
+      "o_tm",
+      "x_1d",
+      "x_2d",
+      "y_2d",
+      "z_conical",
+      "z_raster",
+      "z_shapes",
+      "z_te",
+      "z_tm"
+    ]
+  },
+  "values_sha256": "a2a1c61e96ae0f9deb305f285c2554ee7dac4a04a09493c3704336c0d7650052",
+  "content_sha256": "fdd7c740cfe44670ef26869abb7409b5e5802db928182f9cfefb06a67efd5f53",
+  "consumers": [
+    "tests/references/test_reticolo_magnetic_field_golden.py"
+  ],
+  "provenance_status": "complete",
+  "sources": {
+    "references[0].independence": "the generator process imports numpy, scipy and the cases module only; the cases module imports numpy only",
+    "comparison": "tests/references/README.md row 'RETICOLO, a patterned permeability'"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "generator.product_commit": "the generator does not load the product and records no commit",
+    "generator.clean_tree": "the generator does not load the product and records no commit",
+    "outcomes.matched": "what the comparison found is in the consumer test and tests/references/README.md",
+    "outcomes.not_matched": "what the comparison found is in the consumer test and tests/references/README.md",
+    "outcomes.reference_self_check": "what the comparison found is in the consumer test and tests/references/README.md",
+    "outcomes.failed_or_discarded": "what the comparison found is in the consumer test and tests/references/README.md",
+    "outcomes.not_run": "what the comparison found is in the consumer test and tests/references/README.md"
+  }
+}

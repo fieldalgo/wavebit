@@ -9,14 +9,14 @@ matrices and every difference left is implementation and convention.
 **Two rules, two references.** RETICOLO's ``parm.res1.champ`` picks how ``res3`` rebuilds the
 in-plane ``E`` inside a patterned layer, and the golden stores both:
 
-* ``champ = 1`` is the line-wise continuity rule of P. Lalanne and M. P. Jurek, J. Mod. Opt. 45,
+* ``champ = 1`` is the line-wise Lalanne rule of P. Lalanne and M. P. Jurek, J. Mod. Opt. 45,
   1357 (1998): ``E_x`` summed over the y orders, turned into ``D_x`` by Li's inverse rule along
   the raster row under the sample, summed along x, divided by ``eps``; ``E_y`` the same with the
-  axes swapped. That is ``discontinuous='continuity'``, and it agrees on **all six** components.
-* ``champ = 0`` is the plain Fourier sum, this project's default ``'fourier'``. RETICOLO leaves
+  axes swapped. That is ``reconstruction='lalanne'``, and it agrees on **all six** components.
+* ``champ = 0`` is the plain Fourier sum, this project's default ``'plain'``. RETICOLO leaves
   ``E_z`` and ``H_z`` unset inside a layer under ``champ = 0`` (exactly zero, asserted below),
   so that comparison covers the four transverse components; the default's ``E_z`` and ``H_z``
-  are the continuity rule's, which ``champ = 1`` pins.
+  are the Lalanne rule's, which ``champ = 1`` pins.
 
 The two rules differ by about 0.3 in ``E_x`` and ``E_y`` on these layers, so each reference
 tells them apart by ten orders of magnitude over the tolerance.
@@ -39,9 +39,12 @@ import numpy as np
 import pytest
 
 from tests.references._reticolo_2d_field_cases import (
-    ANGLES, EINC, LAYERS, MAX_ORDER, NAMES, NPTS, N_BOT, N_TOP, PERIOD, WL, key, raster, samples,
-    thickness)
+    ANGLES, EINC, LAYERS, MAX_ORDER, NAMES, NPTS, N_BOT, N_TOP, OFF_GRID_ANGLE, OFF_GRID_LAYERS, PERIOD,
+    WL, blocks, key, off_grid_blocks, raster, samples, shapes, thickness)
+from wavebit import Material, Units
+from wavebit import rcwa as rcwa_api
 from wavebit.rcwa._factory import rcwa
+from wavebit.units import Z0
 
 GOLDEN = np.load(repository_path('tests/references/golden_reticolo_2d_field.npz'))
 
@@ -87,7 +90,7 @@ def _solver(angle, pol):
 def _ours(angle, pol, rule):
     x, y = samples()
     return np.asarray(_solver(angle, pol).reconstruct_field(
-        sample_x=x, sample_y=y, sample_z=_z(), discontinuous=rule))[0]
+        sample_x=x, sample_y=y, sample_z=_z(), reconstruction=rule))[0]
 
 
 def _gap(ours, theirs, slot):
@@ -106,17 +109,17 @@ def test_the_layout_is_the_one_assumed():
 
 
 @pytest.mark.parametrize('angle,pol', CASES)
-def test_the_continuity_rule_is_reticolo_champ_1_on_every_slot(angle, pol):
-    ours, theirs = _ours(angle, pol, 'continuity'), _reticolo(1, angle, pol)
+def test_the_lalanne_rule_is_reticolo_champ_1_on_every_slot(angle, pol):
+    ours, theirs = _ours(angle, pol, 'lalanne'), _reticolo(1, angle, pol)
     gaps = {name: _gap(ours, theirs, slot) for slot, name in enumerate(NAMES)}
-    assert max(gaps.values()) < TOL, gaps
+    assert all(gap < TOL for gap in gaps.values()), gaps
 
 
 @pytest.mark.parametrize('angle,pol', CASES)
 def test_the_fourier_sum_is_reticolo_champ_0_on_the_transverse_slots(angle, pol):
-    ours, theirs = _ours(angle, pol, 'fourier'), _reticolo(0, angle, pol)
+    ours, theirs = _ours(angle, pol, 'plain'), _reticolo(0, angle, pol)
     gaps = {NAMES[slot]: _gap(ours, theirs, slot) for slot in (0, 1, 3, 4)}
-    assert max(gaps.values()) < TOL, gaps
+    assert all(gap < TOL for gap in gaps.values()), gaps
     # What the comparison leaves out, and why: RETICOLO does not fill these under champ = 0.
     assert not np.any(theirs[..., [2, 5]])
 
@@ -124,8 +127,85 @@ def test_the_fourier_sum_is_reticolo_champ_0_on_the_transverse_slots(angle, pol)
 @pytest.mark.parametrize('angle,pol', CASES)
 def test_each_reference_tells_the_two_rules_apart(angle, pol):
     """The rules differ in ``E_x`` and ``E_y`` only, and by far more than the tolerance."""
-    plain, continuity = _ours(angle, pol, 'fourier'), _ours(angle, pol, 'continuity')
-    np.testing.assert_array_equal(plain[..., 2:], continuity[..., 2:])
+    plain, rule = _ours(angle, pol, 'plain'), _ours(angle, pol, 'lalanne')
+    np.testing.assert_array_equal(plain[..., 2:], rule[..., 2:])
     for slot in (0, 1):
-        assert _gap(plain, continuity, slot) > 1e-2
+        assert _gap(plain, rule, slot) > 1e-2
         assert _gap(plain, _reticolo(1, angle, pol), slot) > 1e-2
+
+
+# ------------------------------------------------------------------------- the same on shapes
+
+GOLDEN_OFF_GRID = np.load(repository_path('tests/references/golden_reticolo_2d_field_off_grid.npz'))
+
+
+def _on_shapes(layers, rows, angle, pol):
+    a_p, a_s = EINC[pol]
+    s = rcwa(backend='numpy', top=N_TOP ** 2, bot=N_BOT ** 2, period=list(PERIOD),
+             truncation_order=[MAX_ORDER] * 2, wavelength=WL,
+             thickness=[layer['thickness'] for layer in layers[::-1]],
+             structure=shapes(layers, rows), theta=np.deg2rad(angle[0]), phi=np.deg2rad(angle[1]),
+             polarization=(a_s, a_p), factorization='li', answers='field')
+    s.solve()
+    return s
+
+
+@pytest.mark.parametrize('angle,pol', CASES)
+def test_the_rule_on_shapes_is_champ_1_where_a_raster_draws_the_same_walls(angle, pol):
+    x, y = samples()
+    ours = np.asarray(_on_shapes(LAYERS, blocks, angle, pol).reconstruct_field(
+        sample_x=x, sample_y=y, sample_z=_z(), reconstruction='lalanne'))[0]
+    gaps = {name: _gap(ours, _reticolo(1, angle, pol), slot) for slot, name in enumerate(NAMES)}
+    assert all(gap < TOL for gap in gaps.values()), gaps
+
+
+@pytest.mark.parametrize('pol', list(EINC))
+def test_the_rule_on_shapes_is_champ_1_on_walls_no_raster_has(pol):
+    """No pixel line holds these walls, so this reads the rule off the shapes alone."""
+    x, y = samples()
+    z = GOLDEN_OFF_GRID['z'][_LAYER_ROWS].copy()
+    z[_TOP_FACES] -= 1e-9
+    solver = _on_shapes(OFF_GRID_LAYERS, off_grid_blocks, OFF_GRID_ANGLE, pol)
+    rule = np.asarray(solver.reconstruct_field(x, y, z, reconstruction='lalanne'))[0]
+    plain = np.asarray(solver.reconstruct_field(x, y, z))[0]
+    case = key(OFF_GRID_ANGLE, pol)
+    champ1 = np.transpose(GOLDEN_OFF_GRID[f'champ1__{case}'][_LAYER_ROWS], (0, 2, 1, 3))
+    champ0 = np.transpose(GOLDEN_OFF_GRID[f'champ0__{case}'][_LAYER_ROWS], (0, 2, 1, 3))
+    gaps = {name: _gap(rule, champ1, slot) for slot, name in enumerate(NAMES)}
+    assert all(gap < TOL for gap in gaps.values()), gaps
+    gaps = {NAMES[slot]: _gap(plain, champ0, slot) for slot in (0, 1, 3, 4)}
+    assert all(gap < TOL for gap in gaps.values()), gaps
+    assert _gap(plain, champ1, 0) > 0.1
+
+
+@pytest.mark.parametrize('pol', list(EINC))
+def test_a_result_of_the_current_api_is_champ_1_on_those_walls(pol):
+    """The door a user has, from the problem through ``Result.field``."""
+    def layer(entry):
+        regions = tuple(rcwa_api.Region(geometry=rcwa_api.Rectangle(size=(shape['lx'], shape['ly']),
+                                                                    center=(shape['cx'], shape['cy'])),
+                                        material=Material(shape['material']))
+                        for shape in entry['shapes'])
+        return regions, Material(entry['background'])
+
+    structure = shapes(OFF_GRID_LAYERS, off_grid_blocks)
+    layers = []
+    for entry, source in zip(structure, OFF_GRID_LAYERS[::-1]):
+        regions, background = layer(entry)
+        layers.append(rcwa_api.Layer(thickness=source['thickness'], background=background, regions=regions))
+    problem = rcwa_api.Problem(
+        units=Units(length='nm'),
+        stack=rcwa_api.Stack(period=tuple(PERIOD), top=Material(N_TOP ** 2), bottom=Material(N_BOT ** 2),
+                             layers=tuple(layers)),
+        excitation=rcwa_api.Excitation(wavelength=WL, sources=(rcwa_api.PlaneWave(
+            theta=np.deg2rad(OFF_GRID_ANGLE[0]), phi=np.deg2rad(OFF_GRID_ANGLE[1]), polarization=pol),)),
+        outputs=rcwa_api.Outputs(fields=True))
+    result = rcwa_api.run(problem, numerics=rcwa_api.Numerics(orders=(MAX_ORDER, MAX_ORDER), factorization='li'))
+    x, y = samples()
+    z = GOLDEN_OFF_GRID['z'][_LAYER_ROWS].copy()
+    z[_TOP_FACES] -= 1e-9
+    ours = np.array(result.field(x=x, y=y, z=z, reconstruction='lalanne').values[0])
+    ours[..., 3:] *= Z0
+    champ1 = np.transpose(GOLDEN_OFF_GRID[f'champ1__{key(OFF_GRID_ANGLE, pol)}'][_LAYER_ROWS], (0, 2, 1, 3))
+    gaps = {name: _gap(ours, champ1, slot) for slot, name in enumerate(NAMES)}
+    assert all(gap < TOL for gap in gaps.values()), gaps

@@ -118,7 +118,9 @@ the committed numbers. [The star lift](../../docs/validation/fdtd/fd-subpixel-oc
 | **fmmax**, the in-cell **field** | uniform stacks exactly (7.8e-16), **x-patterned layers to ~1e-4**, and an **x/y-patterned** one to ~3e-2 on both formulations — the only outside check of a field whose `ky` orders come from the structure | the `fwref` env | `golden_fmmax_field.npz` |
 | **RETICOLO**, the in-cell **field** | the *pure TE/TM 1D* path (`field_1d`), which the two rows above never reach — **1e-14 on gratings**, five components of six | Octave + `RETICOLO_PATH` | `golden_reticolo_field.npz` |
 | **RETICOLO**, the **conical** field | `field_1d_conical` on a *patterned* layer — an azimuth and a discontinuity at once, which nothing else here reached | same | `golden_reticolo_conical_field.npz` |
-| **RETICOLO**, the **2D** field | `field_2d` on two patterned layers of a crossed grating, under both of `res3`'s in-plane rules: `champ = 1` is `discontinuous='continuity'` on all six components and `champ = 0` the default on the four transverse ones, 4e-11 at worst; the two rules differ by about 0.3 in `Ex` and `Ey` | Octave + `RETICOLO_PATH`, through `octave` as a subprocess (no `oct2py`) | `golden_reticolo_2d_field.npz` |
+| **RETICOLO**, the **2D** field | `field_2d` on two patterned layers of a crossed grating, under both of `res3`'s in-plane rules: `champ = 1` is `reconstruction='lalanne'` on all six components and `champ = 0` the default on the four transverse ones, 4e-11 at worst; the two rules differ by about 0.3 in `Ex` and `Ey` | Octave + `RETICOLO_PATH`, through `octave` as a subprocess (no `oct2py`) | `golden_reticolo_2d_field.npz`, `golden_reticolo_2d_field_off_grid.npz` |
+| **RETICOLO**, a **patterned permeability** | the field on `field_2d` (shapes and a raster), `field_1d` and `field_1d_conical` with `mu` varying over a layer, put in through `parm.res1.change_index`: `champ = 1` is `reconstruction='lalanne'` on `H` as on `E`, 3.0e-11 at worst, where the default's `Hx` is 0.10 to 0.31 away. `res3`'s pure 1D branch rebuilds the normal component under either `champ` | Octave + `RETICOLO_PATH`, through `octave` as a subprocess (no `oct2py`) | `golden_reticolo_magnetic_field.npz` |
+| **RETICOLO**, the rule's **other paths** | `reconstruction='lalanne'` and the default against `champ = 1` and `champ = 0` on a diagonal tensor in a patterned layer (2D shapes and raster on both formulations, and one-row gratings), a uniform layer with one off-diagonal pair beside a patterned one, layers merged into a half-space, one order along either axis, incidence from below (`parm.res3.sens`, which keeps `s` and turns `p` over) and a dipole under a patterned layer (`rets` and `retchamp`, since `res3` has no source; one overall scale is read off the default) -- 5.9e-11 at worst over 339 comparisons. The tensor conical case asks for `nn = [N, 1]`: under `[N, 0]` with `change_index` RETICOLO's y-invariant branch does not conserve energy (R + T 0.95 and 1.12) | Octave + `RETICOLO_PATH` | `golden_reticolo_rule_paths.npz` |
 | **fmmax**, `Formulation.FFT` | `factorization='laurent'`, the same operator: **identity** on patterned layers -- 6.1e-13 to 3.2e-11 in total and per order, on a rectangular cell, a lossy metal and a hexagonal one -- once fmmax's sampled coefficients are extrapolated to the exact ones | the `fwref` env | `golden_fmmax_laurent.npz` |
 | **fmmax**, **double negatives** | gratings on a lossy double-negative substrate (1D and 2D, `\|mu\| != 1`), double-negative pixels inside a grating (patterned `eps` and `mu`), and a grating lit **from** a lossy double negative: every order's unpolarized `R` and `T`, ETM and SMM, through the `theta` door and the direct-`k` door -- **identity**, 2.7e-14 to 6.2e-12, once the quadrature is extrapolated away as for the row above | the `fwref` env | `golden_fmmax_dng.npz` |
 | **PyMoosh** 4.0.1 (MIT), **lossless double negatives** | flat multilayers with a lossless double negative as the substrate, as the lit superstrate, as an inner layer, and all three: `r`, `t`, `R`, `T`, TE and TM, four in-plane wavevectors each, on the TE/TM, 2D and first-order paths, ETM and SMM -- 8.8e-15 at worst. The case fmmax cannot arbitrate | a throwaway venv with PyMoosh 4.0.1 -- see its generator | `golden_pymoosh_dng.npz` |
@@ -528,17 +530,20 @@ each sample (P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)); on the p
 path it does so whatever `parm.res1.champ` says. This library's default sums `Ex`'s own series.
 The `Dx = eps*Ex` check above formed `D` pointwise *after* the ringing sum, which is why it
 could not close the gap; the rule sums `D`'s series instead. `reconstruct_field(...,
-discontinuous='continuity')` applies RETICOLO's rule and agrees with this golden to 3.6e-14 on
-every case, `Ex` included (`test_the_continuity_rule_matches_reticolo_on_every_slot`); the
+reconstruction='lalanne')` applies RETICOLO's rule and agrees with this golden to 3.6e-14 on
+every case, `Ex` included (`test_the_lalanne_rule_matches_reticolo_on_every_slot`); the
 default is unchanged and keeps the bounded exception. On which is closer to the true field:
 on a 1D TM bar (n = 3.5) against the rule's own `truncation_order = 800`, where the two rules
-agree to 2e-3 away from the walls, the continuity rule's RMS error in `Ex` is 2.5 to 7 times
+agree to 2e-3 away from the walls, the Lalanne rule's RMS error in `Ex` is 2.5 to 7 times
 smaller at every `truncation_order` from 10 to 80, and it does not ring.
 
 On a crossed grating `res3` applies the same rule line by line when `champ = 1` -- `Ex` along
 the row through each sample, `Ey` along the column -- and the plain sum when `champ = 0`.
 `golden_reticolo_2d_field.npz` stores both, and `test_reticolo_2d_field_golden.py` matches
-`discontinuous='continuity'` to the first and the default to the second.
+`reconstruction='lalanne'` to the first and the default to the second. A shape structure reads
+those lines off its outlines rather than off pixels, so the same test holds it to that golden, and
+to `golden_reticolo_2d_field_off_grid.npz`, the same stack with walls on no pixel line, which no
+raster states: 3.6e-11 at worst, where the default is 0.43 from `champ = 1` in `Ex`.
 
 Three things had to be measured, each worth O(1) when guessed wrong:
 
@@ -602,7 +607,7 @@ It lands in the same two tiers, measured over 24 cases (4 stacks x 3 angle pairs
 | --- | --- |
 | every component both codes resolve | **9.8e-14** |
 | fitted amplitude, departure from 1 | **4.2e-14** |
-| `Ex` on a patterned layer | 8.6e-2 to 1.2e-1 — the exception, bounded from both sides; 6e-14 with `discontinuous='continuity'` |
+| `Ex` on a patterned layer | 8.6e-2 to 1.2e-1 — the exception, bounded from both sides; 6e-14 with `reconstruction='lalanne'` |
 
 **The finding is that nothing conical-specific had to be discovered.** The transform established
 on the pure TE/TM path — whole-cell z reversal plus the declared frame's z-parity, no

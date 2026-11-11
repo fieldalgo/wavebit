@@ -219,7 +219,7 @@ def dipole_layers(solver, group, layers, k0, kxy):
     xp, C = scene.xp, scene.complex_dtype
     edges = np.r_[0., np.cumsum([float(_host(d).real) for _, d in layers])]
     if not group['dipoles']:
-        return layers, {}, edges, []
+        return layers, {}, edges, [], tuple(range(len(layers)))
     tol = 1e-12*max(1., edges[-1])
     by_height = {}
     for dipole, weight in group['dipoles']:
@@ -262,6 +262,9 @@ def dipole_layers(solver, group, layers, k0, kxy):
     # values. A layer without a source keeps its own thickness, and a host layer's segments
     # are measured from its live lower face to the source planes, which are fixed in global z:
     # every thickness at or below the host moves them, and its derivative has to see that.
+    # Each segment's host layer, by count: a layer of no thickness has coinciding edges, so its
+    # host cannot be read back off them.
+    hosts = []
     start = 0.
     for li, (material, d) in enumerate(layers):
         heights = sorted(z for z, (index, _) in by_height.items() if index == li)
@@ -272,6 +275,7 @@ def dipole_layers(solver, group, layers, k0, kxy):
                 as_array(xp, planes[z], dtype=C, device=scene._array_device))
             new_layers.append((material, plane-last))
             new_edges.append(z)
+            hosts.append(li)
             p = xp.zeros((kxy.shape[0], 3), dtype=C, device=scene._array_device)
             for dipole, weight in by_height[z][1]:
                 if _carries_derivative(dipole.position):
@@ -295,5 +299,6 @@ def dipole_layers(solver, group, layers, k0, kxy):
             last = plane
         new_layers.append((material, top-last if heights else d))
         new_edges.append(edges[li+1])
+        hosts.append(li)
         start = top
-    return new_layers, jumps, np.asarray(new_edges), sorted(by_height)
+    return new_layers, jumps, np.asarray(new_edges), sorted(by_height), tuple(hosts)

@@ -180,25 +180,40 @@ derivative, including at an artificial seam between identical materials. This
 does not define a unique two-sided derivative across a material discontinuity.
 
 Runs with other sources still use concrete source grouping and layer segmentation, and refuse
-a JAX-traced input; this differentiation guarantee does not extend to them.
+a JAX-traced input; this differentiation guarantee does not extend to them. Under eager `jax.grad`
+a dipole's segments are concrete too, so a dipole solve carries no derivative with respect to a
+layer's thickness or the period: it reads exactly zero or leaves out the cell area, and a finite
+difference is the way to read one.
 
 ## Normal components inside a patterned layer
 
 Inside a patterned layer the field component normal to a material wall jumps there (it is
-`eps*E_n` that is continuous), so the Fourier sum of its coefficients rings near every wall at any
-truncation, and the ringing reaches well away from the walls. The earlier interface's
-`solver.reconstruct_field` takes `discontinuous='continuity'` to rebuild that component from the
-continuous `D` series instead: sum `D`, then divide by `eps` at each sample (P. Lalanne and
-M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). The default, `'fourier'`, is unchanged.
+`eps*E_n` that is continuous, and `mu*H_n` where the wall changes `mu`), so the Fourier sum of its
+coefficients rings near every wall at any truncation, and the ringing reaches well away from the
+walls. `result.field(x=..., y=..., z=..., reconstruction='lalanne')` rebuilds that component from
+the continuous `D` or `B` series instead: sum `D`, then divide by `eps` at each sample (P. Lalanne and
+M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)), and the same for `B` and `mu`. The value is named after
+that paper, which treats a 1D TM grating; the 2D, conical and magnetic cases follow RETICOLO's `res3`
+(J. P. Hugonin and P. Lalanne). The default, `'plain'`, sums each component's own series. The samples'
+metadata records the rule under `'reconstruction'` when it is not the default.
 
 - **What it changes.** `E_x` in the patterned layers of a 1D grating, on the pure TM and the
-  conical paths; `E_x` and `E_y` in the patterned layers of a 2D cell. Every other component,
-  every uniform layer and the whole TE field are returned bit for bit as the default returns them.
+  conical paths; `E_x` and `E_y` in the patterned layers of a 2D cell. A layer that names a
+  permeability takes the same rule for `H`: `H_x` on the pure TE and conical paths, `H_x` and `H_y`
+  on a 2D cell. Without a permeability no component of `H` jumps, so `H` is the default's. Every other
+  component and every uniform layer are returned bit for bit as the default returns them. A diagonal
+  tensor reads each axis's own entry: `eps_xx` for `E_x`, `eps_yy` for `E_y`, `mu_xx` for `H_x`, `mu_yy` for
+  `H_y`. A layer merged into a half-space is uniform, and keeps the sum. A dipole's uniform host keeps
+  the sum too, and the patterned layers around it take the rule. A 1D `s` wave named by its word
+  takes the pure TE path, which has no `E_x` to change; given as a Jones pair it runs on the conical
+  path, where `E_x` is zero up to rounding and the rule's rounding is its own. On a one-row raster
+  the pure TE or TM path and the conical path give the same rule to 1e-14 of the peak.
 - **How it works on a 2D cell.** Line by line. `E_x` jumps across walls normal to x and is
   continuous across walls normal to y, so at each sample its series is summed over the y orders
-  first, then Li's inverse rule along the raster row under the sample turns its x coefficients
-  into those of `D_x`, which is summed along x and divided by `eps`. `E_y` is the same along the
-  column under the sample.
+  first, then Li's inverse rule (L. Li, J. Opt. Soc. Am. A 13, 1870 (1996)) along the row through
+  the sample turns its x coefficients into those of `D_x`, which is summed along x and divided by
+  `eps`. `E_y` is the same along the column through the sample, and `H_x` and `H_y` are the same
+  with `B` and `mu`.
 - **What it trades on a 2D cell.** Each rule is right on one kind of wall and wrong on the
   other, and neither error goes away as the truncation grows. `E_x` meets two kinds of wall:
   across a wall normal to x it is the normal component and must jump (`eps*E_x` is what stays
@@ -206,7 +221,7 @@ M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). The default, `'fourier'`, is unchang
   - The default is continuous everywhere, so it is right across walls normal to y and wrong
     across walls normal to x: there `eps*E_x` mismatches by the full contrast (75 to 92% of the
     larger side in the three test cells below), and the sum rings beside the wall.
-  - The continuity rule makes `eps*E_x` continuous across walls normal to x, to 1e-7. But
+  - The Lalanne rule makes `eps*E_x` continuous across walls normal to x, to 1e-7. But
     across a wall normal to y it reads the two sides off two different rows, each row's
     operator built for that row's walls alone, so there `E_x` steps where it should be
     continuous.
@@ -220,9 +235,9 @@ M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). The default, `'fourier'`, is unchang
     - A higher order does not remove the step. It is the same kind of error as the one the
       rule removes, moved to the other walls.
   - More than one pixel away from any wall the two rules agree and converge together. There
-    the continuity rule is somewhat more accurate: RMS error 0.7 to 2.0% of the field at
+    the Lalanne rule is somewhat more accurate: RMS error 0.7 to 2.0% of the field at
     order 16, against 1.5 to 2.3% for the default.
-  - The choice therefore depends on what you read and where. Use `'continuity'` for anything
+  - The choice therefore depends on what you read and where. Use `'lalanne'` for anything
     built from the normal field at sidewalls: `D` or `eps*E_n` across a wall, the field just
     inside a wall normal to the component, or absorbed power beside a sidewall. Keep the
     default where a component runs along walls normal to the other axis and you need it
@@ -233,16 +248,93 @@ M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). The default, `'fourier'`, is unchang
 - **Why use it.** It is RETICOLO's `res3` rule (`parm.res1.champ=1`): with it the RETICOLO field
   goldens agree to 1e-13 on every slot of the 1D and conical cases, `E_x` included, where the
   default differs by 7e-2 to 1e-1, and to 4e-11 on every slot of a two-layer crossed grating,
-  where the default's `E_x` and `E_y` differ by about 0.3. On a 1D TM bar of index 3.5 its RMS
+  where the default's `E_x` and `E_y` differ by about 0.3. With a patterned `mu` it agrees to 4e-11
+  on every slot of the 2D, pure TE, pure TM and conical cases, where the default's `H_x` differs by
+  0.10 to 0.31. On a 1D TM bar of index 3.5 its RMS
   error in `E_x` is 2.5 to 7 times smaller than the default's at every truncation order from 10
   to 80, against a reference at order 800.
-- **What it reads.** `eps` at each sample, from the raster pixel the sample falls in, and on a
-  2D cell the inverse-rule matrix of the row and the column through it. A sample exactly on a
-  wall belongs to the pixel on its positive side. Derivatives with respect to the raster's
-  values are exact; the pixel choice is not differentiated.
-- **Not yet.** Shape structures, tensor materials, skewed lattices, the first-order 2D
-  formulation and solves that merged layers into a half-space refuse it by name; the current
-  result API's `field` does not take it yet.
+- **What it reads.** `eps` at each sample and, on a 2D cell, the inverse-rule matrix of the row
+  and the column through it, and the same of `mu` in a layer that names one. A raster gives both from the pixel the sample falls in. Choosing it
+  from explicit coordinates takes a concrete period and concrete coordinates: a solve inside
+  `jax.jit` traces the period and a map over the coordinates traces them, and both are refused.
+  Counts always work, and explicit coordinates under `jax.grad`, under a map over anything else,
+  or read inside `jax.jit` from a solve outside it. A shape structure gives them from where that line crosses its outlines, so a wall sits where the
+  shape says, between any two samples. A sample exactly on a wall belongs to its positive side
+  either way, up to rounding: on shapes, a sample or a shape written more than about 60 periods
+  from the cell can read a wall it sits on from the other side. It reads the structure and the cell
+  the solve was posed with, from a copy the result keeps, so an edit after a run waits for the next
+  run, as it does for the default. The copy is kept whether or not the rule is asked for, and a
+  raster is held complex: 16.8 MB per wavelength for each 1024 by 1024 layer, nine times that
+  (151 MB) for a tensor raster, and as much again when the stack names a raster `mu`.
+- **Which shapes.** Walls along x and y: rectangles at a right angle and polygons with only such
+  edges.
+  - Circles, ellipses, rotated rectangles and slanted polygons are refused. So is a differentiated
+    or traced angle, which turns every wall, and under `jax.jit` or `jax.vmap` a traced vertex, whose
+    wall direction cannot be read. Across a slanted wall it is `D_n` that is continuous, not `D_x`,
+    so the rule leaves the whole contrast in the tangential `E`. Against a 3D finite-element
+    reference on 16 circle cells, the rule applied along x and y lost to the default on 4, by up
+    to 5.8 times, with a tangential jump that more orders did not shrink. A raster of the same shape
+    takes the rule on its staircase. Check its `R` and `T` against the true shape before reading
+    its field: drawn as a staircase and solved with `factorization='li'`, a high-index circle had
+    `R` off by 18 to 51% on the three cells whose `R` is 0.5 or more, and more steps or pixels did
+    not change that; `'nvf'` on the same raster came near the true circle on the one cell tried.
+  - A diagonal lattice with a negative side is refused by name: it is read as spelled, on the
+    general path, where the rule has no x and y lines to follow. Spell the cell with positive sides
+    (a raster then reversed along that axis) to use the rule. A trace has no sign to read, so there
+    `E_x` and `E_y` come back NaN.
+  - Against RETICOLO's `champ=1`, with `factorization='li'`, the rule agrees to 4e-11 on every
+    slot, on walls a raster can draw and on walls it cannot, where the default's `E_x` is 0.43
+    away. Only Li's rules have that reference. `'nvf'` and `'laurent'` run and are not pinned to
+    it. Against a finite-element reference on one 200 nm block of `eps` 12.25 at order 8, the RMS
+    error over a plane through the block is 4.3% on `'li'`, 7.3% on `'nvf'` and 23% on `'laurent'`,
+    against 21%, 21% and 28% for the default. Away from the walls `'laurent'` gets slightly worse
+    with the rule, 16% against 15%. On a patterned `mu` no finite-element reference has been run;
+    RETICOLO is the only one.
+  - A shape with the background's own `eps` goes through the rule and matches the default to
+    rounding, not bit for bit, since which values are equal is not asked under a trace. So does `H`
+    in a layer of shapes that names a permeability, even `mu=1.0`. So does
+    every layer of a raster being differentiated, uniform or not: a uniform layer's value is the
+    default's to rounding, and its derivative is the rule's.
+- **Derivatives.** With respect to a raster's values, a shape's position and lengths or a
+  material, a derivative holds each sample point fixed, and agrees with a finite difference off
+  the walls. The choice of pixel, or which side of a wall a sample is on, is not differentiated. So
+  it is not the derivative of an integral over an area: a wall sweeping across a sample is left
+  out, and `E_n` jumps by the contrast there. On that block at order 8, with `'p'` light, off centre
+  at `cx = 13` and a 32 by 32 grid of samples, moving the shape cannot change the mean of `|E_x|^2`
+  over the cell, and the default's derivative is 1e-17 where the rule's is 2.4e-4; growing it gives
+  +3.7e-3 where a fine finite difference of the mean gives -1.8e-3. For an objective over an area,
+  take `'plain'`. An outline's derivative moves vertices it does not check: move both ends of a
+  wall together, or the wall leaves the shapes the rule answers for. A read takes the derivative
+  its solve took: with the solve outside the differentiated call the derivative is zero, as it is
+  for the default. A rectangular cell differentiates through `period=`; a `lattice=` differentiated
+  as a whole matrix can shear, and is refused.
+- **Metals.** The inverse rule inverts the Toeplitz matrix of `1/eps` along a line, and of `1/mu` in
+  a layer that names one. With a negative
+  `eps` or `mu` that matrix is singular at isolated fill factors, which depend on the truncation, and not
+  in general where the mean of `1/eps` vanishes. At `eps = -1` and 50% fill it fails on a raster
+  with code `rcwa.singular` when a sample is on such a line (on JAX, `E_x` comes back NaN there, or
+  `H_x` on a singular `1/mu` line) or, at
+  some orders on a coarse raster, returns a field of order 1e17, and it returns 1e16 to 1e18 on
+  shapes. Loss keeps it finite but not small: at
+  `eps = -20+0.1j`, order 3, the rule's peak is typically 3 times the default's and up to 4000
+  times at the worst fill. Compare two truncations before trusting a peak on a metal line.
+- **One order along an axis.** The lines still read the walls along that axis, though the solve
+  cannot resolve them, so `E_x` differs between two samples the modes cannot tell apart. RETICOLO
+  does the same, and on Li's factorization the two agree to 1e-11. On any other factorization the
+  lines are still Li's and no reference ranks the answer.
+- **What it refuses, by name, with code `field.reconstruction`.** RETICOLO has no answer for any of
+  these. A slanted or curved wall on shapes; a raster takes the rule on its staircase, which is
+  what a RETICOLO ellipse is; check that staircase's `R` and `T` first (see *Which shapes*
+  above). A skewed lattice. A patterned `eps` or `mu` with off-diagonal
+  entries, where `E_x` needs more than `D_x` and a division. A whole 3x3 tensor, on a raster or a
+  shape, under a derivative or a trace, whose zero off-diagonals can hide one; on shapes, principal
+  values `Material([xx, yy, zz])` take the rule and keep the derivative. A tensor uniform across
+  its layer takes the rule, whatever the other field does. A diagonal lattice with a negative
+  side, on shapes and rasters. Matrices handed to `solve_conv`, which need not be any structure.
+- **Heights.** The rule reads the layers a sample is in. Explicit heights in a layer whose line is
+  singular at those `x` and `y` fail; heights elsewhere answer, and a uniform layer keeps the sum. A
+  count reads every layer, and so do heights under a trace, where a singular line in another layer
+  leaves the value right and its gradient NaN.
 
 ## Earlier-interface field calls
 

@@ -44,8 +44,8 @@ across the grating's vertical interfaces and the two codes resolve it differentl
 truncation -- 7.0e-2 to 1.0e-1 here, shrinking with ``truncation_order`` but non-monotonically, in the shape
 of Gibbs ringing near the jump rather than of a defect. The cause is the reconstruction rule:
 RETICOLO rebuilds TM's ``E_x`` from the continuous ``D_x`` series divided by ``eps``, this
-library's default sums ``E_x``'s own series, and ``discontinuous='continuity'`` applies
-RETICOLO's rule (``test_the_continuity_rule_matches_reticolo_on_every_slot``).
+library's default sums ``E_x``'s own series, and ``reconstruction='lalanne'`` applies
+RETICOLO's rule (``test_the_lalanne_rule_matches_reticolo_on_every_slot``).
 :func:`test_the_discontinuous_tm_component_is_the_known_exception` pins the default's gap from
 both sides so it cannot silently grow, and cannot silently vanish without someone updating the
 story here.
@@ -113,7 +113,7 @@ def _in_our_frame(e, pol, theta):
     return e[::-1] * Z_PARITY[pol] * centre
 
 
-def _reconstruct(stack, theta, pol, discontinuous='fourier'):
+def _reconstruct(stack, theta, pol, reconstruction='plain'):
     # STACKS and the comparison use downward depth, top layer first; public Wavebit uses
     # height, bottom layer first, as RETICOLO's raw archive does.
     thickness, structure = STACKS[stack]
@@ -126,7 +126,7 @@ def _reconstruct(stack, theta, pol, discontinuous='fourier'):
                           fourier_coefficients='integrated', answers='field')
     solver.solve()
     cell = np.asarray(solver.reconstruct_field(sample_x=RES_X, sample_y=1, sample_z=RES_Z,
-                                               discontinuous=discontinuous))
+                                               reconstruction=reconstruction))
     return cell[::-1, 0, :, :] * Z_PARITY[pol]                       # (sample_z*n_layers, sample_x, 3)
 
 
@@ -204,8 +204,8 @@ def test_the_discontinuous_tm_component_is_the_known_exception(stack, theta, pol
     **The cause is known since 2026-10-27, and it is a rule, not truncation noise.** RETICOLO
     rebuilds TM's ``E_x`` on the 1D path as the sum of the continuous ``D_x`` series divided by
     ``eps(x)`` (Lalanne & Jurek 1998), whatever ``parm.res1.champ`` says; this library's default
-    sums ``E_x``'s own series. With ``discontinuous='continuity'`` the two agree to 1e-13 on every
-    case -- :func:`test_the_continuity_rule_matches_reticolo_on_every_slot`. This test keeps the
+    sums ``E_x``'s own series. With ``reconstruction='lalanne'`` the two agree to 1e-13 on every
+    case -- :func:`test_the_lalanne_rule_matches_reticolo_on_every_slot`. This test keeps the
     default's gap bounded, because the default is unchanged.
     """
     g = _golden()
@@ -285,11 +285,11 @@ def test_the_patterned_stacks_are_actually_patterned(stack):
 
 
 @pytest.mark.parametrize('stack,theta,pol', CASES, ids=IDS)
-def test_the_continuity_rule_matches_reticolo_on_every_slot(stack, theta, pol):
-    """``discontinuous='continuity'`` is RETICOLO's rule: all three slots at 1e-12, ``E_x`` included."""
+def test_the_lalanne_rule_matches_reticolo_on_every_slot(stack, theta, pol):
+    """``reconstruction='lalanne'`` is RETICOLO's rule: all three slots at 1e-12, ``E_x`` included."""
     g = _golden()
     ref = _in_our_frame(g[key(stack, theta, pol)], pol, theta)
-    got = _reconstruct(stack, theta, pol, discontinuous='continuity')
+    got = _reconstruct(stack, theta, pol, reconstruction='lalanne')
     cell = np.max(np.abs(ref))
     for c in range(3):
         amp = np.max(np.abs(ref[..., c]))

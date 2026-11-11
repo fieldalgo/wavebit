@@ -267,7 +267,7 @@ class CoherentResult(ResultFields):
 
     def __init__(self, xp, spectra, groups, lattice, wavelength, thickness, region,
                  has_internal_sources=False, localized_sources=False,
-                 answers=Answers.AMPLITUDE):
+                 answers=Answers.AMPLITUDE, scene=None):
         answers = answers_of(answers)
         self._xp, self._spectra = xp, spectra
         self.lattice, self.wavelength, self.thickness = lattice, wavelength, thickness
@@ -280,7 +280,7 @@ class CoherentResult(ResultFields):
         self._groups = groups if answers.covers(Answers.FIELD) else ()
         self._field_state = None
         if answers.covers(Answers.AMPLITUDE):
-            self._field_state = source_state(spectra, self._groups, lattice, wavelength, thickness)
+            self._field_state = source_state(spectra, self._groups, lattice, wavelength, thickness, scene)
         else:
             self._spectra = None
 
@@ -684,7 +684,7 @@ class CoherentSolver:
                 delta = xp.astype(xp.arange(count, device=scene._array_device) == index, C)
                 a[side] = a[side] + as_array(xp, amp, dtype=C, device=scene._array_device)*xp.concat(
                     [pol[0]*delta, pol[1]*delta])
-            layers, jumps, segment_edges, source_heights = self._dipole_layers(group, layers, k0, kxy)
+            layers, jumps, segment_edges, source_heights, hosts = self._dipole_layers(group, layers, k0, kxy)
             S, emission, state = _cascade(xp, k0, kx, ky, layers,
                                 tuple(_tangential(xp, ports['bottom', d]) for d in (1, -1)),
                                 tuple(_tangential(xp, ports['top', d]) for d in (1, -1)), keep, jumps,
@@ -699,8 +699,8 @@ class CoherentSolver:
                     f = xp.sum(ports[side, direction] * amplitudes[:, None, :], axis=-1)
                     spectra[side, part].append(_Spectrum(kxy, f))
             internal = _inside_amplitudes(xp, state, a['bottom'], a['top']) if keep else None
-            solved.append(dict(k0=k0, kxy=kxy, kx=kx, ky=ky, n=count, internal=internal,
-                               edges=segment_edges, source_heights=source_heights))
+            solved.append(dict(k0=k0, kxy=kxy, kx=kx, ky=ky, n=count, orders=tuple(gx.shape), internal=internal,
+                               edges=segment_edges, source_heights=source_heights, hosts=hosts))
         # Once per side for the whole solve, however many Bloch sectors a Gaussian beam spread
         # over: the same test and text as an ordinary solve
         # (`CoreFactorizationMixin._warn_gain_cutoff`), on the ports' own eps and mu. Only
@@ -715,7 +715,7 @@ class CoherentSolver:
         joined = {key: _Spectrum(xp.concat([s.kxy for s in items]), xp.concat([s.field for s in items]))
                   for key, items in spectra.items()}
         result = CoherentResult(xp, joined, solved, lattice, scene.wavelength, scene.thickness,
-                                self.power_region, bool(dipoles), localized, answers=scene.answers)
+                                self.power_region, bool(dipoles), localized, answers=scene.answers, scene=scene)
         # The returned result owns the traced field. Keeping it on a live facade
         # would let a later eager reconstruction read an expired JAX trace.
         self._result = None if not keep_traced and _holds_tracer(
@@ -723,7 +723,7 @@ class CoherentSolver:
                                                  scene.thickness]) else result
         return result
 
-    def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20):
+    def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20, reconstruction='plain'):
         if self._result is None:
             raise RuntimeError('Call solve() before reconstruct_field().')
-        return self._result.reconstruct_field(sample_x, sample_y, sample_z)
+        return self._result.reconstruct_field(sample_x, sample_y, sample_z, reconstruction=reconstruction)

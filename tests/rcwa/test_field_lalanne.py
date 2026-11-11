@@ -1,7 +1,7 @@
-"""``reconstruct_field(discontinuous='continuity')`` on the 1D TM, conical and 2D paths.
+"""``reconstruct_field(reconstruction='lalanne')`` on the 1D TM, conical and 2D paths.
 
 Inside a patterned layer ``E_x`` jumps at every wall (``eps_x E_x`` is what is continuous), so the
-Fourier sum of its coefficients rings at any truncation. The continuity rule sums the continuous
+Fourier sum of its coefficients rings at any truncation. The Lalanne rule sums the continuous
 ``D_x`` series instead and divides by ``eps(x)`` at each sample -- the near-field rule of
 P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357 (1998), which RETICOLO's ``res3`` applies.
 
@@ -18,6 +18,7 @@ import numpy as np
 import pytest
 
 import wavebit
+from wavebit.rcwa._engine.lalanne import sample_pixels
 from wavebit.rcwa._factory import rcwa
 
 PERIOD, NX = 400.0, 40
@@ -59,7 +60,7 @@ def test_normal_d_is_continuous_across_every_wall(path, side):
 
     The plain Fourier sum fails this by the Gibbs overshoot, and the rule reading the wrong
     layer's eps fails it by 0.75 (measured by swapping the layer order in
-    ``_continuity_rows``); the residual here is the field's slope over the 2e-6 offset.
+    ``_lalanne_rows``); the residual here is the field's slope over the 2e-6 offset.
     """
     s = _solver(path, side)
     for layer, (z0, d) in enumerate(((0.0, 150.0), (150.0, 260.0))):
@@ -67,7 +68,7 @@ def test_normal_d_is_continuous_across_every_wall(path, side):
         for wall in WALLS[layer]:
             x = np.array([wall - 1e-6, wall + 1e-6]) - PERIOD / 2
             ex = _ex(s.reconstruct_field(sample_x=x, sample_y=np.array([0.0]), sample_z=z,
-                                         discontinuous='continuity'), path).ravel()
+                                         reconstruction='lalanne'), path).ravel()
             eps = STRUCTURE[layer, 0, [int((wall - 1e-3) / 10), int((wall + 1e-3) / 10)]]
             d_x = eps * ex
             assert abs(d_x[0] - d_x[1]) < 1e-6 * np.abs(d_x).max(), (layer, wall)
@@ -82,7 +83,7 @@ def test_only_ex_in_patterned_layers_changes(path):
     uniform = np.concatenate([STRUCTURE[:1], np.full((1, 1, NX), 2.25 + 0j)])
     s = _solver(path, structure=uniform)
     a = np.asarray(s.reconstruct_field(sample_x=17, sample_y=1, sample_z=5))
-    b = np.asarray(s.reconstruct_field(sample_x=17, sample_y=1, sample_z=5, discontinuous='continuity'))
+    b = np.asarray(s.reconstruct_field(sample_x=17, sample_y=1, sample_z=5, reconstruction='lalanne'))
     ex_slot = 1 if path == 'tm' else 0
     others = [c for c in range(a.shape[-1]) if c != ex_slot]
     np.testing.assert_array_equal(a[..., others], b[..., others])
@@ -98,7 +99,7 @@ def test_te_has_nothing_to_change():
     s.solve()
     np.testing.assert_array_equal(
         np.asarray(s.reconstruct_field(sample_x=17, sample_y=1, sample_z=5)),
-        np.asarray(s.reconstruct_field(sample_x=17, sample_y=1, sample_z=5, discontinuous='continuity')))
+        np.asarray(s.reconstruct_field(sample_x=17, sample_y=1, sample_z=5, reconstruction='lalanne')))
 
 
 @pytest.mark.parametrize('path', list(PATHS))
@@ -107,11 +108,11 @@ def test_explicit_points_are_the_count_grid(path):
     x = np.linspace(-PERIOD / 2, PERIOD / 2, 11)
     y = np.array([-PERIOD / 2])       # a count of one samples the cell's edge row, not its centre
     counted = np.asarray(s.reconstruct_field(sample_x=11, sample_y=1, sample_z=4,
-                                             discontinuous='continuity'))
+                                             reconstruction='lalanne'))
     z = np.concatenate([np.linspace(0, 150, 4)[:-1], [150 - 1e-9], np.linspace(150, 410, 4)[:-1],
                         [410 - 1e-9]])
     explicit = np.asarray(s.reconstruct_field(sample_x=x, sample_y=y, sample_z=z,
-                                              discontinuous='continuity'))
+                                              reconstruction='lalanne'))
     np.testing.assert_allclose(_ex(explicit, path), _ex(counted, path), rtol=0, atol=1e-9)
 
 
@@ -120,9 +121,9 @@ def test_explicit_points_are_the_count_grid(path):
 def test_backends_agree(path, backend):
     pytest.importorskip(backend)
     want = _ex(_solver(path).reconstruct_field(sample_x=17, sample_y=1, sample_z=5,
-                                               discontinuous='continuity'), path)
+                                               reconstruction='lalanne'), path)
     got = _solver(path, backend=backend).reconstruct_field(sample_x=17, sample_y=1, sample_z=5,
-                                                          discontinuous='continuity')
+                                                          reconstruction='lalanne')
     got = got.detach().cpu().numpy() if hasattr(got, 'detach') else np.asarray(got)
     np.testing.assert_allclose(_ex(got, path), want, rtol=0, atol=1e-10 * np.abs(want).max())
 
@@ -136,7 +137,7 @@ def test_gradient_through_the_raster_values():
     def power(scale):
         structure = jnp.asarray(STRUCTURE).at[0, 0, 10].multiply(scale)
         s = _solver('tm', backend='jax', structure=structure)
-        ex = s.reconstruct_field(sample_x=13, sample_y=1, sample_z=3, discontinuous='continuity')[..., 1]
+        ex = s.reconstruct_field(sample_x=13, sample_y=1, sample_z=3, reconstruction='lalanne')[..., 1]
         return jnp.sum(jnp.abs(ex) ** 2)
 
     grad = float(jax.grad(power)(1.0))
@@ -147,27 +148,14 @@ def test_gradient_through_the_raster_values():
 
 def test_refusals_name_what_is_missing():
     s = _solver('tm')
-    with pytest.raises(ValueError, match="'fourier' or 'continuity'"):
-        s.reconstruct_field(discontinuous='li')
-    shaped = rcwa(backend='numpy', top=1.0, bot=1.0, period=[PERIOD], truncation_order=4,
-                  wavelength=620.0, thickness=[100.0], phi=0.3, psi=0.2, answers='field',
-                  structure=[dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0,
-                                                                lx=150.0, ly=PERIOD, material=4.0)])])
-    shaped.solve()
-    with pytest.raises(NotImplementedError, match='raster'):
-        shaped.reconstruct_field(discontinuous='continuity')
-    first_order = rcwa(backend='numpy', top=1.0, bot=2.25, period=[PX, PY], truncation_order=[2, 2],
-                       wavelength=620.0, thickness=THICKNESS_2D, structure=GRID_2D, answers='field')
-    first_order.formulation = 'first_order'
-    first_order.solve()
-    with pytest.raises(NotImplementedError, match='first-order'):
-        first_order.reconstruct_field(discontinuous='continuity')
+    with pytest.raises(ValueError, match="'plain' or 'lalanne'"):
+        s.reconstruct_field(reconstruction='li')
     skewed = rcwa(backend='numpy', top=1.0, bot=1.0, lattice=wavebit.Lattice.hexagonal(PERIOD),
                   truncation_order=[2, 2], wavelength=620.0, thickness=[100.0],
                   structure=GRID_2D[:1], factorization='nvf', answers='field')
     skewed.solve()
     with pytest.raises(NotImplementedError, match='skewed lattice'):
-        skewed.reconstruct_field(discontinuous='continuity')
+        skewed.reconstruct_field(reconstruction='lalanne')
 
 
 # A 2D cell: 400 x 360 nm, 8 x 9 pixels, two patterned layers whose walls differ. Rows are y.
@@ -225,10 +213,10 @@ def test_2d_normal_d_is_continuous_across_every_wall(side):
             for at, line, a, b in _walls(GRID_2D[layer], axis):
                 across = np.array([at - 1e-6, at + 1e-6])
                 xs, ys = (across, np.array([line])) if axis == 'x' else (np.array([line]), across)
-                for rule, holds in (('continuity', True), ('fourier', False)):
+                for rule, holds in (('lalanne', True), ('plain', False)):
                     cell = np.asarray(s.reconstruct_field(sample_x=xs, sample_y=ys,
                                                           sample_z=np.array([z]),
-                                                          discontinuous=rule))[0, 0]
+                                                          reconstruction=rule))[0, 0]
                     d = np.array([a, b]) * cell[..., slot].ravel()
                     jump = abs(d[0] - d[1]) / abs(d).max()
                     assert (jump < 1e-6) if holds else (jump > 1e-2), (layer, axis, at, rule, jump)
@@ -238,7 +226,7 @@ def test_2d_only_ex_and_ey_in_patterned_layers_change():
     uniform = np.concatenate([GRID_2D[:1], np.full((1, NY2, NX2), 2.25 + 0j)])
     s = _solver_2d(structure=uniform)
     a = np.asarray(s.reconstruct_field(sample_x=9, sample_y=7, sample_z=4))
-    b = np.asarray(s.reconstruct_field(sample_x=9, sample_y=7, sample_z=4, discontinuous='continuity'))
+    b = np.asarray(s.reconstruct_field(sample_x=9, sample_y=7, sample_z=4, reconstruction='lalanne'))
     np.testing.assert_array_equal(a[..., 2:], b[..., 2:])
     np.testing.assert_array_equal(a[:, 4:], b[:, 4:])         # the upper, uniform layer
     assert not np.allclose(a[:, :4, ..., :2], b[:, :4, ..., :2])
@@ -248,9 +236,9 @@ def test_2d_only_ex_and_ey_in_patterned_layers_change():
 def test_2d_backends_agree(backend):
     pytest.importorskip(backend)
     want = np.asarray(_solver_2d().reconstruct_field(sample_x=9, sample_y=7, sample_z=3,
-                                                     discontinuous='continuity'))
+                                                     reconstruction='lalanne'))
     got = _solver_2d(backend=backend).reconstruct_field(sample_x=9, sample_y=7, sample_z=3,
-                                                        discontinuous='continuity')
+                                                        reconstruction='lalanne')
     got = got.detach().cpu().numpy() if hasattr(got, 'detach') else np.asarray(got)
     np.testing.assert_allclose(got, want, rtol=0, atol=1e-10 * np.abs(want).max())
 
@@ -264,10 +252,140 @@ def test_2d_gradient_through_the_raster_values():
     def power(scale):
         structure = jnp.asarray(GRID_2D).at[1, 2, 3].multiply(scale)
         s = _solver_2d(backend='jax', structure=structure)
-        cell = s.reconstruct_field(sample_x=7, sample_y=5, sample_z=3, discontinuous='continuity')
+        cell = s.reconstruct_field(sample_x=7, sample_y=5, sample_z=3, reconstruction='lalanne')
         return jnp.sum(jnp.abs(cell[..., :2]) ** 2)
 
     grad = float(jax.grad(power)(1.0))
     h = 1e-4
     fd = float((power(1.0 + h) - power(1.0 - h)) / (2 * h))
     assert grad == pytest.approx(fd, rel=1e-6)
+
+
+@pytest.mark.parametrize('period', [[-PERIOD], [-PERIOD, 360.0], [PERIOD, -360.0], -PERIOD])
+def test_a_negative_period_is_refused(period):
+    """It reversed kx against the same raster, and the rule read the wall on the wrong side, by a factor of mu."""
+    kw = dict(backend='numpy', top=1.0, bot=2.25, truncation_order=12, wavelength=620.0, thickness=THICKNESS,
+              structure=STRUCTURE, theta=0.3)
+    with pytest.raises(ValueError, match='a length is positive'):
+        rcwa(period=period, **kw).solve()
+    with pytest.raises(ValueError, match='a length is positive'):
+        rcwa(period=period, **kw).freeze_geometry()
+    s = rcwa(period=[PERIOD], **kw)
+    s.period = period
+    with pytest.raises(ValueError, match='a length is positive'):
+        s.solve()
+
+
+def test_a_negative_period_is_refused_on_a_tensor_scene_too():
+    """A tensor scene builds off the road every scalar scene's refusals sit on."""
+    tensor = wavebit.Material(np.diag([2.25, 2.25, 4.0]).astype(complex))
+    s = rcwa(backend='numpy', top=1.0, bot=2.25, period=[-PERIOD, 360.0], truncation_order=[2, 2], wavelength=620.0,
+             thickness=[100.0], structure=[dict(background=tensor, shapes=[])], theta=0.3)
+    with pytest.raises(ValueError, match='a length is positive'):
+        s.solve()
+
+
+def test_a_gradient_in_the_period_slot_has_any_sign():
+    """``jax.grad`` rebuilds the solver through ``__init__`` with gradients in its slots, so no setter can refuse one."""
+    jax = pytest.importorskip('jax')
+    s = rcwa(backend='jax', top=1.0, bot=2.25, period=[PERIOD], truncation_order=12, wavelength=620.0,
+             thickness=THICKNESS, structure=STRUCTURE, theta=0.3)
+    rebuilt = jax.tree_util.tree_map(lambda leaf: -leaf, s)
+    assert float(np.real(rebuilt.period[0])) == -PERIOD
+
+
+def _grid_solver(backend='numpy', **kw):
+    kw.setdefault('structure', _grid_2d())
+    s = rcwa(backend=backend, top=1.0, bot=2.25, period=[PX, PY], truncation_order=[2, 2],
+             wavelength=620.0, thickness=THICKNESS_2D, answers='field', **kw)
+    s.solve()
+    return s
+
+
+def test_the_rule_reads_the_structure_the_solve_was_posed_with():
+    """The modes are the solve's, so the structure has to be: edits wait for the next solve."""
+    assigned = _grid_solver()
+    before = np.asarray(assigned.reconstruct_field(5, 5, 3, reconstruction='lalanne'))
+    changed = _grid_2d()
+    changed[0, 0:2, 0:2] = 9.0
+    assigned.structure = changed
+    after = assigned.reconstruct_field(5, 5, 3, reconstruction='lalanne')
+    np.testing.assert_array_equal(np.asarray(after), before)
+    assigned.solve()
+    resolved = np.asarray(assigned.reconstruct_field(5, 5, 3, reconstruction='lalanne'))
+    assert np.max(np.abs(resolved - before)) > 1e-2
+
+    in_place = _grid_solver()
+    in_place.structure[0, 0, 0] = 9.0
+    after = in_place.reconstruct_field(5, 5, 3, reconstruction='lalanne')
+    np.testing.assert_array_equal(np.asarray(after), before)
+
+
+def test_a_torch_raster_with_the_conjugate_bit_reads_the_rule():
+    torch = pytest.importorskip('torch')
+    plain = _grid_solver('torch', structure=torch.as_tensor(np.conj(_grid_2d())))
+    lazy = _grid_solver('torch', structure=torch.conj(torch.as_tensor(_grid_2d())))
+    np.testing.assert_allclose(lazy.reconstruct_field(5, 5, 3, reconstruction='lalanne').numpy(),
+                               plain.reconstruct_field(5, 5, 3, reconstruction='lalanne').numpy(),
+                               rtol=0, atol=1e-13)
+
+
+def test_a_sample_on_a_wall_in_single_precision_is_on_its_positive_side():
+    """A period held in single precision rounds a wall sample by more than the old lift."""
+    period = np.float32(500.3)
+    walls = (np.arange(9, dtype=np.float32) / 8 - np.float32(0.5)) * period
+    rows = sample_pixels(walls, period, 8, float(np.finfo(np.float32).eps))
+    np.testing.assert_array_equal(rows, [0, 1, 2, 3, 4, 5, 6, 7, 0])
+
+
+def test_matrices_handed_to_solve_conv_have_no_structure_to_read():
+    """Measured before the refusal: 0.28 from the correct field, with the sum 0.0 from it."""
+    s = _grid_solver()
+    s.solve_conv(*s.eps_conv_matrices())
+    s.reconstruct_field(5, 5, 3)
+    with pytest.raises(NotImplementedError, match='solve_conv'):
+        s.reconstruct_field(5, 5, 3, reconstruction='lalanne')
+    s.solve()
+    s.reconstruct_field(5, 5, 3, reconstruction='lalanne')
+
+
+def test_what_stops_describing_the_solve_lets_go_of_its_mu():
+    """Unreachable through the rule, whose gate stops at the structure, so a stale one only lingers:
+    a tracer past its trace, a leaf in a result's pytree."""
+    mu = np.ones_like(_grid_2d())
+    mu[0, 1:3, 1:3] = 2.25
+    s = _grid_solver(mu=mu)
+    assert s._solved_mu is not None and s.solve()._field_state.mu is not None
+    out = s.solve_conv(*s.eps_conv_matrices())
+    assert s._solved_mu is None and out._field_state.mu is None
+    s.solve()
+    assert s._solved_mu is not None
+    s._forget_the_solve()
+    assert s._solved_mu is None
+
+
+def test_a_traced_structure_over_an_eager_solve_reads_the_solve():
+    jax = pytest.importorskip('jax')
+    s = _grid_solver('jax')
+    before = np.asarray(s.reconstruct_field(5, 5, 3, reconstruction='lalanne'))
+
+    def field(value):
+        s.structure = jax.numpy.asarray(_grid_2d()) * value
+        return s.reconstruct_field(5, 5, 3, reconstruction='lalanne')
+
+    np.testing.assert_allclose(np.asarray(jax.jit(field)(2.0)), before, rtol=0, atol=1e-12)
+
+
+def test_a_grating_on_a_negative_side_is_refused_by_name():
+    """A one-row raster on a diagonal lattice with a negative side is solved on the general path,
+    which has no lines for the rule; its pure TM path is refused before that by the solve itself."""
+    grid = np.ones((2, 1, 48))
+    grid[0, 0, 9:30] = 9.0
+    grid[1] = 2.25
+    kw = dict(backend='numpy', top=1.0, bot=2.25, truncation_order=[11, 0], wavelength=720.0, thickness=[100.0, 60.0],
+              theta=0.2, phi=0.3, answers='field', structure=grid, factorization='laurent')
+    negative = rcwa(lattice=np.array([[-530.0, 0.0], [0.0, 1.0]]), **kw).solve()
+    z = [20.0, 120.0]
+    assert np.all(np.isfinite(np.asarray(negative.reconstruct_field(13, [0.0], z))))
+    with pytest.raises(NotImplementedError, match='positive sides'):
+        negative.reconstruct_field(13, [0.0], z, reconstruction='lalanne')

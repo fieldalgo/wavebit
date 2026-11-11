@@ -4,11 +4,16 @@ Solvers supply spectral coefficients; this module owns sampling, spatial expansi
 component layout and the lifetime of the solved field. No query reads a live solver.
 """
 
+from collections.abc import Mapping
+
 import numpy as np
 
 from wavebit._common.backend import array_namespace
 from wavebit._common.backend import as_array
+from wavebit._common.pytrees import _pack, _unpack
+from wavebit.lattice import periods_of
 from wavebit.rcwa._engine.fields import LayerSamples
+from wavebit.rcwa._engine.fields import _lalanne_2d
 from wavebit.rcwa._engine.fields import is_count
 from wavebit.rcwa._engine.fields import field_1d
 from wavebit.rcwa._engine.fields import field_1d_conical
@@ -163,6 +168,23 @@ def _local_height(xp, z, start, thickness, selected):
     return xp.where(selected, local, safe)
 
 
+def _plain(value):
+    """``_unpack``'s read-only mappings as dicts again, which a pickle and a deep copy can hold."""
+    if isinstance(value, Mapping):
+        return {name: _plain(item) for name, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return type(value)(_plain(item) for item in value)
+    return value
+
+
+def _order_axes(group):
+    """A group's ``kx`` and ``ky`` by axis: an ordinary solve holds them so, a source flattened v-major."""
+    if 'orders' not in group:
+        return group['kx'], group['ky']
+    n_v, n_u = group['orders']
+    return group['kx'][:n_u], group['ky'][::n_u]
+
+
 @eager_under_torch_compile
 class FieldState:
     """Numeric solve snapshot and a static adapter name; a JAX pytree when registered.
@@ -174,7 +196,7 @@ class FieldState:
     """
 
     def __init__(self, data, kind, mirrored=False, names=('incident',), window=None,
-                 merged=None, bare_interface=False):
+                 merged=None, bare_interface=False, structure=None, mu=None):
         self.data, self.kind, self.mirrored, self.names = data, kind, mirrored, tuple(names)
         self.window = window
         #: The stack declared no layers: the engine solved the bare interface through one
@@ -184,14 +206,23 @@ class FieldState:
         #: (:mod:`~wavebit.rcwa._engine.half_space_merge`), else ``None``. Static, like
         #: ``window``: it fixes which heights the kernels' records answer.
         self.merged = merged
+        #: The solve's copy of its structure, which the Lalanne rule reads
+        #: (:func:`~wavebit.rcwa._engine.lalanne.solved_structure`). ``None`` where there is none
+        #: to read: matrices handed to ``solve_conv``. ``mu`` is the same copy of a raster's
+        #: permeability field.
+        self.structure, self.mu = structure, mu
 
     def tree_flatten(self):
-        return (self.data,), (self.kind, self.mirrored, self.names, self.window, self.merged,
-                              self.bare_interface)
+        leaves = []
+        spec = _pack(self.structure, leaves)
+        mu = _pack(self.mu, leaves)
+        return (self.data, tuple(leaves)), (self.kind, self.mirrored, self.names, self.window,
+                                            self.merged, self.bare_interface, spec, mu)
 
     @classmethod
     def tree_unflatten(cls, meta, children):
-        return cls(children[0], *meta)
+        *static, spec, mu = meta
+        return cls(children[0], *static, _plain(_unpack(spec, children[1])), _plain(_unpack(mu, children[1])))
 
     def _incidence(self, name):
         if name not in self.names:
@@ -214,10 +245,61 @@ class FieldState:
             coefficients = incoming + outgoing
         return expand_spectrum(xp, kxy, coefficients, grid)
 
-    def reconstruct(self, sample_x, sample_y, sample_z, incidence):
+    def reconstruct(self, sample_x, sample_y, sample_z, incidence, reconstruction='plain'):
         xp = array_namespace(self.data['lattice'])
         grid = xy_grid(xp, self.data['lattice'], sample_x, sample_y)
-        return self.reconstruct_on(grid, sample_z, incidence)
+        return self.reconstruct_on(grid, sample_z, incidence,
+                                   self._lalanne_rule(xp, sample_x, sample_y, reconstruction, sample_z))
+
+    def _lalanne_rule(self, xp, sample_x, sample_y, reconstruction, sample_z=None):
+        """What :meth:`reconstruct_on` takes for ``reconstruction``, ``None`` for the Fourier sum.
+
+        Refuses by name what the rule does not take. The TE path has nothing for it to change
+        without a permeability: its one electric component runs along every wall, and its ``H``
+        jumps only where ``mu`` does.
+        """
+        if reconstruction not in ('plain', 'lalanne'):
+            raise ValueError(f"reconstruction must be 'plain' or 'lalanne', not {reconstruction!r}.")
+        if reconstruction == 'plain' or (self.merged is not None and not self.data['groups']):
+            return None      # A stack that merged whole has no patterned layer left to read.
+        from wavebit.rcwa._engine.lalanne import lalanne_rows
+        from wavebit.rcwa._engine.lalanne import layers_holding
+        from wavebit.rcwa._engine.lalanne import refusal as lalanne_refusal
+        from wavebit.rcwa._engine.lalanne import samples_along_cell
+        self._require_internal_fields()
+        groups = self.data['groups']
+        lattice = self.data.get('cell')
+        message = lalanne_refusal(self.kind, self.structure, lattice, groups[0].get('kx'), groups[0].get('ky'),
+                                  self.mu, self.merged)
+        if message is not None:
+            raise NotImplementedError(message)
+        if self.kind == 'te' and self.mu is None:
+            return None
+        two_d = self.kind in ('second_order', 'first_order', 'source')
+        sides = _host_value(lattice.columns)
+        if sides is not None:
+            sample_x = samples_along_cell(sample_x, sides[0, 0])
+            sample_y = samples_along_cell(sample_y, sides[1, 1])
+        bottom, top = (0, 0) if self.merged is None else self.merged[:2]
+        count = len(self.structure) if isinstance(self.structure, list) else self.structure.shape[0]
+        kept = slice(bottom, count - top)
+        held = None if sample_z is None else layers_holding(sample_z, self.data['thickness'])
+        held = None if held is None else {layer - bottom for layer in held}
+        real = xp.real(self.data['lattice']).dtype
+        by_size = {}
+        for g in groups:
+            kx, ky = _order_axes(g)
+            if (kx.shape[0], ky.shape[0]) not in by_size:
+                by_size[kx.shape[0], ky.shape[0]] = [None] * bottom + lalanne_rows(
+                    xp, self.structure[kept], None if self.mu is None else self.mu[kept], lattice, kx, ky, real,
+                    self.data['lattice'].dtype if self.kind == 'source' else g['T1'].dtype,
+                    two_d, sample_x, sample_y, held)
+        return dict(by_size=by_size, two_d=two_d, lattice=lattice, sample_x=sample_x, sample_y=sample_y)
+
+    def _require_internal_fields(self):
+        if (not self.data['groups'] and self.merged is None) or any(
+                g['layers'] is None for g in self.data['groups']):
+            raise RuntimeError("Internal fields require solve(answers='field') and at least one layer.")
 
     def _heights(self, xp, sample_z):
         """The heights ``sample_z`` samples, the layer that owns each, and the stack's faces."""
@@ -275,14 +357,13 @@ class FieldState:
             out['z'] = sample_z
         return {axis: out[axis] for axis in ('x', 'y', 'z') if axis in out}
 
-    def reconstruct_on(self, grid, sample_z, incidence):
+    def reconstruct_on(self, grid, sample_z, incidence, rule=None):
         """:meth:`reconstruct` on centre-origin Cartesian points ``grid = (x, y)`` already laid
-        out, for a door whose lateral sampling rules are its own."""
+        out, for a door whose lateral sampling rules are its own. ``rule`` is
+        :meth:`_lalanne_rule`'s, on the same points."""
         index = self._incidence(incidence)
         data = self.data
-        if (not data['groups'] and self.merged is None) or any(
-                g['layers'] is None for g in data['groups']):
-            raise RuntimeError("Internal fields require solve(answers='field') and at least one layer.")
+        self._require_internal_fields()
         xp = array_namespace(data['lattice'])
         z, owner, edges = self._heights(xp, sample_z)
         result = None
@@ -290,8 +371,10 @@ class FieldState:
             if self.kind == 'source':
                 coefficient = self._source_coefficients(xp, g, z, owner, edges)
             else:
-                coefficient = self._ordinary_coefficients(xp, g, z, owner, edges, index)
+                coefficient = self._ordinary_coefficients(xp, g, z, owner, edges, index, rule)
             field = expand_spectrum(xp, g['kxy'], coefficient, grid)
+            if rule is not None:
+                field = self._apply_lalanne(xp, g, rule, coefficient, field, owner)
             result = field if result is None else result + field
         if self.merged is not None:
             from wavebit.rcwa._engine.half_space_merge import zone_coefficients
@@ -301,7 +384,61 @@ class FieldState:
             result = field if result is None else result + field
         return result
 
-    def _ordinary_coefficients(self, xp, g, z, owner, edges, index):
+    def _apply_lalanne(self, xp, g, rule, coefficient, field, owner):
+        """``field`` with the rule's ``E`` and ``H`` in the samples of the layers the rule reads.
+
+        On the 1D paths ``coefficient`` already holds the ``D_x`` and ``B_x`` series there
+        (:meth:`_ordinary_coefficients`), so their sums, in ``field``, only need dividing by ``eps``
+        and ``mu``. ``H`` follows ``E`` through each step on its own slots.
+        The 2D rule is summed line by line in the kernels' frame, where
+        :func:`~wavebit.rcwa._engine.fields._lalanne_2d` lives and its operators are: undoing
+        the parity of :meth:`_ordinary_coefficients` and, as
+        ``CoreSolveMixin._centre_phase`` does, putting the phase of the incident wave at the
+        cell's centre back afterwards. The order grid is the window's, so the specular order is
+        where ``ordinary_spectra`` finds it.
+        """
+        kx, ky = _order_axes(g)
+        if rule['two_d']:
+            lead = (coefficient.shape[0], 1, coefficient.shape[1], 1)
+            lattice = rule['lattice']
+            # The kernels' corner is half a period below the centre, and a period is positive
+            # whichever way the lattice's side was written (`fields._axis_samples`).
+            centre = 0.5 * xp.stack([as_array(xp, p, dtype=g['kxy'].dtype,
+                                              device=getattr(g['kxy'], 'device', None))
+                                     for p in periods_of(lattice)])
+            if self.kind == 'source':
+                # A source's coefficients are about the centre with no incident wave to reference.
+                kernel = coefficient * xp.exp(-1j * xp.sum(g['kxy'] * centre, axis=-1))[None, :, None]
+                phase = 1.0
+            else:
+                from wavebit._common.conventions import centre_parity
+                odd = as_array(xp, centre_parity(*self.window).reshape(-1),
+                               device=getattr(coefficient, 'device', None))
+                kernel = xp.where(odd[None, :, None], -coefficient, coefficient)
+                (cx, hx), (cy, hy) = self.window
+                phase = xp.exp(-1j * xp.sum(g['kxy'][(hy - cy) * (2 * hx + 1) + hx - cx] * centre))
+        for layer, row in enumerate(rule['by_size'][kx.shape[0], ky.shape[0]]):
+            if row is None:
+                continue
+            read = {}
+            # A 1D half only reads a path that carries its component: TE has no E_x, TM no H_x.
+            for half, first, skipped in ((row.electric, 0, 'te'), (row.magnetic, 3, 'tm')):
+                if half is None or self.kind == skipped:
+                    continue
+                if rule['two_d']:
+                    sx, sy = (xp.reshape(kernel[..., first + k], lead) for k in (0, 1))
+                    along_x, along_y = _lalanne_2d(xp, kx, ky, lattice, rule['sample_x'],
+                                                   rule['sample_y'], 2 * np.pi / self.data['wavelength'],
+                                                   coefficient.dtype, sx, sy, half)
+                    read[first], read[first + 1] = along_x[:, 0] * phase, along_y[:, 0] * phase
+                else:
+                    read[first] = field[..., first] / xp.reshape(xp.astype(half, field.dtype), (1, 1, -1))
+            held = (owner == layer)[:, None, None]
+            field = xp.stack([xp.where(held, read[k], field[..., k]) if k in read else field[..., k]
+                              for k in range(field.shape[-1])], axis=-1)
+        return field
+
+    def _ordinary_coefficients(self, xp, g, z, owner, edges, index, rule=None):
         layers = g['layers']
         # The kernels' records cover the layers they solved: all of them, or those left
         # between the merged ones (`half_space_merge`), which start at public layer `first`.
@@ -317,6 +454,11 @@ class FieldState:
             masks.reverse()
         kwargs = dict(sample_z=LayerSamples(local), incidences=(self.names[index],),
                       _coefficients=True)
+        if rule is not None and not rule['two_d']:
+            # Which layers put the D_x and B_x series in place of E_x and H_x, in the kernels'
+            # record order.
+            rows = next(iter(rule['by_size'].values()))[first:first + len(layers)]
+            kwargs['rule_rows'] = rows if self.mirrored else rows[::-1]
         args = (self.data['wavelength'], g['kx'])
         tail = (g['T1'], layers, self.data['lattice'])
         if self.kind in ('te', 'tm'):
@@ -423,10 +565,7 @@ def ordinary_spectra(solver, variants, *, eps_top=None, eps_bot=None, mu_top=Non
     k0 = 2*np.pi/solver.wavelength
     kxy = xp.stack([gx, gy], axis=-1)*k0
     lattice = _array(xp, solver.lattice.columns, kxy)
-    if solver._grating_type == 0:
-        kind = 'te' if solver.tetm_index == 0 else 'tm'
-    else:
-        kind = 'conical' if solver._grating_type == 1 else solver._formulation_assigned.value
+    kind = solver._field_kind()
     names = tuple(name for name, sub in variants.items() if sub is not None)
     (cx, hx), (cy, hy) = solver.order_window
     specular = (hy-cy)*(2*hx+1) + hx-cx
@@ -523,6 +662,7 @@ def ordinary_state(solver, spectra, merged=None):
     ``{'plan': (bottom, top, lit side), 'data': ...}`` (``CoreSolveMixin._finish_merge``):
     the plan rides in the aux data, the numbers under ``data['merge']``.
     """
+    from wavebit.rcwa._engine.lalanne import solved_structure
     if spectra is None:
         return None
     xp = array_namespace(spectra['kxy'])
@@ -538,31 +678,41 @@ def ordinary_state(solver, spectra, merged=None):
                        layers=solver.layer_info_list),)
     data = dict(lattice=spectra['lattice'], wavelength=solver.wavelength,
                 thickness=solver.thickness, boundary_kxy=spectra['kxy'], boundary=boundary,
-                groups=groups)
+                groups=groups, cell=solved_structure(solver.lattice))
     if merged is not None:
         data['merge'] = merged['data']
     return FieldState(_copy(data), spectra['kind'], solver._kernel_incidence_side == 'bottom',
                       spectra['names'], solver.order_window,
-                      None if merged is None else merged['plan'])
+                      None if merged is None else merged['plan'],
+                      structure=solver._solved_structure if groups else None,
+                      mu=solver._solved_mu if groups else None)
 
 
-def source_state(spectra, groups, lattice, wavelength, thickness):
-    """Adapt coherent source groups to the same sample/expand implementation."""
+def source_state(spectra, groups, lattice, wavelength, thickness, scene=None):
+    """Adapt coherent source groups to the same sample/expand implementation.
+
+    ``scene`` is the solver the groups came from, whose structure and cell the Lalanne rule reads.
+    It is copied here, with the fields it answers.
+    """
+    from wavebit.rcwa._engine.lalanne import solved_structure
     boundary = {'incident': {
         side: (spectra[side, 'incoming'].field, spectra[side, 'outgoing'].field)
         for side in ('top', 'bottom')
     }}
-    edges = np.r_[0., np.cumsum(_host_value(thickness).real)]
     converted = []
     for g in groups:
         item = dict(g)
         item['layers'] = item.pop('internal')
-        # Source solves group and segment eagerly; these are static host-layer indices.
-        item['hosts'] = tuple(
-            min(int(np.searchsorted(edges, (a+b)/2, side='right'))-1, len(edges)-2)
-            for a, b in zip(g['edges'][:-1], g['edges'][1:]))
+        # Source solves group and segment eagerly; ``hosts`` are the static host-layer indices
+        # the segmentation kept (`source_expansion.dipole_layers`), which a layer of no thickness
+        # cannot be read back off its coinciding edges.
         converted.append(item)
     data = dict(lattice=lattice, wavelength=wavelength, thickness=thickness,
                 boundary_kxy=spectra['top', 'incoming'].kxy, boundary=boundary,
                 groups=converted)
-    return FieldState(_copy(data), 'source')
+    keep = scene is not None and bool(converted)
+    if keep:
+        data['cell'] = solved_structure(scene.lattice)
+    return FieldState(_copy(data), 'source',
+                      structure=solved_structure(scene.structure) if keep else None,
+                      mu=solved_structure(scene.mu) if keep else None)
