@@ -1,0 +1,8 @@
+occupancy plane numpy 0.0559s  jax 0.2373s  torch 0.0710s  peak RSS 466 MB
+occupancy split numpy 0.0993s  jax 0.3422s  torch 0.1230s  peak RSS 470 MB
+occupancy plane numpy 0.0688s  jax 0.2422s  torch 0.0764s  peak RSS 468 MB
+occupancy split numpy 0.0863s  jax 0.3688s  torch 0.1106s  peak RSS 468 MB
+occupancy plane numpy 0.0668s  jax 0.2389s  torch 0.0672s  peak RSS 465 MB
+occupancy split numpy 0.0819s  jax 0.3686s  torch 0.0998s  peak RSS 467 MB
+fdtd plane plan 0.234s  first value_and_grad 12.41s  repeat 1.257s  peak RSS 656 MB  grad [-1165.60222769  -126.50948229]
+fdtd split plan 0.277s  first value_and_grad 14.41s  repeat 2.212s  peak RSS 739 MB  grad [-1171.32289654  -126.20527993]

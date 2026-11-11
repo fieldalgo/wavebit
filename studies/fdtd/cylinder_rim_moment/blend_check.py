@@ -33,7 +33,8 @@ def switch():
         c = rng.uniform(-.05, .05, 3)
         body = Cylinder(R, H, 'z', tuple(c))
         p = rng.uniform(-1, 1, (5000, 3)) * np.array([R + dx, R + dx, H / 2 + 2 * dx]) + c
-        near, area, diag, off, (pa, pm) = body._split_tensor(p, dx)
+        near, area, diag, off = body._split_tensor(p, dx)
+        _, pa, pm = body.plane(p, dx)
         far = ~near
         n += far.sum()
         worst = max(worst, np.abs(area - pa)[far].max() / dx ** 2,

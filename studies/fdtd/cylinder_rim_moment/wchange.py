@@ -66,7 +66,7 @@ def main():
             centre = (xc, yc, height / 2)
         body = Cylinder(radius, height, 'z', centre)
         staggers = [(.5, 0, 0), (0, .5, 0), (0, 0, .5), (0, .5, .5), (.5, 0, .5), (.5, .5, 0)]
-        for mode in ('rim', 'split', 'exact'):
+        for mode in tuple(__import__('os').environ.get('STUDY_MODES', 'rim,split,exact').split(',')):
             frac = changed = 0
             dws, dps = [], []
             for off in staggers:

@@ -160,9 +160,9 @@ if not 0 < _CAP_BLEND < 1:
 _CAP_RAMP = _os.environ.get('WAVEBIT_STUDY_CYLINDER_CAP_RAMP', 'inside')
 if _CAP_RAMP not in ('inside', 'centred'):
     raise ValueError(f'WAVEBIT_STUDY_CYLINDER_CAP_RAMP={_CAP_RAMP!r}')
-#: STUDY: the blend's polynomial: ``'c1'`` smoothstep ``y^2 (3 - 2y)`` (default) or ``'c2'``
+#: STUDY: the blend's polynomial: ``'c1'`` smoothstep ``y^2 (3 - 2y)`` or ``'c2'`` (default)
 #: smootherstep ``y^3 (10 - 15y + 6y^2)``, whose second derivative also vanishes at both ends.
-_CAP_STEP = _os.environ.get('WAVEBIT_STUDY_CYLINDER_CAP_STEP', 'c1')
+_CAP_STEP = _os.environ.get('WAVEBIT_STUDY_CYLINDER_CAP_STEP', 'c2')
 if _CAP_STEP not in ('c1', 'c2'):
     raise ValueError(f'WAVEBIT_STUDY_CYLINDER_CAP_STEP={_CAP_STEP!r}')
 #: STUDY: beyond this many cells from a cap plane, the side wall's own plane and the nearest-
@@ -1506,14 +1506,15 @@ class Cylinder(_Extrusion):
         return caps, area, diag, xp.stack(offs, axis=-1)
 
     def _split_tensor(self, points, dx):
-        """``(near, area, diag, off, plane)``: ``'split'``'s moment, blended across cap ties.
+        """``(near, area, diag, off)``: ``'split'``'s moment, blended across cap ties.
 
         In a voxel near a cap: the side wall's OWN tangent plane (radial normal ``g``, distance
         ``d_r``) times the axial overlap, plus the cap's clipped disc area times a **smooth
         share** ``S(t)``. No normal is selected and no arc is clipped.
 
         ``t = |cap - s| - dx/2`` is how far the cap plane lies outside the voxel's axial span
-        (negative inside). ``S`` is the C1 smoothstep ``y^2 (3 - 2y)``, ``eps = _CAP_BLEND * dx``.
+        (negative inside). ``S`` is the C2 smootherstep ``y^3 (10 - 15y + 6y^2)`` (:data:`_CAP_STEP`;
+        ``'c1'`` is the smoothstep ``y^2 (3 - 2y)``), ``eps = _CAP_BLEND * dx`` (default 0.02 dx).
         With :data:`_CAP_RAMP` ``'inside'`` (default), ``y = clip(-t/eps, 0, 1)``: exactly 0 for
         ``t >= 0`` -- a cap on the face or beyond it -- and exactly 1 for ``t <= -eps``. That
         is the plane's own one-sided limit at a tie (the nearest-surface plane at ``|d| = dx/2``
@@ -1521,9 +1522,9 @@ class Cylinder(_Extrusion):
         another body's face. The price: a cap within ``eps`` of a face is under-counted, and on
         the face counted nowhere, as the plane counts it. With ``'centred'``, ``y = clip(1/2 -
         t/eps, 0, 1)``: 1/2 on the face, ``S(t) + S(-t) = 1``, area conserved; measured to keep
-        the junction outlier. Either way ``|dS/dt| <= 1.5/eps``: a fixed number per cell, not a
-        function of how close the cap is to the face. The step it replaces (:func:`plane_share`:
-        1, 1/2, 0) is what made the tie a point outlier.
+        the junction outlier. Either way ``|dS/dt| <= 1.875/eps`` (``'c1'``: 1.5/eps): a fixed
+        number per cell, not a function of how close the cap is to the face. The step it
+        replaces (:func:`plane_share`: 1, 1/2, 0) is what made the tie a point outlier.
 
         ``near`` is ``min(t_lo, t_hi) < _SPLIT_REACH dx`` (plus ``eps/2`` centred); outside it the
         caller takes the nearest-surface plane. The switch is continuous because there the two
@@ -1532,8 +1533,8 @@ class Cylinder(_Extrusion):
         ``d``, ``n``). Where the plane's normal is axial or the corner's, its distance is at
         least ``dx/2 + t > (sqrt 2 / 2) dx``, beyond the voxel, so its area is 0 -- and the
         side wall, which is farther still, is out of the voxel too. Same moment, same
-        derivative, on both sides of the switch. ``plane`` is the nearest-surface
-        ``(area, moment)``, returned so the caller does not walk the surface twice.
+        derivative, on both sides of the switch -- so the callers use this moment everywhere
+        and never evaluate the nearest-surface plane at all; ``near`` is kept for the checks.
         """
         xp, (u, v, k), box, (lo, hi, s) = self._boxes(points, dx)
         centre = _as(xp, self.center, points)
@@ -1565,18 +1566,16 @@ class Cylinder(_Extrusion):
         zero = xp.zeros_like(area)
         offs = [zero, zero, zero]
         offs[((0, 1), (0, 2), (1, 2)).index(pair)] = muv
-        _, plane_area, plane_moment = _parts(
-            *self._extruded_surface(points, lambda _q: (d_r, g)), dx)
-        return near, area, diag, xp.stack(offs, axis=-1), (plane_area, plane_moment)
+        return near, area, diag, xp.stack(offs, axis=-1)
 
     def exact_moment(self, points, dx):
         if _CYLINDER_MOMENT == 'plane':
             return None
         if _CYLINDER_MOMENT == 'split':
-            xp = array_namespace(points)
-            near, area, diag, _, (plane_area, plane_moment) = self._split_tensor(points, dx)
-            return (xp.where(near, area, plane_area),
-                    xp.where(near[..., None], diag, plane_moment))
+            # Beyond ``near`` this IS the nearest-surface plane (see _split_tensor), so no
+            # selection is needed: measured 5.2e-16 dx^2 apart (blend_check.py switch).
+            _, area, diag, _ = self._split_tensor(points, dx)
+            return area, diag
         caps, area, diag, _ = self._exact_tensor(points, dx)
         if _CYLINDER_MOMENT == 'exact':
             return area, diag
@@ -1591,8 +1590,8 @@ class Cylinder(_Extrusion):
         if _CYLINDER_MOMENT == 'plane':
             return None
         if _CYLINDER_MOMENT == 'split':
-            near, area, diag, off, _ = self._split_tensor(points, dx)
-            return near, area, diag, off
+            _, area, diag, off = self._split_tensor(points, dx)
+            return array_namespace(points).ones_like(area) > 0, area, diag, off
         caps, area, diag, off = self._exact_tensor(points, dx)
         use = caps >= 0 if _CYLINDER_MOMENT == 'exact' else caps > 0
         return use, area, diag, off

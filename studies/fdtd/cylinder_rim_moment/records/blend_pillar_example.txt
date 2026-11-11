@@ -1,0 +1,1 @@
+pillar_gradient.py under split (blend, c2, eps 0.02): dT/d(R,H,eps) = (0.185429, -0.082352, 0.006185); assert atol 5e-5 fails, max abs 7.87e-3 (dT/dR)
