@@ -14,7 +14,6 @@ import pytest
 from wavebit import Material, Units
 from wavebit import rcwa as rcwa_api
 from wavebit.rcwa._factory import rcwa
-from wavebit.units import Z0
 
 PX, PY, WL = 400.0, 360.0, 620.0
 X = np.array([-171.3, -40.7, 33.1, 120.9])
