@@ -149,6 +149,20 @@ def field_for_thickness(d):
 여러 `PlaneWave`, `GaussianBeam`, 다이폴 같은 다른 소스의 계산은 소스 묶기와 층 분할에서 구체적인 수치값을 사용하며, JAX로 추적한 입력을 거부합니다. 위 설명은 평면파 하나의 계산에 해당합니다.
 :::
 
+### 재료 벽 바로 옆의 필드
+
+패턴이 있는 층 안에서 재료 벽에 수직인 필드 성분은 벽에서 끊깁니다. 벽을 건너 이어지는 것은 `eps*E_n`이므로 `E_n`은 유전율의 비만큼 바뀝니다. 차수를 자른 푸리에 급수는 이 끊김을 그리지 못합니다. `field()`는 기본적으로 성분마다 자기 계수를 그대로 더하는데(`reconstruction="plain"`), 그런 벽 옆에서 이 합은 양쪽 값의 평균을 지나고 물결칩니다. 차수를 아무리 올려도 마찬가지입니다. 그래서 `R`과 `T`가 수렴한 계산에서도 벽에서 몇 nm 떨어진 곳의 값은 틀릴 수 있습니다.
+
+`reconstruction="lalanne"`은 끊기는 성분을 벽을 건너 이어지는 `D = eps*E`의 급수로 더한 뒤 각 점의 유전율로 나눕니다(P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). 그래서 끊김이 벽 자리에 맞는 비로 들어갑니다. 벽이 x축과 y축에 나란한 격자와 셀에 쓸 수 있고, 곡선 벽과 사선 벽은 거부합니다.
+
+```python
+x = np.linspace(-200., 200., 401)                                       # nm, 벽을 가로지르는 위치
+default = result.field(x=x, y=[0.], z=[50.])                            # reconstruction="plain"
+beside_walls = result.field(x=x, y=[0.], z=[50.], reconstruction="lalanne")
+```
+
+성분에 수직인 벽 옆의 값, 곧 `D`, `eps*E_n`, 옆벽 근처의 흡수를 구할 때는 `"lalanne"`을 씁니다. 필드가 어디에 몰리는지 보는 매끄러운 그림, 성분과 나란한 벽을 건너는 공간 미분, 금속이 든 층, 도형의 위치나 크기에 대한 면적 평균의 미분에는 기본값을 씁니다. 어느 규칙이 나은지는 무엇을 구하느냐에 따라 달라서 기본값은 `"plain"`으로 두었습니다. 이 선택의 근거가 된 측정과 각 규칙이 거부하는 경우는 [필드 안내](../../guide/rcwa/fields.md)의 *Normal components inside a patterned layer*에 있습니다.
+
 (illumination-fields)=
 (fields-detail-id23)=
 ## 경계면의 입사파·출력파·전체 장 읽기

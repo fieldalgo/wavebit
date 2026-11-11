@@ -149,6 +149,20 @@ Coordinates such as `z=[50., 100.]` instead give the change at fixed heights. Di
 Runs with other sources, such as several `PlaneWave`s, a `GaussianBeam` or a dipole, use concrete numerical values to group sources and split layers and refuse a JAX-traced input. The differentiation discussion above applies to single-plane-wave runs.
 :::
 
+### Fields beside material walls
+
+Inside a patterned layer, the field component normal to a material wall jumps at the wall: `eps*E_n` is continuous across it, so `E_n` changes by the permittivity ratio. A truncated Fourier series cannot draw that jump. By default `field()` sums each component's own coefficients (`reconstruction="plain"`); beside such a wall that sum passes through the average of the two sides and rings, however many orders are used. Values a few nanometres from a wall can be off even when `R` and `T` have converged.
+
+`reconstruction="lalanne"` rebuilds the jumping component from the continuous `D = eps*E` series and divides by the permittivity at each point (P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)), so the jump lands at the wall with the right ratio. It applies to gratings and cells whose walls run along x and y; curved and slanted walls are refused.
+
+```python
+x = np.linspace(-200., 200., 401)                                       # nm, across the walls
+default = result.field(x=x, y=[0.], z=[50.])                            # reconstruction="plain"
+beside_walls = result.field(x=x, y=[0.], z=[50.], reconstruction="lalanne")
+```
+
+Use `"lalanne"` for values beside a wall normal to the component: `D`, `eps*E_n`, or absorption next to a sidewall. Keep the default for a smooth map of where the field concentrates, for a spatial derivative across a wall the component runs along, for layers that hold a metal, and for derivatives of an area average with respect to a shape's position or size. The default stays `"plain"` because which rule is better depends on what is read. The [fields guide](../../guide/rcwa/fields.md), under *Normal components inside a patterned layer*, gives the measurements behind these choices and what each rule refuses.
+
 (illumination-fields)=
 (fields-detail-id23)=
 ## Incoming, outgoing, and total fields at boundaries
