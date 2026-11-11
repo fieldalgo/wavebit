@@ -176,34 +176,39 @@ def test_plan_replays_against_moved_vertices():
 
 
 # --------------------------------------------------------------------------- normal field
-@pytest.mark.parametrize('truncation_order', [3, 6, 12])
-def test_normal_grid_floor_is_enforced(truncation_order):
-    """Below 4*truncation_order+1 the sampled field aliases; that must raise, not silently mis-transform."""
+@pytest.mark.parametrize('empty', [(0, 0), (0, 13), (13, -1)])
+def test_normal_grid_must_hold_a_point_per_axis(empty):
+    """A grid with no points on an axis has nothing to read the field off; that must raise.
+
+    Until 2026-11-11 this refused any grid below ``4*truncation_order+1``, because the field was
+    read as wrapped DFT bins. It is read through its trigonometric interpolant now, so every
+    positive grid is read, the shortest included.
+    """
     from wavebit.rcwa._engine.factorization import check_normal_grid
 
-    need = 4 * truncation_order + 1
-    with pytest.raises(ValueError, match='aliases'):
-        check_normal_grid((need - 1, need - 1), truncation_order, truncation_order)
-    check_normal_grid((need, need), truncation_order, truncation_order)
+    with pytest.raises(ValueError, match='has no points'):
+        check_normal_grid(empty)
+    for positive in ((1, 1), (1, 13), (12, 12), (13, 13)):
+        check_normal_grid(positive)
 
 
 @pytest.mark.parametrize('overlapping', [False, True], ids=['analytic', 'boundary'])
-def test_both_shape_paths_draw_the_floor_in_the_same_place(overlapping):
-    """The floor is a property of reading a field off a grid, not of which builder read it.
+def test_both_shape_paths_refuse_an_empty_grid_alike(overlapping):
+    """Both shape paths read the grid through ``factorization.check_normal_grid``, and agree.
 
-    Only the boundary route checked it until 2026-08-27, and the asymmetry was not a decision:
-    at ``truncation_order=10`` the boundary route refused ``shape_nvf_grid_size=8`` while the parametric
-    path built it -- ``sum(T)`` 4.9e-4 adrift, ``R + T`` exactly 1. Both go through
-    ``factorization.check_normal_grid`` now, which is where it had to live because
-    :mod:`~wavebit.rcwa._engine.boundary` imports :mod:`~wavebit.rcwa._engine.parametric` and the analytic
-    builder could not reach it in the other direction.
+    Only the boundary route checked its grid until 2026-08-27, and the asymmetry was not a
+    decision: at ``truncation_order=10`` the boundary route refused ``shape_nvf_grid_size=8``
+    while the parametric path built it. Both go through ``factorization.check_normal_grid`` now,
+    which is where it had to live because :mod:`~wavebit.rcwa._engine.boundary` imports
+    :mod:`~wavebit.rcwa._engine.parametric` and the analytic builder could not reach it in the
+    other direction. Since 2026-11-11 it refuses only a grid with no points, and both paths read
+    a grid below ``4*truncation_order+1``.
 
     Crossed over the two paths for the same reason every other refusal in this file is: a rule
     that held on one and not the other is exactly the shape the defect had.
     """
 
     order = 10
-    need = 4 * order + 1
     shapes = [dict(type='rectangle', cx=-0.20, cy=0.0, lx=0.34, ly=0.30, angle=0.0, material=4.0)]
     if overlapping:
         shapes.append(dict(type='rectangle', cx=-0.06, cy=0.0, lx=0.34, ly=0.30, angle=0.0,
@@ -213,9 +218,8 @@ def test_both_shape_paths_draw_the_floor_in_the_same_place(overlapping):
     build = lambda ng: _legacy_wavebit_rcwa(structure=[dict(background=1.0, shapes=shapes)],
                                     shape_nvf_grid_size=ng, **cfg)
 
-    with pytest.raises(ValueError, match='aliases'):
-        build(need - 1).solve()
-    assert 0.0 < float(np.sum(np.asarray(build(need).solve().T)).real) < 1.0
+    with pytest.raises(ValueError, match='has no points'):
+        build(0).solve()
 
 
 def test_normal_field_is_the_edge_normal_beside_an_edge():

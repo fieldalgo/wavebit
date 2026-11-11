@@ -1262,31 +1262,59 @@ class AutoDetuneWarning(UserWarning):
 
 
 class ShapeGridWarning(UserWarning):
-    """A tensor-material region layer reads a ``shape_nvf_grid_size`` below ``4*max(orders)+1``.
+    """A region layer reads a stated ``shape_nvf_grid_size`` below ``4*max(orders)+1``.
 
     Public path: ``wavebit.rcwa.diagnostics.ShapeGridWarning``.
 
-    A scalar shape layer refuses such a grid (``numerics.grid``): its normal field aliases there.
-    A layer whose regions hold a tensor material reads the grid through its own interpolation of
-    the normal field (and, with ``fourier_coefficients='sampled'``, paints its regions on it), with
-    no floor, so it runs; ``check`` and ``prepare`` report it as a ``numerics.grid`` warning and
-    ``prepare`` (so ``run``) emits this.
+    The shape NVF projectors use the normal field's Fourier orders up to ``2*max(orders)``, and
+    a grid of ``n`` points per axis resolves the orders below ``n/2``; below ``4*max(orders)+1``
+    it resolves fewer. Such a grid runs, on scalar- and tensor-material region layers alike:
+    ``check`` and ``prepare`` report it as a ``numerics.grid`` warning, and ``prepare`` (so
+    ``run``) emits this. A layer without regions reads no grid, so a stack of them does not
+    warn. ``4*max(orders)+1`` is not an accuracy bound: the error has no step there, falls with
+    the grid on both sides of it, and not monotonically (an odd grid, that one included, is
+    often worse than the even grid just below it).
 
-    Measured against the default grid (1024) on three tensor layers (a diagonal rectangle, a
-    rotated off-diagonal circle, an ellipse beside a rectangle) at orders (1, 1) to (3, 3), NumPy
-    and JAX alike, the largest per-order R or T error:
+    **Scalar-material layers** take the scalar shape builder, which reads the normal field's
+    coefficients off the field's trigonometric interpolant (zero past Nyquist, the Nyquist mode
+    split between its two signs), so a constant field gives the identity on any grid. Measured
+    against the default grid (1024) on ten layers (a rectangle, a tilted rectangle, a circle,
+    an ellipse, a pentagon, two overlapping circles, a circle in a hexagonal cell, an ellipse in
+    an oblique cell, a lossy and a metallic circle) at orders (3, 3) and (5, 5), NumPy, the
+    largest per-order R or T error:
 
-        grid                 integrated (default)   fourier_coefficients='sampled'
-        1 to 3               3.3e-3 .. 2.6e-2       3.6e-2 .. 1.3e-1
-        4 to the floor - 1   1.4e-3 .. 8.6e-3       7.6e-3 .. 9.0e-2
-        the floor            3.0e-4 .. 5.1e-3       1.7e-3 .. 4.7e-2
-        64                   8.4e-6 .. 1.4e-4       8.9e-4 .. 3.1e-3
+        grid                      scalar layers
+        1 to 3                    6.7e-4 .. 2.6e-1
+        4 to 4*max(orders)        6.8e-6 .. 6.9e-2
+        4*max(orders)+1           2.9e-5 .. 4.9e-2
+        64                        1.9e-7 .. 1.9e-2
 
-    There is no cliff at the floor, which is why this warns rather than refuses. A material
-    derivative converges far later: at orders (2, 2), ``d(sum T)/d(eps_xx)`` was off by more than
-    100% at most grids tested below the floor (by 42% to 13 times its value), with the wrong sign
-    at some, and by 3-35% even at 64. Leave the
-    grid at ``None`` (the default), or check convergence in it, before trusting a gradient.
+    Lossless layers conserved ``R + T`` to 1.7e-13 at every grid below ``4*max(orders)+1``. A
+    shape-parameter derivative of ``sum(T)`` (eager ``jax.grad``, orders (3, 3), six layers)
+    was 9e-4 to 120% off the default-grid derivative below it, 0.5-9% at it and up to 0.7% at
+    64. Until 2026-11-11 these layers refused such a grid: their coefficients were wrapped DFT
+    bins, which on ``2*max(orders)`` points or fewer turn a constant field into a matrix with
+    off-diagonals of 1.0.
+
+    **Tensor-material layers** (a layer of a stack that holds a tensor material) read the grid
+    through the tensor builder's own interpolation of the normal field (and, with
+    ``fourier_coefficients='sampled'``, paint their regions on it). Measured against the default
+    grid on three tensor layers (a diagonal rectangle, a rotated off-diagonal circle, an ellipse
+    beside a rectangle) at orders (1, 1) to (3, 3), NumPy and JAX alike, the largest per-order R
+    or T error:
+
+        grid                      integrated (default)   fourier_coefficients='sampled'
+        1 to 3                    3.3e-3 .. 2.6e-2       3.6e-2 .. 1.3e-1
+        4 to 4*max(orders)        1.4e-3 .. 8.6e-3       7.6e-3 .. 9.0e-2
+        4*max(orders)+1           3.0e-4 .. 5.1e-3       1.7e-3 .. 4.7e-2
+        64                        8.4e-6 .. 1.4e-4       8.9e-4 .. 3.1e-3
+
+    A material derivative converges far later: at orders (2, 2), ``d(sum T)/d(eps_xx)`` was off
+    by more than 100% at most grids tested below ``4*max(orders)+1`` (by 42% to 13 times its
+    value), with the wrong sign at some, and by 3-35% even at 64.
+
+    Leave the grid at ``None`` (the default), or check convergence in it, before trusting a
+    value or a gradient.
     """
 
 

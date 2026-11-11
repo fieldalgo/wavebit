@@ -3438,8 +3438,8 @@ class CoreFactorizationMixin:
                  # (`rectilinear`), and refuses it on any other shape; tensor materials refuse
                  # 'laurent'.
                  shape_nvf_grid_size=None,  # normal-field sampling, per axis; None resolves to
-                 # max(_NORMAL_GRID_DEFAULT, 4*half_width+1) -- 1024, lifted to the aliasing
-                 # floor. This comment said 256 until 2026-09-02, which is a number that was
+                 # max(_NORMAL_GRID_DEFAULT, 4*half_width+1) -- 1024, lifted to
+                 # 4*half_width+1 at high orders. This comment said 256 until 2026-09-02, which is a number that was
                  # tried and reverted: it is a rectangle's *angle* that sets the grid, and 256
                  # sits 9.7% from the converged gradient there. Read by the shape paths only --
                  # the normal field has no closed-form transform, so it is sampled and read off
@@ -5548,7 +5548,7 @@ class CoreFactorizationMixin:
                 '1 or more would take a material twice the half-space\'s to be it.')
         self._half_space_merge_tolerance = value
 
-    #: What `shape_nvf_grid_size=None` means, before the `4*truncation_order+1` floor lifts it.
+    #: What `shape_nvf_grid_size=None` means, before `4*truncation_order+1` lifts it at high orders.
     #:
     #: **1024, and it survived an attempt to drop it to 256.** On the forward value 1024 is
     #: plainly over-specified: 256 moves `sum(T)` by 1.4e-9 to 7.2e-7 on a circle, a tilted
@@ -5591,11 +5591,12 @@ class CoreFactorizationMixin:
     def _resolve_normal_grid(self, half_width_u, half_width_v):
         """`shape_nvf_grid_size`, with `None` meaning "enough, and not more".
 
-        A *stated* number is taken as stated and checked against the aliasing floor by
-        :func:`~wavebit.rcwa._engine.factorization.check_normal_grid`, which refuses below it. The
-        default must never be the thing that trips that check, so it is resolved against the
-        same floor rather than being a literal -- at `truncation_order=64` a flat 256 would
-        refuse a solve nobody configured.
+        A *stated* number is taken as stated: any positive grid is read
+        (:func:`~wavebit.rcwa._engine.factorization.check_normal_grid`), and one below
+        ``4*truncation_order+1`` warns (``ShapeGridWarning``). The default is resolved against
+        that size rather than being a literal -- at `truncation_order=64` a flat 256 would put
+        a solve nobody configured on a grid that resolves fewer orders than the projectors
+        use. Until 2026-11-11 a stated grid below it was refused on scalar shape layers.
 
         **The default's stated reason was the right kind of reason and the wrong measurement.**
         It read "sets the floor on shape gradients (a translation-invariant structure should
@@ -5624,28 +5625,6 @@ class CoreFactorizationMixin:
         if want is None:
             return max(self._NORMAL_GRID_DEFAULT, floor)
         return want
-
-    def _stated_normal_grid_meets_its_floor(self):
-        """Whether a build checks a *stated* ``shape_nvf_grid_size`` against the aliasing floor.
-
-        The public doors ask this before anything is built, so that ``check`` and ``prepare``
-        refuse what the build would (:func:`~wavebit.rcwa._engine.factorization.check_normal_grid`)
-        and nothing else. It follows the build's own dispatch: on the parametric NVF path a stack
-        with no tensor material checks it in every build, including one whose layers have no
-        regions; in a tensor stack only an isotropic patterned layer does, since that takes the
-        scalar shape builder (``tensor_shapes.checked_layers``), while a tensor layer reads the
-        grid through its own spectral interpolation, which has no floor. ``None`` is resolved at
-        or above the floor (:meth:`_resolve_normal_grid`), so it never trips this.
-        """
-        if (self._normal_grid is None or self._modeling_path != ModelingPath.PARAMETRIC
-                or self.factorization != Factorization.NVF):
-            return False
-        if not self._has_tensor_materials():
-            return True
-        if not _anisotropy.integrated_shapes(self):
-            return False
-        from wavebit.rcwa._engine.tensor_shapes import _isotropic
-        return any(_isotropic(layer) is not None for layer in self.structure)
 
     def _reject_unread_normal_method(self, factorization):
         """Refuse an explicit ``raster_normal_method`` on a build that constructs no raster normal

@@ -547,7 +547,7 @@ def polygon_dyadic_projector(xp, pts, polys, lattice, dtype, transform, ring, ch
 def polygon_projector_coeffs(xp, polys, grid_shape, lattice, hu, hv, dtype, cdtype, plan,
                              shapes=None):
     """Sample the polygon Jones projector after removing a common translation."""
-    check_normal_grid(grid_shape, hu, hv)
+    check_normal_grid(grid_shape)
     polys = [xp.astype(v, dtype) for v in polys]
     # The first shape's centre, as on the parametric route since 2026-09-11 (the vertex mean
     # of an area-matched n-gon or a box is its centre to rounding). A phase restores a rigid
@@ -1319,7 +1319,7 @@ def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_w
     a claim that finite quadrature equals the continuous Fourier integral.
     Legacy raw-loop probes keep their single-loop centroid convention.
     """
-    check_normal_grid(grid_shape, half_width_u, half_width_v)
+    check_normal_grid(grid_shape)
     if len(loops) == 1 or anchor is not None:
         c = anchor if anchor is not None else _centroid(xp, loops[0])
         # The `lattice is None` arm that used to sit here computed the rectangle's answer

@@ -623,13 +623,20 @@ with the field taken hard -- one step straddled at 1e-4 -- and reads 0.1476 / 0.
 0.1477 / 0.1477 averaged. The raw probe `distance_gradient_normal_field`, which no solve reads,
 keeps the discontinuity.
 
-**The sampled normal field needs `4*m+1` points per axis**, `m` being that axis's entry of
-`rcwa.Numerics(orders=...)`. Below it, `k % n` folds distinct
-orders onto one bin, and the damage is structural rather than gradual — a constant normal field
-stops transforming to the identity, so NVF no longer collapses onto Li's rules and picks up
-off-diagonals at `±n` instead. `factorization.check_normal_grid` raises instead of quietly
-mis-transforming. This is the same floor `factorization._normal_field_floor` enforces on the
-raster path; the constraint belongs to the transform, not to the path that feeds it.
+**The sampled normal field is read through its trigonometric interpolant** (since 2026-11-11).
+The projectors use the field's Fourier orders up to `±2m` on each axis, `m` being that axis's
+entry of `rcwa.Numerics(orders=...)`, and a grid of `n` points resolves the orders below `n/2`.
+An order the grid cannot resolve reads zero, the Nyquist order is split between its two signs,
+and a constant normal field transforms to the identity on any grid, so NVF still collapses onto
+Li's rules. Any positive `shape_nvf_grid_size` runs; one below `4*m+1` resolves fewer orders than
+the projectors use and is reported as a `numerics.grid` warning (`ShapeGridWarning`), with the
+error measured on each kind of layer. The grid controls accuracy only, and `4*m+1` is not an
+accuracy bound: on ten scalar shape layers the error has no step there and was already 3e-5 to
+5e-2 per order away from the default-grid answer at it. Converge the grid instead. Until then
+`factorization.check_normal_grid` refused a grid below `4*m+1`, because the coefficients were
+wrapped DFT bins (`k % n`) that, on `2m` points or fewer, gave a constant field off-diagonals of
+1.0. The raster path is unchanged: it lifts a raster to `4*m+1` per axis by repetition
+(`factorization._normal_field_floor`) before reading its normal field.
 
 ## What has been verified
 
