@@ -663,7 +663,7 @@ def test_periodic_sample_times_are_refused_in_seconds_under_their_public_name():
         assert caught.value.path == 'times_seconds' and says in caught.value.message
 
 
-# -- 12. A shape NVF grid below 4*max(orders)+1 is refused at check, not first at run ----------
+# -- 12. A shape NVF grid below 4*max(orders)+1 runs at every door, and a region layer warns -------
 
 _REGION = (rcwa.Region(geometry=rcwa.Rectangle(size=(.3, .4)), material=Material(4.)),)
 _TENSOR = (rcwa.Region(geometry=rcwa.Rectangle(size=(.3, .4)), material=Material(np.diag([4., 3., 2.]))),)
@@ -684,29 +684,123 @@ def _grid_problem(layers, beam=False):
                         **(dict(outputs=_BEAM_OUT) if beam else {}))
 
 
+def _short_grid_doors(problem, numerics, warned, backend='numpy'):
+    """``check``, ``prepare`` and ``run`` on a short grid: the report, and both doors' results.
+
+    ``warned`` lists the layers the ``numerics.grid`` warning names, empty for a stack that
+    reads no grid. Until 2026-11-11 a scalar shape stack refused this grid at every door.
+    """
+    import contextlib
+    import warnings
+    report = rcwa.check(problem, numerics=numerics, backend=backend)
+    assert report.ok
+    need = 4*max(numerics.orders) + 1
+    if warned:
+        (issue,) = report.issues
+        assert (issue.code, issue.path, issue.severity) == ('numerics.grid', 'numerics.shape_nvf_grid_size', 'warning')
+        assert (issue.expected, issue.actual) == (f'>= {need}', numerics.shape_nvf_grid_size)
+        assert f'4*max(orders)+1 = {need}' in issue.message
+        assert 'truncation_order' not in issue.message
+        for i in warned:
+            assert f'stack.layers[{i}]' in issue.message
+    else:
+        assert report.issues == ()
+
+    def door():
+        if warned:
+            return pytest.warns(rcwa.diagnostics.ShapeGridWarning,
+                                match=f'shape_nvf_grid_size={numerics.shape_nvf_grid_size} is below')
+        quiet = contextlib.ExitStack()
+        quiet.enter_context(warnings.catch_warnings())
+        warnings.simplefilter('error', rcwa.diagnostics.ShapeGridWarning)
+        return quiet
+
+    with door():
+        prepared = rcwa.prepare(problem, numerics=numerics, backend=backend)
+    assert prepared.report.issues == report.issues
+    with door():
+        ran = rcwa.run(problem, numerics=numerics, backend=backend)
+    return report, prepared.run(problem), ran
+
+
+def _host(value):
+    return np.asarray(value.detach().cpu() if hasattr(value, 'detach') else value)
+
+
 @pytest.mark.parametrize('orders,grid', [((2, 2), 8), ((3, 1), 12), ((1, 0), 4)])
 @pytest.mark.parametrize('stack', sorted(GRID_STACKS))
-def test_an_aliasing_shape_nvf_grid_is_refused_at_every_door(stack, orders, grid):
-    problem = _grid_problem(GRID_STACKS[stack])
-    issue = _refused_alike(problem, rcwa.Numerics(orders=orders, shape_nvf_grid_size=grid))
-    assert (issue.code, issue.path) == ('numerics.grid', 'numerics.shape_nvf_grid_size')
-    need = 4*max(orders) + 1
-    assert f'at least 4*max(orders)+1 = {need}' in issue.message
-    assert 'truncation_order' not in issue.message
-    # The advice: at the floor, the same problem runs.
-    result = rcwa.run(problem, numerics=rcwa.Numerics(orders=orders, shape_nvf_grid_size=need))
-    assert np.isfinite(result.T).all()
+def test_a_short_shape_nvf_grid_runs_at_every_door(stack, orders, grid):
+    layers = GRID_STACKS[stack]
+    problem = _grid_problem(layers)
+    # Every layer with regions reads the grid and is named; a stack without regions reads none.
+    warned = [i for i, layer in enumerate(layers) if layer.regions]
+    _, via_prepare, ran = _short_grid_doors(problem, rcwa.Numerics(orders=orders, shape_nvf_grid_size=grid), warned)
+    for name in ('R', 'T'):
+        assert np.array_equal(getattr(via_prepare, name), getattr(ran, name))
+        assert np.isfinite(getattr(ran, name)).all()
+    if stack != 'tensor-beside-region':
+        # Lossless scalar stacks conserve energy below the old floor too. (A tensor layer's
+        # integrated closure is not Hermitian at finite order, at any grid.)
+        assert abs(float(np.sum(ran.R) + np.sum(ran.T)) - 1.) < 1e-12
 
 
 @pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
 @pytest.mark.parametrize('beam', [False, True], ids=['plane-wave', 'beam'])
-def test_an_aliasing_shape_nvf_grid_is_refused_alike_on_each_backend(backend, beam):
+def test_a_short_shape_nvf_grid_runs_alike_on_each_backend(backend, beam):
     pytest.importorskip(backend)
     problem = _grid_problem(GRID_STACKS['region'], beam=beam)
     x64 = (__import__('jax').enable_x64(True) if backend == 'jax' else __import__('contextlib').nullcontext())
     with x64:
-        issue = _refused_alike(problem, rcwa.Numerics(orders=(2, 2), shape_nvf_grid_size=8), backend=backend)
-    assert (issue.code, issue.path) == ('numerics.grid', 'numerics.shape_nvf_grid_size')
+        _, via_prepare, ran = _short_grid_doors(problem, rcwa.Numerics(orders=(2, 2), shape_nvf_grid_size=8),
+                                                [0], backend=backend)
+        if beam:
+            outputs = {(port, side): (_host(getattr(via_prepare.outputs[port], side)), _host(getattr(power, side)))
+                       for port, power in ran.outputs.items() if hasattr(power, 'incoming')
+                       for side in ('incoming', 'outgoing')}
+            assert outputs
+            for a, b in outputs.values():
+                assert np.array_equal(a, b) and np.isfinite(b).all()
+        else:
+            for name in ('R', 'T'):
+                a, b = _host(getattr(via_prepare, name)), _host(getattr(ran, name))
+                assert np.array_equal(a, b) and np.isfinite(b).all()
+            assert abs(float(np.sum(_host(ran.R)) + np.sum(_host(ran.T))) - 1.) < 1e-12
+
+
+# Which builder reads the grid, per layer: (layers, fourier_coefficients, scalar-builder layers,
+# tensor-stack layers). In a tensor stack an isotropic layer takes the scalar builder under the
+# integrated coefficients and is painted with the tensor layers under 'sampled'.
+_GRID_WARNING_KINDS = {
+    'region': (GRID_STACKS['region'], None, [0], []),
+    'region-beside-region-free': ((rcwa.Layer(thickness=.2, background=Material(1.5)),) + GRID_STACKS['region'],
+                                  None, [1], []),
+    'tensor-beside-region': (GRID_STACKS['tensor-beside-region'], None, [1], [0]),
+    'tensor-beside-region-sampled': (GRID_STACKS['tensor-beside-region'], 'sampled', [], [0, 1]),
+}
+
+
+@pytest.mark.parametrize('case', sorted(_GRID_WARNING_KINDS))
+def test_a_short_grid_warning_says_what_was_measured_for_each_kind_of_layer(case):
+    layers, coefficients, scalar, tensor = _GRID_WARNING_KINDS[case]
+    problem = _grid_problem(layers)
+    numerics = rcwa.Numerics(orders=(2, 2), shape_nvf_grid_size=8, fourier_coefficients=coefficients)
+    report = rcwa.check(problem, numerics=numerics)
+    assert report.ok
+    (issue,) = report.issues
+    assert (issue.code, issue.severity) == ('numerics.grid', 'warning')
+    assert issue.message.startswith('shape_nvf_grid_size=8 is below 4*max(orders)+1 = 9 at Numerics(orders=(2, 2))')
+    names = lambda indices: ', '.join(f'stack.layers[{i}]' for i in indices)
+    said_scalar = f'{names(scalar)} {"takes" if len(scalar) == 1 else "take"} the scalar shape builder'
+    said_tensor = f'{names(tensor)} {"is" if len(tensor) == 1 else "are"} in a stack with tensor materials'
+    assert (said_scalar in issue.message) == bool(scalar)
+    assert ('the scalar shape builder' in issue.message) == bool(scalar)
+    assert (said_tensor in issue.message) == bool(tensor)
+    assert ('in a stack with tensor materials' in issue.message) == bool(tensor)
+    assert 'floor' not in issue.message and 'refuse' not in issue.message
+    # At 4*max(orders)+1 and at the default grid, nothing to say.
+    for grid in (9, None):
+        quiet = rcwa.Numerics(orders=(2, 2), shape_nvf_grid_size=grid, fourier_coefficients=coefficients)
+        assert rcwa.check(problem, numerics=quiet).issues == ()
 
 
 @pytest.mark.parametrize('layers', [

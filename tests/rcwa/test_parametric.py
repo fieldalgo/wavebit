@@ -55,7 +55,8 @@ def to_conv_mat_smooth(shapes, background, half_width_u, half_width_v, period):
 # ----------------------------------------------------------------------
 # 1. coefficient-builder conventions: ordering, and the complex-permittivity branch
 # ----------------------------------------------------------------------
-def test_conv_matrix_matches_grid_convention():
+@pytest.mark.parametrize('grid', [(13, 9), (14, 10)], ids=['at-4m+1', 'above'])
+def test_conv_matrix_matches_grid_convention(grid):
     """The sampled transform is written twice; the two spellings must stay one transform.
 
     ``fourier2d_pointwise`` (raster path) and ``_sampled_coeffs`` + ``conv_matrix_2d`` (parametric
@@ -71,9 +72,16 @@ def test_conv_matrix_matches_grid_convention():
     diverged -- and it was briefly misread as a stale convention probe rather than as the
     finding it was. Comparing the two shipped spellings instead is what makes the failure
     legible: it names the path that was missed.
+
+    They are one transform at or above ``4*truncation_order+1`` points per axis, where the
+    interpolant's weights are all 1 and ``_sampled_coeffs`` returns the wrapped bins; the raster
+    path lifts its grid to that size before reading a normal field. Below it they differ by
+    design (``_sampled_coeffs`` drops the orders past Nyquist and splits the Nyquist one), so
+    the grid here is the exact size on both axes and an even one above it. Until 2026-11-11 it
+    was 12x10, one point short on the v axis, where the two still agreed.
     """
     rng = np.random.default_rng(0)
-    cell = (rng.random((12, 10)) + 1.0).astype(complex)
+    cell = (rng.random(grid) + 1.0).astype(complex)
     half_width_u, half_width_v = 2, 3
 
     M_raster = raw_dft(cell, half_width_u, half_width_v)

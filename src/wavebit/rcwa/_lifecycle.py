@@ -136,31 +136,6 @@ def _resolve(problem, numerics, execution):
     return solvers
 
 
-def _refuse_aliasing_grid(numerics, solvers):
-    """Refuse an explicit ``shape_nvf_grid_size`` below ``4*max(orders)+1`` before anything runs.
-
-    The engine reads this grid only when it builds the shape NVF projectors, so ``check`` and
-    ``prepare``, which build no layer, passed it and ``run`` refused it (``rcwa.invalid``, an
-    aliasing message). The engine says whether its build checks the stated grid
-    (``_stated_normal_grid_meets_its_floor``): NVF on the parametric path, including a stack whose
-    layers have no regions, except a tensor layer, which reads the grid without that floor. The
-    default is resolved at or above the floor, so only a stated value can trip it.
-    """
-    grid = numerics.shape_nvf_grid_size
-    scene = _engine_scene(solvers[0])
-    if grid is None or not scene._stated_normal_grid_meets_its_floor():
-        return
-    (_, half_u), (_, half_v) = scene.order_window
-    need = max(4*half_u + 1, 4*half_v + 1)
-    if grid < need:
-        raise ValidationError(
-            f'shape_nvf_grid_size={grid} aliases at Numerics(orders=({half_u}, {half_v})): the shape '
-            f'NVF normal field is read off a {grid}x{grid} grid, and the projectors ask for orders up '
-            f'to +/-2*orders, so it needs at least 4*max(orders)+1 = {need} points per axis. Give '
-            f'shape_nvf_grid_size >= {need}, or leave it None for max(1024, {need}).',
-            code='numerics.grid', path='numerics.shape_nvf_grid_size', expected=f'>= {need}', actual=grid)
-
-
 def _refuse_unbounded_power_region(problem):
     """Refuse a localized source without a finite rectangle ``power_region`` before anything runs.
 
@@ -277,37 +252,67 @@ def _refuse_patterned_dipole_host(problem, execution, solvers):
                         expected='a uniform host layer', actual=f'stack.layers[{li}]')
 
 
-def _short_tensor_grid(numerics, solvers):
-    """The ``numerics.grid`` warning for a stated grid below the floor that a tensor layer reads.
+def _short_shape_grid(numerics, solvers):
+    """The ``numerics.grid`` warning for a stated grid below ``4*max(orders)+1`` that a region layer reads.
 
-    ``_refuse_aliasing_grid`` refuses such a grid wherever a build checks it against the floor.
-    A tensor-material region layer reads it without that floor (its own normal-field
-    interpolation, and its painted regions under ``fourier_coefficients='sampled'``), so it runs;
-    this says so. ``None`` when there is nothing to warn about.
+    On the shape NVF path every layer with regions reads ``shape_nvf_grid_size``, and any
+    positive grid runs. A scalar-material layer takes the scalar shape builder, which reads its
+    normal field through the field's trigonometric interpolant; a layer of a stack that holds a
+    tensor material reads it through the tensor builder's own interpolation (and, under
+    ``fourier_coefficients='sampled'``, paints its regions on it). Below ``4*max(orders)+1``
+    the grid resolves fewer orders than the projectors use, and this says so, with what was
+    measured for each kind of layer. A layer without regions reads no grid, so a stack of
+    them (or no layers) does not warn. Until 2026-11-11 a scalar shape layer refused such a
+    grid. ``None`` when there is nothing to warn about.
     """
     from ..errors import Issue
+    from ._engine.anisotropy import integrated_shapes
+    from ._engine.tensor_shapes import _isotropic
     grid = numerics.shape_nvf_grid_size
     scene = _engine_scene(solvers[0])
-    if (grid is None or scene.factorization.value != 'nvf' or scene.modeling_path != 'parametric'
-            or not scene._has_tensor_materials()):
+    if grid is None or scene.factorization.value != 'nvf' or scene.modeling_path != 'parametric':
         return None
     (_, half_u), (_, half_v) = scene.order_window
     need = max(4*half_u + 1, 4*half_v + 1)
-    layers = [i for i, layer in enumerate(scene.structure or ()) if layer.get('shapes')]
+    structure = scene.structure or ()
+    layers = [i for i, layer in enumerate(structure) if layer.get('shapes')]
     if grid >= need or not layers:
         return None
+    # The engine's own dispatch: in a tensor stack an isotropic layer takes the scalar builder
+    # under the integrated coefficients, and is painted with the rest under 'sampled'.
+    if not scene._has_tensor_materials():
+        scalar = layers
+    elif integrated_shapes(scene):
+        scalar = [i for i in layers if _isotropic(structure[i]) is not None]
+    else:
+        scalar = []
+    tensor = [i for i in layers if i not in scalar]
+
+    def named(indices, one, many):
+        return f'{", ".join(f"stack.layers[{i}]" for i in indices)} {one if len(indices) == 1 else many}'
+
+    said = []
+    if scalar:
+        said.append(
+            f'{named(scalar, "takes", "take")} the scalar shape builder, which reads the normal '
+            'field through its trigonometric interpolant: on ten scalar shape layers at orders '
+            '(3, 3) and (5, 5), against the default grid, R and T moved by up to 2.6e-1 per order '
+            'below 4*max(orders)+1 and by up to 4.9e-2 at it, lossless layers conserved energy to '
+            '2e-13, and a shape gradient was off by up to 120%.')
+    if tensor:
+        said.append(
+            f'{named(tensor, "is", "are")} in a stack with tensor materials, which reads the grid '
+            'through its own interpolation of the normal field (and paints its regions on it '
+            "under fourier_coefficients='sampled'): on three tensor layers, against the default "
+            "grid, R and T moved by up to 2.6e-2 per order (1.3e-1 under 'sampled'), and material "
+            'gradients by more than 100% at most grids tested, at some with the wrong sign.')
     return Issue(
         code='numerics.grid', severity='warning', path='numerics.shape_nvf_grid_size',
         expected=f'>= {need}', actual=grid,
         message=f'shape_nvf_grid_size={grid} is below 4*max(orders)+1 = {need} at Numerics(orders='
-                f'({half_u}, {half_v})). A scalar shape layer refuses that grid; '
-                f'{", ".join(f"stack.layers[{i}]" for i in layers)} '
-                f'{"holds" if len(layers) == 1 else "hold"} tensor-material regions, which read it '
-                'without that floor, so this runs. Measured against the default grid, R and T moved by up to 2.6e-2 per order '
-                "below the floor (1.3e-1 under fourier_coefficients='sampled'), and material "
-                'gradients by more than 100% at most grids tested, at some with the wrong sign. Leave '
-                'shape_nvf_grid_size=None, or check convergence in the grid; see '
-                'wavebit.rcwa.diagnostics.ShapeGridWarning.')
+                f'({half_u}, {half_v})): this runs, but the grid resolves fewer orders than the '
+                f'projectors use. {" ".join(said)} Leave shape_nvf_grid_size=None, or check '
+                'convergence in the grid; see wavebit.rcwa.diagnostics.ShapeGridWarning.')
 
 
 def _report(problem, numerics, execution, solvers):
@@ -316,7 +321,7 @@ def _report(problem, numerics, execution, solvers):
     modes = (2*window[0][1]+1)*(2*window[1][1]+1)
     cbytes = 16 if execution.precision == 'double' else 8
     single = _adapt.single_plane(problem)
-    warning = _short_tensor_grid(numerics, solvers)
+    warning = _short_shape_grid(numerics, solvers)
     return CheckReport(
         issues=() if warning is None else (warning,),
         estimates={'retained_spatial_modes': modes,
@@ -376,7 +381,6 @@ def check(problem, *, numerics, backend='numpy', device='cpu', precision='double
         # tensor or scalar -- is the same at every wavelength.
         with execution._scope():
             _engine_scene(solvers[0])._check_layer_geometry()
-        _refuse_aliasing_grid(numerics, solvers)
         _refuse_unbounded_power_region(problem)
         _refuse_unreadable_power_region(problem, execution, solvers)
         _refuse_patterned_dipole_host(problem, execution, solvers)
@@ -670,7 +674,6 @@ def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='doub
         solvers = _resolve(problem, numerics, execution)
         _adapt.refuse_nonfinite(problem)
         geometry = tuple(_engine_scene(solver).freeze_geometry() for solver in solvers)
-        _refuse_aliasing_grid(numerics, solvers)
         _refuse_unbounded_power_region(problem)
         _refuse_unreadable_power_region(problem, execution, solvers)
         _refuse_patterned_dipole_host(problem, execution, solvers)
