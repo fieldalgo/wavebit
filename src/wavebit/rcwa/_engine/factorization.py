@@ -753,32 +753,46 @@ def _layer_eps(xp, structure):
         yield xp.astype(layer, _complex_dtype(xp, layer))
 
 
-def check_normal_grid(grid_shape, half_width_u, half_width_v):
-    """``4*truncation_order+1`` points per axis, or reading the field off the grid aliases.
+def interpolant_weights(n, half_width):
+    """Per-order weights of the cell-centre trigonometric interpolant on an ``n``-point axis.
 
-    The same floor :func:`_normal_field_floor` lifts a raster to, stated as a refusal for the
-    paths that take the grid as a *number* instead of lifting one: a raster can be repeated up
-    to the floor without changing what it describes, and a sampling resolution cannot.
+    For orders ``-2*half_width .. 2*half_width``: ``1`` below Nyquist (``2|k| < n``), ``1/2`` at
+    it (``2|k| == n``, even ``n``: the mode is split between its two signs, as
+    :func:`~wavebit.rcwa._engine.tensor_shapes._interpolant` splits it), ``0`` past it. Python
+    floats, decided from the grid shape alone, so a trace sees constants.
 
-    Structural, not gradual: a *constant* normal field has to transform to the identity for NVF
-    to collapse onto Li's rules, and on a short grid it picks up off-diagonals at ``+/-n``
-    instead.
+    With ``n >= 4*half_width + 1`` every weight is exactly ``1``: the interpolant's coefficients
+    are then the DFT bins themselves, and :func:`~wavebit.rcwa._engine.parametric._sampled_coeffs`
+    skips the multiply.
+    """
+    return [1.0 if 2 * abs(k) < n else (0.5 if 2 * abs(k) == n else 0.0)
+            for k in range(-2 * half_width, 2 * half_width + 1)]
+
+
+def check_normal_grid(grid_shape):
+    """At least one point per axis: the shape NVF normal field is read off this grid.
+
+    Any positive grid is read. The projectors' coefficients come from the field's
+    trigonometric interpolant (:func:`interpolant_weights`), so an order the grid cannot
+    resolve reads zero rather than a wrapped bin, and a constant field transforms to the
+    identity on any grid. The grid controls accuracy only; ``ShapeGridWarning`` says so for a
+    stated grid below ``4*max(orders)+1``.
+
+    Until 2026-11-11 this refused below ``4*truncation_order+1`` per axis, because the
+    coefficients were wrapped DFT bins (``k % n``): on ``n <= 2M`` points a constant field
+    picked up off-diagonals of 1.0, and between ``2M+1`` and ``4M`` the orders past Nyquist
+    landed on the wrong bin. Reading them through the interpolant removed both; measured on ten
+    scalar shape layers, there is no step in accuracy at the old floor, and below it a lossless
+    layer conserves energy to 2e-13.
 
     It lives here rather than beside either caller because both shape paths need it and
     :mod:`.boundary` imports :mod:`.parametric`, so the parametric one could not reach it there.
-    Until 2026-08-27 only the boundary route called it, and the asymmetry was not a decision:
-    at ``truncation_order=10`` the boundary route refused ``shape_nvf_grid_size=8`` while the parametric
-    path built it, 4.9e-4 adrift and conserving energy to twelve digits.
     """
     Ny, Nx = grid_shape
-    need_v, need_u = 4 * half_width_v + 1, 4 * half_width_u + 1
-    if Ny < need_v or Nx < need_u:
+    if Ny < 1 or Nx < 1:
         raise ValueError(
-            f'normal-field grid {Ny}x{Nx} aliases at truncation_order=({half_width_u}, '
-            f'{half_width_v}): needs at least {need_v}x{need_u}. The normal field has no '
-            f'closed-form transform, so it is read off this grid, and the circulant asks for '
-            f'orders up to +/-2*truncation_order -- below that, k % n folds distinct orders '
-            f'onto one bin and a constant field stops transforming to the identity.')
+            f'normal-field grid {Ny}x{Nx} has no points: the shape NVF normal field is read off '
+            f'this grid, so it needs at least one point per axis.')
 
 
 def _normal_field_floor(shape, half_width_u, half_width_v):

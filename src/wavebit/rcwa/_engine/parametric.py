@@ -179,6 +179,7 @@ from wavebit._common.backend import torch_autodiff
 from wavebit.materials.response import as_material
 from wavebit.rcwa._engine.factorization import ConvMatrices
 from wavebit.rcwa._engine.factorization import check_normal_grid
+from wavebit.rcwa._engine.factorization import interpolant_weights
 from wavebit.rcwa._engine.factorization import _nvf_assemble
 from wavebit.rcwa._engine.factorization import inverse_rule_bound
 from wavebit.lattice import periods_of
@@ -2232,13 +2233,28 @@ def _hypot_safe(xp, a, b):
 
 
 def _sampled_coeffs(xp, field, half_width_u, half_width_v):
-    """Fourier coefficients of a sampled field on the doubled reciprocal grid.
+    """Fourier coefficients of a sampled field's trigonometric interpolant, on the doubled grid.
 
-    ``c(ky, kx) = 1/(Ny*Nx) * sum f[iy, ix] exp(-2i*pi*(ky*iy/Ny + kx*ix/Nx))``, laid out the
-    way :func:`assemble_eps_coeffs` lays its grids out. Feeding it to :func:`conv_matrix_2d`
-    reproduces ``fourier2d_pointwise(field, ...)`` — that equivalence is what
+    ``c(ky, kx) = w(ky, Ny) * w(kx, Nx) * 1/(Ny*Nx) * sum f[iy, ix] exp(-2i*pi*(ky*iy/Ny + kx*ix/Nx))``
+    for ``|ky| <= 2*half_width_v``, ``|kx| <= 2*half_width_u``, times the cell-centre half-pixel
+    phase, laid out the way :func:`assemble_eps_coeffs` lays its grids out. ``w`` is
+    :func:`~wavebit.rcwa._engine.factorization.interpolant_weights`: 1 below Nyquist, 1/2 at it,
+    0 past it, the coefficients :func:`~wavebit.rcwa._engine.tensor_shapes._interpolant` gives
+    the tensor builder. So an order the grid cannot resolve reads zero instead of a wrapped bin,
+    and a constant field transforms to the identity on any grid.
+
+    At or above ``4*max(half_width)+1`` points per axis every weight is 1 and the multiply is
+    skipped, so the result is bit for bit the wrapped DFT bins (a complex-by-real multiply could
+    flip the sign of an exact zero). There, feeding it to :func:`conv_matrix_2d` reproduces
+    ``fourier2d_pointwise(field, ...)`` -- that equivalence is what
     ``test_conv_matrix_matches_grid_convention`` states, and it is what lets a translation be
-    applied here as a phase instead of by moving the samples.
+    applied here as a phase instead of by moving the samples. Below it the two differ by
+    design: the raster path lifts its grid to that size instead (``_normal_field_floor``).
+
+    Until 2026-11-11 the coefficients were the wrapped bins at every grid, which is why both
+    shape paths refused a grid below ``4*max(half_width)+1``: on ``n <= 2M`` points a constant
+    field picked up off-diagonals of 1.0, and between ``2M+1`` and ``4M`` the orders past Nyquist
+    folded onto the wrong bin.
     """
     Ny, Nx = field.shape
     dev = _device(field)
@@ -2251,6 +2267,11 @@ def _sampled_coeffs(xp, field, half_width_u, half_width_v):
     iy = xp.asarray([k % Ny for k in range(-2 * half_width_v, 2 * half_width_v + 1)], device=dev)
     ix = xp.asarray([k % Nx for k in range(-2 * half_width_u, 2 * half_width_u + 1)], device=dev)
     coeff = F[iy[:, None], ix[None, :]]
+    wy, wx = interpolant_weights(Ny, half_width_v), interpolant_weights(Nx, half_width_u)
+    if any(w != 1.0 for w in wy + wx):
+        real = xp.real(coeff).dtype
+        coeff = coeff * (xp.asarray(wy, dtype=real, device=dev)[:, None]
+                         * xp.asarray(wx, dtype=real, device=dev)[None, :])
     # The cell-centre half-pixel shift, the same one
     # :func:`~wavebit.rcwa._engine.factorization._half_pixel_phase` applies on the raster side. The
     # samples come from `sample_grid`, which places index `i` at `(i + 0.5)/N` -- so a bare DFT,
@@ -2508,14 +2529,13 @@ def normal_projector_coeffs(xp, shapes, grid_shape, lattice, half_width_u, half_
     (``test_a_multishape_layer_is_periodic_across_the_cell_edge``) -- since every distance in
     the field folds to the nearest image, and a fold is the same fold about any origin.
 
-    ``grid_shape`` is checked against the ``4*truncation_order+1`` floor
-    (:func:`~wavebit.rcwa._engine.factorization.check_normal_grid`). The boundary route has done that
-    since it was written and this one did not, which was not a decision: at
-    ``truncation_order=10`` the two disagreed about ``shape_nvf_grid_size=8``, one refusing and the
-    other building it 4.9e-4 adrift with energy conserved to twelve digits. The floor is a
-    property of reading a field off a grid, not of which builder put it there.
+    ``grid_shape`` must hold at least one point per axis
+    (:func:`~wavebit.rcwa._engine.factorization.check_normal_grid`), the same check the boundary
+    route makes: both shape paths read the field through :func:`_sampled_coeffs`. Until
+    2026-11-11 both refused a grid below ``4*truncation_order+1``; with the coefficients taken
+    from the field's trigonometric interpolant the grid controls accuracy only.
     """
-    check_normal_grid(grid_shape, half_width_u, half_width_v)
+    check_normal_grid(grid_shape)
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
 
     if shapes:
