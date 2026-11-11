@@ -214,45 +214,69 @@ metadata records the rule under `'reconstruction'` when it is not the default.
   the sample turns its x coefficients into those of `D_x`, which is summed along x and divided by
   `eps`. `E_y` is the same along the column through the sample, and `H_x` and `H_y` are the same
   with `B` and `mu`.
-- **What it trades on a 2D cell.** Each rule is right on one kind of wall and wrong on the
-  other, and neither error goes away as the truncation grows. `E_x` meets two kinds of wall:
-  across a wall normal to x it is the normal component and must jump (`eps*E_x` is what stays
-  continuous), and across a wall normal to y it is tangential and must not jump.
-  - The default is continuous everywhere, so it is right across walls normal to y and wrong
-    across walls normal to x: there `eps*E_x` mismatches by the full contrast (75 to 92% of the
-    larger side in the three test cells below), and the sum rings beside the wall.
-  - The Lalanne rule makes `eps*E_x` continuous across walls normal to x, to 1e-7. But
-    across a wall normal to y it reads the two sides off two different rows, each row's
-    operator built for that row's walls alone, so there `E_x` steps where it should be
-    continuous.
-  - Measured on three cells — a 3.5-index square, a 2.5-index checkerboard with four-way
-    corners, and a lossy L-shape at oblique incidence — at orders 4, 8, 12 and 16, each jump
-    relative to the larger side, at the middle of each pixel edge:
-    - The step is 5 to 43% of the local field (median over walls) and up to 75% at the worst
-      wall, beside corners.
-    - It shows no trend toward zero over that range. The default's mismatch across the other
-      walls does not shrink either.
-    - A higher order does not remove the step. It is the same kind of error as the one the
-      rule removes, moved to the other walls.
-  - More than one pixel away from any wall the two rules agree and converge together. There
-    the Lalanne rule is somewhat more accurate: RMS error 0.7 to 2.0% of the field at
-    order 16, against 1.5 to 2.3% for the default.
-  - The choice therefore depends on what you read and where. Use `'lalanne'` for anything
-    built from the normal field at sidewalls: `D` or `eps*E_n` across a wall, the field just
-    inside a wall normal to the component, or absorbed power beside a sidewall. Keep the
-    default where a component runs along walls normal to the other axis and you need it
-    continuous there, as in a smooth field map or a tangential boundary value. Away from walls
-    either rule will do. A reconstruction right on both kinds of wall would split `E` at each
-    point into the part normal to the local wall, read from `D`, and the part along it, read
-    from `E`. Wavebit does not have one yet.
+- **What it gets right on a 2D cell.** `E_x` meets two kinds of wall: across a wall normal to x it
+  is the normal component and must jump (`eps*E_x` is what stays continuous), and across a wall
+  normal to y it is tangential and must not jump.
+  - The default is continuous everywhere. Across walls normal to x, `eps*E_x` mismatches by the
+    full contrast (75 to 92% of the larger side in three test cells) at every order, and the sum
+    rings beside the wall. Across walls normal to y it is continuous but off on both sides: its row
+    carries the ringing of the walls normal to x that the row meets.
+  - The Lalanne rule makes `eps*E_x` continuous across walls normal to x, to 1e-7. Across a wall
+    normal to y it reads the two sides off two different rows. The row that holds the walls is
+    right. The other row, such as the air row under a block, has no wall of its own, so its
+    operator is the identity and it returns exactly the default's value. `E_x` then steps there
+    where the true field is continuous. The step is not a new error: it is the default's error at
+    that wall, removed on one side and left on the other. The same step appears at any boundary
+    between two rows that differ somewhere, even where the material on both sides is the same.
+  - Checked against a finite-element reference (gyptis, second-order edge elements; period
+    400 nm, a 200 nm square of `eps` 12.25 in a 150 nm layer, normal incidence at 900 nm, Li's
+    factorization, order 16): over 2304 samples on the mid-layer plane the relative RMS error of
+    the in-plane field is 1.52% for the rule and 9.10% for the default. 0.3 nm from the middle of
+    the square's bottom wall, on the square's side, the rule is off by 1.1% of the local field and
+    the default by 25%; on the air side the two are equal. The rule was as accurate as the default
+    or better in every region checked, at walls and away from them. This square is the only cell
+    with walls along x and y that has a finite-element reference.
+  - Five repairs of the remaining step were measured against the same reference. None is in
+    Wavebit: four were less accurate than the rule somewhere, and the best (a correction toward the
+    right side's wall value, switched off near corners: 1.11% against 1.52% on the square's 8x8
+    raster) changed with the raster's resolution and with a relative change of about 1e-5 in one
+    pixel's permittivity, and departs from the RETICOLO reference the rule is pinned to.
+- **Choosing a rule.** Which rule is right depends on what is read, so neither is right
+  everywhere.
+  - `'lalanne'` for values beside a wall normal to the component: `D` or `eps*E_n` across the
+    wall, the field just inside it, absorbed power beside a sidewall. On walls along x and y.
+  - `'plain'` for a spatial derivative across a wall the component runs along, such as an optical
+    force from the gradient of `|E|^2` or a curl taken afterwards. On the square above, the
+    difference of `|E_x|` over two samples 0.3 nm either side of the bottom wall is +0.002 per nm
+    in the reference, +0.004 for the default and -0.082 for the rule, whose step sits between them.
+  - `'plain'` for a smooth map of where the field concentrates: it is continuous where the rule
+    steps, though not right beside walls normal to the component.
+  - `'plain'` in a layer that holds a metal, unless two truncations agree on the rule's peak (see
+    *Metals* below), and for the derivative of an area average with respect to a shape's
+    position or size (see *Derivatives* below).
+  - Either, away from walls (the two rules converge together there), and for `R`, `T` and the
+    absorption from the ports, which neither rule changes.
+  - On curved or slanted walls, not this rule, which is refused there (see *Which shapes* below).
+    Give the true shape with `factorization='nvf'`, check that `R` and `T` have converged, and read
+    the default. A rule that splits `E` at each sample into the part normal to the local wall,
+    read from `D`, and the part along it, read from `E` (M. Weismann, D. F. G. Gallagher and N. C.
+    Panoiu, J. Opt. 17, 125612 (2015)), was more accurate than the default on all 16 dielectric
+    circle cells checked against a finite-element reference: 0.06 to 0.67 times its error over the
+    plane at order 12, with a window that switches the split off away from the wall. It is not in
+    Wavebit.
+- **Why the default is `'plain'`.** The default never puts a jump where the field is continuous,
+  and its derivatives across walls a component runs along, and of area averages, are right. What
+  it misses is the jump at a wall normal to a component, which is what the Lalanne rule is for.
+  The rule is a choice for what it measures best, and making it the default would also change
+  every field already read with the default.
 - **Why use it.** It is RETICOLO's `res3` rule (`parm.res1.champ=1`): with it the RETICOLO field
   goldens agree to 1e-13 on every slot of the 1D and conical cases, `E_x` included, where the
   default differs by 7e-2 to 1e-1, and to 4e-11 on every slot of a two-layer crossed grating,
   where the default's `E_x` and `E_y` differ by about 0.3. With a patterned `mu` it agrees to 4e-11
   on every slot of the 2D, pure TE, pure TM and conical cases, where the default's `H_x` differs by
-  0.10 to 0.31. On a 1D TM bar of index 3.5 its RMS
-  error in `E_x` is 2.5 to 7 times smaller than the default's at every truncation order from 10
-  to 80, against a reference at order 800.
+  0.10 to 0.31. On a 1D TM bar of index 3.5, over 2000 samples at mid-layer, its relative RMS
+  error in `E_x` falls from 6.53% to 0.05% as the order goes from 5 to 160, and the default's from
+  23.08% to 4.15%, against the rule at order 800.
 - **What it reads.** `eps` at each sample and, on a 2D cell, the inverse-rule matrix of the row
   and the column through it, and the same of `mu` in a layer that names one. A raster gives both from the pixel the sample falls in. Choosing it
   from explicit coordinates takes a concrete period and concrete coordinates: a solve inside
@@ -285,9 +309,9 @@ metadata records the rule under `'reconstruction'` when it is not the default.
   - Against RETICOLO's `champ=1`, with `factorization='li'`, the rule agrees to 4e-11 on every
     slot, on walls a raster can draw and on walls it cannot, where the default's `E_x` is 0.43
     away. Only Li's rules have that reference. `'nvf'` and `'laurent'` run and are not pinned to
-    it. Against a finite-element reference on one 200 nm block of `eps` 12.25 at order 8, the RMS
-    error over a plane through the block is 4.3% on `'li'`, 7.3% on `'nvf'` and 23% on `'laurent'`,
-    against 21%, 21% and 28% for the default. Away from the walls `'laurent'` gets slightly worse
+    it. Against a finite-element reference on one 200 nm block of `eps` 12.25 at order 8, the
+    largest component error over a plane through the block, relative to the field's RMS, is 4.3% on
+    `'li'`, 7.3% on `'nvf'` and 23% on `'laurent'`, against 21%, 21% and 28% for the default. Away from the walls `'laurent'` gets slightly worse
     with the rule, 16% against 15%. On a patterned `mu` no finite-element reference has been run;
     RETICOLO is the only one.
   - A shape with the background's own `eps` goes through the rule and matches the default to
