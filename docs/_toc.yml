@@ -63,6 +63,7 @@ subtrees:
     title: User guide
     subtrees:
     - entries:
+      - file: guide/postprocess/propagation
       - file: guide/common/index
         subtrees:
         - entries:
