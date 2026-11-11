@@ -66,6 +66,8 @@ PUBLIC = {
                           'RawDiffractionOrder', 'RawDiffractionSpectrum', 'RawFieldSpectrum',
                           'TimeSeries', 'Validity', 'fit_modes'),
  'wavebit.observations.modes': ('ModeFit', 'fit_modes'),
+ 'wavebit.postprocess': ('propagation',),
+ 'wavebit.postprocess.propagation': ('Plane', 'PropagationResult', 'propagate'),
  'wavebit.rcwa': ('BoundaryPower', 'Circle', 'ElectricDipole', 'Ellipse', 'Excitation',
                   'GaussianBeam', 'IncidentOrders', 'Layer', 'Numerics', 'Outputs', 'PlaneWave',
                   'Polygon', 'Prepared', 'Problem', 'Rectangle', 'Region', 'Result', 'Stack',

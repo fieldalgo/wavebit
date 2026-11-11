@@ -7,3 +7,5 @@ Choose the workflow for your model, then use the shared chapters for materials, 
 - [FDTD: time-domain calculations](fdtd/index.md)
 
 The [learning paths](../learn/index.md) develop the physical ideas before the individual options. The [reference](../reference/index.md) records exact contracts.
+
+[Outgoing diffraction-order propagation](postprocess/propagation.md) continues calibrated solver results to an observation plane.
