@@ -37,7 +37,7 @@ def main():
              *sorted((ROOT / 'src/wavebit').rglob('*.py'))]
     digest = hashlib.sha256()
     for path in files:
-        digest.update(str(path.relative_to(ROOT)).encode())
+        digest.update(path.relative_to(ROOT).as_posix().encode())
         digest.update(path.read_bytes())
     report = dict(schema=1, source_sha256=digest.hexdigest(),
                   git_head=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT,

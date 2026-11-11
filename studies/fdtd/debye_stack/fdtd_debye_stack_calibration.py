@@ -60,7 +60,7 @@ def run(attempt):
         destination = directory/(label+'.py.raw')
         with destination.open('xb') as stream:
             stream.write(source.read_bytes())
-        snapshots.append({'file': str(destination.relative_to(ROOT)), 'sha256': sha(destination)})
+        snapshots.append({'file': destination.relative_to(ROOT).as_posix(), 'sha256': sha(destination)})
     # Freeze exact production bytes before preflight or the first field response.
     production = {path.relative_to(ROOT).as_posix(): sha(path) for path in sorted((ROOT/'src/wavebit').rglob('*.py'))}
     archive = directory/'production_sources.zip'
@@ -76,7 +76,7 @@ def run(attempt):
         'support_sha256': sha(pathlib.Path(support.__file__)),
         'attempt': attempt, 'started_utc': now(), 'source_identity': identity,
         'analytic_preflight': None,
-        'production_sources': production, 'production_archive': str(archive.relative_to(ROOT)),
+        'production_sources': production, 'production_archive': archive.relative_to(ROOT).as_posix(),
         'production_archive_sha256': sha(archive),
         **probe.runtime_identity(), 'frozen_sources': snapshots,
         'planned_rows': [{'family': family, 'backend': backend, 'n': 40, 'pol': 'p',
@@ -108,9 +108,9 @@ def run(attempt):
                 process = subprocess.run(command, cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT, check=False)
             record = {'backend': backend, 'family': family, 'started_utc': start, 'ended_utc': now(),
                       'wall_s': time.perf_counter()-begin, 'command': command,
-                      'exit_code': process.returncode, 'raw_log': str(log.relative_to(ROOT)), 'raw_log_sha256': sha(log)}
+                      'exit_code': process.returncode, 'raw_log': log.relative_to(ROOT).as_posix(), 'raw_log_sha256': sha(log)}
             if output.exists():
-                record.update(result=str(output.relative_to(ROOT)), result_sha256=sha(output))
+                record.update(result=output.relative_to(ROOT).as_posix(), result_sha256=sha(output))
             manifest['workers'].append(record)
             manifest['source_unchanged'] = probe.source_identity() == identity
             write(manifest_path, manifest)
@@ -150,7 +150,7 @@ def run(attempt):
     manifest['complete'] = True
     manifest['ended_utc'] = now()
     write(manifest_path, manifest)
-    print(json.dumps({'complete': True, 'workers': 6, 'manifest': str(manifest_path.relative_to(ROOT))}))
+    print(json.dumps({'complete': True, 'workers': 6, 'manifest': manifest_path.relative_to(ROOT).as_posix()}))
     return 0 if (manifest['backend_pairs_within_budget'] and manifest['finite_stable_all_rows']
                  and manifest['production_unchanged']) else 1
 

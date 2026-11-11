@@ -126,7 +126,7 @@ def run(attempt, baseline_log):
             stream.write(source.read_bytes())
     manifest = {'attempt': attempt, 'started_utc': now(), 'source_identity_before': identity,
                 'harness_sha256': digest(harness.read_bytes()), 'test_sha256': digest((ROOT/TEST).read_bytes()),
-                'baseline_log': str(baseline_log.relative_to(ROOT)),
+                'baseline_log': baseline_log.relative_to(ROOT).as_posix(),
                 'baseline_log_sha256': digest(baseline_log.read_bytes()),
                 'witnesses': [], 'restored': False, 'passed': False}
     write(manifest_path, manifest, exclusive=True)
@@ -138,7 +138,7 @@ def run(attempt, baseline_log):
     code, elapsed, command = pytest_run([TEST, '--collect-only'], collection, f'attempt{attempt}-collection')
     output = collection.read_text(encoding='utf-8')
     nodes = [line for line in output.splitlines() if line.startswith(TEST+'::')]
-    manifest['collection'] = {'raw_log': str(collection.relative_to(ROOT)),
+    manifest['collection'] = {'raw_log': collection.relative_to(ROOT).as_posix(),
         'raw_log_sha256': digest(collection.read_bytes()), 'exit_code': code,
         'wall_s': elapsed, 'command': command, 'collected': len(nodes)}
     write(manifest_path, manifest)
@@ -178,9 +178,9 @@ def run(attempt, baseline_log):
             'replacement': {'before': before, 'after': after},
             'original_sha256': digest(original), 'mutant_sha256': digest(changed),
             'restored_sha256': digest(source.read_bytes()),
-            'original_snapshot': str(original_path.relative_to(ROOT)),
-            'mutant_snapshot': str(mutant_path.relative_to(ROOT)),
-            'raw_log': str(log.relative_to(ROOT)), 'raw_log_sha256': digest(log.read_bytes()),
+            'original_snapshot': original_path.relative_to(ROOT).as_posix(),
+            'mutant_snapshot': mutant_path.relative_to(ROOT).as_posix(),
+            'raw_log': log.relative_to(ROOT).as_posix(), 'raw_log_sha256': digest(log.read_bytes()),
             'exit_code': code, 'wall_s': elapsed, 'command': command,
             'assertion_failure': assertion, 'accepted': accepted})
         manifest['restored'] = probe.source_identity() == identity
@@ -188,7 +188,7 @@ def run(attempt, baseline_log):
         print(f'{now()} END {name} exit={code} accepted={accepted} restored={manifest["restored"]}', flush=True)
     log = directory/'restored_targeted_baseline.log'
     code, elapsed, command = pytest_run([TEST], log, f'attempt{attempt}-restored')
-    manifest['final_baseline'] = {'raw_log': str(log.relative_to(ROOT)),
+    manifest['final_baseline'] = {'raw_log': log.relative_to(ROOT).as_posix(),
                                  'raw_log_sha256': digest(log.read_bytes()),
                                  'exit_code': code, 'wall_s': elapsed, 'command': command}
     output = log.read_text(encoding='utf-8')
@@ -212,7 +212,7 @@ def run(attempt, baseline_log):
         write(RESULTS/f'{PREFIX}_mutations.json', manifest, exclusive=True)
     print(json.dumps({'passed': manifest['passed'], 'restored': manifest['restored'],
                       'accepted_witnesses': sum(w['accepted'] for w in manifest['witnesses']),
-                      'manifest': str(manifest_path.relative_to(ROOT))}))
+                      'manifest': manifest_path.relative_to(ROOT).as_posix()}))
     return 0 if manifest['passed'] else 1
 
 

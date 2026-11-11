@@ -46,10 +46,10 @@ def main():
             with log.open('xb') as stream:
                 result = subprocess.run(command, cwd=root, stdout=stream, stderr=subprocess.STDOUT)
             worker = {'family': family, 'backend': backend, 'command': command,
-                      'exit_code': result.returncode, 'raw_log': str(log.relative_to(root)),
+                      'exit_code': result.returncode, 'raw_log': log.relative_to(root).as_posix(),
                       'raw_log_sha256': hashlib.sha256(log.read_bytes()).hexdigest()}
             if output.exists():
-                worker.update(result=str(output.relative_to(root)),
+                worker.update(result=output.relative_to(root).as_posix(),
                               result_sha256=hashlib.sha256(output.read_bytes()).hexdigest())
             record['workers'].append(worker)
             save()

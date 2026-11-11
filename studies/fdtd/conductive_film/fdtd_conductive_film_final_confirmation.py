@@ -89,7 +89,7 @@ def mutations():
         'source_identity_before': baseline, 'adapter_sha256': campaign.sha(ADAPTER),
         'harness_sha256': campaign.sha(pathlib.Path(mutation.__file__)),
         'test_sha256': campaign.sha(ROOT / mutation.TEST),
-        'baseline_log': str(BASELINE.relative_to(ROOT)),
+        'baseline_log': BASELINE.relative_to(ROOT).as_posix(),
         'baseline_log_sha256': campaign.sha(BASELINE),
         'original_registration_fingerprint': original['fingerprint'],
         'prior_mutation_manifest': f'studies/results/{OLD_PREFIX}_mutations.json',
@@ -133,9 +133,9 @@ def mutations():
             'replacement': {'before': before, 'after': after},
             'original_sha256': mutation.digest(original_bytes),
             'mutant_sha256': mutation.digest(changed), 'restored_sha256': campaign.sha(source),
-            'original_snapshot': str(before_path.relative_to(ROOT)),
-            'mutant_snapshot': str(after_path.relative_to(ROOT)),
-            'raw_log': str(log.relative_to(ROOT)), 'raw_log_sha256': campaign.sha(log),
+            'original_snapshot': before_path.relative_to(ROOT).as_posix(),
+            'mutant_snapshot': after_path.relative_to(ROOT).as_posix(),
+            'raw_log': log.relative_to(ROOT).as_posix(), 'raw_log_sha256': campaign.sha(log),
             'exit_code': code, 'wall_s': elapsed, 'command': command,
             'assertion_failure': assertion, 'accepted': accepted,
         })
@@ -147,7 +147,7 @@ def mutations():
     code, elapsed, command = mutation.pytest_run(
         [mutation.TEST], final, 'final-source-attempt2-restored')
     manifest['final_baseline'] = {
-        'raw_log': str(final.relative_to(ROOT)), 'raw_log_sha256': campaign.sha(final),
+        'raw_log': final.relative_to(ROOT).as_posix(), 'raw_log_sha256': campaign.sha(final),
         'exit_code': code, 'wall_s': elapsed, 'command': command,
     }
     manifest['source_identity_after'] = probe.source_identity()
@@ -162,7 +162,7 @@ def mutations():
     write(MUTATIONS, manifest)
     return {'passed': manifest['passed'], 'restored': manifest['restored'],
             'accepted_witnesses': sum(w['accepted'] for w in manifest['witnesses']),
-            'manifest': str(MUTATIONS.relative_to(ROOT))}
+            'manifest': MUTATIONS.relative_to(ROOT).as_posix()}
 
 
 def mutation_evidence():
@@ -210,7 +210,7 @@ def register():
     linked = {item['file']: item for item in known}
 
     def add(path, scope):
-        filename = str(path.relative_to(RESULTS))
+        filename = path.relative_to(RESULTS).as_posix()
         linked[filename] = {'file': filename, 'sha256': campaign.sha(path), 'scope': scope}
 
     for path in (ORIGINAL_REGISTRATION, ORIGINAL_LEDGER, ORIGINAL_REPORT):
@@ -263,7 +263,7 @@ def register():
     data['fingerprint'] = hashlib.sha256(campaign.canonical(data)).hexdigest()
     write(campaign.REGISTRATION, data, exclusive=True)
     campaign.verify()
-    return {'registered': str(campaign.REGISTRATION.relative_to(ROOT)),
+    return {'registered': campaign.REGISTRATION.relative_to(ROOT).as_posix(),
             'fingerprint': data['fingerprint'], 'known_original_workers': len(prior_entries)}
 
 

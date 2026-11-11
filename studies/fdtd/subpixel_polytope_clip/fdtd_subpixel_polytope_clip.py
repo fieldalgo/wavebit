@@ -242,7 +242,7 @@ def source_digest():
     import hashlib
     digest = hashlib.sha256()
     for path in sorted((ROOT / 'src' / 'wavebit').rglob('*.py')):
-        digest.update(str(path.relative_to(ROOT)).encode())
+        digest.update(path.relative_to(ROOT).as_posix().encode())
         digest.update(path.read_bytes())
     return digest.hexdigest()
 

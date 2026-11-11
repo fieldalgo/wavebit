@@ -143,9 +143,9 @@ def run(attempt):
                    'replacement': {'before': before, 'after': after},
                    'original_sha256': digest(original), 'mutant_sha256': digest(changed),
                    'restored_sha256': digest(source.read_bytes()),
-                   'original_snapshot': str(original_path.relative_to(ROOT)),
-                   'mutant_snapshot': str(mutant_path.relative_to(ROOT)),
-                   'raw_log': str(log.relative_to(ROOT)), 'raw_log_sha256': digest(log.read_bytes()),
+                   'original_snapshot': original_path.relative_to(ROOT).as_posix(),
+                   'mutant_snapshot': mutant_path.relative_to(ROOT).as_posix(),
+                   'raw_log': log.relative_to(ROOT).as_posix(), 'raw_log_sha256': digest(log.read_bytes()),
                    'exit_code': code, 'wall_s': elapsed, 'command': command,
                    'assertion_failure': assertion, 'accepted': accepted}
         manifest['witnesses'].append(witness)
@@ -154,7 +154,7 @@ def run(attempt):
         print(f'END {name} exit={code} accepted={accepted} restored={manifest["restored"]}', flush=True)
     final = directory / 'restored_targeted_baseline.log'
     code, elapsed, command = pytest_run([TEST], final, f'attempt{attempt}-restored')
-    manifest['final_baseline'] = {'raw_log': str(final.relative_to(ROOT)),
+    manifest['final_baseline'] = {'raw_log': final.relative_to(ROOT).as_posix(),
                                   'raw_log_sha256': digest(final.read_bytes()),
                                   'exit_code': code, 'wall_s': elapsed, 'command': command}
     manifest['source_identity_after'] = source_identity()
@@ -168,7 +168,7 @@ def run(attempt):
         assert not accepted_path.exists()
         save(accepted_path, manifest)
     print(json.dumps({'passed': manifest['passed'], 'restored': manifest['restored'],
-                      'witnesses': len(manifest['witnesses']), 'manifest': str(path.relative_to(ROOT))}))
+                      'witnesses': len(manifest['witnesses']), 'manifest': path.relative_to(ROOT).as_posix()}))
     return 0 if manifest['passed'] else 1
 
 
@@ -211,9 +211,9 @@ def audit(attempt):
                 'all_nine_assertion_witnesses': True,
                 'acceptance_audit': {
                     'audited_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                    'original_manifest': str(path.relative_to(ROOT)),
+                    'original_manifest': path.relative_to(ROOT).as_posix(),
                     'original_manifest_sha256': digest(original_bytes),
-                    'original_harness_snapshot': str(original_harness.relative_to(ROOT)),
+                    'original_harness_snapshot': original_harness.relative_to(ROOT).as_posix(),
                     'audit_harness_sha256': digest(pathlib.Path(__file__).read_bytes()),
                     'scope': 'Original matcher decisions and manifest remain unchanged. '
                              'Three pytest-rewritten E assert failures are accepted after '
@@ -225,7 +225,7 @@ def audit(attempt):
     save(accepted_path, accepted)
     assert path.read_bytes() == original_bytes
     print(json.dumps({'audit': 'passed', 'accepted_witnesses': 9, 'restored_baseline': 53,
-                      'source_restored': True, 'manifest': str(accepted_path.relative_to(ROOT))}))
+                      'source_restored': True, 'manifest': accepted_path.relative_to(ROOT).as_posix()}))
     return 0
 
 

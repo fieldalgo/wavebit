@@ -100,7 +100,7 @@ def register():
     known = {}
 
     def add(path, scope):
-        filename = str(path.relative_to(RESULTS))
+        filename = path.relative_to(RESULTS).as_posix()
         known[filename] = {'file': filename, 'sha256': sha(path), 'scope': scope}
 
     for item in prior_registration['known_exposures']+prior_registration['frozen_sources']:
@@ -154,7 +154,7 @@ def register():
     data['fingerprint'] = hashlib.sha256(canonical(data)).hexdigest()
     write(REGISTRATION, data, exclusive=True)
     verify()
-    return {'registered': str(REGISTRATION.relative_to(ROOT)), 'fingerprint': data['fingerprint'],
+    return {'registered': REGISTRATION.relative_to(ROOT).as_posix(), 'fingerprint': data['fingerprint'],
             'known_original_workers': 40, 'planned_base_workers': 10, 'cells': 12}
 
 
@@ -207,9 +207,9 @@ def worker(family, fraction, pol, n, periods=BASE, pml=24):
         process = subprocess.run(command, cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT, check=False)
     entry = {'key': job, 'started_utc': start, 'ended_utc': now(), 'wall_s': time.perf_counter()-begin,
              'exit_code': process.returncode, 'command': command, 'registration': registration['fingerprint'],
-             'raw_log': str(log.relative_to(ROOT)), 'raw_log_sha256': sha(log)}
+             'raw_log': log.relative_to(ROOT).as_posix(), 'raw_log_sha256': sha(log)}
     if output.exists():
-        entry.update(result=str(output.relative_to(ROOT)), result_sha256=sha(output))
+        entry.update(result=output.relative_to(ROOT).as_posix(), result_sha256=sha(output))
     with LEDGER.open('a', encoding='utf-8', newline='\n') as stream:
         stream.write(json.dumps(entry, allow_nan=False)+'\n')
         stream.flush()
@@ -294,7 +294,7 @@ def run():
     report = make_report(stop)
     write(REPORT, report)
     return {'complete': report['complete'], 'stop_reason': stop, 'workers': report['worker_rows'],
-            'report': str(REPORT.relative_to(ROOT))}
+            'report': REPORT.relative_to(ROOT).as_posix()}
 
 
 def audit_sequence(entries, available):
