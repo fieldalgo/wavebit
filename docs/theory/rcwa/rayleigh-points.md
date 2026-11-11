@@ -1220,7 +1220,12 @@ members, with no root taken, and its columns are `Q1 X`. `B`'s rows `J` and colu
 disjoint from each other and from every pair's, which is all that `exponential`,
 `split_generator` and `_split_sylvester` ask; they read the coupling entry by entry. A failed
 check warns with §8's text, and under a trace it, or more clusters than slots, multiplies both
-generators by NaN. The traced slots are the pair gate's `slots` (at most `n / 3`, `n` the split's
+generators by NaN. A jointly rebuilt cluster answers to that check alone: the screen after the
+split puts each of its members in a group of its own, as on 2D. Its rebuilt columns are a
+Jordan block's and may stay nearly dependent -- PL952's at the coincidence had a smallest
+singular value of 0.10 on OpenBLAS's SkylakeX path (0.29 .. 0.64 on five others) -- and until
+2026-11-12, when they fell below the screen's 0.05 on one CI runner, the screen warned on an
+exact answer. The traced slots are the pair gate's `slots` (at most `n / 3`, `n` the split's
 mode count). Since the gate reads first, a ball of three holding a pair is a cluster here, where
 on 2D it stays with the pair rebuild: a pair beside a root within the wide radius, and the pair
 the pair gate refuses beside a root within `_PAIR_SEPARATION`.

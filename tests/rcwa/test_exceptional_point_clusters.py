@@ -91,6 +91,33 @@ def test_coincident_exceptional_points_on_the_first_order_path_are_exact(name, a
                      solve=lambda: _solve_2d(scene, algo, True))
 
 
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+def test_the_screen_never_reads_a_jointly_rebuilt_first_order_cluster(algo, monkeypatch):
+    """A jointly rebuilt cluster answers to its own check, as on 2D: the screen after the split
+    puts each of its members in a group of its own. Its rebuilt columns are a Jordan block's and
+    may still be nearly dependent -- PL952's at the coincidence had a smallest singular value of
+    0.10 on OpenBLAS's SkylakeX path (0.29 .. 0.64 on five others), and on one CI runner fell
+    below the screen's 0.05, which then warned on an exact answer. Here the screen reads every
+    ball whatever its columns (its sine at 1): quiet eagerly, and the exact answer under
+    ``jax.jit``. Catches the rebuilt members left in the screen's groups."""
+    eager, traced = solve_2d._unresolved_defective_cluster, solve_2d._unresolved_cluster_traced
+    monkeypatch.setattr(solve_2d, '_unresolved_defective_cluster',
+                        lambda xp, w, W, op, sine, group=None: eager(xp, w, W, op, 1.0, group))
+    monkeypatch.setattr(solve_2d, '_unresolved_cluster_traced',
+                        lambda xp, w, W, op, sine, group=None, slots=1:
+                        traced(xp, w, W, op, 1.0, group, slots))
+    scene = _littrow(SCENES['PL952'], 0.0)
+    _exact_and_quiet(scene, algo, f'PL952 {algo} first order, screen at sine 1',
+                     solve=lambda: _solve_2d(scene, algo, True))
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    ref = _vector(_solver(scene).solve(auto_detune=False))
+    s = _solver(scene, algo=algo, backend='jax', two_d=True)
+    s.formulation = 'first_order'
+    rows, grad = _jit_rows(s, scene['wavelength'])
+    assert np.isfinite(grad) and np.max(np.abs(rows[2:] - ref[2:])) < 1e-12
+
+
 #: A uniform layer at oblique incidence whose first-order split holds two exactly degenerate
 #: pairs 4.5e-5 apart in a nearly parallel eig basis (sigma 3.8e-2): normal, so harmless. A
 #: defect measure that reads the diagonal spread (``||T - mean I||`` = 9.1e-5) warned here.

@@ -573,11 +573,19 @@ def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1):
     # candidate ball for each of its degenerate eigenvalues (11 at truncation (5, 5)).
     from wavebit.rcwa._engine.solve_2d import (_EP_SCREEN_BALL, _unresolved_cluster_traced,
                                                _unresolved_defective_cluster)
+    # A jointly rebuilt cluster answers to its own check, never to this screen, as on 2D: each of
+    # its members takes a group of its own. Its rebuilt columns are a Jordan block's and may still
+    # be nearly dependent -- on one CI runner PL952's at the coincidence came out below
+    # `_PARALLEL_SIN`, and the screen warned on an exact answer.
+    group = forward
+    if exclude is not None:
+        ii = xp.arange(lam.shape[0], device=dev)
+        group = xp.where(exclude, ii + 2, xp.astype(forward, ii.dtype))
     unresolved = _unresolved_defective_cluster(xp, _stop(eig_lam), _stop(psi), lambda: _stop(M),
-                                               _PARALLEL_SIN, group=forward)
+                                               _PARALLEL_SIN, group=group)
     if unresolved is None:
         loud = _unresolved_cluster_traced(
-            xp, _stop(eig_lam), _stop(psi), lambda: _stop(M), _PARALLEL_SIN, forward,
+            xp, _stop(eig_lam), _stop(psi), lambda: _stop(M), _PARALLEL_SIN, group,
             max(slots, lam.shape[0] // (2 * _EP_SCREEN_BALL)))
         # A selection, not a product, so that a quiet layer keeps its bits.
         lam = xp.where(loud, xp.full_like(lam, float('nan')), lam)
