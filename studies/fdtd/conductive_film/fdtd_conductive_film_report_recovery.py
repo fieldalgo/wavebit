@@ -36,7 +36,7 @@ def evidence():
     paths = [campaign.REGISTRATION, campaign.LEDGER,
              pathlib.Path(campaign.__file__), pathlib.Path(probe.__file__)]
     paths.extend(sorted(campaign.JOBS.iterdir()))
-    return {str(path.relative_to(campaign.ROOT)): sha(path) for path in paths}
+    return {path.relative_to(campaign.ROOT).as_posix(): sha(path) for path in paths}
 
 
 def summary(report):
@@ -138,14 +138,14 @@ def recover(controller_log=None):
         'original_controller_failure': {'type': 'TypeError', 'message': serialization_error,
                                         'all_20_worker_exit_codes': [e['exit_code'] for e in campaign.ledger()]},
         'partial_json_parse_error': partial_error,
-        'original_partial': {'file': str(backup.relative_to(campaign.ROOT)),
+        'original_partial': {'file': backup.relative_to(campaign.ROOT).as_posix(),
                              'sha256': sha(backup), 'bytes': len(partial)},
-        'faithful_reproduction': {'partial': str(reproduction.relative_to(campaign.ROOT)),
+        'faithful_reproduction': {'partial': reproduction.relative_to(campaign.ROOT).as_posix(),
                                   'partial_sha256': sha(reproduction),
                                   'identical_to_original_partial': True,
-                                  'failure_log': str(failure_log.relative_to(campaign.ROOT)),
+                                  'failure_log': failure_log.relative_to(campaign.ROOT).as_posix(),
                                   'failure_log_sha256': sha(failure_log)},
-        'report': {'file': str(campaign.REPORT.relative_to(campaign.ROOT)),
+        'report': {'file': campaign.REPORT.relative_to(campaign.ROOT).as_posix(),
                    'sha256': sha(campaign.REPORT)},
         'immutable_evidence_sha256': before, 'original_audit': audit, 'summary': stats,
     }

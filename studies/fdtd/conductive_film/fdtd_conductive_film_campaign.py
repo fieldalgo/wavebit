@@ -125,7 +125,7 @@ def register():
         known.append({'file': filename, 'sha256': sha(RESULTS / filename),
                       'scope': 'Calibration provenance supporting file; see its own qualification.'})
     for tests in sorted((RESULTS / f'{PREFIX}_controls').glob('targeted_attempt*.log')):
-        known.append({'file': str(tests.relative_to(RESULTS)), 'sha256': sha(tests),
+        known.append({'file': tests.relative_to(RESULTS).as_posix(), 'sha256': sha(tests),
                       'scope': 'Known development/validation exposure. Attempts1/2 preserve '
                                'refused source setups, not field responses; attempts3/4 include '
                                'broad n40,p60,fraction.3 on NumPy/JAX/Torch; subsequent attempts '
@@ -144,7 +144,7 @@ def register():
         evidence += [witness['raw_log'], witness['original_snapshot'], witness['mutant_snapshot']]
     for filename in evidence:
         path = ROOT / filename
-        known.append({'file': str(path.relative_to(RESULTS)), 'sha256': sha(path),
+        known.append({'file': path.relative_to(RESULTS).as_posix(), 'sha256': sha(path),
                       'scope': 'Preserved mutation or restored-baseline evidence; no campaign response.'})
     frozen = []
     for label, path in (('campaign', pathlib.Path(__file__)),
@@ -159,7 +159,7 @@ def register():
                              'agent review is implied by this registration.'}
     data['fingerprint'] = hashlib.sha256(canonical(data)).hexdigest()
     write_json(REGISTRATION, data, exclusive=True)
-    return {'registered': str(REGISTRATION.relative_to(ROOT)), 'fingerprint': data['fingerprint']}
+    return {'registered': REGISTRATION.relative_to(ROOT).as_posix(), 'fingerprint': data['fingerprint']}
 
 
 def verify():
@@ -238,9 +238,9 @@ def worker(fraction, pol, n, periods=BASE, pml=24):
     entry = {'key': job, 'started_utc': start, 'ended_utc': now(),
              'wall_s': time.perf_counter()-begin, 'exit_code': completed.returncode,
              'command': command, 'registration': registered['fingerprint'],
-             'raw_log': str(log.relative_to(ROOT)), 'raw_log_sha256': sha(log)}
+             'raw_log': log.relative_to(ROOT).as_posix(), 'raw_log_sha256': sha(log)}
     if output.exists():
-        entry.update(result=str(output.relative_to(ROOT)), result_sha256=sha(output))
+        entry.update(result=output.relative_to(ROOT).as_posix(), result_sha256=sha(output))
     with LEDGER.open('a', encoding='utf-8', newline='\n') as stream:
         stream.write(json.dumps(entry, allow_nan=False) + '\n')
         stream.flush()
@@ -373,7 +373,7 @@ def run():
     report = make_report(stop)
     write_json(REPORT, report)
     return {'complete': report['complete'], 'stop_reason': stop,
-            'workers': report['worker_rows'], 'report': str(REPORT.relative_to(ROOT))}
+            'workers': report['worker_rows'], 'report': REPORT.relative_to(ROOT).as_posix()}
 
 
 def audit():

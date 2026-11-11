@@ -33,7 +33,7 @@ def main(attempt):
         snapshot = out/(stem+'_'+source.stem+'.py.txt')
         with snapshot.open('xb') as stream:
             stream.write(source.read_bytes())
-        snapshots.append({'file': str(snapshot.relative_to(root)),
+        snapshots.append({'file': snapshot.relative_to(root).as_posix(),
                           'sha256': hashlib.sha256(snapshot.read_bytes()).hexdigest()})
     record = {'started_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
               'source_before': source_identity(), 'complete': False,
@@ -50,7 +50,7 @@ def main(attempt):
             result = subprocess.run(command, cwd=root, stdout=stream, stderr=subprocess.STDOUT)
         output = log.read_text(encoding='utf-8')
         record['checks'].append({'name': name, 'command': command, 'exit_code': result.returncode,
-            'wall_s': time.perf_counter()-begin, 'raw_log': str(log.relative_to(root)),
+            'wall_s': time.perf_counter()-begin, 'raw_log': log.relative_to(root).as_posix(),
             'sha256': hashlib.sha256(log.read_bytes()).hexdigest()})
         save()
         print(output[-3000:], flush=True)

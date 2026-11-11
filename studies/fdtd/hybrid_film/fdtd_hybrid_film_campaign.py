@@ -114,7 +114,7 @@ def register():
     known = {}
 
     def add(path, scope):
-        filename = str(path.relative_to(RESULTS))
+        filename = path.relative_to(RESULTS).as_posix()
         known[filename] = {'file': filename, 'sha256': sha(path), 'scope': scope}
 
     calibrations = sorted(RESULTS.glob(f'{PREFIX}_calibration_attempt*.json'))
@@ -199,7 +199,7 @@ def register():
         stem = path.name[len(PREFIX)+1:]
         if stem.startswith(('calibration', 'mutations', 'targeted')):
             for item in sorted(path.rglob('*')) if path.is_dir() else (path,):
-                if item.is_file() and str(item.relative_to(RESULTS)) not in known:
+                if item.is_file() and item.relative_to(RESULTS).as_posix() not in known:
                     add(item, 'Complete preserved development provenance, including failed attempts.')
     frozen = []
     for label, path in (('campaign', pathlib.Path(__file__)), ('probe', pathlib.Path(probe.__file__)),
@@ -218,7 +218,7 @@ def register():
                              'criteria. Procedural audit does not imply independent agent review.'}
     data['fingerprint'] = hashlib.sha256(canonical(data)).hexdigest()
     write(REGISTRATION, data, exclusive=True)
-    return {'registered': str(REGISTRATION.relative_to(ROOT)), 'fingerprint': data['fingerprint']}
+    return {'registered': REGISTRATION.relative_to(ROOT).as_posix(), 'fingerprint': data['fingerprint']}
 
 
 def verify():
@@ -274,9 +274,9 @@ def worker(family, fraction, pol, n, periods=BASE, pml=24):
         result = subprocess.run(command, cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT, check=False)
     entry = {'key': job, 'started_utc': start, 'ended_utc': now(), 'wall_s': time.perf_counter()-begin,
              'exit_code': result.returncode, 'command': command, 'registration': registered['fingerprint'],
-             'raw_log': str(log.relative_to(ROOT)), 'raw_log_sha256': sha(log)}
+             'raw_log': log.relative_to(ROOT).as_posix(), 'raw_log_sha256': sha(log)}
     if output.exists():
-        entry.update(result=str(output.relative_to(ROOT)), result_sha256=sha(output))
+        entry.update(result=output.relative_to(ROOT).as_posix(), result_sha256=sha(output))
     with LEDGER.open('a', encoding='utf-8', newline='\n') as stream:
         stream.write(json.dumps(entry, allow_nan=False)+'\n')
         stream.flush()
@@ -370,7 +370,7 @@ def run():
     report = make_report(stop)
     write(REPORT, report)
     return {'complete': report['complete'], 'stop_reason': stop, 'workers': report['worker_rows'],
-            'report': str(REPORT.relative_to(ROOT))}
+            'report': REPORT.relative_to(ROOT).as_posix()}
 
 
 def audit_sequence(entries, available):

@@ -54,7 +54,7 @@ def run(attempt):
         destination = directory/(label+'.py.txt')
         with destination.open('xb') as stream:
             stream.write(source.read_bytes())
-        snapshots.append({'file': str(destination.relative_to(ROOT)), 'sha256': sha(destination)})
+        snapshots.append({'file': destination.relative_to(ROOT).as_posix(), 'sha256': sha(destination)})
     manifest = {
         'kind': 'disclosed calibration, not a registered convergence verdict',
         'attempt': attempt, 'started_utc': now(), 'source_identity': identity,
@@ -83,10 +83,10 @@ def run(attempt):
                                      check=False)
         record = {'backend': backend, 'family': 'debye', 'started_utc': start, 'ended_utc': now(),
                   'wall_s': time.perf_counter()-begin, 'command': command,
-                  'exit_code': process.returncode, 'raw_log': str(log.relative_to(ROOT)),
+                  'exit_code': process.returncode, 'raw_log': log.relative_to(ROOT).as_posix(),
                   'raw_log_sha256': sha(log)}
         if output.exists():
-            record.update(result=str(output.relative_to(ROOT)), result_sha256=sha(output))
+            record.update(result=output.relative_to(ROOT).as_posix(), result_sha256=sha(output))
         manifest['workers'].append(record)
         manifest['source_unchanged'] = probe.source_identity() == identity
         write(manifest_path, manifest)
@@ -109,7 +109,7 @@ def run(attempt):
     manifest['complete'] = True
     manifest['ended_utc'] = now()
     write(manifest_path, manifest)
-    print(json.dumps({'complete': True, 'workers': 3, 'manifest': str(manifest_path.relative_to(ROOT))}))
+    print(json.dumps({'complete': True, 'workers': 3, 'manifest': manifest_path.relative_to(ROOT).as_posix()}))
     return 0 if manifest['backend_pairs_within_budget'] else 1
 
 
