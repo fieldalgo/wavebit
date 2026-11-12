@@ -35,6 +35,8 @@ class GridFit:
 
 
 def _positive_vector(value, shape, name):
+    if np.iscomplexobj(value):
+        raise ValueError(f'{name} must be real')
     array = np.broadcast_to(np.asarray(value, dtype=float), shape).copy()
     if not np.all(np.isfinite(array)) or np.any(array <= 0):
         raise ValueError(f'{name} must contain finite positive numbers')
@@ -42,7 +44,7 @@ def _positive_vector(value, shape, name):
 
 
 def fit_grid_ladder(model_factory, initial, data, *, grids, noise_sigma,
-                    parameter_tolerance, spectrum_tolerance, max_nfev=40):
+                    parameter_tolerance, spectrum_tolerance, max_nfev=40, on_stage=None):
     """Warm-start least-squares fits; require two consecutive refinement checks.
 
     ``model_factory(grid)(parameters)`` returns (spectrum, Jacobian), with a
@@ -55,8 +57,11 @@ def fit_grid_ladder(model_factory, initial, data, *, grids, noise_sigma,
     A failed optimizer, deficient Jacobian rank or exhausted grid list is not
     convergence. A failed coarse fit is retried at the next grid, with its status
     retained; it cannot count toward a pass. Two passes are evidence on this
-    ladder, not an error bound.
+    ladder, not an error bound. ``on_stage``, when given, receives each completed
+    FitStage for progress reporting or checkpointing.
     """
+    if np.iscomplexobj(initial) or np.iscomplexobj(data):
+        raise ValueError('initial and data must be real')
     x = np.asarray(initial, dtype=float).copy()
     data = np.asarray(data, dtype=float)
     if x.ndim != 1 or data.ndim != 1 or not x.size or data.size < x.size:
@@ -114,6 +119,8 @@ def fit_grid_ladder(model_factory, initial, data, *, grids, noise_sigma,
         stages.append(FitStage(grid, fit.x.copy(), noise_std,
                                float(np.linalg.norm((y - data) / sigma)),
                                dp, dy, bool(fit.success)))
+        if on_stage is not None:
+            on_stage(stages[-1])
         fit_ok = bool(fit.success and full_rank)
         last_failure = (f'optimizer failed at grid {grid}: {fit.message}' if not fit.success
                         else f'Jacobian is rank deficient at grid {grid}' if not full_rank else None)
@@ -162,6 +169,7 @@ def main():
     for stage in report.stages:
         print(f'grid={stage.grid:4d}, width={stage.parameters[0]:.6f} nm, '
               f'noise-only std={stage.noise_std[0]:.6f} nm, '
+              f'weighted residual norm={stage.residual_norm:.3f}, '
               f'parameter/tolerance={stage.parameter_change}, '
               f'spectrum/tolerance={stage.spectrum_change}')
     print(f'grid converged={report.converged}: {report.reason}')

@@ -39,6 +39,7 @@ Pass these explicit controls to `fit_grid_ladder`:
 | `parameter_tolerance` | Maximum acceptable change per fitted parameter, in that parameter's units. |
 | `spectrum_tolerance` | Maximum acceptable forward-model change per observation. |
 | `max_nfev` | Optimizer evaluation budget at each grid. |
+| `on_stage` | Optional callback receiving each completed stage, for progress records. |
 
 At each grid the function fits the same data, starting from the previous fitted
 parameters. It checks both the parameter change and the difference between the
@@ -60,7 +61,9 @@ on the tested ladder, **not a bound on the remaining error**, global-optimum
 proof or physical accuracy guarantee. Check additional levels when the sequence
 is irregular. Noise-only standard deviations use the singular-value decomposition
 of the weighted Jacobian, assuming a locally identifiable least-squares model;
-they do not include discretization bias or model mismatch.
+they do not include discretization bias or model mismatch. Check the weighted
+residuals separately: grid convergence does not establish agreement with the
+measurements within their noise.
 
 ## What to verify for a new problem
 
