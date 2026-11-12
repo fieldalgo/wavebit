@@ -1,0 +1,10 @@
+# Korean translations for Wavebit.
+msgid ""
+msgstr ""
+"Language: ko\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "For overlapping polygonised curves, the default averaged normal field can have finite value steps when a clipped interval disappears. Repreparing or increasing the normal-grid size does not guarantee their removal. See the [short-interval diagnosis](../../validation/rcwa/normal-field-known-limits.md) for the separate material-label correction and the remaining continuity defect."
+msgstr "겹친 다각형 근사 곡선에서는 잘린 구간이 사라질 때 기본 평균 법선장에 유한한 값의 계단이 생길 수 있다. 다시 준비하거나 법선 격자를 늘려도 계단 제거는 보장되지 않는다. 별도의 재료 분류 수정과 남아 있는 연속성 결함은 [짧은 구간 진단](../../validation/rcwa/normal-field-known-limits.md)을 참고한다."

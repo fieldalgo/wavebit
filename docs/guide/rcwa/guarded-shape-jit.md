@@ -58,6 +58,8 @@ normal-field grid and polygon approximations retain their existing derivative li
 Compare the derivative with fresh finite differences and refine numerical resolution
 independently.
 
+For overlapping polygonised curves, the default averaged normal field can have finite value steps when a clipped interval disappears. Repreparing or increasing the normal-grid size does not guarantee their removal. See the [short-interval diagnosis](../../validation/rcwa/normal-field-known-limits.md) for the separate material-label correction and the remaining continuity defect.
+
 Runnable examples cover [rectangular contact](../../../examples/rcwa/nvf_contact.py),
 [tangent ellipses](../../../examples/rcwa/nvf_curved_contact.py), and
 [overlapping curves](../../../examples/rcwa/nvf_curved_painting.py). They preserve their
