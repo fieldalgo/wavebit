@@ -1444,7 +1444,9 @@ def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_
     # Keep the input vertices' rounded coordinates, but evaluate shared intersections
     # at the solve precision. Mixed float32/float64 arithmetic can otherwise put two
     # copies of one shared endpoint on different lines and count the interface twice.
-    verts = [xp.astype(shape_vertices(xp, s, lattice, n_poly), real_dtype) for s in shapes]
+    verts = [shape_vertices(xp, s, lattice, n_poly) for s in shapes]
+    if real_dtype == xp.float64 or any(v.dtype == xp.float64 for v in verts):
+        verts = [xp.astype(v, xp.float64) for v in verts]
     if plan is None:
         recs, regions, transform, interfaces = plan_layer(shapes, lattice, n_poly)
     else:

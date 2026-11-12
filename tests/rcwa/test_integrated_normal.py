@@ -211,3 +211,19 @@ def test_compact_support_has_no_value_or_slope_step():
     coarse = fraction(1.0 - 1e-3)
     fine = fraction(1.0 - 1e-4)
     assert 0.0 < fine < 0.01 * coarse
+
+
+def test_single_precision_slots_keep_high_precision_polygon_area():
+    # Mean permittivity is background + area * contrast, independently of NVF.
+    # Downcasting these input vertices before intersection replay erases their area.
+    mats = b.to_conv_mat_boundary_layer(
+        np,
+        [dict(type="rectangle", lx=1e-5, ly=1e-5, material=1e10 + 1)],
+        1.0,
+        0,
+        0,
+        ((1.0, 0.0), (0.0, 1.0)),
+        np.complex64,
+        laurent=True,
+    )
+    assert mats[0][0, 0] == pytest.approx(2.0, abs=1e-6)
