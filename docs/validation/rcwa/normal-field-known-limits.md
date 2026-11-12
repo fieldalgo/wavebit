@@ -141,6 +141,8 @@ issue is fixed in §8d.
 
 ### 1a. Painted material-equality limit (2026-09-13)
 
+**Historical construction:** this section records the earlier nearest-interface material weighting. The current scalar painted extension is the boundary integral in §1c; its positive contrast weighting retains the material-equality limit.
+
 Removing an interval only at exact material equality created a finite step in the
 default painted extension. An arbitrarily weak internal interface still owned its
 whole nearest-point region until the two materials became equal. The exact material
