@@ -3443,11 +3443,9 @@ class CoreFactorizationMixin:
                  # 'laurent'.
                  shape_nvf_grid_size=None,  # normal-field sampling, per axis; None resolves to
                  # max(_NORMAL_GRID_DEFAULT, 4*half_width+1) -- 1024, lifted to
-                 # 4*half_width+1 at high orders. This comment said 256 until 2026-09-02, which is a number that was
-                 # tried and reverted: it is a rectangle's *angle* that sets the grid, and 256
-                 # sits 9.7% from the converged gradient there. Read by the shape paths only --
-                 # the normal field has no closed-form transform, so it is sampled and read off
-                 # this grid. See `_resolve_normal_grid` for the measurements.
+                 # 4*half_width+1 at high orders. Shape paths sample the normal projector
+                 # on this grid. Check refinement for the requested observable, derivative
+                 # or fitted parameter; the default is not an accuracy guarantee.
                  lattice=None,               # 2x2 cell basis (columns a1, a2); None = diag(period).
                  # New parameters go at the end on purpose: SolverJax._tree_unflatten passes
                  # the children positionally, so one added earlier silently shifts them.
@@ -5544,7 +5542,7 @@ class CoreFactorizationMixin:
         self._normal_grid = value
 
     def _resolve_normal_grid(self, half_width_u, half_width_v):
-        """`shape_nvf_grid_size`, with `None` meaning "enough, and not more".
+        """Resolve the starting normal grid against the retained Fourier bandwidth.
 
         A *stated* number is taken as stated: any positive grid is read
         (:func:`~wavebit.rcwa._engine.factorization.check_normal_grid`), and one below
@@ -5568,12 +5566,11 @@ class CoreFactorizationMixin:
             two shapes     1.5e-13   2.9e-13   2.8e-13   9.8e-14      flat since (two 250 x 300
                                                                       boxes, the placement study's)
 
-        But the conclusion that looks like -- that the default is over-specified and could be
-        256 -- is wrong, and 256 was tried and reverted. It is a rectangle's **angle** that
-        sets the grid, not anyone's position, and there 256 is 9.7% from the converged
-        gradient. See `_NORMAL_GRID_DEFAULT` for the numbers. The general lesson is the one
-        `docs/` already states about this field: a *value* cannot judge a normal field, and a
-        default chosen on values will be chosen too coarse.
+        Translation exactness does not establish shape-derivative or fitting accuracy.
+        Check those quantities under refinement, separately from Fourier order. The
+        reproducible examples in docs/validation/rcwa/fitting-grid-convergence.md show
+        non-monotone parameter changes and a fit that succeeds at every grid while
+        failing its grid-stability criteria. No fixed default certifies every fit.
         """
         want = self._normal_grid
         floor = max(4 * half_width_u + 1, 4 * half_width_v + 1)

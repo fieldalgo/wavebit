@@ -54,6 +54,45 @@ file; exit code 2 means the supplied ladder did not converge. A finer model
 fitted to a coarse synthetic target need not recover the generating parameters.
 Refinement stability and recovery of known truth are different experiments.
 
+### Reproduction of the coarse-grid shift
+
+With the fixed grid-128 target, a grid-256 fit on solver `18bbcbfd` gave:
+
+| Parameter | Generating value | Grid-256 fit | Shift | Grid-128 noise-only standard deviation |
+| --- | ---: | ---: | ---: | ---: |
+| Rectangle width (nm) | 420 | 420.341686 | +0.341686 | 0.086855 |
+| Rectangle angle (rad) | 0.3 | 0.299912115 | −0.000087885 | 0.000187304 |
+| Ellipse center x (nm) | 90 | 89.987132 | −0.012868 | 0.068026 |
+| Thickness (nm) | 300 | 299.730583 | −0.269417 | 0.017574 |
+
+The width and thickness shifts are about 3.9 and 15.3 times their noise-only
+standard deviations. The residual norm after refitting is `0.00195635`; at
+noise sigma `1e-4` its squared weighted norm is about 382.7 for 30 observations
+and four parameters. Refining the model does not make that coarse synthetic
+target a fine-grid truth.
+
+This CPU double-precision reproduction used JAX 0.12.0.1, NumPy 2.5.4 and SciPy
+1.18.1, all 30 observations in one batch, and the original LM settings
+(`x_scale='jac'`, `xtol=1e-10`, `ftol=1e-13`, `gtol=3e-16`, `max_nfev=40`).
+It took seven evaluations. A separate NumPy grid-128 spectrum on NumPy 2.5.1
+agreed with the retained target to `2.8e-13` maximum absolute difference.
+These reproduce the grid effect; they do not establish convergence at 1024.
+
+### Derivative check on the same baseline
+
+At the generating parameters on grid 128, compare the fresh JAX Jacobian with
+Richardson-extrapolated central differences, using steps
+`(0.01 nm, 0.0001 rad, 0.01 nm, 0.01 nm)` and their halves. The maximum absolute
+difference in each column, divided by that column's maximum absolute AD entry,
+was `(0.0021014, 0.0041754, 0.0015886, 2.6e-11)`. The first three columns **fail**
+the predeclared `1e-3` criterion; thickness passes. All evaluations were finite.
+
+This is a separate limitation of the baseline painted normal field. The
+refinement wrapper does not repair its derivative artifacts; see the
+[normal-field limits](normal-field-known-limits.md). A stable fit and a derivative
+check are separate requirements, and the measured finite-order extension must
+be requalified when the normal-field construction changes.
+
 ## Controls and scope
 
 `tests/rcwa/test_spectral_fit_grid_example.py` uses exact linear inverse problems

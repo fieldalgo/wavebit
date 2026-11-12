@@ -101,3 +101,19 @@ def test_a_bad_coarse_fit_is_retried_but_does_not_count_as_a_pass():
     assert [s.grid for s in report.stages] == [1, 2, 4, 8]
     assert np.isinf(report.stages[0].noise_std).all()
     np.testing.assert_allclose(report.parameters, [1.], atol=1e-12)
+
+
+def test_progress_callback_receives_each_completed_fit_once():
+    seen = []
+    report = fit(biased, spectrum_tolerance=.06, on_stage=seen.append)
+    assert [s.grid for s in seen] == [s.grid for s in report.stages]
+    assert len(seen) == 6
+
+
+@pytest.mark.parametrize('field', ['initial', 'data', 'noise_sigma'])
+def test_complex_inputs_are_not_silently_projected_to_real(field):
+    kwargs = dict(initial=[0.], data=[1., 2.], grids=(1, 2, 4),
+                  noise_sigma=.01, parameter_tolerance=.03, spectrum_tolerance=.03)
+    kwargs[field] = np.asarray(kwargs[field], dtype=complex) + 1j
+    with pytest.raises(ValueError, match='must be real'):
+        example.fit_grid_ladder(biased, **kwargs)
