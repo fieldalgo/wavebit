@@ -1,0 +1,10 @@
+# Korean translations for Wavebit.
+msgid ""
+msgstr ""
+"Language: ko\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "`Polygon.vertices` differentiates as an `(N, 2)` tensor or as `N` pairs of scalars; prepare with the spelling you run with, since the two are different layouts. Under `factorization='laurent'`, its fixed-topology derivative follows the analytic polygon Fourier transform. The default scalar painted NVF has used a boundary line integral since 2026-11-13: disappearing intervals lose their contribution and straight subdivision is additive. Validate its derivative across a finite parameter window as well as against local differences. The documented overlapping-curve windows close to 0.180% and 0.116%, while small polygon-facet slope kinks remain. See [polygon regions](../rcwa/boundary-modeling.md#polygon-regions) and [clipping-plan continuity](../../validation/rcwa/normal-field-known-limits.md) for the measured scope; refine the normal grid and Fourier orders independently."
+msgstr "`Polygon.vertices`는 `(N, 2)` 텐서 또는 스칼라 쌍 N개로 미분할 수 있습니다. 두 표현은 레이아웃이 다르므로 실행할 표현으로 준비하세요. `factorization='laurent'`의 고정 위상 미분은 해석적인 다각형 푸리에 변환을 따릅니다. 기본 스칼라 painting NVF는 2026-11-13부터 경계 선적분을 사용하여 사라지는 구간의 기여가 줄고 직선 분할에 가법적입니다. 국소 차분과 함께 유한한 매개변수 구간에서도 미분을 검증하세요. 문서의 겹친 곡선 구간에서는 적분 오차가 0.180%와 0.116%이며 작은 다각형 변의 기울기 꺾임은 남습니다. 측정 범위는 [다각형 영역](../rcwa/boundary-modeling.md#polygon-regions)과 [클리핑 계획 연속성](../../validation/rcwa/normal-field-known-limits.md)을 참고하고, 법선 격자와 푸리에 차수는 독립적으로 높여 확인하세요."

@@ -17,8 +17,8 @@ polygon facet normal near each chord. Original edge contributions remain in the
 extension when covered, so material equality does not switch the field. Clipped
 regions still supply the material coefficients. See [usage, derivatives and
 approximation limits](parametric-modeling.md#overlapping-circles-and-ellipses).
-The default linear construction described below still extracts actual material
-interfaces and keeps its existing numerical behavior.
+
+The default linear construction extracts actual material interfaces. Since 2026-11-13 its scalar painted field uses a boundary line integral; tensor shapes retain their nearest-interface extension. The change affects finite-order NVF results. Earlier numerical measurements below describe their dated constructions; current continuity and reference checks are recorded in [known limits, §1c](../../validation/rcwa/normal-field-known-limits.md).
 
 ---
 
@@ -58,7 +58,7 @@ shapes in painting order
   -> polygon.polygon_ft              closed form, exact for any straight edge
   -> interfaces.plan_interfaces     partition coincident edges, including periodic images
   -> interfaces.replay_interfaces   traced endpoints and live material-jump flags
-  -> boundary.distance_gradient_...  nearest point on the *actual* interface set
+  -> boundary.material_projector_fields  scalar line integral / tensor nearest extension
   -> the five NVF convolution matrices
 ```
 
@@ -88,7 +88,7 @@ same value. The normal field now keeps material labels through the interval plan
 `src/wavebit/_common/geometry/interfaces.py`. Collinear edges are partitioned at every contact endpoint,
 including periodic contacts, and their oriented contributions are summed per region before
 assigning the two sides. This cancels the clipper's possible zero-area out-and-back spurs
-without erasing a real third edge on the same run. An interval is a distance candidate only
+without erasing a real third edge on the same run. An interval contributes only
 when the two sides' current values differ. Material-to-background intervals follow the same rule. The comparison is
 per scalar constitutive quantity: the magnetic pass supplies `Material.mu_value` in the slots
 normally used for epsilon. Complex equality includes loss, and omitted mu has the physical
@@ -116,7 +116,7 @@ material Fourier coefficients remain the original signed polygon transforms.
 
 The regression suite is `tests/rcwa/test_polygon_interfaces.py`; the earlier field defect and the
 scope of the fix are recorded in [known limits, §1](../../validation/rcwa/normal-field-known-limits.md#1-polygon-internal-and-periodic-seams--fixed-2026-09-07).
-The nearest-point extension away from interfaces, its finite-grid quadrature, and RCWA
+The chosen extension away from interfaces, its finite-grid quadrature, and RCWA
 truncation convergence are separate questions. Matching a normal on a smooth interface does not
 make either of the latter two exact.
 
@@ -227,32 +227,11 @@ with `backend='torch'` and pass shape values that require grad to `prepared.run`
 admits: fixed-cell Cartesian Li rectangles by default, the other scalar shapes with `'host'`
 ([checked shape JIT](guarded-shape-jit.md)).
 
-**That agreement is pointwise, and pointwise is the one comparison that cannot fail here.** The
-normal field is sampled, and the nearest-interface direction jumps across the medial axis, so as
-a shape moved the solve changed by small steps as well as smoothly; a difference step smaller
-than a pixel stays inside one smooth piece and agrees with autodiff by construction. Integrated
-across a window several pixels wide, autodiff missed the steps' share of the change: measured
-2026-10-15 on one rotated rectangle painted under a second shape, 18% to 20% of the change across
-a four-pixel window, the same at `shape_nvf_grid_size` 64, 128 and 256 -- a missing term, not a
-grid error. The closed-form route's blended field has no such steps (a lone rectangle closes the
-same window to 5e-4), and Laurent's rule builds no field at all, so its painted-layer derivative
-is exact.
+**A local difference is not a full-window derivative check.** A sampled field with value steps can agree with a small finite difference on each smooth piece while missing the steps in the total change. Earlier nearest-interface and averaged-switch constructions exposed this distinction. Their dated measurements remain in [known limits, §1b](../../validation/rcwa/normal-field-known-limits.md).
 
-**Since 2026-10-15 the field averages each switch over half a sample step, and the window
-closes.** `boundary.material_projector_fields` keeps the nearest-interface extension and replaces
-each of its hard choices -- the nearest interval of a material pair, the nearest of the
-influential pairs -- by a soft minimum: a candidate weighs `exp(-b / w)`, `b` its distance to its
-bisector with the nearest candidate and `w` half the sample step, and what is averaged is the
-projector `n n^T`, which has no sign to flip across an interface. Every sample then moves
-smoothly with the geometry, and the same painted pair misses 0.05%, 0.12% and 0.22% of its
-window's change at grids 64, 128 and 256
-(`test_a_painted_layers_position_derivative_integrates_to_the_change`). The price -- a
-projector of rank two inside a switch, a different extension where material pairs of unequal
-contrast mix, a straight interface under two region labels visible within a sample of where
-the labels change, and the field's build time -- is
-measured in [the normal field's known limits](../../validation/rcwa/normal-field-known-limits.md),
-section 1b, which also says why the tensor shapes keep the hard field. See
-[Polygon regions](#polygon-regions) for the measurement on outlines.
+**The current scalar painted field integrates interface normal dyads.** A positive distance kernel weights each physical interval continuously, with zero kernel and first derivative at its finite support radius. Straight subdivision is additive, and a disappearing interval loses its mass away from its endpoint. Material contrast can vanish continuously; on a smooth interface the pole recovers its normal. The normalized projector can have rank two away from interfaces. This replaces the sample-spacing switch average; `shape_nvf_grid_size` controls sampling, not the kernel width.
+
+On the documented overlapping rectangle/ellipse, the two 41-point JAX derivative integrals agree with the transmission change to 0.180% and 0.116% at orders (4, 4) and normal grid 1024, within the unchanged 1% criterion. Small one-sided slope kinks at finite polygon facets remain. This is not a global C1 guarantee or a convergence result for every geometry. See [the integral and its validation](../../validation/rcwa/normal-field-known-limits.md), section 1c. Tensor shapes keep their previous nearest extension, and the explicit circular projector keeps its analytic construction.
 
 ### It carried a position gradient the parametric path could not — and no longer does
 
@@ -584,18 +563,7 @@ What it has been checked against:
 | the same, default NVF: corners on this route, the rectangle on the closed form | 7.1e-3 at orders (4, 4), 4.8e-4 at (8, 8): two normal fields, one limit |
 | an axis-aligned L at normal incidence, NVF, against an exact-pixel raster under Li's rule (converged: 0.4509 / 0.4511 at orders 12 / 16) | 0.4509, 0.4508 and 0.4507 at orders 4, 8 and 12, with excursions to 0.436 between; Laurent is still at 0.504 at order 12 |
 
-**The vertex derivative is exact under Laurent's rule** -- every coordinate of the L matched a
-central difference to 6e-9 against derivatives up to 7e-2, and integrated across a window the
-derivative closes on the change to the quadrature's 1.5e-4. **Under NVF it closes too since
-2026-10-15**, when the painted field began to average its switches (the
-[differentiability section](#differentiability) says why it had not): across the same four-pixel
-window on a tilted L it misses 0.15% of the change at orders (3, 3) and grid 128, at most 0.24%
-over grids 64 to 512, and 0.06% and 0.08% at orders (6, 6) and (9, 9) -- where the field taken
-hard missed 9-16% at every grid, 6.9% and 3.5%. The rectangle written as corners, one corner
-moved, closes to 0.014% where it missed 13-17%; a second L, of permittivity 5.76 on glass and lit
-from it, whose zeroth transmitted order the hard field missed by 89% at orders (3, 3), closes to
-0.25%. `test_under_nvf_the_vertex_derivative_integrates_to_the_change` holds the window, a slow
-twin holds it at grid 512, and `studies/rcwa/painted_switch_average` has every number.
+**Check polygon derivatives over a window.** Laurent's fixed-topology vertex derivative follows the polygon transform without a normal field. Under the current scalar NVF, `test_under_nvf_the_vertex_derivative_integrates_to_the_change` retains its 1% window criterion, with a slow companion on grid 512. The exact-pixel Li comparison also retains its 2e-2 tolerance and required improvement over Laurent. The former switch-average measurements and the instrument `studies/rcwa/painted_switch_average` describe the 2026-10-15 extension; they are not measurements of the current boundary integral. See [known limits, §1b–1c](../../validation/rcwa/normal-field-known-limits.md).
 
 **An axis-aligned edge is a knife edge for a frozen plan.** The interface planner rounds each
 segment's fractional extent outward to whole cells, and an axis-aligned edge's extent across its
@@ -608,20 +576,7 @@ axis-aligned design re-prepares on its first step.
 
 ## Two properties worth knowing before you trust a number
 
-**The nearest-interface direction is discontinuous on the medial axis**, where the closest
-boundary point swaps and the direction turns by up to 90 degrees, and until 2026-10-15 the field
-sampled it as it is. A *symmetric* shape therefore sat exactly on its own discontinuity: a
-square's 45-degree medial axis runs through the pixel centres of a square grid, those pixels were
-exact `argmin` ties, and the answer stepped as the shape was perturbed either way. Finite
-differences there diverged like `1/h` (a constant jump of 0.42 straddled at every `h` from 1e-3 to
-1e-6) while the analytic gradient was the one-sided value, and an optimizer started from a
-perfectly symmetric shape saw that step on its first move. The field now averages the switch over
-half a sample step, a tied sample reads the average of the two faces' projectors, and the step is
-gone. On a 0.5 square at the cell centre, grid 128, orders (4, 4), the central difference of total
-transmission in the half-width read 0.144 / 0.261 / 0.146 / 0.146 / 0.146 at `h` = 1e-3 to 1e-7
-with the field taken hard -- one step straddled at 1e-4 -- and reads 0.1476 / 0.1478 / 0.1477 /
-0.1477 / 0.1477 averaged. The raw probe `distance_gradient_normal_field`, which no solve reads,
-keeps the discontinuity.
+**The scalar boundary integral avoids selecting one nearest face on a medial axis.** It averages positive normal dyads over actual interfaces, so an equal-distance tie does not switch an `argmin`. Exact corners and material junctions need not have a unique normal, and fixed polygon-facet events can still have small slope kinks. Reprepare changed topology and check finite-window derivatives and resolution convergence. The legacy nearest-distance probe and the tensor nearest extension retain their own tie behavior; historical symmetric-shape measurements are in [known limits](../../validation/rcwa/normal-field-known-limits.md).
 
 **The sampled normal field is read through its trigonometric interpolant** (since 2026-11-11).
 The projectors use the field's Fourier orders up to `±2m` on each axis, `m` being that axis's
