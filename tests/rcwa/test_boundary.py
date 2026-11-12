@@ -1556,14 +1556,9 @@ def test_a_painted_layer_on_an_unreduced_basis_builds_its_reduction():
     assert _spelled_total(_spelled(10, _TWO_OVERLAPPING)) == reference
     odd = [_spelled_total(_spelled(k, _TWO_OVERLAPPING)) for k in (1, 3)]
     assert odd[0] == odd[1]
-    # The old numeric pin included a same-material internal seam, and its replacement read the
-    # independently specified union contour exactly -- true of the hard nearest-interface field,
-    # which no interval split can reach. The field averages its switches over half a sample
-    # step since 2026-10-15 and so reads where the outline passes from one box's region label
-    # to the other's, within a sample of that point: against the union written as one polygon
-    # on the same route, every spelling reads 3.9e-4 / 4.1e-4 at grid 64, 1.1e-4 / 1.0e-4 at
-    # 128 (k even / odd) and 2.5e-5 at 256 (6.3e-4 / 6.5e-4, 1.7e-4 / 1.6e-4 and 3.8e-5 while
-    # the average also read the clipper's splits within one pair as corners, until 2026-10-16).
+    # A same-material painted partition and its independently specified union
+    # now have the same additive boundary measure, including across region labels.
+    # Test equality at roundoff rather than decay of the former averaging error.
     union = [dict(type='polygon', vertices=((-250., -150.), (250., -150.), (250., 150.),
                                             (-250., 150.)), material=12.25)]
     two = {(k, grid): _spelled_total(_spelled(k, _TWO_OVERLAPPING, shape_nvf_grid_size=grid))
@@ -1571,7 +1566,7 @@ def test_a_painted_layer_on_an_unreduced_basis_builds_its_reduction():
     one = {(k, grid): _spelled_total(_spelled(k, union, shape_nvf_grid_size=grid))
            for k in (0, 1) for grid in (64, 128)}
     gaps = [[abs(two[k, grid] - one[k, grid]) for k in (0, 1)] for grid in (64, 128)]
-    assert all(fine < coarse / 3 and fine < 3e-4 for coarse, fine in zip(*gaps)), gaps
+    assert max(gap for row in gaps for gap in row) < 2e-12, gaps
     # Odd spellings sample a different quadrature grid. The two boxes' gap to the even ones is
     # the same outline's sampling difference and no more: the union, which has no split to
     # read, moves 2.7e-5 at grid 64 and 1.4e-5 at 128 between the two quadratures, the two

@@ -1440,7 +1440,11 @@ def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_
     if laurent and (nvf_projector is not None or projector_coeffs is not None
                     or projector_plan is not None):
         raise ValueError("Laurent's rule builds no normal projector; pass no projector option")
-    verts = [shape_vertices(xp, s, lattice, n_poly) for s in shapes]
+    real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
+    # Keep the input vertices' rounded coordinates, but evaluate shared intersections
+    # at the solve precision. Mixed float32/float64 arithmetic can otherwise put two
+    # copies of one shared endpoint on different lines and count the interface twice.
+    verts = [xp.astype(shape_vertices(xp, s, lattice, n_poly), real_dtype) for s in shapes]
     if plan is None:
         recs, regions, transform, interfaces = plan_layer(shapes, lattice, n_poly)
     else:
@@ -1449,7 +1453,6 @@ def to_conv_mat_boundary_layer(xp, shapes, background, half_width_u, half_width_
     vals = _clipper.eval_table(xp, recs, verts)
     regs = [(s['material'], [_clipper.loop_verts(xp, lp, vals) for lp in region])
             for s, region in zip(shapes, regions)]
-    real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
     if nvf_projector == 'circular':
         import wavebit.rcwa._engine.parametric as P
         if projector_coeffs is not None:
