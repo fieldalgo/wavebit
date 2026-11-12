@@ -84,7 +84,7 @@ def projector_fields(
     transform=None,
     chunk=None,
 ):
-    A, E, L2, active = segment_data
+    A, E, L2, _active = segment_data
     ids = [i for g in plan.groups for i in g]
     if not ids:
         return (
@@ -102,10 +102,12 @@ def projector_fields(
     repeat = b._continued_endpoints(
         xp, A, E, L2, xp.sum(E * E, axis=1) > 0, labels, scale
     )[2]
-    valid = active[xp.asarray(ids)] & ~repeat
+    strength = contrasts[xp.asarray(ids)]
+    distinct = xp.asarray([pair[0] != pair[1] for pair in pairs])
+    valid = (strength > 0) & distinct & (xp.sum(E * E, axis=1) > 0) & ~repeat
     t = E / xp.sqrt(L2)[:, None]
     nx, ny = t[:, 1], -t[:, 0]
-    contrast = contrasts[xp.asarray(ids)] ** 4
+    contrast = strength**4
     basis = b.reduced_basis(lattice, transform)
     basis = xp.stack(
         [
@@ -122,9 +124,15 @@ def projector_fields(
     pts = b._folded_sample_points(xp, grid, lattice, dtype, transform)
     threshold2 = b._on_interface_threshold2(xp, lattice, dtype)
 
-    def integrate(p, a, e, l2, live, weight, normal_x, normal_y):
+    def integrate(p, a, e, l2, live, weight, normal_x, normal_y, indices=None):
         mass = _interval_mass(xp, p, a, e, l2, radius, threshold2, live)
         mass = mass * weight[None, :]
+        if indices is not None:
+            # Restore the full ordered reduction, including exact zeros, so NumPy
+            # chunk size cannot change its pairwise summation tree by one ulp.
+            full_mass = xp.zeros((p.shape[0], len(A)), dtype=mass.dtype)
+            full_mass[:, indices] = mass
+            mass, normal_x, normal_y = full_mass, nx, ny
         total = xp.sum(mass, axis=1)
         nonempty = total > 0
         total = xp.where(nonempty, total, 1.0)
@@ -192,6 +200,7 @@ def projector_fields(
                 contrast[index],
                 nx[index],
                 ny[index],
+                indices=index,
             )
         return full(p)
 
