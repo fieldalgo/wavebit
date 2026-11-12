@@ -16,6 +16,7 @@ in [`../studies/`](../studies) with a [`../docs/`](../docs) write-up instead. Se
 
 | Entry | Question |
 |---|---|
+| `tests/api/test_compiled_rcwa.py` | Can a host optimizer cross geometry-plan boundaries with automatic re-preparation, correct values and derivatives, bounded recovery and preserved input/numerical errors? |
 | `tests/fdtd/test_pml_kappa.py`, `tests/fdtd/test_fd_layer_return.py` | Does explicit PML coordinate stretch preserve default job/plan identity, independent kernel reflection, per-face/source isolation and backend material derivatives? |
 | `tests/fdtd/test_fd_acceptance.py`, `tests/fixtures/fdtd/acceptance.py` | Do fixed per-observable limits reject unstable, incomplete or inaccurate evidence without enlarging the budget? |
 | `tests/fdtd/check_metasurface_current.py` | Does current-source M1 p pass the unchanged C7 criteria before a separate regression row is exported? [Criteria](../docs/validation/fdtd/fd-planewave-acceptance.md#source-specific-m1-regression-qualification-2026-10-22). |

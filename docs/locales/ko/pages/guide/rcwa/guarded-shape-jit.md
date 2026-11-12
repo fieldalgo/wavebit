@@ -67,6 +67,50 @@ RCWA의 `result.validity.checks['numerical_finite']`는 내부 계산이 유한�
 유한한 법선장 격자와 다각형 근사는 기존 미분 한계를 그대로 가집니다.
 새로 준비한 계산의 유한차분과 미분을 비교하고 수치 해상도를 독립적으로 높이세요.
 
+## 최적화 중 자동 재준비
+
+기하 처리 계획이 바뀌어도 최적화를 계속하려면
+`rcwa.compile(build, observe, numerics=...)`를 사용하세요.
+`build(parameters)`는 `Problem`을, `observe(result)`는 계산할 스칼라나 배열을
+반환합니다. 제어 객체는 매번 구체적인 후보를 호스트에서 검사합니다. 기존 계획이
+맞으면 재사용하고, 맞지 않으면 **바로 그 새 후보**로 다시 준비하고 컴파일하여
+그 점의 값과 미분을 반환합니다. 이전 매개변수로 되돌리거나 최적화기에 위상 예외의
+복구 처리를 요구하지 않습니다.
+
+```python
+evaluate = rcwa.compile(design, lambda result: result.T.sum(), numerics=numerics)
+value = evaluate(121.)
+value, gradient = evaluate.value_and_grad(121.)
+value, jacobian = evaluate.value_and_jacobian(121.)
+```
+
+Python 최적화 루프나 SciPy에서 직접 호출하세요. 내부에서 JAX JIT를 관리하므로
+제어 객체를 다시 `jax.jit`, `jax.grad`, `jax.vmap`으로 감싸지 않습니다.
+실수 스칼라 목적함수에는 `value_and_grad`, 배열 관측량에는
+`value_and_jacobian` 또는 `jacobian`을 쓰세요. 매개변수는 구체적이고 유한한
+실수 부동소수점 배열 또는 스칼라여야 합니다. `build`와 `observe`는 순수 함수이며
+JAX tracing이 가능해야 합니다. 모델 구조와 출력 shape를 유지하고, 바뀌는 모든
+입력은 외부의 가변 상태가 아닌 매개변수로 전달하세요.
+
+이 진입점은 명시적으로 `topology_check='host'`를 사용하며 평면파 하나와 스칼라
+재료 지원 범위를 따릅니다. 다른 수치 설정은 유지합니다. 준비 하나와 각 값·미분
+메서드의 컴파일 함수를 보관하므로, 위상이 바뀌면 컴파일 비용이 다시 들 수 있습니다.
+`evaluate.preparation_count`는 성공적으로 적용한 준비 횟수입니다. 실패한 후보는
+마지막 정상 계획을 덮어쓰지 않습니다. 예전 위상으로 돌아갈 때도 재준비할 수
+있으며, 과거의 기하 계획이나 계산 답을 계속 쌓아두지 않습니다.
+
+기하 재사용 검사 실패만 재준비합니다. 잘못된 치수, 비유한 입력, 미지원 요청,
+선택한 관측량이나 미분의 비유한 결과는 명시적인 오류로 남습니다. 호스트 사전
+검사를 통과한 이전 계획이 컴파일된 검사에서 거절되면 같은 매개변수로 한 번
+재준비해 재시도합니다. 새 계획도 실패하면 무한 재시도하지 않고 오류를 알립니다.
+
+[자동 재준비 예제](../../../examples/rcwa/automatic_repreparation.py)는 수동 재시도
+처리 없이 SciPy의 잔차·Jacobian 호출로 사각형의 위치를 맞추며, 겹침에서 분리로
+넘어갑니다. CPU JAX를 회귀 테스트로 검증하고 GPU 실행은 측정하지 않았습니다.
+재준비는 지원되는 새 형상을 계산할 수 있게 하지만, 정확한 위상 경계에서의 매끄러운
+미분, 최적화기의 수렴, 법선장 격자의 수렴을 보장하지 않습니다. 저수준
+`Prepared.run`은 위에서 설명한 고정 계획 계약을 유지합니다.
+
 실행 가능한 예제는 [직사각형 접촉](../../../examples/rcwa/nvf_contact.py),
 [접하는 타원](../../../examples/rcwa/nvf_curved_contact.py),
 [겹치는 곡선](../../../examples/rcwa/nvf_curved_painting.py)을 다룹니다.

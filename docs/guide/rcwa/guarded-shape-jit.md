@@ -70,6 +70,53 @@ normal-field grid and polygon approximations retain their existing derivative li
 Compare the derivative with fresh finite differences and refine numerical resolution
 independently.
 
+## Automatic re-preparation during optimization
+
+Use `rcwa.compile(build, observe, numerics=...)` when an optimizer should continue
+through changes in the geometry plan. `build(parameters)` returns a `Problem`, and
+`observe(result)` selects a scalar or array. The controller checks each concrete
+candidate on the host. It reuses its preparation while the geometry fits; otherwise
+it prepares the **same candidate**, compiles the new calculation and returns that
+candidate's value and derivative. It does not move back to the previous parameters
+or ask the optimizer to catch a topology exception.
+
+```python
+evaluate = rcwa.compile(design, lambda result: result.T.sum(), numerics=numerics)
+value = evaluate(121.)
+value, gradient = evaluate.value_and_grad(121.)
+value, jacobian = evaluate.value_and_jacobian(121.)
+```
+
+Call this controller directly from a Python optimization loop or SciPy. It manages
+JAX JIT internally; do not wrap the controller in `jax.jit`, `jax.grad` or `jax.vmap`.
+Use `value_and_grad` for a real scalar objective, and `value_and_jacobian` or
+`jacobian` for array observations. Parameters must be a concrete finite real
+floating-point array or scalar. `build` and `observe` must be pure and traceable by
+JAX: keep the model structure and observation shape fixed and pass every changing
+input through the parameters, rather than mutable captured state.
+
+This entry point explicitly uses `topology_check='host'` and its single-plane-wave,
+scalar-material scope. It preserves the other numerical settings. It keeps one
+preparation and compiled functions for its value/derivative methods; a topology
+change can incur compilation again. `evaluate.preparation_count` counts successfully
+installed preparations. Failed candidates do not replace the last working plan.
+Revisiting an older topology can require another preparation: the controller does
+not accumulate a history of geometry plans or cached answers.
+
+Only geometry-reuse failures trigger re-preparation. Invalid dimensions, nonfinite
+inputs, unsupported requests, nonfinite selected observations and nonfinite
+derivatives remain explicit errors. If a compiled guard rejects an old plan despite
+the host preflight, it retries once with a fresh preparation at those parameters;
+failure of that fresh plan is reported instead of retrying indefinitely.
+
+The [automatic re-preparation example](../../../examples/rcwa/automatic_repreparation.py)
+fits a rectangle's position across the transition from overlap to separation, using
+SciPy residual and Jacobian calls without a manual retry handler. CPU JAX is covered
+by regression tests; GPU execution has not been measured. Re-preparation makes
+supported new geometry calculable, but does not guarantee a smooth derivative at
+the exact topology boundary, convergence of an optimizer, or normal-field grid
+convergence. Low-level `Prepared.run` retains the explicit fixed-plan behavior above.
+
 Runnable examples cover [rectangular contact](../../../examples/rcwa/nvf_contact.py),
 [tangent ellipses](../../../examples/rcwa/nvf_curved_contact.py), and
 [overlapping curves](../../../examples/rcwa/nvf_curved_painting.py). They preserve their
