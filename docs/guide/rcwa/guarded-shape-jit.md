@@ -47,7 +47,19 @@ rectangle under the default, is in the differentiation guide's
 
 `result.validity.checks['shape_topology']` is false when the host check rejects a live
 geometry. Diffraction powers and amplitudes, retained fields, boundary fields and
-scattering matrices are then NaN. A valid point follows an invalid point correctly:
+scattering matrices are then NaN. Their connected forward- and reverse-mode derivatives
+also propagate NaN, so a rejected solve cannot masquerade as a zero-gradient optimum.
+An output independent of a differentiated input can still have a structural zero
+derivative; do not use Jacobian finiteness as the admission test.
+
+For RCWA, `result.validity.checks['numerical_finite']` is false if the underlying
+solve is nonfinite **or any admission check fails**. Inspect the other checks, such
+as `shape_topology`, to identify an admission failure. A true flag does not certify
+convergence or that every optional observable is defined (for example, efficiency
+can be undefined for a source with no normal incident flux). Optimizers must reject
+failed checks before accepting a step or estimating uncertainty.
+
+A valid point follows an invalid point correctly:
 no last-call geometry is cached. Eager invalid reuse still raises an
 `IncompatibleProblemError`, and `prepared.validate(concrete_problem)` gives an eager
 report. Prepare again from concrete inputs when topology changes; no smooth derivative

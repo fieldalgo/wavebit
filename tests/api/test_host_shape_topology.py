@@ -129,6 +129,50 @@ def test_polygon_painting_plan_change_is_not_hidden_by_a_finite_solve(jax):
     assert not bool(valid) and np.isnan(power).all()
 
 
+def test_rejected_painting_has_nan_forward_and_reverse_jacobians(jax):
+    import jax.numpy as jnp
+
+    def build(parameters):
+        offset, thickness = parameters
+        base = CASES['painting'][0](offset)
+        return base.replace(stack=base.stack.replace(layers=(
+            base.stack.layers[0].replace(thickness=thickness),)))
+
+    good = jnp.asarray([80., 180.])
+    bad = jnp.asarray([200., 180.])
+    prepared = rcwa.prepare(build(good), numerics=NUMERICS, backend='jax')
+
+    def evaluate(parameters):
+        result = prepared.run(build(parameters))
+        return jnp.concatenate((result.R.ravel(), result.T.ravel())), dict(result.validity.checks)
+
+    response = lambda p: evaluate(p)[0]
+    run = jax.jit(evaluate)
+    forward = jax.jit(jax.jacfwd(response))
+    reverse = jax.jit(jax.jacrev(response))
+    before, flags = run(good)
+    df, dr = forward(good), reverse(good)
+    assert all(bool(flag) for flag in flags.values())
+    assert np.isfinite(df).all() and np.max(np.abs(df)) > 1e-6
+    np.testing.assert_allclose(df, dr, rtol=2e-10, atol=1e-12)
+
+    invalid, flags = run(bad)
+    assert np.isnan(invalid).all()
+    assert np.isnan(forward(bad)).all()
+    assert np.isnan(reverse(bad)).all()
+    assert not bool(flags['shape_topology'])
+    assert not bool(flags['numerical_finite'])
+    # A failed call cannot poison the next valid call or a separate vmap lane.
+    np.testing.assert_array_equal(run(good)[0], before)
+    np.testing.assert_array_equal(forward(good), df)
+    np.testing.assert_array_equal(reverse(good), dr)
+    for transform in (jax.jacfwd, jax.jacrev):
+        batched = jax.jit(jax.vmap(transform(response)))(jnp.stack((good, bad, good)))
+        assert np.isnan(batched[1]).all()
+        np.testing.assert_allclose(batched[0], df, rtol=2e-10, atol=1e-12)
+        np.testing.assert_array_equal(batched[0], batched[2])
+
+
 def test_host_policy_does_not_claim_tensor_or_raster_topology_support():
     base = scene((rcwa.Circle(radius=120.),))
     layer = base.stack.layers[0]
