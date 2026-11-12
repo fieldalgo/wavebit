@@ -935,6 +935,74 @@ def _dead_last(xp, lam, E, mu, ndead):
     return xp.sum(lam[..., :, None] * P, axis=-2), E @ P
 
 
+#: :func:`_cluster_split` tries again with :func:`_spread_eigenvectors` where its best split's
+#: ``cond(X)`` exceeds this. Splits from independent eigenvectors measured at most 20.0; the
+#: check (:func:`_joint_cluster_bases`) reads ``cond(X)`` times a dropped part that itself grows
+#: with ``cond(X)``: measured, it passed up to 146 and failed from 185 (2026-11-12). Below it the
+#: split is ``eig``'s, to the bit.
+_SPLIT_RETRY = 32.0
+
+#: :func:`_spread_eigenvectors`: eigenvalues within this of each other, relative to
+#: ``max(1, |lambda|)``, are one near set. Two Jordan pairs at one eigenvalue come back from
+#: ``eig`` spread by about the square root of the rounding (1e-9 at ``DC612``); a near set wider
+#: than the true multiplicity finds no eigenvector orthogonal to it, and the residual test keeps
+#: ``eig``'s.
+_SPREAD_NEAR = 1e-6
+
+#: :func:`_spread_eigenvectors` keeps a re-derived vector only where its residual
+#: ``||T x - rho x||`` is within this many ulp of ``||T||``: an eigenvector to rounding.
+_SPREAD_RES = 16.0
+
+
+def _spread_eigenvectors(xp, T, lam, E, live):
+    """``eig``'s unit eigenvectors ``E`` of ``T`` with every collapsed one re-derived.
+
+    At an eigenvalue of geometric multiplicity two or more -- two Jordan pairs at one eigenvalue,
+    or a degenerate eigenvalue that is not defective -- ``eig``'s vectors are the eigenvectors of
+    a rounding-sized perturbation within the eigenspace, and may come back nearly parallel
+    (``DC612`` at ``theta`` 1e-4, first order, on some OpenBLAS kernels: the four vectors of one
+    eigenvalue within a sine of 1.3e-3 of one another, and the best split's ``cond(X)`` 1833).
+    For each live lane ``i`` in order, where an
+    earlier live lane's eigenvalue is within :data:`_SPREAD_NEAR`, the lane takes the unit vector
+    with the smallest residual against ``T - lambda_i`` orthogonal to those earlier lanes ``V``:
+    the right singular vector of the smallest singular value of ``[T - lambda_i I; ||T|| V^H]``.
+    It is kept only where it is an eigenvector to rounding (:data:`_SPREAD_RES`); a lane with no
+    such vector -- the second member of a Jordan pair -- keeps ``eig``'s. Inverse iteration
+    orthogonalises the vectors of close eigenvalues against each other in the same way (G. H.
+    Golub and C. F. Van Loan, Matrix Computations, 4th ed., section 7.6.1; LAPACK's ``?stein``).
+    The lane's own eigenvalue serves at a perturbed Jordan pair as well as the near set's mean:
+    ``T - lambda_i`` there has a second singular value at rounding (measured on 900 random
+    operators, the same verdicts).
+
+    ``T`` is ``(S, k, k)``, ``lam`` and ``E`` ``eig``'s, ``live`` ``(S, k)`` the member lanes. Values
+    only: ``T`` is stopped.
+    """
+    S, k, _ = T.shape
+    C = T.dtype
+    dev = getattr(T, 'device', None)
+    rdt = xp.real(T).dtype
+    eps = float(xp.finfo(rdt).eps)
+    scale = xp.maximum(xp.ones_like(xp.abs(lam)), xp.abs(lam))
+    near = ((xp.abs(lam[:, :, None] - lam[:, None, :]) <= _SPREAD_NEAR * scale[:, :, None])
+            & live[:, :, None] & live[:, None, :])
+    norm_T = xp.linalg.matrix_norm(T)
+    eye = xp.astype(xp.eye(k, device=dev), C)
+    cols = [E[:, :, 0]]
+    for i in range(1, k):
+        prev = near[:, i, :i]                                               # (S, i)
+        V = xp.stack(cols, axis=-1) * xp.astype(prev, C)[:, None, :]
+        A = xp.concat([T - lam[:, i][:, None, None] * eye,
+                       xp.astype(norm_T, C)[:, None, None] * _conj_t(xp, V)], axis=-2)
+        _, _, Vh = xp.linalg.svd(A, full_matrices=False)
+        x = xp.conj(Vh[:, -1, :])
+        Tx = (T @ x[:, :, None])[:, :, 0]
+        rho = xp.sum(xp.conj(x) * Tx, axis=-1)
+        res = xp.linalg.vector_norm(Tx - rho[:, None] * x, axis=-1)
+        keep = xp.any(prev, axis=-1) & (res <= _SPREAD_RES * eps * norm_T)
+        cols.append(xp.where(keep[:, None], x, E[:, :, i]))
+    return xp.stack(cols, axis=-1)
+
+
 def _cluster_split(xp, T, valid, pad):
     """A basis ``X`` with ``X^-1 T X`` diagonal but for a block on rows ``J``, columns ``K``.
 
@@ -949,6 +1017,12 @@ def _cluster_split(xp, T, valid, pad):
     length at most two, some ``J`` leaves no other off-diagonal entry; the split with the
     smallest ``cond(X)`` is taken (measured at most 8.14 on the y-Littrow scenes, 12.2 on a
     genuinely 2D one, 20.0 on eight modes at a double x-cutoff).
+
+    Where that ``cond(X)`` exceeds :data:`_SPLIT_RETRY` -- ``eig`` handed back nearly parallel
+    vectors at an eigenvalue of multiplicity two or more -- the split is tried again from
+    :func:`_spread_eigenvectors`, and the one with the smaller ``cond(X)`` times its dropped part
+    (what the check reads) is kept. Eagerly a layer whose splits are all below it never forms the
+    second; under a trace both are formed and one is selected per slot.
 
     Returns ``(X, J, cond)``. A slot with no admissible split -- and under a trace a slot with no
     members -- takes ``X = I`` and ``cond = inf``; every padded row and column of ``X`` is the
@@ -966,46 +1040,69 @@ def _cluster_split(xp, T, valid, pad):
     lam, E = _eig_raw(T)
     E = E / xp.linalg.vector_norm(E, axis=-2)[..., None, :]
     lam, E = _dead_last(xp, lam, E, mu, ndead)
-    Xs, conds, oks, masks = [], [], [], []
-    for j, Jidx, Kidx, Jmask, order in _split_candidates(k):
-        nc = Jidx.shape[0]
-        Ji = xp.asarray(Jidx.reshape(-1), device=dev)
-        EJ = xp.permute_dims(xp.reshape(xp.take(E, Ji, axis=2), (S, k, nc, j)), (0, 2, 1, 3))
-        Qc, _ = xp.linalg.qr(EJ, mode='complete')
-        Cc = Qc[..., j:]
-        lq, Yq = _eig_raw(_conj_t(xp, Cc) @ T[:, None] @ Cc)
-        Yq = Yq / xp.linalg.vector_norm(Yq, axis=-2)[..., None, :]
-        # The padded lanes are K's last whenever J holds only members.
-        _, Yq = _dead_last(xp, lq, Yq, mu[:, None], xp.broadcast_to(ndead[:, None], (S, nc)))
-        # P[c, p, l] = 1 where position p of [J | K] is lane l: back to lane order, exactly.
-        P = xp.astype(xp.asarray(order, device=dev)[:, :, None] == lane[None, None, :], C)
-        X = xp.concat([EJ, Cc @ Yq], axis=-1) @ P[None]
-        X = X / xp.linalg.vector_norm(X, axis=-2)[..., None, :]
-        X = xp.where(vv[:, None], X, xp.broadcast_to(eye, X.shape))
-        sv = xp.linalg.svdvals(X)
-        pos = sv[..., -1] > 0
-        conds.append(xp.where(pos, sv[..., 0] / xp.where(pos, sv[..., -1], xp.ones_like(sv[..., -1])),
-                              xp.full_like(sv[..., 0], float('inf'))))
-        vJ = xp.reshape(xp.take(valid, Ji, axis=1), (S, nc, j))
-        vK = xp.reshape(xp.take(valid, xp.asarray(Kidx.reshape(-1), device=dev), axis=1),
-                        (S, nc, k - j))
-        oks.append(xp.all(vJ, axis=-1) & xp.any(vK, axis=-1))
-        Xs.append(X)
-        masks.append(Jmask)
-    X = xp.concat(Xs, axis=1)                                         # (S, ncand, k, k)
-    cond = xp.concat(conds, axis=1)
-    ok = xp.concat(oks, axis=1) & xp.isfinite(cond)
-    Jm = xp.asarray(np.concatenate(masks, axis=0), device=dev)        # (ncand, k)
-    ncand = Jm.shape[0]
-    best = xp.argmin(xp.where(ok, cond, xp.full_like(cond, float('inf'))), axis=1)
-    pick = xp.arange(S, device=dev) * ncand + best
-    has = xp.any(ok, axis=1)
-    Xb = xp.take(xp.reshape(X, (S * ncand, k, k)), pick, axis=0)
-    Xb = xp.where(has[:, None, None], Xb, xp.broadcast_to(eye, Xb.shape))
-    cb = xp.take(xp.reshape(cond, (-1,)), pick)
-    cb = xp.where(has, cb, xp.full_like(cb, float('inf')))
-    J = xp.take(Jm, best, axis=0) & valid & has[:, None]
-    return Xb, J, cb
+
+    def best(E):
+        Xs, conds, oks, masks = [], [], [], []
+        for j, Jidx, Kidx, Jmask, order in _split_candidates(k):
+            nc = Jidx.shape[0]
+            Ji = xp.asarray(Jidx.reshape(-1), device=dev)
+            EJ = xp.permute_dims(xp.reshape(xp.take(E, Ji, axis=2), (S, k, nc, j)), (0, 2, 1, 3))
+            Qc, _ = xp.linalg.qr(EJ, mode='complete')
+            Cc = Qc[..., j:]
+            lq, Yq = _eig_raw(_conj_t(xp, Cc) @ T[:, None] @ Cc)
+            Yq = Yq / xp.linalg.vector_norm(Yq, axis=-2)[..., None, :]
+            # The padded lanes are K's last whenever J holds only members.
+            _, Yq = _dead_last(xp, lq, Yq, mu[:, None], xp.broadcast_to(ndead[:, None], (S, nc)))
+            # P[c, p, l] = 1 where position p of [J | K] is lane l: back to lane order, exactly.
+            P = xp.astype(xp.asarray(order, device=dev)[:, :, None] == lane[None, None, :], C)
+            X = xp.concat([EJ, Cc @ Yq], axis=-1) @ P[None]
+            X = X / xp.linalg.vector_norm(X, axis=-2)[..., None, :]
+            X = xp.where(vv[:, None], X, xp.broadcast_to(eye, X.shape))
+            sv = xp.linalg.svdvals(X)
+            pos = sv[..., -1] > 0
+            conds.append(xp.where(pos, sv[..., 0] / xp.where(pos, sv[..., -1],
+                                                              xp.ones_like(sv[..., -1])),
+                                  xp.full_like(sv[..., 0], float('inf'))))
+            vJ = xp.reshape(xp.take(valid, Ji, axis=1), (S, nc, j))
+            vK = xp.reshape(xp.take(valid, xp.asarray(Kidx.reshape(-1), device=dev), axis=1),
+                            (S, nc, k - j))
+            oks.append(xp.all(vJ, axis=-1) & xp.any(vK, axis=-1))
+            Xs.append(X)
+            masks.append(Jmask)
+        X = xp.concat(Xs, axis=1)                                     # (S, ncand, k, k)
+        cond = xp.concat(conds, axis=1)
+        ok = xp.concat(oks, axis=1) & xp.isfinite(cond)
+        Jm = xp.asarray(np.concatenate(masks, axis=0), device=dev)    # (ncand, k)
+        ncand = Jm.shape[0]
+        pick_c = xp.argmin(xp.where(ok, cond, xp.full_like(cond, float('inf'))), axis=1)
+        pick = xp.arange(S, device=dev) * ncand + pick_c
+        has = xp.any(ok, axis=1)
+        Xb = xp.take(xp.reshape(X, (S * ncand, k, k)), pick, axis=0)
+        Xb = xp.where(has[:, None, None], Xb, xp.broadcast_to(eye, Xb.shape))
+        cb = xp.take(xp.reshape(cond, (-1,)), pick)
+        cb = xp.where(has, cb, xp.full_like(cb, float('inf')))
+        J = xp.take(Jm, pick_c, axis=0) & valid & has[:, None]
+        return Xb, J, cb
+
+    def miss(X, J, cond):
+        # What the check reads of a split: cond(X) times the part of X^-1 T X it drops.
+        Mx = linear_solve(xp, X, T @ X)
+        JK = J[:, :, None] & (~J & valid)[:, None, :]
+        drop = vv & ~(JK | (eye != 0))
+        dropped = xp.linalg.matrix_norm(xp.where(drop, Mx, xp.zeros_like(Mx)))
+        finite = xp.isfinite(cond)
+        return xp.where(finite, xp.where(finite, cond, xp.zeros_like(cond)) * dropped,
+                        xp.full_like(cond, float('inf')))
+
+    X, J, cond = best(E)
+    again = cond > _SPLIT_RETRY
+    if _concrete(xp.any(again)) is False:
+        return X, J, cond
+    live = lane[None, :] < (k - ndead)[:, None]
+    X2, J2, cond2 = best(_spread_eigenvectors(xp, T, lam, E, live))
+    take = again & (miss(X2, J2, cond2) < miss(X, J, cond))
+    return (xp.where(take[:, None, None], X2, X), xp.where(take[:, None], J2, J),
+            xp.where(take, cond2, cond))
 
 
 def _rebuild_defective_pairs(xp, A, Omega_R, W, V, q, w, pairs, clusters=None):
