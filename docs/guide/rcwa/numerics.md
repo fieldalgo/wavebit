@@ -164,9 +164,11 @@ backend, and double precision avoids it.
 `shape_nvf_grid_size` is the grid the normal field is read off, per axis, and it is the one number here
 that can dominate a differentiated step: at order 3 the default spends more per
 step building the field than the solve itself costs. It defaults to
-`max(1024, 4*half_width+1)`, and 1024 is not over-specification -- 256 was tried and reverted,
-because it is a rectangle's *angle* that sets the grid and 256 sits 9.7% from the converged
-gradient there.
+`max(1024, 4*half_width+1)`. This starting resolution does not guarantee a
+requested accuracy for values, derivatives or fitted parameters. Check those
+quantities under refinement; their convergence can be non-monotone. The
+[automatic grid/refit workflow](fitting-grid-convergence.md) checks parameter
+changes and same-point spectral differences separately.
 
 Lowering it is bounded by accuracy rather than by taste. See
 [`../nvf-upsampling.md`](../../validation/rcwa/nvf-upsampling.md) and [`../backend-choice.md`](../../validation/rcwa/backend-choice.md).

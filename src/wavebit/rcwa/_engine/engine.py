@@ -5512,18 +5512,11 @@ class CoreFactorizationMixin:
 
     #: What `shape_nvf_grid_size=None` means, before `4*truncation_order+1` lifts it at high orders.
     #:
-    #: **1024, and it survived an attempt to drop it to 256.** On the forward value 1024 is
-    #: plainly over-specified: 256 moves `sum(T)` by 1.4e-9 to 7.2e-7 on a circle, a tilted
-    #: rectangle and a pair of circles at truncation_order 4 / 8 / 12, where the truncation
-    #: error on those same rows is 4.2e-7 to 1.2e-4 -- one to four orders larger. Judged on
-    #: values alone, this is 16x the pixels for the seventh digit.
-    #:
-    #: It is not judged on values. A *rotated rectangle's angle gradient* is what sets this,
-    #: and it converges far later than the value does -- `d(sum T)/d(angle)` at 128 / 256 /
-    #: 512 / 1024 / 2048 is 0.002050 / 0.002593 / 0.002342 / 0.002372 / 0.002364, so 256 is
-    #: **9.7% off** the converged answer and 512 is 0.9% off. Non-monotone, too: the AD-vs-FD
-    #: gap runs 1.3e-3 / 1.6e-2 / 3.4e-3 / 1.6e-3 / 4.4e-4 across those grids, so a coarser
-    #: grid can look better than a finer one and no single check catches it.
+    #: This is a starting resolution, not an accuracy guarantee. Values, shape
+    #: derivatives and fitted dimensions can converge at different rates, and
+    #: changes under refinement need not be monotone. Check the requested
+    #: observable and fitted parameters on an explicit grid ladder; see
+    #: docs/guide/rcwa/fitting-grid-convergence.md for a checked refitting workflow.
     _NORMAL_GRID_DEFAULT = 1024
 
     @property
