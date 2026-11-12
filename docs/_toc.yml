@@ -91,6 +91,7 @@ subtrees:
           - file: guide/rcwa/full-tensor-patterns
           - file: guide/rcwa/light
           - file: guide/rcwa/multimode-incidence
+          - file: guide/rcwa/fitting-grid-convergence
           - file: guide/rcwa/numerics
           - file: guide/rcwa/nvf-method-selection
           - file: guide/rcwa/parametric-modeling
@@ -225,6 +226,7 @@ subtrees:
               - file: validation/rcwa/nvf-seam-trace
               - file: validation/rcwa/nvf-separated-rectangles
               - file: validation/rcwa/nvf-thin-gap-energy
+              - file: validation/rcwa/fitting-grid-convergence
               - file: validation/rcwa/nvf-upsampling
               - file: validation/rcwa/time-convention-audit
           - file: validation/fdtd/index
