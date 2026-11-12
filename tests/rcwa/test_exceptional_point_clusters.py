@@ -29,6 +29,16 @@ PL952 = dict(structure=_pillar(), wavelength=952.0673283430336, period=1000., th
              top=1.0, bot=2.25, theta=0.3)
 SCENES = {'PA616': PATTERNED['PA616'], 'PL952': PL952}
 
+#: PA616's grating with the pillar's permittivity and the wavelength root-found together so that
+#: an even and an odd family-1 mode of the x-symmetric pillar sit at the x-cutoff at once (Newton
+#: on the two parity blocks of the solver's own family-1 operator; its two smallest ``|wA|`` are
+#: 6.1e-16 and 8.9e-16). Each order row then holds two coincident Jordan pairs, and at
+#: ``ky0 = Gy / 2`` two rows coincide: eight modes at one eigenvalue. Two parameters tuned at once,
+#: as a design aiming at a higher-order exceptional point would tune them.
+DC612 = dict(PATTERNED['PA616'], wavelength=611.8949901188266,
+             structure=_pillar(eps=11.549834654024636))
+LITTROW_SCENES = dict(SCENES, DC612=DC612)
+
 
 def _littrow(scene, dth):
     theta0 = float(np.arcsin(scene['wavelength'] / (2 * 700.0)))
@@ -116,6 +126,71 @@ def test_the_screen_never_reads_a_jointly_rebuilt_first_order_cluster(algo, monk
     s.formulation = 'first_order'
     rows, grad = _jit_rows(s, scene['wavelength'])
     assert np.isfinite(grad) and np.max(np.abs(rows[2:] - ref[2:])) < 1e-12
+
+
+def test_the_double_x_cutoff_is_one_and_its_1d_rebuild_is_exact(monkeypatch):
+    """The premises of the eight-mode tests below. :data:`DC612` is a double x-cutoff: the 1D
+    layer's gate reads two ``|wA|`` under 1e-13. And the 1D rebuild, the oracle, answers there: at
+    relative wavelength offsets 0, +-1e-12 and +-1e-9 it is within 1e-12 of a degree-8 fit through
+    the family construction at ``|rel|`` in [1e-4, 1e-3], where that construction's rounding is
+    1e-12 or less (as ``tests/rcwa/test_conical_cutoff.py::_fit``). Measured 1.2e-13 for ETM and
+    SMM, the fit's own residual 4.0e-13; the family construction itself is 0.88 off at the point."""
+    from wavebit.rcwa._engine import solve_1d
+    from tests.rcwa.test_conical_cutoff import _FIT_OFFSETS, _family_construction
+    seen = []
+    gate = solve_1d._cutoff_cluster
+
+    def spy(xp, wA, wB, *rest):
+        seen.append(np.sort(np.abs(_np(wA)))[:2])
+        return gate(xp, wA, wB, *rest)
+    monkeypatch.setattr(solve_1d, '_cutoff_cluster', spy)
+    wl0 = DC612['wavelength']
+    with _family_construction(), warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        Y = np.array([_vector(_solver(DC612, wavelength=wl0 * (1 + h)).solve(auto_detune=False))
+                      for h in _FIT_OFFSETS])
+    coeffs = np.polyfit(1e3 * _FIT_OFFSETS, Y, 8)
+    for rel in (0.0, 1e-12, -1e-12, 1e-9, -1e-9):
+        del seen[:]
+        truth = np.polyval(coeffs, 1e3 * rel)
+        for algo in ('ETM', 'SMM'):
+            got = _vector(_solver(DC612, algo=algo, wavelength=wl0 * (1 + rel))
+                          .solve(auto_detune=False))
+            assert np.max(np.abs(got - truth)) < 1e-12, (
+                f'rel {rel:g} {algo}: {np.max(np.abs(got - truth)):.1e} from the fit')
+        if rel == 0.0:
+            assert max(seen[0]) < 1e-13, f'not a double cutoff: {seen[0]}'
+
+
+#: Offsets from :data:`DC612`: of ``theta`` (relative, from ``ky0 = Gy / 2``), of the pillar's
+#: permittivity and of the wavelength, one at a time.
+DOUBLE_OFFSETS = ([('theta', x) for x in (0.0, 1e-9, -1e-9, 1e-7, 1e-5, 1e-4, 1e-3)]
+                  + [('eps', x) for x in (1e-12, -1e-12, 1e-8, -1e-8, 1e-6, 1e-4)]
+                  + [('wavelength', x) for x in (1e-12, 1e-8, -1e-8, 1e-6, -1e-5, 1e-4)])
+
+
+def _double(kind, x):
+    if kind == 'theta':
+        return _littrow(DC612, x)
+    if kind == 'eps':
+        return _littrow(dict(DC612, structure=_pillar(eps=11.549834654024636 * (1 + x))), 0.0)
+    return _littrow(dict(DC612, wavelength=DC612['wavelength'] * (1 + x)), 0.0)
+
+
+@pytest.mark.parametrize('first_order', [False, True], ids=['2d', 'first_order'])
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.parametrize('kind, x', DOUBLE_OFFSETS)
+def test_eight_modes_at_a_double_x_cutoff_are_exact(kind, x, algo, first_order):
+    """At :data:`DC612` and around it, both formulations are within 1e-12 of the 1D rebuild, and
+    quiet: the eight modes are one defective cluster, rebuilt jointly (with a cluster of four
+    beside it, the third order row's two pairs; on the first-order split, in each direction).
+    Measured <= 2.1e-14. With clusters of at most four modes (until 2026-11-12) every offset
+    measured up to theta 1e-4, eps 1e-6 and wavelength 1e-5 was loud and off: the 2D path up to
+    1.2e-5 (ETM) and 9.8e-4 (SMM), the first-order split up to 1.5e-5 (ETM) and 1.5 (SMM).
+    Catches the cluster size cap lowered below eight (loud, and off)."""
+    scene = _double(kind, x)
+    _exact_and_quiet(scene, algo, f'DC612 {kind} {x:g} {algo}' + (' first order' * first_order),
+                     solve=lambda: _solve_2d(scene, algo, first_order))
 
 
 #: A uniform layer at oblique incidence whose first-order split holds two exactly degenerate
@@ -274,7 +349,7 @@ def test_a_three_mode_ball_holding_mode_zero():
     q = np.sqrt(w)
     clusters = solve_2d._defective_clusters(np, w, W, q, None, lambda: A, 2)
     members, valid = (np.asarray(x) for x in clusters[:2])
-    assert valid.tolist() == [[True, True, True, False]]
+    assert valid.tolist() == [[True, True, True, False]]          # no ball of five: four lanes
     assert sorted(members[valid].tolist()) == [0, 1, 2]
     rng = np.random.default_rng(4)
     U, _ = np.linalg.qr(rng.normal(size=(9, 9)) + 1j * rng.normal(size=(9, 9)))
@@ -284,18 +359,20 @@ def test_a_three_mode_ball_holding_mode_zero():
 
 
 def test_the_split_does_not_trust_eig_s_order(monkeypatch):
-    """A three-mode cluster pads its fourth lane at a stand-in eigenvalue, and the position in
-    which ``eig`` hands that eigenpair back is not promised (LAPACK's returns the decoupled one
-    last; another solver need not). With every small ``eig`` of the split handing its pairs back
-    reversed, the joint rebuild is the same: exact and quiet. Catches the padded pair placed by
-    position."""
+    """A cluster smaller than its slot pads its last lanes at a stand-in eigenvalue, and the
+    position in which ``eig`` hands those eigenpairs back is not promised (LAPACK's returns the
+    decoupled ones last; another solver need not). With every small ``eig`` of the split handing
+    its pairs back reversed, the joint rebuild is the same: exact and quiet -- a three-mode
+    cluster in four lanes, and clusters of six and five modes in eight (two and three padded
+    lanes). Catches the padded pairs placed by position, or only one of them put back."""
     original = solve_2d._eig_raw
     monkeypatch.setattr(solve_2d, '_eig_raw', lambda T: tuple(x[..., ::-1] for x in original(T)))
-    for delta in (0.0, 1e-9, 5e-8):
-        A = _jordan_beside(delta)[0]
+    models = [(f'beside {d:g}', _jordan_beside(d)[0], 3) for d in (0.0, 1e-9, 5e-8)]
+    models += [('three pairs', _coincident_pairs(3), 6), ('short chain', _spaced([0.9e-4, 1.8e-4]), 5)]
+    for label, A, size in models:
         _, clusters, rebuilt, warned = _layer(A)
-        assert np.asarray(clusters[1]).sum() == 3
-        assert not warned and _backward(A, rebuilt) < 1e-13, delta
+        assert np.asarray(clusters[1]).sum() == size, label
+        assert not warned and _backward(A, rebuilt) < 1e-13, label
 
 
 def test_a_cluster_takes_one_root_side():
@@ -317,24 +394,66 @@ def test_a_cluster_takes_one_root_side():
     assert np.all(np.real(roots) > 0), roots
 
 
-def test_a_chain_is_not_taken():
-    """A pair refused for a root within ``_EP_SEPARATION``, a mode 0.9e-4 beyond them and another
-    0.9e-4 beyond that: the first four are a ball of the lowest member, but the third's ball
-    holds five -- a chain, not a closed ball. The joint rebuild does not take it (a closed ball is
-    what keeps every divisor of its Newton step at least the cluster radius); the unresolved screen
-    reads it. Catches the closed-ball condition dropped."""
-    rng = np.random.default_rng(0)
+def _spaced(steps, seed=0):
+    """A 12 x 12 product operator: a Jordan pair at 0.3 (coupling 0.05) beside a root 5e-8 away --
+    a pair the gate refuses -- and modes at ``0.3 + steps``, the rest spread out to 2.8, turned by
+    a random unitary."""
+    rng = np.random.default_rng(seed)
     U, _ = np.linalg.qr(rng.normal(size=(12, 12)) + 1j * rng.normal(size=(12, 12)))
-    J = np.diag([0.3, 0.3, 0.3 + 5e-8, 0.3 + 0.9e-4, 0.3 + 1.8e-4, 0.7, 0.9, 1.3, 1.6, 1.9, 2.3,
-                 2.8]).astype(complex)
+    d = [0.3, 0.3, 0.3 + 5e-8] + [0.3 + s for s in steps]
+    J = np.diag(d + list(np.linspace(0.7, 2.8, 12 - len(d)))).astype(complex)
     J[0, 1] = 0.05
-    A = U @ J @ U.conj().T
+    return U @ J @ U.conj().T
+
+
+def test_a_chain_is_not_taken():
+    """The refused pair and its root, then seven modes 0.9e-4 apart beyond them: ten modes within
+    6.3e-4. At :data:`~solve_2d._EP_JOINT_RADIUS` their ball holds ten, more than a cluster may;
+    at :data:`~solve_2d._EP_CLUSTER` the first four are a ball of the lowest member, but the
+    fourth's ball holds five -- a chain, not a closed ball. The joint rebuild does not take it (a
+    closed ball is what keeps every divisor of its Newton step at least the cluster radius); the
+    unresolved screen reads it. Catches the closed-ball condition dropped."""
+    A = _spaced([0.9e-4 * j for j in range(1, 8)])
     w, W = _first(A, 0.3)
     q = np.sqrt(w)
     pairs = solve_2d._defective_pairs(np, w, W, q, 4)
     assert pairs is None
     assert solve_2d._defective_clusters(np, w, W, q, pairs, lambda: A, 2) is None
     assert solve_2d._unresolved_defective_cluster(np, w, W, lambda: A, solve_2d._EP_SINE)
+
+
+@pytest.mark.parametrize('seed', range(4))
+def test_a_short_chain_is_one_wide_cluster(seed):
+    """The refused pair and its root with two modes 0.9e-4 and 1.8e-4 beyond: a chain at
+    :data:`~solve_2d._EP_CLUSTER`, but one closed ball of five at the joint radius, which the joint
+    rebuild takes whole -- exact (measured <= 1.7e-15 of ``||A||`` on four bases) and quiet. With
+    at most four modes a cluster (until 2026-11-12) it was a chain left to the screen: loud.
+    Catches the cluster size cap lowered below five."""
+    A = _spaced([0.9e-4, 1.8e-4], seed)
+    pairs, clusters, rebuilt, warned = _layer(A)
+    assert pairs is None and np.asarray(clusters[1]).sum(axis=1).tolist() == [5]
+    assert not warned and _backward(A, rebuilt) < 1e-13
+
+
+@pytest.mark.parametrize('seed', range(3))
+@pytest.mark.parametrize('gap', [1e-7, 1e-6, 1e-5])
+def test_two_gated_pairs_beside_a_root_are_one_cluster(gap, seed):
+    """Two Jordan pairs ``gap`` apart, both gated, beside a root 5e-5 away, in a basis of
+    condition 10: a ball of five, which the joint rebuild takes whole -- exact (measured <= 1.9e-15
+    of ``||A||``) and quiet. With at most four modes a cluster (until 2026-11-12) each pair was
+    rebuilt alone and the backward-error screen warned. Catches the cluster size cap lowered
+    below five."""
+    rng = np.random.default_rng(seed)
+    U, _ = np.linalg.qr(rng.normal(size=(14, 14)) + 1j * rng.normal(size=(14, 14)))
+    Vh, _ = np.linalg.qr(rng.normal(size=(14, 14)) + 1j * rng.normal(size=(14, 14)))
+    P = U @ np.diag(np.geomspace(1, 10, 14)) @ Vh
+    lead = [0.3, 0.3, 0.3 + gap, 0.3 + gap, 0.3 + 5e-5]
+    J = np.diag(lead + list(np.linspace(0.7, 2.8, 9))).astype(complex)
+    J[0, 1], J[2, 3] = 0.05, 0.04
+    A = P @ J @ np.linalg.inv(P)
+    pairs, clusters, rebuilt, warned = _layer(A)
+    assert np.asarray(clusters[1]).sum(axis=1).tolist() == [5]
+    assert not warned and _backward(A, rebuilt) < 1e-13
 
 
 def test_a_degenerate_ball_in_a_parallel_basis_is_not_taken():
@@ -970,7 +1089,7 @@ def test_a_trace_keeps_the_bits_where_no_cluster_is_live(algo, monkeypatch):
                 assert x.tobytes() == y.tobytes(), f'{label} {algo} output {k}'
 
 
-LITTROW_CASES = [('PL952', 0.0), ('PA616', 1e-8)]
+LITTROW_CASES = [('PL952', 0.0), ('PA616', 1e-8), ('DC612', 0.0)]
 
 
 @pytest.mark.parametrize('first_order', [False, True], ids=['2d', 'first_order'])
@@ -982,7 +1101,7 @@ def test_derivatives_at_a_coincidence_are_the_1d_rebuild_s(name, dth, algo, firs
     rebuilt cluster: ``jax.grad``, ``jax.jvp``, torch reverse and ``forward_ad`` against
     ``jax.grad`` of the 1D rebuild. Measured <= 1.8e-13; with the pair rebuild alone 3.3e-8 ..
     3.1e-3. On the first-order split, whose cluster block of the generator is coupled the same
-    way, <= 1.2e-13. Catches an entry list that leaves out a cluster's coupling (the generator
+    way, <= 1.2e-13. At :data:`DC612`'s eight modes <= 2.9e-13 on both. Catches an entry list that leaves out a cluster's coupling (the generator
     and inverse rules then drop its terms while the values stay exact)."""
     from tests.rcwa.test_conical_cutoff import _rel
     jax = pytest.importorskip('jax')
@@ -990,7 +1109,7 @@ def test_derivatives_at_a_coincidence_are_the_1d_rebuild_s(name, dth, algo, firs
     torch = pytest.importorskip('torch')
     from torch.autograd import forward_ad
     jnp = jax.numpy
-    scene = _littrow(SCENES[name], dth)
+    scene = _littrow(LITTROW_SCENES[name], dth)
     u0, t0, th0, wl0 = (np.asarray(scene['structure'], float), float(scene['thickness'][0]),
                         float(scene['theta']), float(scene['wavelength']))
 
@@ -1042,13 +1161,14 @@ def test_a_coincidence_under_an_abstract_trace(name, dth, algo, first_order):
     (``dR/dwl`` per lane), lanes ``rel`` 0, +-1e-12 and 1e-2 (off the cluster): the eager 1D
     rebuild's. Measured <= 1.4e-14 (values) and <= 9.6e-14 (derivatives); with the pair rebuild
     alone, silent and up to 1.9e-3 (values) and 7.5e-3 (derivatives) off. On the first-order
-    split <= 1.6e-14 and <= 1.2e-13. Catches the traced gate or slots broken, and the check or
+    split <= 1.6e-14 and <= 1.2e-13. At :data:`DC612`'s eight modes <= 1.9e-14 and <= 6.2e-14 on
+    both; NaN with clusters of at most four modes. Catches the traced gate or slots broken, and the check or
     the overflow poisoning a live layer."""
     jax = pytest.importorskip('jax')
     jax.config.update('jax_enable_x64', True)
     torch = pytest.importorskip('torch')
     jnp = jax.numpy
-    scene = _littrow(SCENES[name], dth)
+    scene = _littrow(LITTROW_SCENES[name], dth)
     wl0 = scene['wavelength']
     lanes = [wl0, wl0 * (1 - 1e-12), wl0 * (1 + 1e-12), wl0 * (1 + 1e-2)]
     ref = np.stack([np.concatenate([n['r'], n['t']]) for n in (
@@ -1106,7 +1226,7 @@ def test_a_coincidence_field_and_its_gradient_are_the_1d_rebuild_s(name, dth, al
     jax = pytest.importorskip('jax')
     jax.config.update('jax_enable_x64', True)
     jnp = jax.numpy
-    scene = _littrow(SCENES[name], dth)
+    scene = _littrow(LITTROW_SCENES[name], dth)
     ref = _np(_solver(scene).solve(auto_detune=False, answers='field').reconstruct_field(
         sample_x=12, sample_y=1, sample_z=8))
     s2 = _solver(scene, algo=algo, two_d=True)
@@ -1393,29 +1513,26 @@ def test_a_graze_on_the_first_order_path_is_not_an_exceptional_point(algo, rel):
 # ------------------------------------------------------------------ the unresolved screen, traced
 
 def _coincident_pairs(count, root=None, seed=0):
-    """``count`` coincident Jordan pairs at 0.3 (couplings 0.05, 0.04, 0.03), a plain root at
-    ``0.3 + root`` beside them if given, the rest spread out, in a basis of condition 10. Three
-    pairs, or two and a root within ``_EP_CLUSTER``, are a defective cluster of more than four
-    modes, which no rebuild takes."""
+    """``count`` coincident Jordan pairs at 0.3 (couplings 0.05, 0.04, 0.03, 0.06, 0.07), a plain
+    root at ``0.3 + root`` beside them if given, the rest spread out, in a basis of condition 10.
+    Up to four pairs, or three and a root within ``_EP_CLUSTER``, are a defective cluster the joint
+    rebuild takes (measured <= 1.8e-15 of ``||A||``); five pairs, or four and a root, hold more
+    than eight modes, which no rebuild takes."""
     rng = np.random.default_rng(seed)
     U, _ = np.linalg.qr(rng.normal(size=(14, 14)) + 1j * rng.normal(size=(14, 14)))
     Vh, _ = np.linalg.qr(rng.normal(size=(14, 14)) + 1j * rng.normal(size=(14, 14)))
     P = U @ np.diag(np.geomspace(1, 10, 14)) @ Vh
     lead = [0.3] * (2 * count) + ([0.3 + root] if root is not None else [])
     J = np.diag(lead + list(np.linspace(0.7, 2.8, 14 - len(lead)))).astype(complex)
-    for p, c in zip(range(count), (0.05, 0.04, 0.03)):
+    for p, c in zip(range(count), (0.05, 0.04, 0.03, 0.06, 0.07)):
         J[2 * p, 2 * p + 1] = c
     return P @ J @ np.linalg.inv(P)
 
 
 def _a_chain():
-    """:func:`test_a_chain_is_not_taken`'s operator: a refused pair, then modes 0.9e-4 apart."""
-    rng = np.random.default_rng(0)
-    U, _ = np.linalg.qr(rng.normal(size=(12, 12)) + 1j * rng.normal(size=(12, 12)))
-    J = np.diag([0.3, 0.3, 0.3 + 5e-8, 0.3 + 0.9e-4, 0.3 + 1.8e-4, 0.7, 0.9, 1.3, 1.6, 1.9, 2.3,
-                 2.8]).astype(complex)
-    J[0, 1] = 0.05
-    return U @ J @ U.conj().T
+    """:func:`test_a_chain_is_not_taken`'s operator: a refused pair, then seven modes 0.9e-4
+    apart."""
+    return _spaced([0.9e-4 * j for j in range(1, 8)])
 
 
 def _degenerate_balls(centres, seed=3):
@@ -1455,8 +1572,11 @@ TRACED_SCREEN_CASES = {
     'a length-3 Jordan chain': (lambda: _kept(_chain(0)), True),
     'a length-3 Jordan chain, every mode apart': (
         lambda: _kept(_chain(0))[:3] + (np.arange(12),), False),
-    'three coincident pairs': (lambda: _kept(_coincident_pairs(3)), True),
-    'two coincident pairs and a root': (lambda: _kept(_coincident_pairs(2, 5e-5)), True),
+    'five coincident pairs': (lambda: _kept(_coincident_pairs(5)), True),
+    'four coincident pairs and a root': (lambda: _kept(_coincident_pairs(4, 5e-5)), True),
+    'four coincident pairs, rebuilt jointly': (lambda: _kept(_coincident_pairs(4)), False),
+    'two coincident pairs and a root, rebuilt jointly': (
+        lambda: _kept(_coincident_pairs(2, 5e-5)), False),
     'two coincident pairs, rebuilt jointly': (lambda: _kept(_coincident_pairs(2)), False),
     'a Jordan pair beside a root, rebuilt': (lambda: _kept(_jordan_beside(1e-6)[0]), False),
     'a degenerate ball in a parallel basis': (lambda: _degenerate_balls([0.3]) + (None,), False),
@@ -1492,7 +1612,7 @@ def _traced_screen(backend, A, w, W, group, slots=2):
 def test_the_traced_screen_reads_what_the_eager_screen_reads(name, backend):
     """Under an abstract trace the unresolved screen cannot walk a cluster; it reads every mode's
     ball of at most eight modes instead, and must reach the eager verdict: loud on a chain, a
-    length-3 Jordan chain after the pair rebuild, and defective clusters of five and six modes
+    length-3 Jordan chain after the pair rebuild, and defective clusters of nine and ten modes
     (none of which any rebuild takes); quiet on a cluster rebuilt jointly (its members apart), a
     pair rebuilt beside a root, a degenerate ball in a nearly parallel basis, the length-3 chain
     with every mode in a group of its own (as a jointly rebuilt member is, or the other direction

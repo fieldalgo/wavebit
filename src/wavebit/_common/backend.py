@@ -1120,15 +1120,15 @@ class ExceptionalPointWarning(UserWarning):
     Public path: ``wavebit.rcwa.diagnostics.ExceptionalPointWarning``.
 
     Isolated exceptional-point pairs are rebuilt in a regular basis. On the 2D path, exceptional
-    points that coincide or nearly coincide form a defective cluster of three or four modes
+    points that coincide or nearly coincide form a defective cluster of three to eight modes
     (two order rows of a y-invariant layer at one x-cutoff, the two degenerate doublets just off a
-    symmetric coincidence, or a pair beside an unpaired root),
-    and the cluster is rebuilt as a whole, eagerly and under every trace; the warning fires
+    symmetric coincidence, a pair beside an unpaired root, or two such coincidences at one
+    point), and the cluster is rebuilt as a whole, eagerly and under every trace -- on the
+    first-order path within each propagation direction; the warning fires
     when that joint rebuild fails its own check. An eager screen of each layer's final mode
     basis warns when it still contains a nearly dependent cluster with a non-normal restriction
-    of the layer operator: a cluster no rebuild took exactly (more than four modes, a chain of
-    nearly equal eigenvalues, a Jordan chain of length three, or any coincident cluster on the
-    first-order path). On the 2D path a
+    of the layer operator: a cluster no rebuild took exactly (more than eight modes, a chain of
+    nearly equal eigenvalues, or a Jordan chain of length three). On the 2D path a
     third eager screen warns when two or more pairs rebuilt one at a time share such a cluster
     and the rebuilt modes miss the layer operator by more than the layer's thickness and roots
     tolerate. Ordinary diagonalizable degeneracies trigger none of them.

@@ -166,13 +166,14 @@ measurements.
 On the 2D and first-order paths the same patterned point produces nearly parallel eigenvectors
 at a nonzero root. Their builders replace each eligible pair with a regular basis and coupled
 generator (`rayleigh-points.md` §§8–9). Where exceptional points coincide or nearly coincide
-the pairs merge into a defective cluster of three or four modes, which the 2D builder rebuilds
-as a whole (`solve_2d.py::_rebuild_defective_clusters`), eagerly and under every trace, with a
-check of its own. The first-order path has no such rebuild. Clusters no rebuild takes (larger
-or chained ones, the first-order path's), and a joint rebuild that fails its check, emit
+the pairs merge into a defective cluster of three to eight modes, which both builders rebuild
+as a whole (`solve_2d.py::_rebuild_defective_clusters`; on the first-order split
+`solve_2d_first_order.py::_regular_clusters`, within each direction), eagerly and under every
+trace, with a check of its own. Clusters no rebuild takes (more than eight modes, chained
+ones, a Jordan chain of length three), and a joint rebuild that fails its check, emit
 `ExceptionalPointWarning` eagerly, which does not trigger detuning. Under an abstract trace the
-screens are silent, so an untaken traced cluster can remain inaccurate; a failed check, or more
-eligible pairs or clusters than the layer's static slots, returns NaN.
+screens run as data: a layer that would warn, or that holds more eligible pairs or clusters
+than its static slots, returns NaN.
 
 ## Where the proofs live
 

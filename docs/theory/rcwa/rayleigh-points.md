@@ -831,9 +831,9 @@ come first; where none of those is taken, balls of `_EP_CLUSTER = 1e-4`, the unr
 radius, and a narrow ball inside a wide ball that is taken is left to the wide one. The wide level
 takes the degenerate doublets off a symmetric coincidence (the C4v pillar in *Measured*, below),
 which split by more than `_EP_CLUSTER`; the narrow level takes clusters closer than 3e-3 to other
-clusters or pairs, whose wide ball holds more than four modes. A ball is taken when it is closed --
-every member's own ball is the same set, so no chain runs out of it -- holds three or four modes
-(`_EP_CLUSTER_SIZE = 4`) with roots above `_EP_ROOT_FLOOR`, its unit columns are nearly dependent
+clusters or pairs, whose wide ball holds more than eight modes. A ball is taken when it is closed --
+every member's own ball is the same set, so no chain runs out of it -- holds three to eight modes
+(`_EP_CLUSTER_SIZE = 8`, four until 2026-11-12: *Eight modes*, below) with roots above `_EP_ROOT_FLOOR`, its unit columns are nearly dependent
 (smallest singular value below `_EP_SINE`, read from the Gram matrix's smallest eigenvalue
 clamped at zero, since rounding leaves a rank-deficient Gram's below it), and its restriction
 `T = Q^H Omega2 Q` is not normal (`nu > _DEFECT_NU`, the unresolved screen's measure). A ball
@@ -842,7 +842,7 @@ beside a root more than `_EP_SEPARATION` away. So the gate takes coincident exce
 (the pair gate sees none there), two gated pairs a few 1e-8 .. 1e-3 apart, one gated pair beside
 two ungated modes, a pair with an unpaired root within `_EP_SEPARATION`, which the pair gate
 refuses, and two degenerate doublets up to 3e-3 apart whose columns stay nearly dependent.
-Eagerly a layer with no ball of three or four at either radius returns after one quadratic
+Eagerly a layer with no ball of three to eight at either radius returns after one quadratic
 table of its eigenvalues' distances, its arithmetic untouched. Under an abstract trace,
 `max(1, min(pair_cap // 2, n2 // 3))` slots hold the qualifying balls of both radii with the
 smallest singular values, their masks as data; more qualifying balls than slots multiply the layer's `q` by NaN,
@@ -885,13 +885,18 @@ check warned on one path, are within 1.8e-15 and quiet on seven paths and five b
 takes `X = [E_J | C Y]`: `E_J` some of `eig(T)`'s unit eigenvectors, `C` the orthonormal complement
 of their span, `Y` the eigenvectors of the quotient `C^H T C` (Golub and Van Loan, §7.1.4 and
 §7.6). Then `X^-1 T X = L + B`, `L` diagonal and `B` coupling the rows `J` to the columns `K`,
-disjoint. Every nonempty proper subset of member lanes is tried as `J` (14 for four modes) and the
-smallest `cond(X)` kept: on the y-Littrow clusters `|J| = |K| = 2` and `cond(X) <= 8.14`, a
-three-mode cluster splits one and two, and `cond(X)` reached 8.3 on the synthetic clusters and
+disjoint. Every nonempty proper subset of member lanes is tried as `J` (14 for four modes, 254 for
+eight) and the smallest `cond(X)` kept: on the y-Littrow clusters `|J| = |K| = 2` and
+`cond(X) <= 8.14`, a three-mode cluster splits one and two, the eight-mode clusters below four
+and four with `cond(X) <= 20.0`, and `cond(X)` reached 8.3 on the synthetic clusters and
 12.2 on the genuinely 2D ones below. Where a
-cluster holds a Jordan chain of length three no such split exists. A three-mode cluster pads its
-fourth lane: decoupled at a stand-in eigenvalue far from every mode, put back on its lane by an
-explicit permutation rather than by `eig`'s order, and given the identity's row and column in `X`.
+cluster holds a Jordan chain of length three no such split exists. A cluster smaller than its
+slot pads its last lanes: decoupled at a stand-in eigenvalue far from every mode, put back on
+their lanes by an explicit permutation rather than by `eig`'s order (the stand-in's eigenpairs,
+as many as there are padded lanes, last, the members in front, each part in `eig`'s order: the
+identity where `eig` already returns them so), and given the identity's rows and columns in `X`.
+A slot has four lanes eagerly unless the layer holds a ball of five to eight modes, and eight
+under a trace.
 
 *The modes.* `q = diag(r) + B / (r_j + r_k)` on `J x K` is the exact square root of `L + B`
 (`B**2 = 0`), every `r = sqrt(L)` on the side of the member whose label decays most, as for a pair.
@@ -955,12 +960,74 @@ whose two pairs it now takes as one cluster (<= 1.3e-14 off the 1D rebuild there
 paths); the other 144 eager
 and 48 traced digests are identical.
 
+*Eight modes* (2026-11-12). Two parameters tuned together make two coincidences meet at one
+point. PA616's pillar is x-symmetric, so its family-1 modes (§7) are even or odd and cross
+freely; with the pillar's permittivity and the wavelength root-found together (Newton on the two
+parity blocks of the solver's own family-1 operator: 611.8949901188 nm and 11.549834654, two
+`|wA|` of 6.1e-16 and 8.9e-16; `DC612` in the tests), an even and an odd mode sit at the x-cutoff
+at once. Each order row then holds two coincident Jordan pairs, and at `ky0 = Gy / 2` two rows
+coincide: eight modes at one eigenvalue, with the third row's four beside them. A design aiming at
+a higher-order exceptional point tunes exactly so. The 1D rebuild of §7, which takes any set of
+cutoff modes, is the oracle: within 1.2e-13 of a degree-8 fit through the family construction at
+relative wavelength offsets 1e-4 .. 1e-3, where the family construction is 0.88 off at the point.
+With at most four modes a cluster the wide ball of eight was refused and the narrow balls are
+degenerate doublets, so nothing took them. `_EP_CLUSTER_SIZE` is now eight, and nothing else in
+the rebuild depends on the size. Eagerly a layer with no ball of five to eight modes at either
+radius keeps four lanes a slot and runs as before, to the bit (a padded lane changes the
+rounding of every product with the slot); elsewhere, and under every trace, a slot has eight
+lanes, a smaller cluster pads several, and the split puts the stand-in's eigenpairs back on all
+of them (one, by a swap, before).
+
+| case | at most four modes | at most eight |
+| --- | --- | --- |
+| `DC612`, one offset at a time (`theta` from `Gy / 2`, 0 .. 1e-3; permittivity +-1e-12 .. 1e-4; wavelength +-1e-12 .. 1e-4), 2D and first order, ETM and SMM | loud and off out to `theta` 1e-4, permittivity 1e-6 and wavelength 1e-5: 2D up to 1.2e-5 (ETM) and 9.8e-4 (SMM), first order up to 1.5e-5 and 1.5 | <= 2.1e-14, quiet |
+| `DC612`, 240 random joint offsets (each of the three 0, or log-uniform in +-[1e-12, 1e-3]) and 240 more with `theta` exact, four solves each (1920) | -- | within 1e-4 of the point <= 2.7e-14; beyond it ETM <= 4.1e-14 and SMM <= 7.6e-13, the same with four; one false alarm, on both algorithms (below) |
+| `DC612` at the point: `jit`, `jit(vmap)`, `torch.func.vmap` values; `jit(grad(sum vmap))`, `jit(vmap(grad))`, torch `vmap` + backward of `sum R` in the wavelength; lanes `rel` 0, +-1e-12, 1e-2 | NaN | <= 1.9e-14; <= 6.2e-14 (relative) |
+| `DC612` at the point: derivatives in the raster, wavelength, thickness and `theta` (`jax.grad`, `jvp`, torch reverse, `forward_ad`); fields, and `jax.grad` of `sum |E|**2` eagerly and under `jit`, 2D and first order, ETM and SMM | loud | derivatives <= 2.9e-13 (relative); fields <= 2.9e-14 of `max|F|`, their gradients <= 7.1e-14 |
+| synthetic: three and four coincident Jordan pairs, two pairs and a root within `_EP_CLUSTER`, a five-mode chain at `_EP_CLUSTER` that is one closed wide ball; three or four bases | loud | <= 1.8e-15 of `||A||`, quiet |
+| synthetic: two gated pairs 1e-7 .. 1e-5 apart beside a root 5e-5 away (*The screens under a trace*, below), three bases | each pair rebuilt alone: loud (the backward-error screen) | one cluster of five, <= 1.9e-15 of `||A||`, quiet |
+| synthetic: four pairs and a root, five pairs (nine and ten modes), a ten-mode chain | loud | loud: not taken |
+| 200 random clustered operators (the basis the 2D path keeps, then the unresolved screen) | 121 loud | 56 loud; the 96 clusters taken (four to eight modes) within 2.7e-15 of `||A||`, quiet; the traced screen gave the eager verdict on all 200, either way |
+
+The splits of the eight-mode clusters are four and four, `cond(X) <= 20.0`. The false alarm: at
+permittivity -3.2e-12 and wavelength -1.1e-5 (`theta` exact), first order, `eig` of one
+direction's eight-mode restriction returned, for two of its four doubly degenerate eigenvalues,
+two nearly parallel eigenvectors each (overlap 0.99995), so its eight vectors span about four
+dimensions; every split built from them had `cond(X) >= 185`, and the check, which reads the
+dropped part times `cond(X)`, read 1.6 times its threshold. The answer was exact (4.7e-15), and
+under a trace that layer answers NaN. Re-deriving those vectors -- the smallest residual
+orthogonal to the earlier vector of the same eigenvalue -- gave `cond(X) = 1.0` and a pass; not
+done.
+
+*Bits.* On the byte-identity scenes above with the Littrow scenes at every offset of the
+coincidence tests (0 .. 1e-3), the C4v pillar at four coincidences (0, 1e-8, -1e-7, 1e-5,
+1e-3) and `DC612` off its coincidence (`theta` 1e-2, 3e-2): 384 eager digests on the 2D path and
+384 on the first-order split (NumPy, JAX and PyTorch, ETM and SMM), identical to `a35375a4`.
+Under a trace, 66 digests each (`jit` values, `jit(grad)`, `torch.func.vmap` values on eleven of
+those scenes): identical but where the trace rebuilds a cluster, PA616 at 3e-4 and PL952 at
+1e-3 (8 on 2D, 10 on the first-order split), whose slots now have eight lanes; there the
+outputs moved by at most 7.7e-16, as close to the 1D rebuild as before.
+
+*Mutants.* Eight one-line mutations, each against the tests that should catch it: seven are
+caught -- the size cap at four and at seven, eager slots always eight lanes, the old swap of
+one padded pair (caught only with `eig`'s order reversed on clusters of five and six modes:
+LAPACK returns decoupled pairs last), the padded count not clipped, the padded pairs put
+first, and the quotient's padded pairs left in place. The tie-break by position survives: no
+input reaches it, and it is kept so that the permutation stays one to one where distances
+tie.
+
+Under a trace the cost grows with the size: per ball 28 Gram entries instead of six and eight
+nearest-mode passes instead of four, per cluster slot 254 split candidates instead of 14, and on
+the first-order split the exponential's closed-form tangent gathers `slots + 7 S` coupled rows a
+direction instead of `slots + 3 S`. Eager layers with no ball of five or more pay nothing more.
+
 *The screens under a trace* (2026-11-10). Nothing can warn under `jit`, `vmap` or
 `torch.func.vmap`, and the unresolved and backward-error screens used to be skipped there, so what
 they warn on eagerly came back silently. On the first-order path at the y-Littrow coincidences
 (§9), every solve that warns eagerly -- PA616 and PL952, ETM and SMM, `|dtheta| <= 1e-4`, 26 of 32
 -- was 1.1e-6 .. 0.69 off under `jit`, with no NaN. Two pairs 1e-6 .. 1e-5 apart beside a root
-within `_EP_CLUSTER` -- a ball of five, which the joint rebuild leaves to the pair rebuild -- kept
+within `_EP_CLUSTER` -- a ball of five, which the joint rebuild left to the pair rebuild until
+2026-11-12 (*Eight modes*, above: now one cluster, exact) -- kept
 a backward error of 6.3e-13 .. 4.7e-10 under `jit`, where the backward-error screen warns
 eagerly. Both screens now run as data under a trace, and a layer whose screen would warn answers
 NaN: its `Q` (2D) or the split's eigenvalues (first order) are replaced by NaN in a selection,
@@ -1013,7 +1080,8 @@ the Gram matrices of their columns, the defect measure on its slots, and on 2D o
 
 *Limits.*
 
-- Not taken: clusters of more than four modes, chains (a ball that is not closed), grazing layers
+- Not taken: clusters of more than eight modes, chains (a ball that is not closed at either
+  radius, or at the wide one holds more than eight), grazing layers
   (§6 runs first), and complex64 (the defect measure's `eps**2` scaling keeps the gate closed below
   double precision: PL952 and PA616 in complex64 on NumPy, JAX and PyTorch gave the pair
   rebuild's answers, and under `jit` its bytes). The first-order formulation takes the same
@@ -1025,7 +1093,7 @@ the Gram matrices of their columns, the defect measure on its slots, and on 2D o
 - Off a symmetric coincidence the wide ball holds the doublets while their columns stay
   dependent to within `_EP_SINE`; beyond that (relative offsets past about 3e-6 on the C4v
   pillar) `eig`'s basis is left as it is, and was within 1.5e-13 of the oracle there. Where such
-  doublets sit within 3e-3 of another cluster or pair, their wide ball holds more than four modes
+  doublets sit within 3e-3 of another cluster or pair, their wide ball can hold more than eight modes
   and only the narrow radius reads them: silent, as before the wide radius (not met on any layer
   measured).
 - A length-3 Jordan chain is loud, not exact.
@@ -1276,14 +1344,15 @@ into the generator. Two survive: the rows' diagonal taken from `eig` instead of 
 (they differ by about `sqrt(u)`, and the correction that moves is of second order), and §8's
 pair terms in the chord step, which no measured model reaches (as when the chord step landed).
 
-*Limits.* What the joint rebuild does not take keeps §8's limits: a cluster of more than four
+*Limits.* What the joint rebuild does not take keeps §8's limits: a cluster of more than eight
 modes, a chain, a length-3 Jordan chain (its check fails, and the screen warns too: loud),
 complex64 (the gate stays closed). A ball of three holding a pair is a cluster here, unlike on
 2D, since the gate reads before the pair gate; the synthetic rows above cover it. Under a trace
 more clusters than slots answer NaN: a coincident cluster left over would be loud anyway (the
 screen reads it), but the C4v doublets would not: with the gate closed they were up to 3.1e-13
-off, silently. The traced exponential's closed-form tangent now gathers up to `slots + 3
-S` rows a direction wherever clusters can be rebuilt, which is every traced first-order layer.
+off, silently. The traced exponential's closed-form tangent now gathers up to
+`slots + (k - 1) S` rows a direction, `k` the most modes a cluster holds (four at first, eight
+since 2026-11-12), wherever clusters can be rebuilt, which is every traced first-order layer.
 
 **Derivatives.** The rebuilt basis is built on stopped values, and the derivative is the modal
 rule's (`modal_gradient.py::split_generator`) in that basis. Within a direction the generator's
@@ -1363,8 +1432,8 @@ cases. This covers those measured cases, not every possible opposite-label pair.
 
 **Limits and unchanged behavior.**
 
-- Coincident EPs of three or four modes a direction are rebuilt jointly (above). What that
-  rebuild does not take -- a cluster of more than four modes, a chain, a length-3 Jordan chain
+- Coincident EPs of three to eight modes a direction are rebuilt jointly (above). What that
+  rebuild does not take -- a cluster of more than eight modes, a chain, a length-3 Jordan chain
   (its check fails) -- keeps the eigenvector arithmetic and warns eagerly; under `jit`, `vmap`
   or `torch.func.vmap` the screen runs as data and the layer answers NaN. The screen's slots
   there are `max(slots, n / 16)`, `n` the split's mode count, and more candidate balls than that
