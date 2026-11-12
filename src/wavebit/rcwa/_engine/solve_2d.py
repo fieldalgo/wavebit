@@ -422,7 +422,7 @@ def _unresolved_cluster_traced(xp, w, W, operator, sine, group=None, slots=1):
 
 _UNRESOLVED_2D = (
     'a 2D layer holds three or more modes of one defective eigenvalue cluster (exceptional '
-    'points that coincide) that no rebuild takes exactly -- more than four modes, a chain of '
+    'points that coincide) that no rebuild takes exactly -- more than eight modes, a chain of '
     'nearly equal eigenvalues, or a Jordan chain of length three: the eigenvector basis was '
     'kept, and the answer can be inaccurate. Move the angle or wavelength by more than a '
     'relative 1e-4 to check it.')
@@ -652,8 +652,12 @@ def _one_hot(xp, n2, index, mask, dtype, dev):
 
 #: The most modes one defective cluster may hold for the joint rebuild
 #: (:func:`_defective_clusters`): two exceptional-point pairs at or near one coincidence, or a
-#: pair and the unpaired root beside it. Static, so that every traced slot has one shape.
-_EP_CLUSTER_SIZE = 4
+#: pair and the unpaired root beside it -- and, two parameters tuned at once, two such
+#: coincidences at one point: an even and an odd mode of an x-symmetric raster at one x-cutoff
+#: in two order rows, eight modes (2026-11-12; four left that loud and up to 1.5 off). Static, so
+#: that every traced slot has one shape; a cluster of fewer modes pads its last lanes. Eagerly a
+#: layer with no ball of five or more keeps four lanes a slot (:func:`_defective_clusters`).
+_EP_CLUSTER_SIZE = 8
 
 
 def _gather_pairs(xp, M, rows, cols):
@@ -686,7 +690,7 @@ def _conj_t(xp, X):
 #: offset measured (0 .. 1e-5 either side of five coincidences, Laurent and NVF, and 1e-4, 1e-3
 #: above) was within
 #: 5.4e-14 of a Cauchy oracle and quiet; a radius of 1e-3 left up to 3.2e-13. A wider ball
-#: holding more than four modes is left to
+#: holding more than :data:`_EP_CLUSTER_SIZE` modes is left to
 #: the narrower ones inside it, so clusters closer than this to other clusters or pairs keep
 #: the :data:`_EP_CLUSTER` rebuild.
 _EP_JOINT_RADIUS = 3e-3
@@ -747,8 +751,8 @@ def _defective_clusters(xp, w, W, q, pairs, operator, slots, group=None):
     warns). A degenerate (normal) cluster is left alone, whatever basis ``eig`` chose for it.
 
     Returns ``(members, valid, Q0, overflow)``: ``members`` ``(S, k)`` the clusters' mode
-    indices, nearest the seed first; ``valid`` which lanes are members (a three-mode cluster pads
-    its last lane, and under a trace a slot nothing took is all padding); ``Q0`` ``(S, n2, k)`` an
+    indices, nearest the seed first; ``valid`` which lanes are members (a smaller cluster pads
+    its last lanes, and under a trace a slot nothing took is all padding); ``Q0`` ``(S, n2, k)`` an
     orthonormal basis of each cluster's unit columns (zero-padded before the QR); and, under an
     abstract trace, whether more clusters qualified than the ``slots`` held (``None`` eagerly).
     ``operator()`` builds the product operator, only when a candidate needs it. ``group``
@@ -772,6 +776,20 @@ def _defective_clusters(xp, w, W, q, pairs, operator, slots, group=None):
     if group is not None:
         d = xp.where(group[:, None] == group[None, :], d, xp.full_like(d, float('inf')))
     span = xp.maximum(scale[:, None], scale[None, :])
+    # Eagerly a layer with no ball of five to `k` modes at either radius keeps four lanes a slot:
+    # it runs as it did before balls of eight were taken, to the bit (a padded lane changes the
+    # rounding of every product with the slot). Under a trace nothing is read, and every slot
+    # has the full count.
+    if k > 4:
+        big = False
+        for radius in (_EP_JOINT_RADIUS, _EP_CLUSTER):
+            count = xp.sum(xp.astype(d <= radius * span, xp.int32), axis=1)
+            some = _concrete(xp.any((count > 4) & (count <= k)))
+            big = None if some is None else (big or some)
+            if big is None or big:
+                break
+        if big is False:
+            k = 4
     Wn = W / xp.linalg.vector_norm(W, axis=0)[None, :]
     C = W.dtype
     lane = xp.arange(k, device=dev)
@@ -891,19 +909,29 @@ def _split_candidates(k):
     return groups
 
 
-def _dead_last(xp, lam, E, mu, dead):
-    """Eigenpairs with the one nearest ``mu`` moved to the last position where ``dead``.
+def _dead_last(xp, lam, E, mu, ndead):
+    """Eigenpairs with the ``ndead`` nearest ``mu`` moved to the last positions, the rest in
+    front, each part in ``eig``'s order.
 
-    A padded lane is decoupled at the stand-in eigenvalue ``mu``; ``eig`` returns its pair in no
-    promised position, so it is put back on its lane explicitly, by a one-hot permutation.
+    Padded lanes are decoupled at the stand-in eigenvalue ``mu`` (a cluster of ``m`` members
+    pads its last ``k - m`` lanes); ``eig`` returns their pairs in no promised position, so they
+    are put back on their lanes explicitly, by a one-hot permutation -- the identity where
+    ``eig`` already handed them back last. Ties in the distance go by position. ``ndead`` is
+    clipped to ``k``, so the result is a permutation even for a quotient smaller than the
+    padding (a split candidate whose ``J`` holds a padded lane, which the split discards).
     """
     k = lam.shape[-1]
     dev = getattr(lam, 'device', None)
     ar = xp.arange(k, device=dev)
-    pd = xp.argmin(xp.abs(lam - mu[..., None]), axis=-1)
-    src = xp.where(ar == k - 1, pd[..., None], xp.where(ar == pd[..., None], k - 1, ar))
-    src = xp.where(dead[..., None], src, xp.broadcast_to(ar, src.shape))
-    P = xp.astype(ar[:, None] == src[..., None, :], E.dtype)        # P[p, l]: l takes p
+    d = xp.abs(lam - mu[..., None])
+    before = ar[None, :] < ar[:, None]                               # [p, q]: q before p
+    closer = (d[..., None, :] < d[..., :, None]) | ((d[..., None, :] == d[..., :, None]) & before)
+    nd = xp.where(ndead < k, ndead, k * xp.ones_like(ndead))[..., None]
+    padded = xp.sum(xp.astype(closer, xp.int32), axis=-1) < nd       # (..., k)
+    ahead_m = xp.sum(xp.astype(before & ~padded[..., None, :], xp.int32), axis=-1)
+    ahead_p = xp.sum(xp.astype(before & padded[..., None, :], xp.int32), axis=-1)
+    dest = xp.where(padded, k - nd + ahead_p, ahead_m)
+    P = xp.astype(dest[..., :, None] == ar, E.dtype)                 # P[p, l]: l takes p
     return xp.sum(lam[..., :, None] * P, axis=-2), E @ P
 
 
@@ -920,7 +948,7 @@ def _cluster_split(xp, T, valid, pad):
     inverse and derivative rules below take exactly. Where every Jordan chain of the cluster has
     length at most two, some ``J`` leaves no other off-diagonal entry; the split with the
     smallest ``cond(X)`` is taken (measured at most 8.14 on the y-Littrow scenes, 12.2 on a
-    genuinely 2D one).
+    genuinely 2D one, 20.0 on eight modes at a double x-cutoff).
 
     Returns ``(X, J, cond)``. A slot with no admissible split -- and under a trace a slot with no
     members -- takes ``X = I`` and ``cond = inf``; every padded row and column of ``X`` is the
@@ -932,12 +960,12 @@ def _cluster_split(xp, T, valid, pad):
     dev = getattr(T, 'device', None)
     lane = xp.arange(k, device=dev)
     eye = xp.astype(lane[:, None] == lane[None, :], C)
-    dead = ~valid[:, k - 1]
+    ndead = k - xp.sum(xp.astype(valid, xp.int32), axis=1)          # the padded lanes, last
     vv = valid[:, :, None] & valid[:, None, :]
     mu = pad * xp.ones(S, dtype=C, device=dev)
     lam, E = _eig_raw(T)
     E = E / xp.linalg.vector_norm(E, axis=-2)[..., None, :]
-    lam, E = _dead_last(xp, lam, E, mu, dead)
+    lam, E = _dead_last(xp, lam, E, mu, ndead)
     Xs, conds, oks, masks = [], [], [], []
     for j, Jidx, Kidx, Jmask, order in _split_candidates(k):
         nc = Jidx.shape[0]
@@ -947,8 +975,8 @@ def _cluster_split(xp, T, valid, pad):
         Cc = Qc[..., j:]
         lq, Yq = _eig_raw(_conj_t(xp, Cc) @ T[:, None] @ Cc)
         Yq = Yq / xp.linalg.vector_norm(Yq, axis=-2)[..., None, :]
-        # The padded lane is K's last whenever J holds only members.
-        _, Yq = _dead_last(xp, lq, Yq, mu[:, None], xp.broadcast_to(dead[:, None], (S, nc)))
+        # The padded lanes are K's last whenever J holds only members.
+        _, Yq = _dead_last(xp, lq, Yq, mu[:, None], xp.broadcast_to(ndead[:, None], (S, nc)))
         # P[c, p, l] = 1 where position p of [J | K] is lane l: back to lane order, exactly.
         P = xp.astype(xp.asarray(order, device=dev)[:, :, None] == lane[None, None, :], C)
         X = xp.concat([EJ, Cc @ Yq], axis=-1) @ P[None]
@@ -1865,7 +1893,7 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
                 built.append(_block(xp, [[-Cc_, B_], [-D_, E_]]) @ Omega_R)
         return built[0]
 
-    # Defective clusters of three or four modes, rebuilt jointly (`_rebuild_defective_clusters`);
+    # Defective clusters of three to eight modes, rebuilt jointly (`_rebuild_defective_clusters`);
     # a trace holds `pair_cap // 2` of them, with their masks as data.
     clusters = _defective_clusters(xp, _stop(w), _stop(W), _stop(q), pairs, _operator,
                                    max(1, pair_cap // 2))

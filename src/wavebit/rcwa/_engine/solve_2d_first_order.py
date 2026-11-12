@@ -147,7 +147,7 @@ _PAIR_SEPARATION = 1e-4
 _REFUSED_PAIR = (
     'a first-order layer holds three or more same-direction modes in a defective eigenvalue '
     'cluster that neither a regular pair rebuild nor the joint rebuild of a cluster of up to '
-    'four modes spans (a larger cluster, a chain of nearby roots, or a Jordan chain of length '
+    'eight modes spans (a larger cluster, a chain of nearby roots, or a Jordan chain of length '
     'three): the eigenvector basis was kept for them, and the answer can be inaccurate. Move '
     'the wavelength or angle by more than a relative 1e-4 to check it.')
 
@@ -335,7 +335,7 @@ def _regular_clusters(xp, M, values, psi, w, clusters):
     """Rebuild each defective cluster of a first-order layer jointly, in a regular basis.
 
     ``clusters`` is :func:`~wavebit.rcwa._engine.solve_2d._defective_clusters`' answer for the
-    layer's ``eig`` eigenvalues ``w``, read within each direction: three or four same-direction
+    layer's ``eig`` eigenvalues ``w``, read within each direction: three to eight same-direction
     modes in one closed ball, nearly dependent and not normal. That is what ``eig`` hands back at
     coincident exceptional points -- two order rows of a y-invariant raster at one x-cutoff,
     ``ky0 = Gy / 2``, where it mixes four vectors of which no two are nearly parallel, so the pair
@@ -459,7 +459,7 @@ def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1):
     abstract trace this layout is structural even when no pair engages. ``slots``
     bounds greedy candidates per direction; an eligible candidate beyond that
     capacity poisons both generators with NaN. Eagerly all eligible pairs are rebuilt.
-    Defective clusters of three or four modes are rebuilt jointly
+    Defective clusters of three to eight modes are rebuilt jointly
     (:func:`_regular_clusters`); then ``coupled`` is a count, the coupled rows one
     direction can hold, which the exponential's traced rule gathers to.
 
@@ -520,7 +520,7 @@ def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1):
     # regular basis (:func:`_regular_pair`); off the band nothing here runs and the split is the
     # eigenvector one, to the bit. `coupled` is structural: True wherever the layout was taken.
     # Coincident exceptional points, and a pair beside a root it nearly shares, are a defective
-    # cluster of three or four same-direction modes: no pair spans it, and it is rebuilt jointly
+    # cluster of three to eight same-direction modes: no pair spans it, and it is rebuilt jointly
     # (:func:`_regular_clusters`). Eagerly a layer with none returns from the gate after one look
     # at its eigenvalues' distances; under a trace its slots hold the balls, masked as data. The
     # gate reads first, and the pair gate never sees a cluster's modes. So, unlike on 2D, a ball of

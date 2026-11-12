@@ -495,8 +495,8 @@ def _expm(xp, a, count):
 #: untouched. A rebuilt layer couples one family-1 mode per cluster pair -- every patterned
 #: point measured couples one -- and a uniform layer none (its coupling is exactly zero). A 2D
 #: layer's jointly rebuilt cluster couples its rows J to its columns K (two and two on the
-#: four-mode clusters measured, one and two on a three-mode one), counted with the layer's pairs
-#: against its integer cap.
+#: four-mode clusters measured, one and two on a three-mode one, four and four on the
+#: eight-mode ones), counted with the layer's pairs against its integer cap.
 _COUPLED_CAP = 4
 
 #: At or below this diameter a set of points takes the Taylor series of its divided difference
