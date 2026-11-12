@@ -58,7 +58,7 @@ normal-field grid and polygon approximations retain their existing derivative li
 Compare the derivative with fresh finite differences and refine numerical resolution
 independently.
 
-For overlapping polygonised curves, the default averaged normal field can have finite value steps when a clipped interval disappears. Repreparing or increasing the normal-grid size does not guarantee their removal. See the [short-interval diagnosis](../../validation/rcwa/normal-field-known-limits.md) for the separate material-label correction and the remaining continuity defect.
+For overlapping polygonised curves, the scalar painted normal field uses a boundary line integral so a disappearing clipped interval loses its contribution continuously. Reprepare when its topology changes. The [clipping-plan continuity validation](../../validation/rcwa/normal-field-known-limits.md) describes the material-label repair, the integral, and its scope; physical contacts, polygon approximation and finite normal grids still require independent convergence and derivative checks.
 
 Runnable examples cover [rectangular contact](../../../examples/rcwa/nvf_contact.py),
 [tangent ellipses](../../../examples/rcwa/nvf_curved_contact.py), and

@@ -6,5 +6,5 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-msgid "For overlapping polygonised curves, the default averaged normal field can have finite value steps when a clipped interval disappears. Repreparing or increasing the normal-grid size does not guarantee their removal. See the [short-interval diagnosis](../../validation/rcwa/normal-field-known-limits.md) for the separate material-label correction and the remaining continuity defect."
-msgstr "겹친 다각형 근사 곡선에서는 잘린 구간이 사라질 때 기본 평균 법선장에 유한한 값의 계단이 생길 수 있다. 다시 준비하거나 법선 격자를 늘려도 계단 제거는 보장되지 않는다. 별도의 재료 분류 수정과 남아 있는 연속성 결함은 [짧은 구간 진단](../../validation/rcwa/normal-field-known-limits.md)을 참고한다."
+msgid "For overlapping polygonised curves, the scalar painted normal field uses a boundary line integral so a disappearing clipped interval loses its contribution continuously. Reprepare when its topology changes. The [clipping-plan continuity validation](../../validation/rcwa/normal-field-known-limits.md) describes the material-label repair, the integral, and its scope; physical contacts, polygon approximation and finite normal grids still require independent convergence and derivative checks."
+msgstr "겹친 다각형 근사 곡선의 스칼라 painting 법선장은 경계 선적분을 사용하므로 잘린 구간이 사라질 때 기여도 연속으로 사라진다. 위상이 바뀌면 다시 준비한다. [클리핑 계획 연속성 검증](../../validation/rcwa/normal-field-known-limits.md)은 재료 분류 수정, 적분, 적용 범위를 설명한다. 물리적 접촉, 다각형 근사, 유한 법선 격자에는 여전히 독립적인 수렴과 미분 검증이 필요하다."

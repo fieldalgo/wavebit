@@ -197,6 +197,8 @@ from these material ramps, energy balance or representation invariants.
 
 ### 1b. Medial-axis switches averaged at the sample spacing — FIXED (2026-10-15)
 
+**Historical construction:** the scalar interval average described here was replaced by the boundary integral in §1c on 2026-11-13. The measurements below describe that earlier extension.
+
 **Status: fixed** for the painted scalar route; the tensor shapes keep §1a's field
 (`average=False`, below). §1a chose its candidates hard: within each pair of region labels the
 nearest interval, and across pairs the nearest of the influential ones. Both choices switch across
@@ -348,19 +350,19 @@ polygon where its facets meet: averaged, the polygon route stopped converging on
 curve, which `tests/rcwa/test_tensor_curve_normals.py` holds it to. Their derivatives keep the
 steps on their polygonal pieces.
 
-### 1c. Short painted intervals: labels fixed, value steps remain (2026-11-12)
+### 1c. Clipping-plan continuity through a boundary integral (2026-11-13)
 
-Two distinct mechanisms affect overlapping polygonised curves. The interval planner could label a short shared facet as an exterior boundary: normalising that short edge amplified endpoint rounding when testing a longer, coincident edge. Around rectangle angle 0.313 rad, the clipping vertices and intersection walk were unchanged, but one interface alternated between rectangle/background and rectangle/ellipse. Its contribution to the quadrature centroid changed too.
+Two defects affected overlapping polygonised curves. A short shared facet could be labelled as an exterior boundary because normalising its edge amplified endpoint rounding. The planner now tests transverse extent on the shorter edge and line displacement against the longer edge, with the existing spatial tolerance. Around rectangle angle 0.313 rad, this removes the alternating rectangle/background and rectangle/ellipse labels.
 
-The planner now measures transverse extent on the shorter edge and line displacement against the longer edge, using the existing spatial tolerance. Regression tests cover short shared straight edges, both region orders and the overlapping rectangle/ellipse. This stabilises the material labels; it does not make the default normal extension continuous through every clipping event.
+The previous scalar average also gave each interval a finite distance-based vote as its length vanished. The scalar painted route now integrates positive normal dyads over the actual material interfaces. For interval i, its weight is `contrast_i**4 * integral (1/r**2 - 1/R**2)**2 ds` over points with `r < R`, where r is distance from the sample and R is half the longest diagonal of the reduced cell. Divide the weighted sum of dyads by the total weight. The field is positive semidefinite with unit trace; it need not have rank one away from an interface.
 
-The remaining mechanism is in the scalar averaged field: each interval has a distance-based weight with no vanishing-length factor. A segment shrinking to a point can therefore retain finite weight until it disappears from a material pair. A finer grid changes the averaging width but does not guarantee continuity at a fixed resolution. A derivative of one fixed plan does not include the resulting value step.
+Line integration makes straight subdivision additive and makes a disappearing interval contribute zero away from its endpoint. At an exact interface sample the inverse-distance pole selects its line normal; an endpoint owns half the pole so splitting at a sampled junction is also invariant. Corners and genuine material junctions need not have a unique physical normal. No finite interval-length cutoff is introduced.
 
-A reproducible scene uses a 700 nm square cell, air above, epsilon 2.25 below, and a 300 nm layer with background epsilon 1. Paint a rectangle of size (420, 210) nm, centre (-60, 0) nm, epsilon 12.25, then an ellipse of radii (160, 100) nm, centre (90, 40) nm, angle -0.4 rad, epsilon 4. At wavelength 900 nm, theta 0.2 rad, phi 0.3 rad, p polarisation and orders (4, 4), compare rectangle angles 0.30354672169878616 +/- 1e-8 rad.
+The radial kernel and its first derivative vanish at R. Existing periodic image bounds include every interval within that support, so changing an image record does not truncate a nonzero contribution. An exact bounding-box exclusion avoids evaluating zero contributions. JAX uses a fixed-capacity gather and falls back to the full sum when it is exceeded; this does not limit the number of physical interfaces. Independent adaptive quadrature, periodic translation, straight subdivision, the support boundary and JAX value/shape-derivative comparisons exercise these rules in `tests/rcwa/test_integrated_normal.py`.
 
-On Linux, NumPy 2.5.1, float64 and normal grid 256, the transmission difference was 2.36e-7 before the label correction and 4.93e-7 after it. At grid 1024 the corrected code gives 7.41e-8: smaller, but still above the 1e-9 continuity target. Removing only the vanishing intervals in a diagnostic experiment reduced the difference to 2.28e-10. That removal is not a supported calculation: a length cutoff would introduce another switching boundary. Simply multiplying weights by length is also unsuitable: splitting one straight rectangle edge changed its sampled projector by 0.267, despite representing the same boundary.
+A reproducible scene uses a 700 nm square cell, air above, epsilon 2.25 below, and a 300 nm layer with background epsilon 1. Paint a rectangle of size (420, 210) nm, centre (-60, 0) nm, angle 0.3 rad, epsilon 12.25, then an ellipse of radii (160, 100) nm, centre (90, 40) nm, angle -0.4 rad, epsilon 4. Use wavelength 900 nm, theta 0.2 rad, phi 0.3 rad, p polarisation and orders (4, 4). The tested plan changes are rectangle angle 0.30354672169878616 rad and ellipse centre x = 91.87187983049787 nm.
 
-The continuity defect remains open. Reprepare after topology changes, but do not interpret successful preparation, energy conservation or a finer normal grid as evidence of a smooth objective. Check shrinking finite-difference steps against automatic derivatives. Laurent factorisation is a useful diagnostic without the normal field; it requires its own Fourier-order convergence check and is not substituted automatically.
+The two public regression cases require transmission differences below 1e-9 across offsets of +/-1e-8, followed by proportional decay at +/-1e-10, on normal grid 64. The independent exact-pixel Li comparison retains its original 2e-2 tolerance and improvement over Laurent. Tensor shape fields retain the nearest extension. The new scalar extension changes finite-order results, so convergence must be checked for each scene. Reprepare after a topology change; this repair does not promise differentiability through physical contact or eliminate polygon and normal-grid discretisation error.
 
 ## 2. A face the fold cannot merge is refused, not built — FIXED (2026-09-06)
 
