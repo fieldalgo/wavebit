@@ -1,5 +1,6 @@
 """Independent physical and lifecycle contracts of the public immutable RCWA API."""
 import dataclasses
+from contextlib import nullcontext
 import os
 from pathlib import Path
 import subprocess
@@ -27,6 +28,21 @@ def slab(*, side='top', polarization='s', wavelength=(.65, .8, 1.), amplitude=1.
                                   sources=(rcwa.PlaneWave(side=side, polarization=polarization,
                                                          theta=.29, phi=.4, amplitude=amplitude),)),
         outputs=rcwa.Outputs(fields=fields))
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('precision,dtype', [('single', 'float32'), ('double', 'float64')])
+def test_admitted_efficiencies_keep_the_requested_precision(backend, precision, dtype):
+    if backend != 'numpy':
+        module = pytest.importorskip(backend)
+    scope = module.enable_x64(True) if backend == 'jax' else nullcontext()
+    with scope:
+        result = rcwa.run(slab(wavelength=.8), numerics=rcwa.Numerics(),
+                          backend=backend, precision=precision)
+        assert str(result.R.dtype).removeprefix('torch.') == dtype
+        assert str(result.T.dtype).removeprefix('torch.') == dtype
+        np.testing.assert_allclose(np.asarray(result.R).sum() + np.asarray(result.T).sum(),
+                                   1., rtol=2e-6 if precision == 'single' else 2e-12)
 
 
 def film_oracle(wavelengths, epsilon, mu, thickness, theta, polarization):
@@ -413,6 +429,51 @@ def test_traced_invalid_thickness_masks_retained_fields_and_scattering_too():
         assert np.isfinite(np.asarray(value)).all()
     for value in (bad[1], bad[2], bad[3], *bad[4]):
         assert np.isnan(np.asarray(value)).all()
+
+
+def test_rejected_thickness_masks_observation_derivatives_and_finiteness():
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+
+    with jax.enable_x64(True):
+        problem = slab(wavelength=.8, fields=True)
+        problem = problem.replace(outputs=rcwa.Outputs(fields=True, scattering=True))
+        prepared = rcwa.prepare(problem, numerics=rcwa.Numerics(algorithm='smm'), backend='jax')
+
+        def evaluate(thickness):
+            live = problem.replace(stack=problem.stack.replace(layers=(
+                problem.stack.layers[0].replace(thickness=thickness),)))
+            result = prepared.run(live)
+            arrays = [result.R, result.T, result.outputs['power_entering'], result.absorption,
+                      result.transmission.amplitude_ratio_xyz,
+                      result.field(x=[0.], y=[0.], z=[.09]).values,
+                      result.boundary_fields(side='top', x=[0.], y=[0.]).values,
+                      *(getattr(result.scattering[0], key) for key in ('S11', 'S12', 'S21', 'S22'))]
+            # Real and imaginary parts exercise both power and complex field derivatives.
+            values = jnp.concatenate([part(a).ravel() for a in arrays
+                                      for part in ((jnp.real, jnp.imag) if jnp.iscomplexobj(a) else (jnp.real,))])
+            return values, dict(result.validity.checks)
+
+        call = jax.jit(evaluate)
+        good, good_checks = call(.18)
+        bad, bad_checks = call(-.18)
+        assert all(bool(flag) for flag in good_checks.values())
+        assert np.isfinite(good).all() and np.isnan(bad).all()
+        assert not bool(bad_checks['nonnegative_thickness'])
+        assert not bool(bad_checks['numerical_finite'])
+        # Only connected derivatives can carry NaN; structural constants may stay zero.
+        response = lambda x: evaluate(x)[0]
+        forward = jax.jit(jax.jacfwd(response))
+        reverse = jax.jit(jax.jacrev(response))
+        df, dr = forward(.18), reverse(.18)
+        assert np.isfinite(df).all() and np.max(np.abs(df)) > 1e-4
+        np.testing.assert_allclose(df, dr, rtol=1e-10, atol=1e-12)
+        assert np.isnan(forward(-.18)[np.abs(df) > 1e-12]).all()
+        assert np.isnan(reverse(-.18)[np.abs(dr) > 1e-12]).all()
+        value, gradient = jax.jit(jax.value_and_grad(lambda x: response(x).sum()))(-.18)
+        assert np.isnan(value) and np.isnan(gradient)
+        np.testing.assert_array_equal(call(.18)[0], good)
+        np.testing.assert_array_equal(forward(.18), df)
 
 
 def test_prepared_refuses_wrong_problem_type_through_the_public_error_contract():

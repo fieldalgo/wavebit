@@ -417,26 +417,29 @@ def pack(problem, numerics, execution, solves, checks, report):
     combined = finite
     for value in checks.values():
         combined = combined & value
-    # Traced admission failures remain visible; their numerical observations are NaN.
+    # Multiply by a real NaN on rejected runs so connected tangents/cotangents
+    # also become NaN. Selecting a constant NaN output with where would silently
+    # replace their derivatives with zero. The unit factor preserves valid runs.
+    admission_scale = xp.where(combined, _array(xp, 1., execution), _array(xp, xp.nan, execution))
     if single_plane(problem):
         for name in ('reflected', 'transmitted'):
             if name in outputs:
                 o = outputs[name]
                 # Every array the contract marks as masked; the wavevectors stay as computed,
                 # and field_* follows the masked ratios it is computed from.
-                outputs[name] = o.replace(**{key: xp.where(combined, getattr(o, key), xp.nan)
+                outputs[name] = o.replace(**{key: getattr(o, key) * admission_scale
                                             for key, (_, masked) in RATIO_ARRAYS.items()
                                             if masked and getattr(o, key) is not None})
         for name in ('power_entering', 'absorption'):
-            outputs[name] = xp.where(combined, outputs[name], xp.nan)
+            outputs[name] = outputs[name] * admission_scale
     # Retained reconstruction must obey the same admission guards as the
     # eagerly materialized observables, including when evaluated after jit.
-    amplitudes = [xp.where(combined, amplitude, xp.nan) for amplitude in amplitudes]
-    scattering = [matrix._replace(**{name: xp.where(combined, getattr(matrix, name), xp.nan)
+    amplitudes = [amplitude * admission_scale for amplitude in amplitudes]
+    scattering = [matrix._replace(**{name: getattr(matrix, name) * admission_scale
                                     for name in ('S11', 'S12', 'S21', 'S22')})
                   for matrix in scattering]
     return Result(outputs=outputs, wavelengths=xp.stack(actual_wavelengths),
-                  validity=Validity(checks={**checks, 'numerical_finite': finite},
+                  validity=Validity(checks={**checks, 'numerical_finite': combined},
                                     convergence={'status': 'not assessed', 'requires': 'independent refinement study'}),
                   diagnostics={'report': report, 'effective_wavelengths': tuple(actual_wavelengths),
                                'source_group_counts': tuple(getattr(r, 'group_count', 1) for _, r in solves),
