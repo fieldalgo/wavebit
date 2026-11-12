@@ -838,7 +838,9 @@ every member's own ball is the same set, so no chain runs out of it -- holds thr
 clamped at zero, since rounding leaves a rank-deficient Gram's below it), and its restriction
 `T = Q^H Omega2 Q` is not normal (`nu > _DEFECT_NU`, the unresolved screen's measure). A ball
 of exactly three holding one gated pair stays with the pair rebuild, which is exact for a pair
-beside a root more than `_EP_SEPARATION` away. So the gate takes coincident exceptional points
+beside an independent root more than `_EP_SEPARATION` away -- unless the root's unit column lies
+within `_EP_SINE` of the pair's span: near a third-order point the root is the chain's own third
+mode, and the ball is taken jointly (*Three modes, one eigenvector*, below). So the gate takes coincident exceptional points
 (the pair gate sees none there), two gated pairs a few 1e-8 .. 1e-3 apart, one gated pair beside
 two ungated modes, a pair with an unpaired root within `_EP_SEPARATION`, which the pair gate
 refuses, and two degenerate doublets up to 3e-3 apart whose columns stay nearly dependent.
@@ -1080,6 +1082,51 @@ first-order split the exponential's closed-form tangent gathers `slots + 7 S` co
 direction instead of `slots + 3 S`. Eager layers with no ball of five or more pay nothing more,
 and an eager split forms the second set only where the first exceeds `_SPLIT_RETRY`.
 
+*Three modes, one eigenvector* (2026-11-13). In a lossless layer two real `q**2` meet at an
+exceptional point along a curve in two real parameters, and three meet at isolated points where
+the three modes share one eigenvector: a Jordan chain of length three, a third-order point (EP3).
+The cut PA616 pillar of §8's genuinely 2D rows (truncation `(5, 2)`, `theta = 0.3`) holds at
+least fourteen between 539 and 749 nm at `fy` 0.5 and 0.8, found with the wavelength and the
+pillar's permittivity root-found together: Newton on the centred power sums of the three
+eigenvalues in one x-parity block, which are analytic at the point where the eigenvalues are not
+(3e-17 .. 8e-17 of their scale at the points). `eig` splits the triple eigenvalue by about
+`u**(1/3)` (1e-6 .. 1e-5 of its scale), and off the point the three move apart like the cube
+root of the offset.
+
+Measured at three of them (`fy` 0.5 at 620.55 and 645.23 nm, `fy` 0.8 at 664.35 nm), relative
+wavelength offsets 0 .. +-1e-3, ETM and SMM, against the Cauchy circle in `theta` (radius 1e-4,
+16 points; it moves by at most 5.9e-15 to radius 2e-4 with 24 points, or to SMM):
+
+| offset | before | now |
+| --- | --- | --- |
+| 0 .. +-1e-9 | loud, up to 9.3e-3 off (SMM at the point) | loud within 7.8e-13, or quiet within 2.4e-14 |
+| +-1e-8 .. +-1e-7 | quiet and 1.2e-12 .. 9.9e-12 off at `fy` 0.5 (+-1e-8), up to 2.2e-12 at `fy` 0.8 (+-1e-7) | quiet within 1.3e-14, or loud within 8.0e-15 |
+| +-1e-6 .. +-1e-3 | within 1.8e-14 | the same |
+| `jax.jit`, `jit(vmap)`, `fy` 0.5 and 0.8 | NaN to 1e-9 (1e-8 at `fy` 0.8); then quiet, 4.0e-13 .. 8.6e-12 off | NaN, or within 2.9e-14 |
+
+In the quiet band the pair gate took two of the three, and the cluster gate left the ball of three
+to the pair rebuild, which is exact beside an independent root. The third mode is the chain's
+own: its unit column lay within 4.8e-5 .. 8.0e-5 of the pair's span, the rebuilt columns stayed
+nearly dependent, and the three sat 1.5e-4 .. 1.7e-4 apart (relative), beyond the unresolved
+screen's `_EP_CLUSTER`. Such a ball is now taken jointly where its third column lies within
+`_EP_SINE` of the pair's span (`solve_2d.py::_sine_to_span`). The span, not the pair's
+eigenvector: the third column leaves the eigenvector at about the square root of its sine to the
+span -- 7.1e-3 against 7.2e-5 at the band's edge, a margin of 1.4 below `_EP_SINE` where the
+span leaves 140. No disjoint split represents the chain itself, so at the point the joint check
+warns, now on answers within 7.8e-13. It warns on 36 of the 66 solves within 1e-7 of the three
+points (46 before, 44 of them more than 1e-12 off), 32 of them on answers within 1.3e-13:
+false alarms. A rebuild that represents the chain would quiet them; it is not done. The
+first-order split, whose gate reads before its pair gate, already took the three jointly: quiet
+answers within 3.9e-14, loud ones within 1.4e-11 at the point.
+
+The digests of *Eight modes* (386 eager and 66 traced on each formulation) are identical to
+`18bbcbfd`: no ball of three there holds a pair beside a dependent column, and the first-order
+gate reads no pairs. Seven one-line mutations are each caught: the rule switched off, its
+threshold at 1e-6, the sine read against the pair's eigenvector alone, the pair looked up in the
+first slot, a pair member read as the third, every such ball taken jointly, and the third member
+found as the sum of a ball's unpaired lanes (an index past the layer on other balls: an
+`IndexError` eagerly, out of range under `torch.func.vmap`).
+
 *The screens under a trace* (2026-11-10). Nothing can warn under `jit`, `vmap` or
 `torch.func.vmap`, and the unresolved and backward-error screens used to be skipped there, so what
 they warn on eagerly came back silently. On the first-order path at the y-Littrow coincidences
@@ -1155,7 +1202,8 @@ the Gram matrices of their columns, the defect measure on its slots, and on 2D o
   doublets sit within 3e-3 of another cluster or pair, their wide ball can hold more than eight modes
   and only the narrow radius reads them: silent, as before the wide radius (not met on any layer
   measured).
-- A length-3 Jordan chain is loud, not exact.
+- A length-3 Jordan chain is loud at its point, not exact; off it the gate takes its three
+  modes jointly, exact or loud (*Three modes, one eigenvector*, above).
 - Where `eig`'s start is poorer than the second step can absorb, the check warns; the answer is
   not exact. Two steps leave a remainder of third order in the start's error over the gap to
   the nearest block, so how poor depends on that gap: off by about 1e-4 with every block 1e-2

@@ -786,21 +786,27 @@ def _chain(seed=0):
 def test_a_length_three_chain_is_loud(seed):
     """No basis puts a length-3 Jordan chain in the disjoint form, so no rebuild here is exact
     there. ``eig`` splits its eigenvalue by ~1e-6 and the pair gate takes two of the three, beside
-    a third more than 1e-7 away: the pair rebuild, after which the cluster screen still sees
-    three nearly dependent columns of a non-normal cluster (``cond(W)`` ~3e9) and warns. Handed
-    to the joint rebuild instead, its check reads the split's dropped part times ``cond(X)`` and
-    warns. Catches a three-mode ball holding one gated pair taken jointly without the check, and
-    the check's split term removed."""
+    a third more than 1e-7 away whose column lies within 1e-6 of the pair's span: the chain's own
+    third mode, so the cluster gate takes the three jointly (since 2026-11-13;
+    ``test_third_order_exceptional_point``), and the joint check reads the split's dropped part
+    times ``cond(X)`` and warns. Left to the pair rebuild, as it was before, the cluster screen
+    sees three nearly dependent columns of a non-normal cluster (``cond(W)`` ~3e9) and warns.
+    Catches a three-mode ball holding one gated pair taken jointly without the check, the
+    check's split term removed, and the pair rebuild left without the screen."""
     A = _chain(seed)
-    pairs, clusters, rebuilt, warned = _layer(A)
-    assert pairs is not None and clusters is None and not warned
     w, W = np.linalg.eig(A)
-    assert solve_2d._unresolved_defective_cluster(np, w, rebuilt[0], lambda: A, solve_2d._EP_SINE)
     q = np.sqrt(w)
-    forced = solve_2d._defective_clusters(np, w, W, q, None, lambda: A, 2)
-    assert forced is not None
+    pairs = solve_2d._defective_pairs(np, w, W, q, 4)
+    clusters = solve_2d._defective_clusters(np, w, W, q, pairs, lambda: A, 2)
+    assert pairs is not None and clusters is not None
+    assert np.asarray(clusters[1]).sum() == 3
     with pytest.warns(_legacy_wavebit_ExceptionalPointWarning, match='joint rebuild failed'):
-        solve_2d._rebuild_defective_pairs(np, A, np.eye(12), W, W / q, q, w, None, clusters=forced)
+        solve_2d._rebuild_defective_pairs(np, A, np.eye(12), W, W / q, q, w, pairs,
+                                          clusters=clusters)
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        alone = solve_2d._rebuild_defective_pairs(np, A, np.eye(12), W, W / q, q, w, pairs)
+    assert solve_2d._unresolved_defective_cluster(np, w, alone[0], lambda: A, solve_2d._EP_SINE)
 
 
 def _two_clusters_and_a_pair(gap, seed=1, far=(2.4, 3.0)):
@@ -1676,11 +1682,22 @@ def _kept(A):
     return A, w, np.asarray(rebuilt[0]), group
 
 
+def _pair_rebuilt(A):
+    """``A``'s basis after the pair rebuild alone, the way the 2D path kept a length-3 Jordan
+    chain until 2026-11-13 (it now rebuilds the three jointly): ``(A, w, W, None)``."""
+    w, W = np.linalg.eig(A)
+    q = np.sqrt(w)
+    pairs = solve_2d._defective_pairs(np, w, W, q, 4)
+    rebuilt = solve_2d._rebuild_defective_pairs(np, A, np.eye(len(w)), W, W / q, q, w, pairs)
+    return A, w, np.asarray(rebuilt[0]), None
+
+
 TRACED_SCREEN_CASES = {
     'a chain': (lambda: _kept(_a_chain()), True),
-    'a length-3 Jordan chain': (lambda: _kept(_chain(0)), True),
+    'a length-3 Jordan chain after the pair rebuild': (lambda: _pair_rebuilt(_chain(0)), True),
     'a length-3 Jordan chain, every mode apart': (
-        lambda: _kept(_chain(0))[:3] + (np.arange(12),), False),
+        lambda: _pair_rebuilt(_chain(0))[:3] + (np.arange(12),), False),
+    'a length-3 Jordan chain, rebuilt jointly': (lambda: _kept(_chain(0)), False),
     'five coincident pairs': (lambda: _kept(_coincident_pairs(5)), True),
     'four coincident pairs and a root': (lambda: _kept(_coincident_pairs(4, 5e-5)), True),
     'four coincident pairs, rebuilt jointly': (lambda: _kept(_coincident_pairs(4)), False),
@@ -1721,12 +1738,13 @@ def _traced_screen(backend, A, w, W, group, slots=2):
 def test_the_traced_screen_reads_what_the_eager_screen_reads(name, backend):
     """Under an abstract trace the unresolved screen cannot walk a cluster; it reads every mode's
     ball of at most eight modes instead, and must reach the eager verdict: loud on a chain, a
-    length-3 Jordan chain after the pair rebuild, and defective clusters of nine and ten modes
-    (none of which any rebuild takes); quiet on a cluster rebuilt jointly (its members apart), a
-    pair rebuilt beside a root, a degenerate ball in a nearly parallel basis, the length-3 chain
-    with every mode in a group of its own (as a jointly rebuilt member is, or the other direction
-    of the first-order split), and a lone Jordan pair in ``eig``'s basis (a ball of two: the pair
-    gate's business, not a cluster). Measured: the same verdict as the eager screen on 200 random
+    length-3 Jordan chain after the pair rebuild alone, and defective clusters of nine and ten
+    modes (none of which any rebuild takes); quiet on a cluster rebuilt jointly (its members
+    apart; the length-3 chain is now one, and its joint check warns instead), a pair rebuilt
+    beside a root, a degenerate ball in a nearly parallel basis, the length-3 chain with every
+    mode in a group of its own (as a jointly rebuilt member is, or the other direction of the
+    first-order split), and a lone Jordan pair in ``eig``'s basis (a ball of two: the pair gate's
+    business, not a cluster). Measured: the same verdict as the eager screen on 200 random
     clustered layers as well (129 loud). Catches the traced screen returning a constant, its
     singular-value or defect test dropped, the group ignored, and balls of two read."""
     build, loud = TRACED_SCREEN_CASES[name]

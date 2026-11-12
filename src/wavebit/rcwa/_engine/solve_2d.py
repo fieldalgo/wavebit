@@ -732,6 +732,18 @@ def _closed_balls(xp, d, span, radius, rows_of, k, idx, dev):
     return rows, nbr, valid, xp.take(seed, rows) & clique & same_ball, count_r
 
 
+def _sine_to_span(xp, col, v, x):
+    """The sine of each unit column of ``col`` to the span of the orthonormal pair ``(v, x)``,
+    column by column: ``||col - v (v^H col) - x (x^H col)||``. The span, not ``v``: near a
+    third-order point a chain's third column leaves the eigenvector ``v`` at about the square
+    root of the sine it leaves the pair's span at -- measured at the edge of the band
+    :func:`_defective_clusters` closes, 7.2e-5 to the span and 7.1e-3 to ``v``, against
+    :data:`_EP_SINE` = 1e-2."""
+    r = (col - v * xp.sum(xp.conj(v) * col, axis=0)[None, :]
+         - x * xp.sum(xp.conj(x) * col, axis=0)[None, :])
+    return xp.linalg.vector_norm(r, axis=0)
+
+
 def _defective_clusters(xp, w, W, q, pairs, operator, slots, group=None):
     """The defective clusters of a 2D layer the joint rebuild takes, or ``None`` when none is.
 
@@ -746,9 +758,16 @@ def _defective_clusters(xp, w, W, q, pairs, operator, slots, group=None):
     where exceptional points coincide or nearly coincide -- two order rows of a y-invariant layer
     at one x-cutoff -- and where a pair has an unpaired root within :data:`_EP_SEPARATION`, which
     :func:`_defective_pairs` refuses. A ball of exactly three that holds one gated pair is left to
-    the pair rebuild: exact for a pair beside a root more than :data:`_EP_SEPARATION` away, not
-    for a length-3 Jordan chain (which no disjoint split represents; the unresolved screen then
-    warns). A degenerate (normal) cluster is left alone, whatever basis ``eig`` chose for it.
+    the pair rebuild, which is exact for a pair beside an independent root more than
+    :data:`_EP_SEPARATION` away -- unless the root's unit column lies within :data:`_EP_SINE` of
+    the pair's span (:func:`_sine_to_span`). Near a third-order exceptional point (three modes,
+    one eigenvector: a Jordan chain of length three) the pair gate takes two of the three and the
+    "root" is the chain's third mode: its column lay within 8e-5 of the pair's span on the
+    measured layers, the pair rebuild left the three nearly dependent, and from about 1e-9 to
+    1e-7 of the point the three sat too far apart for the unresolved screen, silently up to
+    9.9e-12 off (2026-11-13). Taken jointly the answer is exact or the check warns (no disjoint
+    split represents the chain itself). A degenerate (normal) cluster is left alone, whatever basis
+    ``eig`` chose for it.
 
     Returns ``(members, valid, Q0, overflow)``: ``members`` ``(S, k)`` the clusters' mode
     indices, nearest the seed first; ``valid`` which lanes are members (a smaller cluster pads
@@ -796,10 +815,27 @@ def _defective_clusters(xp, w, W, q, pairs, operator, slots, group=None):
     eye_k = xp.astype(lane[:, None] == lane[None, :], C)
     if pairs is not None:
         a, b, mask = pairs[:3]
-        in_pair = xp.any(((idx[:, None] == a[None, :]) | (idx[:, None] == b[None, :]))
-                         & mask[None, :], axis=1)
+        slot_of = (((idx[:, None] == a[None, :]) | (idx[:, None] == b[None, :]))
+                   & mask[None, :])                                       # (n2, pair slots)
+        in_pair = xp.any(slot_of, axis=1)
+        pair_slot = xp.argmax(xp.astype(slot_of, xp.int32), axis=1)
+        del slot_of
     else:
         in_pair = xp.zeros(n2, dtype=xp.bool, device=dev)
+
+    def third_dependent(nbr, valid):
+        # A ball of three holding one gated pair: is its third member's unit column within
+        # `_EP_SINE` of the pair's span? (Read on every ball; only those balls use it.)
+        ip = valid & xp.reshape(xp.take(in_pair, xp.reshape(nbr, (-1,))), nbr.shape)
+        ps = xp.reshape(xp.take(pair_slot, xp.reshape(nbr, (-1,))), nbr.shape)
+        # One lane each, by position: an index on every row, whatever the ball holds.
+        first = xp.argmax(xp.astype(ip, xp.int32), axis=1)
+        p = xp.sum(xp.where(lane[None, :] == first[:, None], ps, xp.zeros_like(ps)), axis=1)
+        third = xp.argmax(xp.astype(valid & ~ip, xp.int32), axis=1)
+        c = xp.sum(xp.where(lane[None, :] == third[:, None], nbr, xp.zeros_like(nbr)), axis=1)
+        sine = _sine_to_span(xp, xp.take(Wn, c, axis=1), xp.take(pairs[3], p, axis=1),
+                             xp.take(pairs[4], p, axis=1))
+        return sine < _EP_SINE
 
     def rows_of(seed):
         # Eagerly only the seeds' rows are read; under a trace every row, masked by `seed`.
@@ -832,6 +868,10 @@ def _defective_clusters(xp, w, W, q, pairs, operator, slots, group=None):
         held = xp.sum(xp.astype(valid & xp.reshape(xp.take(in_pair, xp.reshape(nbr, (-1,))),
                                                    nbr.shape), xp.int32), axis=1)
         lone_pair = (count_r == 3) & (held == 2)
+        if pairs is not None and _concrete(xp.any(lone_pair)) is not False:
+            # Such a ball is the pair rebuild's unless its third column is nearly dependent on
+            # the pair's: the pair rebuild is exact only beside an independent root.
+            lone_pair = lone_pair & ~third_dependent(nbr, valid)
         return nbr, valid, sigma, closed & floor_ok & (sigma < _EP_SINE) & ~lone_pair
 
     # The wide balls first; a narrow ball inside a wide one the wide level takes is its business
