@@ -18,6 +18,7 @@ All checks live alongside the example so a copied script retains its verificatio
 | [`basic_grating.py`](rcwa/basic_grating.py) | A binary grating and its lossless power balance. | Base install |
 | [`shapes_1d.py`](rcwa/shapes_1d.py), [`shapes_2d.py`](rcwa/shapes_2d.py) | Typed regions with explicit mixed/s/p illumination and lossless power checks. | PyTorch / JAX respectively |
 | [`rectilinear_contact.py`](rcwa/rectilinear_contact.py) | Cartesian Li gap/material derivatives under JIT with checked topology and NaN for overlap. | JAX |
+| [`automatic_repreparation.py`](rcwa/automatic_repreparation.py) | Fit a rectangle position from overlap to separation; automatically rebuild geometry and JIT functions at the new candidate and verify recovery of the synthetic target. | JAX |
 | [`anisotropic_material.py`](rcwa/anisotropic_material.py), [`coherent_illumination.py`](rcwa/coherent_illumination.py) | Physical tensor spectra and two-source boundary power. | Base install |
 | [`nvf_method_selection.py`](rcwa/nvf_method_selection.py) | Explicit ordinary NVF/Li and experimental auxiliary operators for the same pair. | Base install |
 | [`learning/`](rcwa/learning/) | 15 teaching scripts: physical geometry, SI fields, Job round trips, sweeps, lossless/Airy checks and gradients. | Base install; JAX/PyTorch for gradients |

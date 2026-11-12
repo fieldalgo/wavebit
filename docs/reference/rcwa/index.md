@@ -9,6 +9,12 @@ See the [runnable first calculation](../../getting-started/rcwa.md) and [common 
 
 .. autofunction:: wavebit.rcwa.run
 
+.. autofunction:: wavebit.rcwa.compile
+
+.. autoclass:: wavebit.rcwa.Compiled
+   :members:
+   :special-members: __call__
+
 .. autofunction:: wavebit.rcwa.sample_structure
 
 .. autoclass:: wavebit.rcwa.Problem

@@ -1,15 +1,16 @@
-"""Rigorous coupled-wave analysis: immutable problems and explicit preparation."""
+"""Rigorous coupled-wave analysis with immutable problems and managed or explicit preparation."""
 from .problem import Problem, Stack, Layer, Region, Rectangle, Circle, Ellipse, Polygon, Excitation, Outputs
 from .sources import PlaneWave, IncidentOrders, GaussianBeam, ElectricDipole
 from .numerics import Numerics
 from .results import Result, BoundaryPower
 from ._lifecycle import Prepared, check, prepare, run
+from ._compiled import Compiled, compile
 from ._structure import sample_structure
 from . import diagnostics  # noqa: F401 -- public submodule, listed by __dir__ as fdtd.diagnostics is
 
 __all__ = ['Problem', 'Stack', 'Layer', 'Region', 'Rectangle', 'Circle', 'Ellipse', 'Polygon',
            'Excitation', 'Outputs', 'PlaneWave', 'IncidentOrders', 'GaussianBeam', 'ElectricDipole',
-           'Numerics', 'Result', 'BoundaryPower', 'Prepared', 'check', 'prepare', 'run',
+           'Numerics', 'Result', 'BoundaryPower', 'Prepared', 'Compiled', 'check', 'prepare', 'run', 'compile',
            'sample_structure']
 
 #: Names this module no longer has (fieldalgo/wavebit#57), and their full replacements. Each is
