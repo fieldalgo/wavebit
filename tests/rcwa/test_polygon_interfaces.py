@@ -13,6 +13,59 @@ from wavebit._common.geometry.polygon import rect_verts
 CELL = ((700., 0.), (0., 700.))
 
 
+@pytest.mark.parametrize('length', [1e-3, 1e-5, 1e-7])
+@pytest.mark.parametrize('angle', [.313, -.4])
+@pytest.mark.parametrize('reverse', [False, True])
+def test_short_shared_edge_keeps_both_material_labels(length, angle, reverse):
+    """Endpoint rounding on a short edge must not erase its long neighbour's coverage."""
+    rotation = np.array([[np.cos(angle), -np.sin(angle)],
+                         [np.sin(angle), np.cos(angle)]])
+    triangles = [np.array([[0., 0.], [length, 0.], [0., 1.]]),
+                 np.array([[0., 0.], [0., -1.], [3., 0.]])]
+    regs = [(m, [v @ rotation.T + [350.123, 490.654]])
+            for m, v in zip([4., 9.], triangles)]
+    if reverse:
+        regs.reverse()
+    plan = b.plan_interfaces(regs, CELL, b.reduction_transform(CELL))
+    _, edges, _, _ = b.replay_interfaces(xp, regs, 1., CELL,
+                                        b.reduction_transform(CELL), plan)
+    shared = [i for i, p in enumerate(plan.pieces) if {p.left, p.right} == {0, 1}]
+    # Both oriented contours represent the shared interval; neither has background beside it.
+    assert len(shared) == 2
+    np.testing.assert_allclose(np.linalg.norm(edges[shared], axis=1), length,
+                               rtol=0, atol=2e-13)
+
+
+@pytest.mark.parametrize('gap,tilt', [(1e-6, 0.), (0., 1e-3)])
+def test_short_distinct_edges_do_not_acquire_shared_coverage(gap, tilt):
+    """A resolved displacement or turn is not endpoint rounding."""
+    length, angle = 1e-5, .313
+    rotation = np.array([[np.cos(angle), -np.sin(angle)],
+                         [np.sin(angle), np.cos(angle)]])
+    triangles = [np.array([[0., 0.], [length, length*tilt], [0., 1.]]),
+                 np.array([[0., -gap], [0., -1.-gap], [3., -gap]])]
+    regs = [(m, [v @ rotation.T + [350.123, 490.654]])
+            for m, v in zip([4., 9.], triangles)]
+    plan = b.plan_interfaces(regs, CELL, b.reduction_transform(CELL))
+    assert all({p.left, p.right} != {0, 1} for p in plan.pieces)
+
+
+def test_short_curved_facet_does_not_alternate_interface_plans():
+    """A clipped ellipse facet retains its labels throughout one intersection topology."""
+    plans = []
+    for offset in (-1e-6, -1e-7, -1e-8, 0., 1e-8, 1e-7, 1e-6, 3e-6, 1e-5):
+        shapes = [dict(type='rectangle', lx=420., ly=210., cx=-60., cy=0.,
+                       angle=.313 + offset, material=12.25),
+                  dict(type='ellipse', lx=320., ly=200., cx=90., cy=40.,
+                       angle=-.4, material=4.)]
+        plans.append(b.plan_layer(shapes, CELL))
+    assert all(plan == plans[0] for plan in plans[1:])
+    # This short facet is shared by rectangle and ellipse, never rectangle and background.
+    piece = plans[0][3].pieces[84]
+    assert {piece.left, piece.right} == {0, 1}
+    assert piece.centroid_sign == 0
+
+
 def resolved(vertices, materials):
     recs, regions = clipper.resolve_painting(vertices)
     vals = clipper.eval_table(xp, recs, vertices)
