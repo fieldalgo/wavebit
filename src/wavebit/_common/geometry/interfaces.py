@@ -85,7 +85,8 @@ def plan_interfaces(regions, lattice, transform):
         unit = e[i] / lengths[i]
         # Vectorized direction filter keeps polygonised curves inexpensive.
         cross = e[:, 0] * unit[1] - e[:, 1] * unit[0]
-        candidates = np.flatnonzero((lengths > tol) & (np.abs(cross) <= tol))
+        candidates = np.flatnonzero((lengths > tol) &
+                                   (np.abs(cross) <= tol * np.maximum(1., lengths / lengths[i])))
         events = [(0., (i, 0, 0, 0)), (1., (i, 1, 0, 0))]
         runs = []
         for j in candidates:
@@ -95,7 +96,12 @@ def plan_interfaces(regions, lattice, transform):
                 for n in range(int(lower[1]), int(upper[1]) + 1):
                     shift = basis @ np.array([m, n])
                     delta = a[j] + shift - a[i]
-                    if abs(delta[0] * unit[1] - delta[1] * unit[0]) > tol:
+                    # Use the longer edge's line. Normalising a tiny clipped remainder
+                    # amplifies endpoint rounding, so a coincident full facet can otherwise
+                    # be classified as nonparallel or displaced from it. The direction
+                    # filter above likewise measures the shorter edge's transverse extent.
+                    line = e[j] / lengths[j] if lengths[j] > lengths[i] else unit
+                    if abs(delta[0] * line[1] - delta[1] * line[0]) > tol:
                         continue
                     t0 = float(delta @ unit / lengths[i])
                     t1 = float((z[j] + shift - a[i]) @ unit / lengths[i])
