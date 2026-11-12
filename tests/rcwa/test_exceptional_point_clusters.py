@@ -375,6 +375,115 @@ def test_the_split_does_not_trust_eig_s_order(monkeypatch):
         assert not warned and _backward(A, rebuilt) < 1e-13, label
 
 
+def _collapse_the_split_eig(monkeypatch, sine):
+    """Make the split's ``eig`` of each cluster restriction hand back, at every eigenvalue of
+    geometric multiplicity two or more, eigenvectors all within ``sine`` of one direction: each
+    one a true eigenvector (in the eigenspace, to rounding), as ``eig``'s collapsed vectors are.
+    ``DC612`` at ``theta`` 1e-4 came out that way on OpenBLAS's Haswell, Zen and Prescott kernels
+    (sines of 1.3e-3, best ``cond(X)`` 1833). The quotients' ``eig`` is left alone."""
+    original = solve_2d._eig_raw
+
+    def collapsed(T):
+        lam, E = original(T)
+        if T.ndim != 3:
+            return lam, E
+        lam, E, T = np.array(lam), np.array(E), np.asarray(T)
+        for s in range(T.shape[0]):
+            seen = np.zeros(lam.shape[1], bool)
+            for i in range(lam.shape[1]):
+                group = np.flatnonzero(~seen & (np.abs(lam[s] - lam[s, i])
+                                                <= 1e-6 * max(1.0, abs(lam[s, i]))))
+                seen[group] = True
+                if group.size < 2:
+                    continue
+                shifted = T[s] - lam[s, group].mean() * np.eye(T.shape[1])
+                _, sv, Vh = np.linalg.svd(shifted)
+                null = Vh[sv <= 1e-12 * np.linalg.norm(T[s])].conj().T
+                if null.shape[1] < 2:
+                    continue
+                for n, g in enumerate(group):
+                    c = null[:, 0] + sine * (n + 1) * null[:, 1 + n % (null.shape[1] - 1)]
+                    E[s, :, g] = c / np.linalg.norm(c)
+        return lam, E
+    monkeypatch.setattr(solve_2d, '_eig_raw', collapsed)
+
+
+@pytest.mark.parametrize('model', ['two pairs', 'four pairs', 'DC612 2d', 'DC612 first order'])
+def test_a_split_from_collapsed_eigenvectors_is_re_derived(model, monkeypatch):
+    """With the split's ``eig`` handing back collapsed eigenvectors (:func:`_collapse_the_split_eig`,
+    sines of 1e-6), every split from them has ``cond(X)`` near 1e6 and the check fails. The split
+    is tried again with the collapsed vectors re-derived (``_spread_eigenvectors``): exact and
+    quiet -- two and four coincident Jordan pairs, and ``DC612`` at ``theta`` 1e-4 on both
+    formulations (the scene that warned on an exact answer on three OpenBLAS kernels). Catches the
+    retry removed, its vectors not orthogonalised, or kept without the residual test."""
+    _collapse_the_split_eig(monkeypatch, 1e-6)
+    if model.startswith('DC612'):
+        scene, first_order = _double('theta', 1e-4), model.endswith('first order')
+        _exact_and_quiet(scene, 'ETM', f'collapsed split, {model}',
+                         solve=lambda: _solve_2d(scene, 'ETM', first_order))
+        return
+    A = _coincident_pairs(2 if model == 'two pairs' else 4)
+    _, clusters, rebuilt, warned = _layer(A)
+    assert clusters is not None and not warned, model
+    assert _backward(A, rebuilt) < 1e-13, model
+
+
+def test_the_split_retry_keeps_the_split_the_check_passes(monkeypatch):
+    """The second split replaces the first only where the check would read less of it: its
+    ``cond(X)`` times its dropped part. Instrumented: collapsed eigenvectors at sines of 1.5e-2
+    (best ``cond(X)`` above the retry's 32, a split the check still passes), and re-derived
+    vectors replaced by an orthonormal basis of the same columns, each mixed with 1e-6 of the
+    next -- well conditioned, but some no longer eigenvectors. Kept by ``cond(X)`` alone that
+    split fails the check, loud; kept by the miss the first split stays, exact and quiet. Catches
+    the choice made by ``cond(X)`` alone."""
+    _collapse_the_split_eig(monkeypatch, 1.5e-2)
+    split, retry, first = solve_2d._cluster_split, solve_2d._SPLIT_RETRY, []
+
+    def recorded(xp, T, valid, pad):
+        # The first split's cond(X), with the retry held off.
+        monkeypatch.setattr(solve_2d, '_SPLIT_RETRY', float('inf'))
+        first.append(float(np.max(np.asarray(split(xp, T, valid, pad)[2]))))
+        monkeypatch.setattr(solve_2d, '_SPLIT_RETRY', retry)
+        return split(xp, T, valid, pad)
+    monkeypatch.setattr(solve_2d, '_cluster_split', recorded)
+
+    def not_eigenvectors(xp, T, lam, E, live):
+        Q = np.linalg.qr(np.asarray(E))[0]
+        Q = Q + 1e-6 * np.roll(Q, 1, axis=-1)
+        return Q / np.linalg.norm(Q, axis=-2, keepdims=True)
+    monkeypatch.setattr(solve_2d, '_spread_eigenvectors', not_eigenvectors)
+    A = _coincident_pairs(2)
+    _, clusters, rebuilt, warned = _layer(A)
+    assert first and min(first) > retry, first
+    assert clusters is not None and not warned
+    assert _backward(A, rebuilt) < 1e-13
+
+
+def test_re_derived_eigenvectors_are_orthogonal_eigenvectors():
+    """At a double eigenvalue that is not defective every vector of the eigenspace is an
+    eigenvector. Given two of them within a sine of 1e-9, ``_spread_eigenvectors`` keeps the first
+    and re-derives the second orthogonal to it, an eigenvector to rounding. A Jordan pair's second
+    member has no eigenvector orthogonal to its first and keeps ``eig``'s, to the bit; so do the
+    plain lanes. Catches the re-derived vector not orthogonalised against the earlier lane, or
+    kept without the residual test."""
+    rng = np.random.default_rng(3)
+    U, _ = np.linalg.qr(rng.normal(size=(6, 6)) + 1j * rng.normal(size=(6, 6)))
+    J = np.diag([0.3, 0.3, 1.4, 1.4, 2.0, 2.6]).astype(complex)
+    J[2, 3] = 0.05
+    T = U @ J @ U.conj().T
+    lam, E = np.linalg.eig(T)
+    order = np.argsort(lam.real)
+    lam, E = lam[order], E[:, order] / np.linalg.norm(E[:, order], axis=0)
+    lam[:2] = 0.3
+    E[:, 0] = U[:, 0]
+    E[:, 1] = (U[:, 0] + 1e-9 * U[:, 1]) / np.linalg.norm(U[:, 0] + 1e-9 * U[:, 1])
+    live = np.ones((1, 6), bool)
+    out = np.asarray(solve_2d._spread_eigenvectors(np, T[None], lam[None], E[None], live))[0]
+    assert np.array_equal(out[:, 0], E[:, 0]) and np.array_equal(out[:, 2:], E[:, 2:])
+    assert abs(np.vdot(out[:, 0], out[:, 1])) < 1e-12
+    assert np.linalg.norm(T @ out[:, 1] - 0.3 * out[:, 1]) < 1e-14
+
+
 def test_a_cluster_takes_one_root_side():
     """A cluster's members may carry labels of opposite sides (a tie the flux breaks, a complex
     root on Maystre's cut); every root then takes the side of the most decaying member, so the

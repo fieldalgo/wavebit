@@ -889,7 +889,10 @@ disjoint. Every nonempty proper subset of member lanes is tried as `J` (14 for f
 eight) and the smallest `cond(X)` kept: on the y-Littrow clusters `|J| = |K| = 2` and
 `cond(X) <= 8.14`, a three-mode cluster splits one and two, the eight-mode clusters below four
 and four with `cond(X) <= 20.0`, and `cond(X)` reached 8.3 on the synthetic clusters and
-12.2 on the genuinely 2D ones below. Where a
+12.2 on the genuinely 2D ones below. Where the smallest `cond(X)` exceeds `_SPLIT_RETRY = 32`,
+`eig` has handed back nearly parallel vectors at an eigenvalue of multiplicity two or more; the
+split is formed again from re-derived vectors, and the one the check reads less of is kept
+(*Collapsed eigenvectors*, below). Where a
 cluster holds a Jordan chain of length three no such split exists. A cluster smaller than its
 slot pads its last lanes: decoupled at a stand-in eigenvalue far from every mode, put back on
 their lanes by an explicit permutation rather than by `eig`'s order (the stand-in's eigenpairs,
@@ -981,7 +984,7 @@ of them (one, by a swap, before).
 | case | at most four modes | at most eight |
 | --- | --- | --- |
 | `DC612`, one offset at a time (`theta` from `Gy / 2`, 0 .. 1e-3; permittivity +-1e-12 .. 1e-4; wavelength +-1e-12 .. 1e-4), 2D and first order, ETM and SMM | loud and off out to `theta` 1e-4, permittivity 1e-6 and wavelength 1e-5: 2D up to 1.2e-5 (ETM) and 9.8e-4 (SMM), first order up to 1.5e-5 and 1.5 | <= 2.1e-14, quiet |
-| `DC612`, 240 random joint offsets (each of the three 0, or log-uniform in +-[1e-12, 1e-3]) and 240 more with `theta` exact, four solves each (1920) | -- | within 1e-4 of the point <= 2.7e-14; beyond it ETM <= 4.1e-14 and SMM <= 7.6e-13, the same with four; one false alarm, on both algorithms (below) |
+| `DC612`, 240 random joint offsets (each of the three 0, or log-uniform in +-[1e-12, 1e-3]) and 240 more with `theta` exact, four solves each (1920) | -- | within 1e-4 of the point <= 2.7e-14; beyond it ETM <= 4.1e-14 and SMM <= 7.6e-13, the same with four; quiet (one false alarm, on both algorithms, before the split's retry: *Collapsed eigenvectors*, below) |
 | `DC612` at the point: `jit`, `jit(vmap)`, `torch.func.vmap` values; `jit(grad(sum vmap))`, `jit(vmap(grad))`, torch `vmap` + backward of `sum R` in the wavelength; lanes `rel` 0, +-1e-12, 1e-2 | NaN | <= 1.9e-14; <= 6.2e-14 (relative) |
 | `DC612` at the point: derivatives in the raster, wavelength, thickness and `theta` (`jax.grad`, `jvp`, torch reverse, `forward_ad`); fields, and `jax.grad` of `sum |E|**2` eagerly and under `jit`, 2D and first order, ETM and SMM | loud | derivatives <= 2.9e-13 (relative); fields <= 2.9e-14 of `max|F|`, their gradients <= 7.1e-14 |
 | synthetic: three and four coincident Jordan pairs, two pairs and a root within `_EP_CLUSTER`, a five-mode chain at `_EP_CLUSTER` that is one closed wide ball; three or four bases | loud | <= 1.8e-15 of `||A||`, quiet |
@@ -989,15 +992,55 @@ of them (one, by a swap, before).
 | synthetic: four pairs and a root, five pairs (nine and ten modes), a ten-mode chain | loud | loud: not taken |
 | 200 random clustered operators (the basis the 2D path keeps, then the unresolved screen) | 121 loud | 56 loud; the 96 clusters taken (four to eight modes) within 2.7e-15 of `||A||`, quiet; the traced screen gave the eager verdict on all 200, either way |
 
-The splits of the eight-mode clusters are four and four, `cond(X) <= 20.0`. The false alarm: at
-permittivity -3.2e-12 and wavelength -1.1e-5 (`theta` exact), first order, `eig` of one
-direction's eight-mode restriction returned, for two of its four doubly degenerate eigenvalues,
-two nearly parallel eigenvectors each (overlap 0.99995), so its eight vectors span about four
-dimensions; every split built from them had `cond(X) >= 185`, and the check, which reads the
-dropped part times `cond(X)`, read 1.6 times its threshold. The answer was exact (4.7e-15), and
-under a trace that layer answers NaN. Re-deriving those vectors -- the smallest residual
-orthogonal to the earlier vector of the same eigenvalue -- gave `cond(X) = 1.0` and a pass; not
-done.
+The splits of the eight-mode clusters are four and four, `cond(X) <= 20.0` where `eig`'s
+vectors are independent.
+
+*Collapsed eigenvectors* (2026-11-12). At an eigenvalue of geometric multiplicity two or more --
+two Jordan pairs at one eigenvalue, as in each half of `DC612`'s eight -- `eig`'s vectors are the
+eigenvectors of a rounding-sized perturbation inside the eigenspace, and may come back nearly
+parallel. Every split built from them is then ill conditioned, and the check, which reads the
+dropped part times `cond(X)` (the dropped part itself grows with `cond(X)`), fails on an exact
+answer. It did so three times:
+- In the 1920 random solves above, at permittivity -3.2e-12 and wavelength -1.1e-5 (`theta`
+  exact), first order: two of four doubly degenerate eigenvalues each had two vectors with
+  overlap 0.99995. The best split had `cond(X)` 185, and the check read 1.6 times its threshold
+  on an answer within 4.7e-15.
+- In CI, at `DC612` with `theta` 1e-4, first order, on OpenBLAS's Haswell, Zen and Prescott
+  kernels: the four vectors of one eigenvalue were within a sine of 1.3e-3 of one another. The
+  best split had `cond(X)` 1833, and the check read 502 times its threshold. The SkylakeX kernel
+  gave `cond(X)` 4.6 at the same point.
+- On PyTorch, at the C4v pillar's coincidence on the first-order split (*Bits*, below): best
+  splits of `cond(X)` 660 and 302.
+
+On 900 random restrictions of the same form, `eig`'s split failed the check on 15. Each held two
+double Jordan groups 0, 1e-12, 1e-8 or 8e-5 apart, with couplings 0.02 .. 0.2, in a random basis,
+brought to upper-triangular Schur form, with rounding-sized noise.
+
+`_spread_eigenvectors` re-derives those vectors. A lane whose eigenvalue is within
+`_SPREAD_NEAR = 1e-6` of an earlier lane's takes the unit vector with the smallest residual
+against `T - lambda_i` that is orthogonal to those earlier lanes: the right singular vector of the
+smallest singular value of `[T - lambda_i I; ||T|| V^H]`. The vector is kept only where it is an
+eigenvector to `_SPREAD_RES = 16` units of `eps ||T||`. Inverse iteration orthogonalises the
+vectors of close eigenvalues in the same way (Golub and Van Loan, §7.6.1; LAPACK's `?stein`). A
+Jordan pair's second member has no such vector and keeps `eig`'s. The lane's own eigenvalue works
+as the shift: at a perturbed Jordan pair, `T - lambda_i` has a second singular value at rounding.
+The near set's mean gave the same verdicts on all 900.
+
+Where the first split's `cond(X)` exceeds `_SPLIT_RETRY = 32`, `_cluster_split` forms a second
+split from these vectors and keeps whichever has the smaller `cond(X)` times its dropped part. A
+split from independent eigenvectors measured at most 20.0; the check passed up to 146 and failed
+from 185.
+Choosing by `cond(X)` alone failed once in the 900: it took a split with a smaller `cond(X)` and
+a larger miss. With the retry:
+- None of the 900 fails; the largest miss is 0.098 of the threshold.
+- The restrictions dumped at the CI failure split at `cond(X) <= 1.94`, and the random solves'
+  one at 1.0.
+- `DC612` at `theta` 1e-4 is quiet on the Haswell, Zen, Prescott and SkylakeX kernels.
+- The 1920 random solves around `DC612` are all quiet, within the same bounds as before.
+
+Eagerly, a layer whose splits all stay below 32 never forms the second split, so it keeps its
+bits (*Bits*, below). Under a trace both splits are formed, and the second is selected only in
+slots where the first exceeded 32 and the second misses less.
 
 *Bits.* On the byte-identity scenes above with the Littrow scenes at every offset of the
 coincidence tests (0 .. 1e-3), the C4v pillar at four coincidences (0, 1e-8, -1e-7, 1e-5,
@@ -1006,7 +1049,17 @@ coincidence tests (0 .. 1e-3), the C4v pillar at four coincidences (0, 1e-8, -1e
 Under a trace, 66 digests each (`jit` values, `jit(grad)`, `torch.func.vmap` values on eleven of
 those scenes): identical but where the trace rebuilds a cluster, PA616 at 3e-4 and PL952 at
 1e-3 (8 on 2D, 10 on the first-order split), whose slots now have eight lanes; there the
-outputs moved by at most 7.7e-16, as close to the 1D rebuild as before.
+outputs moved by at most 7.7e-16, as close to the 1D rebuild as before. The split's retry
+(*Collapsed eigenvectors*, above) leaves the 384 eager 2D digests identical and moves four of
+the 384 eager first-order ones. All four are PyTorch at a coincidence, where its `eig` collapsed
+a restriction's vectors, on ETM and SMM each:
+- The C4v pillar at 603.5 nm: the first splits had `cond(X)` 660 and 302, and the check warned
+  on an exact answer. With the retry the splits are 2.7 and 1.7, quiet, and within 2.2e-14 of
+  NumPy (2.4e-14 before).
+- PA616: as close to the 1D rebuild as before (1.2e-14), quiet either way.
+
+Under a trace the retry is formed in every slot but taken in none of these scenes: the 132 traced
+digests are unchanged by it.
 
 *Mutants.* Eight one-line mutations, each against the tests that should catch it: seven are
 caught -- the size cap at four and at seven, eager slots always eight lanes, the old swap of
@@ -1014,12 +1067,18 @@ one padded pair (caught only with `eig`'s order reversed on clusters of five and
 LAPACK returns decoupled pairs last), the padded count not clipped, the padded pairs put
 first, and the quotient's padded pairs left in place. The tie-break by position survives: no
 input reaches it, and it is kept so that the permutation stays one to one where distances
-tie.
+tie. Four more against the split's retry are all caught: the retry removed, the re-derived vector
+not orthogonalised, a re-derived vector kept without the residual test, and the second split
+kept by `cond(X)` alone. Each is caught by tests that hand the split collapsed eigenvectors on
+purpose, since `eig` collapses them only on some kernels.
 
 Under a trace the cost grows with the size: per ball 28 Gram entries instead of six and eight
-nearest-mode passes instead of four, per cluster slot 254 split candidates instead of 14, and on
-the first-order split the exponential's closed-form tangent gathers `slots + 7 S` coupled rows a
-direction instead of `slots + 3 S`. Eager layers with no ball of five or more pay nothing more.
+nearest-mode passes instead of four, per cluster slot 254 split candidates instead of 14, each
+formed twice (the retry above, with seven batched SVDs, up to `15 x 8`, for the re-derived
+vectors), and on the
+first-order split the exponential's closed-form tangent gathers `slots + 7 S` coupled rows a
+direction instead of `slots + 3 S`. Eager layers with no ball of five or more pay nothing more,
+and an eager split forms the second set only where the first exceeds `_SPLIT_RETRY`.
 
 *The screens under a trace* (2026-11-10). Nothing can warn under `jit`, `vmap` or
 `torch.func.vmap`, and the unresolved and backward-error screens used to be skipped there, so what
