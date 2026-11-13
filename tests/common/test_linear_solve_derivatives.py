@@ -940,7 +940,7 @@ def test_every_solve_goes_through_linear_solve():
         name = path.relative_to(package).as_posix()
         if not name.startswith('rcwa/_engine/conforming/'):
             scanned.append(name)
-            found += [(name, func, line) for func, line in _solve_references(path.read_text())]
+            found += [(name, func, line) for func, line in _solve_references(path.read_text(encoding='utf-8'))]
     assert {'fdtd/native.py', 'fdtd/periodic.py', 'migration.py', 'materials/catalog.py', 'rcwa/_backends/torch_backend.py', 'rcwa/_backends/jax_backend.py',
             'rcwa/_engine/solve_1d.py', 'fdtd/_periodic/adapter.py',
             'materials/models.py', 'observations/contracts.py', 'units.py'} <= set(scanned), scanned

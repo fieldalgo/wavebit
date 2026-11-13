@@ -39,7 +39,7 @@ def test_cross_solver_mutations_still_target_one_existing_source_anchor(relative
     # would execute mutations. This preflight never writes a solver source file.
     import ast
     root = Path(__file__).resolve().parents[2]
-    tree = ast.parse((root / relative).read_text())
+    tree = ast.parse((root / relative).read_text(encoding='utf-8'))
     declarations = [node for node in tree.body if isinstance(node, ast.Assign)
                     and any(isinstance(target, ast.Name) and target.id in names
                             for target in node.targets)]
@@ -53,5 +53,5 @@ def test_cross_solver_mutations_still_target_one_existing_source_anchor(relative
         for source, before, after in changes:
             target = root / source
             assert target.is_file(), (row[0], source)
-            assert target.read_text().count(before) == 1, (row[0], source)
+            assert target.read_text(encoding='utf-8').count(before) == 1, (row[0], source)
             assert before != after
