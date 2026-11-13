@@ -181,6 +181,30 @@ def test_what_does_not_depend_on_the_cell_records_nothing_to_rebuild():
     assert plan.direction == 'contour'
 
 
+@pytest.mark.parametrize('method', ['distance', 'spectral', 'smooth', 'contour'])
+def test_two_freezes_of_one_raster_are_one_record_to_a_fit(method):
+    """JAX's ``fit`` keeps the previous record when a fresh freeze equals it, which is what
+    compiles its step once. Plans compared by identity made every freeze a new record, and a fit
+    over a fixed NVF raster compiled at every step (``test_fit_geometry``'s trace count)."""
+    _jax()
+    from wavebit.rcwa._backends.jax_backend import _same_prepared_geometry
+    from wavebit.rcwa._factory import rcwa
+    if method == 'contour':
+        pytest.importorskip('contourpy')
+    eps = _disc()[None]
+
+    def freeze(structure):
+        return rcwa(backend='jax', structure=structure, lattice=CELLS['skewed'], wavelength=620.,
+                    thickness=(300.,), truncation_order=(2, 2), factorization='nvf',
+                    raster_normal_method=method, nvf_projector='circular').freeze_geometry()
+    first, second = freeze(eps), freeze(eps)
+    assert first.normal_field_plan == second.normal_field_plan
+    assert _same_prepared_geometry(first, second)
+    moved = np.roll(eps, 3, axis=-1)
+    assert first.normal_field_plan != freeze(moved).normal_field_plan
+    assert not _same_prepared_geometry(first, freeze(moved))
+
+
 @pytest.mark.parametrize('cell', sorted(CELLS))
 def test_the_recorded_nearest_pixel_measures_the_signed_distance(cell):
     """``_signed_distance_offsets`` is the choice ``_periodic_signed_distance`` made: its length

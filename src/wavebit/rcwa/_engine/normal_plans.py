@@ -68,10 +68,40 @@ class NormalFieldPlan:
             pixel on the periodic tiling -- what the ``'distance'`` direction and the circular
             projector's magnitude are rebuilt from. ``None`` where neither reads it.
         detail: the construction's own choices (``normal_methods`` documents each), or ``None``.
+
+    **Equal by content, and never hashed.** JAX's ``fit`` re-freezes before every step and
+    keeps the previous record when the new one is the same in every field
+    (``jax_backend._same_prepared_geometry``), which is what compiles the step once. A plan
+    compared by identity made every fresh freeze a new record, and a fit over a fixed raster
+    compiled at every step. Two plans are equal when their choices are: the same direction and
+    the same arrays, dtype and value. A plan holds arrays, so it has no hash; the record that
+    carries it is hashed by identity (``StaticGeometry._cache_key``).
     """
     direction: str
     offsets: Optional[Any] = None
     detail: Optional[dict] = None
+
+    def __eq__(self, other):
+        if not isinstance(other, NormalFieldPlan):
+            return NotImplemented
+        return (self.direction == other.direction and _same_choices(self.offsets, other.offsets)
+                and _same_choices(self.detail, other.detail))
+
+    __hash__ = None
+
+
+def _same_choices(a, b):
+    """Exact equality of two plans' choices: nested tuples, lists and dicts of arrays and scalars."""
+    if isinstance(a, dict) or isinstance(b, dict):
+        return (isinstance(a, dict) and isinstance(b, dict) and a.keys() == b.keys()
+                and all(_same_choices(a[k], b[k]) for k in a))
+    if isinstance(a, (tuple, list)) or isinstance(b, (tuple, list)):
+        return (isinstance(a, (tuple, list)) and isinstance(b, (tuple, list)) and len(a) == len(b)
+                and all(_same_choices(x, y) for x, y in zip(a, b)))
+    if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
+        a, b = np.asarray(a), np.asarray(b)
+        return a.dtype == b.dtype and a.shape == b.shape and bool(np.array_equal(a, b))
+    return type(a) is type(b) and a == b
 
 
 #: A replay whose record cannot carry the cell's derivative, asked for one. Raised when the
