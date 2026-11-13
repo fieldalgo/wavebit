@@ -3,6 +3,7 @@
 | Entry | Question it answers |
 | --- | --- |
 | `nvf_fitting_grid.py` | How far do four fitted dimensions move when the normal-field grid changes, with the target and Fourier order held fixed? |
+| `check_grid.py` | Are fixed-geometry values and derivatives stable under grid refinement, and does AD agree with finite differences? |
 | `measurement.json` | Did the declared 128/256/512/1024 ladder meet both refinement tolerances on the measured solver? |
 
 The runnable workflow is documented in
@@ -13,10 +14,14 @@ file chosen by `--output`; each completed fit is checkpointed atomically with
 `completed=false` until the final decision. Exit code 2 preserves an unconverged
 completed run. An existing output is refused.
 
-`--batch-size` changes only how many of the same 30 optical observations run
-simultaneously (default 5); the JSON records it. A larger batch can reduce repeated
-geometry work at the cost of memory. Use the same numerical parameters when
-comparing batches.
+`--batch-size` bounds a small unrolled group of scalar JIT calls over the same
+30 optical observations (default 5); the JSON records it and the execution mode.
+The scalar lane is traced once and reused. This avoids an outer spectral `vmap`,
+which can evaluate both branches of the normal-field kernel's conditional, and
+avoids tracing the entire spectrum as one large program. Larger batches can cost
+substantially more compilation memory; start with the default. Batching does not
+change the observations or numerical tolerances. `Model(...)(p, derivative=False)`
+uses a separate value-only function for finite-difference checks.
 
 `measurement.json` is a reviewed CPU double-precision observation, not a golden
 or an independent reference. Its provenance records the solver baseline and reproducer commit,
@@ -25,3 +30,20 @@ target Jacobian, all completed fit stages and the negative convergence decision.
 The study command used `--batch-size 30` and the default grid ladder. Solver
 changes, especially a different normal-field construction, require a fresh run;
 this record does not qualify those changes.
+
+Before fitting, run `check_grid.py` for each grid, using a new output each time:
+
+```shell
+python studies/rcwa/nvf_fitting_grid/check_grid.py --grid 128 --fd --solver-revision 2056a39e --output artifacts/check-128.json
+python studies/rcwa/nvf_fitting_grid/check_grid.py --grid 256 --previous artifacts/check-128.json --solver-revision 2056a39e --output artifacts/check-256.json
+```
+
+Use the revision of the solver actually imported, then continue with 512 and 1024
+using the preceding output. The script retains all 30 observations and four
+Jacobian columns. At the fixed generating geometry, an adjacent spectrum change
+must be at most `1e-5`; each Jacobian column's maximum difference divided by the
+finer column's maximum magnitude must be at most `1e-3`. `--fd` checks the original
+four step sizes and their halves with Richardson extrapolation, also at `1e-3`.
+Exit code 2 retains a completed measurement with a failed check. A first grid
+without `--fd` has no comparison checks; exit code 0 is not a convergence claim.
+These pointwise checks do not replace refitting or independent optical validation.

@@ -117,3 +117,51 @@ def test_complex_inputs_are_not_silently_projected_to_real(field):
     kwargs[field] = np.asarray(kwargs[field], dtype=complex) + 1j
     with pytest.raises(ValueError, match='must be real'):
         example.fit_grid_ladder(biased, **kwargs)
+
+
+@pytest.mark.slow
+def test_study_scalar_batches_match_independent_scalar_calls(monkeypatch):
+    """Spectral batching preserves public scalar values and all four derivatives."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    from wavebit import rcwa
+
+    path = _PATH.parents[2] / 'studies/rcwa/nvf_fitting_grid/nvf_fitting_grid.py'
+    spec = importlib.util.spec_from_file_location('nvf_grid_study_control', path)
+    study = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(study)
+    monkeypatch.setattr(study, 'WAVELENGTHS', np.array([900., 1100.]))
+    parameters = study.TRUE.copy()
+    model = study.Model(32, batch_size=2)
+    values, jacobian = model(parameters)
+    prepared = rcwa.prepare(study.problem(parameters, 900., (1., 0.)),
+                            numerics=rcwa.Numerics(orders=(4, 4), shape_nvf_grid_size=32,
+                                                  topology_check='host'), backend='jax')
+    prepared.report.raise_if_invalid()
+
+    def scalar(q, wavelength, polarization):
+        result = prepared.run(study.problem(q, wavelength,
+                                             (polarization[0], polarization[1])))
+        value = jnp.real(result.reflection.order(0, 0).efficiency)[0]
+        flags = jnp.stack([jnp.all(v) for v in result.validity.checks.values()])
+        return value, (value, jnp.all(flags))
+
+    reference = jax.jit(jax.jacfwd(scalar, has_aux=True))
+
+    def expected(q):
+        pairs = [reference(jnp.asarray(q), jnp.asarray(w), jnp.asarray(pol))
+                 for pol in [(1., 0.), (0., 1.)] for w in study.WAVELENGTHS]
+        assert all(bool(ok) for _, (_, ok) in pairs)
+        return np.array([v for _, (v, _) in pairs]), np.stack([j for j, _ in pairs])
+
+    expected_values, expected_jacobian = expected(parameters)
+    np.testing.assert_allclose(values, expected_values, rtol=1e-10, atol=1e-12)
+    np.testing.assert_allclose(jacobian, expected_jacobian, rtol=1e-8, atol=1e-11)
+    changed = parameters.copy()
+    changed[3] += .01
+    expected_values, expected_jacobian = expected(changed)
+    value_only = model(changed, derivative=False)
+    values, jacobian = model(changed)
+    np.testing.assert_allclose(value_only, expected_values, rtol=1e-10, atol=1e-12)
+    np.testing.assert_allclose(values, expected_values, rtol=1e-10, atol=1e-12)
+    np.testing.assert_allclose(jacobian, expected_jacobian, rtol=1e-8, atol=1e-11)
