@@ -240,10 +240,12 @@ def test_a_chain_beside_a_coincident_cluster(seed):
 @pytest.mark.slow
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 def test_traced_values_near_a_third_order_point_are_exact_or_nan(algo):
-    """``jax.jit`` of one wavelength at the fy 0.8 point, relative offsets +-1e-7 and +-1e-8:
-    finite and within 1e-12 of the oracle (measured 7.8e-15 .. 1.6e-14), where main was 4.0e-13
-    .. 1.4e-12 off at +-1e-7 and NaN at +-1e-8. Closer, under a trace the joint check answers NaN
-    where it would warn eagerly."""
+    """``jax.jit`` of one wavelength at the fy 0.8 point, relative offsets +-1e-7 and +-1e-8: each
+    NaN (the joint check's verdict under a trace, where it would warn eagerly) or within 1e-12 of
+    the oracle, and not all NaN. Which offsets the check takes depends on the CPU's arithmetic
+    path: measured on six OpenBLAS kernels, every value within 1.6e-14, but NaN at +-1e-8 on
+    Sandybridge and at -1e-8 on a CI runner; +-1e-7 finite on all seven. Main was 4.0e-13 ..
+    1.4e-12 off at +-1e-7, quiet, and NaN at +-1e-8."""
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     from wavebit._common.backend import _enable_x64
@@ -256,8 +258,13 @@ def test_traced_values_near_a_third_order_point_are_exact_or_nan(algo):
         r = s.solve(wavelength=w, auto_detune=False)
         return jnp.concatenate([r.r_xyz.ravel(), r.t_xyz.ravel()])
     jf = jax.jit(one)
+    finite = 0
     for rel in (1e-7, -1e-7, 1e-8, -1e-8):
         got = np.asarray(jf(jnp.asarray(wl * (1 + rel))))
-        assert np.all(np.isfinite(got)), f'{algo} rel {rel:g}: NaN'
+        if np.all(np.isnan(got)):
+            continue
+        assert np.all(np.isfinite(got)), f'{algo} rel {rel:g}: partly NaN'
+        finite += 1
         err = np.max(np.abs(got - _oracle(name, rel)))
-        assert err < 1e-12, f'{algo} rel {rel:g}: {err:.1e}'
+        assert err < 1e-12, f'{algo} rel {rel:g}: {err:.1e}, finite'
+    assert finite
