@@ -91,7 +91,7 @@ def fit_grid_ladder(model_factory, initial, data, *, grids, noise_sigma,
     for grid in grids:
         model = model_factory(grid)
         # SciPy requests fun and jac at the same point: share that evaluation.
-        cached_x, cached_pair = None, None
+        cached_x, cached_pair, accepted = None, None, None
 
         def evaluate(p):
             nonlocal cached_x, cached_pair
@@ -100,11 +100,20 @@ def fit_grid_ladder(model_factory, initial, data, *, grids, noise_sigma,
                 cached_x = p.copy()
             return cached_pair
 
+        def jacobian(p):
+            nonlocal accepted
+            # SciPy asks for the Jacobian at accepted iterates. Retain that
+            # pair when a later trial is rejected before termination, so the
+            # final report does not repeat an expensive solve at the accepted x.
+            accepted = (p.copy(), tuple(a.copy() for a in evaluate(p)))
+            return accepted[1][1] / sigma[:, None]
+
         fit = least_squares(lambda p: (evaluate(p)[0] - data) / sigma, x,
-                            jac=lambda p: evaluate(p)[1] / sigma[:, None],
+                            jac=jacobian,
                             x_scale='jac', ftol=1e-10, xtol=1e-10, gtol=1e-10,
                             max_nfev=max_nfev)
-        y, jac = evaluate(fit.x)
+        y, jac = (accepted[1] if accepted is not None and np.array_equal(accepted[0], fit.x)
+                  else evaluate(fit.x))
         _, singular, vh = np.linalg.svd(jac / sigma[:, None], full_matrices=False)
         full_rank = singular[-1] > (np.finfo(float).eps * max(jac.shape) * singular[0])
         noise_std = (np.sqrt(np.sum((vh.T / singular)**2, axis=1)) if full_rank

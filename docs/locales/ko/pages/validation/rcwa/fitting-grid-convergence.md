@@ -123,7 +123,8 @@ solver `2056a39e`에서 같은 생성 매개변수·Fourier 차수·CPU 배정�
 [검토한 고정점 기록](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_fitting_grid/integral-fixed-point.json)에
 모든 값·Jacobian 네 열·유한차분·버전·출처를 보존했습니다. 관측값은 유지하며
 scalar JIT 호출을 다섯 개씩 묶어, 바깥쪽 스펙트럼 `vmap`의 메모리 증가를
-피했습니다. 독립 scalar 호출 및 공개 파장 배열 경로와의 비교도 일치했습니다.
+피했습니다. 두 파장·두 편광 대조에서 독립 scalar 호출 및 공개 파장 배열
+경로와의 비교도 일치했습니다.
 
 격자128에서 원래 Richardson 간격으로 얻은 열별 상대오차는
 `(6.68e-9, 7.58e-9, 1.38e-9, 9.15e-12)`입니다. 기존 `1e-3` AD/FD 기준에
