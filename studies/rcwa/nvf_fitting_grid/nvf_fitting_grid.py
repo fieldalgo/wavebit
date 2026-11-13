@@ -43,7 +43,13 @@ def problem(p, wavelength, jones):
 
 
 class Model:
-    """Host-validated prepared reuse; JIT values and forward Jacobian together."""
+    """Host-validated reuse with bounded scalar JIT calls over spectral lanes.
+
+    Small scalar-call batches preserve conditional evaluation in the normal-field
+    kernel. An outer vmap can evaluate both branches of a conditional and retain
+    substantially larger temporaries. ``derivative=False`` evaluates values only
+    for independent finite-difference checks; the default returns values/Jacobian.
+    """
     def __init__(self, grid, batch_size=5):
         if not isinstance(batch_size, int) or batch_size < 1:
             raise ValueError('batch_size must be a positive integer')
@@ -53,10 +59,10 @@ class Model:
         self.key = self.cached = None
         self.evaluations = 0
 
-    def __call__(self, p):
+    def __call__(self, p, *, derivative=True):
         key = tuple(float(x) for x in p)
         if self.key == key:
-            return self.cached
+            return self.cached if derivative else self.cached[0]
         start = time.monotonic()
         concrete = problem(key, 800., (1., 0.))
         if self.prepared is None or not self.prepared.validate(concrete).ok:
@@ -64,37 +70,49 @@ class Model:
                 orders=(4, 4), shape_nvf_grid_size=self.grid, topology_check='host'), backend='jax')
             prepared.report.raise_if_invalid()
 
+            # Trace one scalar lane once, then reuse it inside a small unrolled
+            # batch. Avoid both a spectral vmap and one huge unrolled spectrum.
+            @jax.jit
             def lane(q, wavelength, jones):
                 result = prepared.run(problem(q, wavelength, (jones[0], jones[1])))
                 flags = jnp.stack([jnp.all(v) for v in result.validity.checks.values()])
                 return jnp.real(result.reflection.order(0, 0).efficiency)[0], jnp.all(flags)
 
             def values(q, wavelengths, jones):
-                y, valid = jax.vmap(lambda wl, pol: lane(q, wl, pol))(wavelengths, jones)
+                pairs = [lane(q, wavelengths[i], jones[i]) for i in range(len(wavelengths))]
+                y = jnp.stack([v for v, _ in pairs])
+                valid = jnp.stack([v for _, v in pairs])
                 return y, (y, valid)
 
             self.prepared = prepared
             self.compiled = jax.jit(jax.jacfwd(values, has_aux=True))
+            self.compiled_values = jax.jit(values)
         # Bound the simultaneous optical batch without changing any observation.
         # Consume each result before dispatching the next chunk to bound memory.
         wavelengths = np.tile(WAVELENGTHS, 2)
         polarizations = np.repeat(np.eye(2), len(WAVELENGTHS), axis=0)
         values, derivatives, validity = [], [], []
         for offset in range(0, len(wavelengths), self.batch_size):
-            jac, (y, valid) = self.compiled(jnp.asarray(p),
-                jnp.asarray(wavelengths[offset:offset+self.batch_size]),
-                jnp.asarray(polarizations[offset:offset+self.batch_size]))
+            arguments = (jnp.asarray(p), jnp.asarray(wavelengths[offset:offset+self.batch_size]),
+                         jnp.asarray(polarizations[offset:offset+self.batch_size]))
+            if derivative:
+                jac, (y, valid) = self.compiled(*arguments)
+            else:
+                y, (_, valid) = self.compiled_values(*arguments)
             values.append(np.asarray(y))
-            derivatives.append(np.asarray(jac))
+            if derivative:
+                derivatives.append(np.asarray(jac))
             validity.append(np.asarray(valid))
-        y, jac = np.concatenate(values), np.concatenate(derivatives)
-        if not all(np.all(v) for v in validity) or not np.isfinite(y).all() or not np.isfinite(jac).all():
+        y = np.concatenate(values)
+        jac = np.concatenate(derivatives) if derivative else None
+        if not all(np.all(v) for v in validity) or not np.isfinite(y).all() or (derivative and not np.isfinite(jac).all()):
             raise RuntimeError(f'invalid solve at grid {self.grid}, parameters {key}')
-        self.key, self.cached = key, (y, jac)
+        if derivative:
+            self.key, self.cached = key, (y, jac)
         self.evaluations += 1
         print(f'grid {self.grid}: evaluation {self.evaluations}, '
               f'{time.monotonic()-start:.1f} s, p={key}', flush=True)
-        return self.cached
+        return (y, jac) if derivative else y
 
 
 def main():
@@ -132,7 +150,8 @@ def main():
                 row['noise_std'] = None
             stages.append(row)
         record = dict(completed=completed, converged=converged, reason=reason,
-                      data_grid=128, lane_batch_size=args.batch_size, orders=[4, 4],
+                      data_grid=128, lane_batch_size=args.batch_size, execution='bounded_scalar_calls',
+                      orders=[4, 4],
                       precision='double', data=data.tolist(), target_parameters=TRUE.tolist(),
                       target_jacobian=target_jac.tolist(), stages=stages,
                       versions=dict(jax=jax.__version__, numpy=np.__version__))
