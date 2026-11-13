@@ -11,7 +11,7 @@ Three things, each an oracle or a harness rather than a test:
   (the factorization reads ``n n^T``), so the comparison is of directions.
 * :func:`mutated` -- a source-mutation harness that says **DID-NOT-APPLY** when the text it was
   asked to replace is not there and **NO-OP** when the replacement changes nothing, and
-  restores the file by md5 afterwards. A mutation that does not apply, or applies to nothing,
+  restores the file's original bytes afterwards, checked by md5. A mutation that does not apply, or applies to nothing,
   reads exactly like a passing test unless the harness says so out loud -- which is how two of
   the eighteen mutants over the previous mechanism were first miscounted.
 
@@ -92,12 +92,21 @@ def band_error(normal_x, normal_y, grid_shape, lattice, gamma, band_px=1.5):
 
 @contextlib.contextmanager
 def mutated(path, old, new):
-    """Replace ``old`` by ``new`` in ``path`` for the block, then restore the file by md5.
+    """Replace ``old`` by ``new`` in ``path`` for the block, then restore the file's bytes.
 
     Raises ``AssertionError('DID-NOT-APPLY ...')`` when ``old`` is not in the file and
     ``AssertionError('NO-OP ...')`` when the replacement leaves the text unchanged, so a mutant
     that never ran is never counted as one that survived. The module under test has to be
     re-imported by the caller (``importlib.reload``) for the mutation to be live.
+
+    The file is handled as bytes and decoded as UTF-8, never with the locale's codec, which
+    is cp949 on a Korean-locale Windows machine and fails on the sources' first em-dash.
+    ``old`` and ``new`` are written with ``\\n``; on a checkout whose sources end lines with
+    ``\\r\\n`` (Windows with ``core.autocrlf``) they are matched and written in that form, so
+    the mutant changes only the text it names. The restore writes back the original bytes,
+    and the md5 that confirms it is taken over bytes too: a text-mode round trip writes the
+    platform's line endings (an ``\\n`` checkout on Windows comes back ``\\r\\n``), and a
+    digest of the decoded text could not see that.
 
     The compiled bytecode is deleted on the way in and on the way out. A pyc records the
     source's size and whole-second mtime, and a same-size replacement written within the
@@ -106,21 +115,24 @@ def mutated(path, old, new):
     while having done nothing, found by exactly that mutant.
     """
     path = pathlib.Path(path)
-    source = path.read_text()
-    digest = hashlib.md5(source.encode()).hexdigest()
-    if old not in source:
+    original = path.read_bytes()
+    digest = hashlib.md5(original).hexdigest()
+    source = original.decode('utf-8')
+    newline = '\r\n' if '\r\n' in source else '\n'
+    find, put = old.replace('\n', newline), new.replace('\n', newline)
+    if find not in source:
         raise AssertionError(f'DID-NOT-APPLY: {old!r} is not in {path.name}')
-    changed = source.replace(old, new, 1)
+    changed = source.replace(find, put, 1)
     if changed == source:
         raise AssertionError(f'NO-OP: replacing {old!r} by {new!r} changes nothing')
-    path.write_text(changed)
+    path.write_bytes(changed.encode('utf-8'))
     _drop_bytecode(path)
     try:
         yield
     finally:
-        path.write_text(source)
+        path.write_bytes(original)
         _drop_bytecode(path)
-        assert hashlib.md5(path.read_text().encode()).hexdigest() == digest, \
+        assert hashlib.md5(path.read_bytes()).hexdigest() == digest, \
             f'{path.name} was not restored'
 
 

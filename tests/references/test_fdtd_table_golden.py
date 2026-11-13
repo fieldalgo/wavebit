@@ -142,7 +142,7 @@ def table():
 
 @pytest.fixture(scope='module')
 def doc():
-    return DOC.read_text()
+    return DOC.read_text(encoding='utf-8')
 
 
 @pytest.fixture(scope='module')
@@ -324,7 +324,7 @@ def test_the_headline_gaps_quoted_in_prose_are_the_frozen_ones(table, doc):
     """
     want = [float(table[f'fdtd__{leg}__{FDTD_PUBLISHED}__worst']) for leg in ('te', 'tm')]
     want += [float(table[f'meep__{leg}__worst']) for leg in ('te', 'tm')]
-    quotes = [(str(path.relative_to(ROOT)), path.read_text()) for path in HEADLINE_QUOTES]
+    quotes = [(str(path.relative_to(ROOT)), path.read_text(encoding='utf-8')) for path in HEADLINE_QUOTES]
     for name, text in [('docs/guide/fdtd/fdtd.md', doc)] + quotes:
         printed = _numbers_after(text, 'worst per-order gap', 4)
         for a, b in zip(want, printed):

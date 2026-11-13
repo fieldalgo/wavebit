@@ -175,7 +175,7 @@ def test_maintained_watchers_scan_the_current_fdtd_package(monkeypatch):
     assert len(expected) > 20
     checked = []
     for path in (ROOT / 'studies/fdtd').glob('*/*.py'):
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding='utf-8'))
         for node in ast.walk(tree):
             if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
                     and node.func.attr == 'rglob'):
@@ -218,7 +218,7 @@ def test_historical_source_paths_select_the_preserved_engine_not_new_declaration
         assert repository_path('wavebit/fd', old) == ROOT / new
     import ast
     path = ROOT / 'studies/fdtd/subpixel_junction/fdtd_subpixel_junction.py'
-    declarations = [node for node in ast.parse(path.read_text()).body
+    declarations = [node for node in ast.parse(path.read_text(encoding='utf-8')).body
                     if isinstance(node, ast.Assign) and any(
                         isinstance(target, ast.Name) and target.id == 'FILES'
                         for target in node.targets)]
