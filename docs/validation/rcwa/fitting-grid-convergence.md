@@ -5,9 +5,9 @@ checks the fitted parameters as well as the forward spectrum. This page records
 what its numerical controls establish; it does not certify one normal-field grid
 for all geometries.
 
-The measurements on solver `18bbcbfd` below describe the earlier normal-field
-construction. The integral construction landed in `2056a39e`; its fitting and
-grid convergence must be measured separately. Historical failures here are not
+The measurements labelled solver `18bbcbfd` describe the earlier normal-field
+construction. The integral construction landed in `2056a39e`; its fixed-point
+requalification is reported separately below. Historical failures here are not
 measurements of that newer implementation.
 
 ## A complete small fit
@@ -129,6 +129,38 @@ refinement wrapper does not repair its derivative artifacts; see the
 [normal-field limits](normal-field-known-limits.md). A stable fit and a derivative
 check are separate requirements, and the measured finite-order extension must
 be requalified when the normal-field construction changes.
+
+## Fixed-point requalification of the integral construction
+
+On solver `2056a39e`, repeat the thirty-observation case at the generating
+parameters, with the same Fourier orders and CPU double precision. The
+[reviewed fixed-point record](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_fitting_grid/integral-fixed-point.json)
+retains all values, all four Jacobian columns, finite differences, versions and
+provenance. The study uses bounded groups of five scalar JIT calls; it preserves
+all observations while avoiding the memory expansion of an outer spectral
+`vmap`. Independent scalar and public wavelength-array comparisons agree.
+
+At grid 128, the original Richardson steps give relative column errors
+`(6.68e-9, 7.58e-9, 1.38e-9, 9.15e-12)`. **All four pass** the unchanged `1e-3`
+AD/FD criterion. This checks differentiation of the sampled model, separately
+from convergence when its grid changes.
+
+For adjacent grids, the declared spectrum criterion is maximum absolute change
+`1e-5`. Each Jacobian column's maximum difference is divided by that column's
+maximum magnitude on the finer grid and must be at most `1e-3`.
+
+| Grid change | Maximum spectrum difference | Width Jacobian | Angle Jacobian | Center-x Jacobian | Thickness Jacobian |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 128 → 256 | 2.393e-5 | 9.329e-4 | 1.509e-2 | 7.576e-4 | 2.718e-5 |
+| 256 → 512 | 8.917e-6 | 5.978e-4 | 5.599e-3 | 2.193e-4 | 1.335e-5 |
+| 512 → 1024 | 2.621e-6 | 2.468e-4 | 3.714e-3 | 2.888e-4 | 8.106e-6 |
+
+The last two spectrum comparisons pass. The angle Jacobian still changes by
+0.371% at the final transition, exceeding the 0.1% criterion; the other three
+columns pass. **Neither AD/FD agreement nor stable spectra establish Jacobian
+grid convergence.** These fixed-point results also do not establish stability
+of fitted parameters. Reproduce them with `check_grid.py` as described in the
+[study README](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_fitting_grid/README.md).
 
 ## Controls and scope
 

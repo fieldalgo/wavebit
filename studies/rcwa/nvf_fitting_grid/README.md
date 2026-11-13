@@ -5,6 +5,7 @@
 | `nvf_fitting_grid.py` | How far do four fitted dimensions move when the normal-field grid changes, with the target and Fourier order held fixed? |
 | `check_grid.py` | Are fixed-geometry values and derivatives stable under grid refinement, and does AD agree with finite differences? |
 | `measurement.json` | Did the declared 128/256/512/1024 ladder meet both refinement tolerances on the measured solver? |
+| `integral-fixed-point.json` | How did fixed-point spectra, Jacobians and finite differences compare after the integral normal field landed? |
 
 The runnable workflow is documented in
 [the fitting guide](../../../docs/guide/rcwa/fitting-grid-convergence.md).
@@ -47,3 +48,9 @@ four step sizes and their halves with Richardson extrapolation, also at `1e-3`.
 Exit code 2 retains a completed measurement with a failed check. A first grid
 without `--fd` has no comparison checks; exit code 0 is not a convergence claim.
 These pointwise checks do not replace refitting or independent optical validation.
+
+`integral-fixed-point.json` retains all four completed fixed-point measurements
+on solver `2056a39e`, their original instrument hashes and the adjacent-grid
+comparisons. Grid-128 AD/FD passes. Spectra pass from 256 to 512 and from 512 to
+1024, but the angle Jacobian still fails the `1e-3` stability criterion at 1024.
+This is a measured limit, not a reason to relax the criterion.
