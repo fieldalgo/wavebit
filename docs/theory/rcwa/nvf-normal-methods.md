@@ -716,6 +716,13 @@ pre-change tree.
   skewed cell and `'distance'` was the only field an oblique lattice could have). Square-pixel
   cells reduce bit-identically to no metric; everything else works in physical coordinates,
   non-square and skewed alike. See [the metric section](#the-cell-metric-and-oblique-cells).
+- **Equal-sided cells take one tie-break** (since 2026-11-13). Equal steps -- rhombic and
+  hexagonal cells on a square raster, square pixels in a rectangle -- used to settle the
+  distance transform's ties by the last bit of their steps, and `'spectral'`'s answer jumped
+  with it; so did the choices a record keeps, which a replayed cell derivative reads. They now
+  settle them in scan order, as a square cell always did, and a record takes one set of
+  choices whatever the last bit.
+  See [the equal-step section](#equal-steps-settle-their-ties-one-way-2026-11-13).
 
 ## The cell metric, and oblique cells
 
@@ -839,6 +846,123 @@ because it is an axis-aligned defect the port merely happened to find. Everythin
 bit-identical on an axis-aligned cell, square *and* non-square, for all three constructions,
 checked scene by scene across the change.
 
+### Equal steps settle their ties one way (2026-11-13)
+
+A distance transform on a grid is full of exact ties. With equal steps along the two axes,
+`(3, 4)` and `(5, 0)` are equally far, and so are `(1, 0)` and `(0, 1)`, so *which* pixel is
+nearest is the transform's tie-break. scipy's `distance_transform_edt` settles those ties in
+its scan order when it is given no `sampling`, and by the last bit of the sampling when it is:
+`(1 - 2**-53, 1)` sends every one of them to the axis-0 pixel, `(1 + 2**-52, 1)` to the
+axis-1 pixel. Every transform the raster normal field runs passed no sampling only when both
+steps were *exactly* 1, and the one that picks the nearest interface pixel for a traced cell
+or a record passed both steps always.
+
+The steps are column norms of the cell's basis, divided through by the first one, and on a
+cell whose two steps are equal in exact arithmetic they land on 1 or an ulp or two either
+side of it. On an 8 x 8 raster: 28 of 101 angles 1e-7 rad apart around
+`oblique(0.77, 0.77, 100 deg)`, 171 of 201 `hexagonal(a)` scales between 0.1 and 2000, 248 of
+997 rotations of a square cell (both steps an ulp under 1 together, which the old switch
+passed as a uniform sampling) and 549 of 997 of a hexagonal one; square pixels in a 3:7
+rectangle at 19 of 59 scales.
+
+What the last bit did depends on what each construction reads from the pixel it found:
+
+| | reads from the nearest pixel | what the last bit did |
+|---|---|---|
+| `'spectral'` | its *normal*, in the bulk copy | a different donor at 6 of 64 pixels of a rod, the field moving by up to 1.8 there; the solve's read-out jumped by 3.3e-4 between angles 1e-7 rad apart (6.5e-4 under `nvf_projector='circular'`), and by 8.9e-4 across the scales of one scale-invariant hexagonal scene |
+| `'distance'` | its distance | round-off: the distance is the same to every tied pixel |
+| `'smooth'`, axis-aligned | its signed distance | round-off; one square-pixel cell drawn at different scales measured four different arrays |
+| `'distance'`, traced cell or record | its offset, whose length is rebuilt in the traced metric | the derivative along one side length flipped by 0.8% (0.24021 or 0.24205) between angles 1e-7 rad apart; along the angle, nothing |
+| `'spectral'`, traced cell or record | the donors, and which cell edge is the longer | the donors as above; the longer edge, whose length the low-pass is rebuilt from, followed the last bit on a square raster |
+| `'smooth'`, traced cell or record | its offset, from the transform (axis-aligned) or a kd-tree (skewed) | the derivative along one side length moved by up to 2.3e-3 between angles 1e-7 rad apart on a skewed cell, and by 1.6e-3 between turns 1e-9 rad apart of a square |
+| `'contour'` | (no transform) | nothing |
+
+The bulk copy is the surprise. It reaches only the homogeneous interior, where every
+factorization rule agrees in the continuum whatever the normal says, and the code said so
+as a reason not to care which donor won. A truncated Fourier series does not agree: the
+interior's normal enters the coefficients of `n n^T`, and 6 interior pixels were worth 3e-4.
+
+The kd-tree is the other way round: no transform and no sampling, and the same tie. On an
+equal-sided cell `(d_u, d_v)` and `(d_v, d_u)` are equally long, the kd-tree compares lengths
+it computed from rounded Cartesian coordinates, and which of the two it returned followed the
+angle's last bit. The distance is the same either way, so no eager answer moved; but
+[a record](#the-cell-derivative-through-a-record) keeps the offset, and a replayed derivative
+reads it.
+
+**The fix.** Steps that agree to `1e-12` relative take no sampling
+(`normal_methods._edt_sampling`, which every transform now reads: the signed distance and the
+offsets that report its choice, the bulk copy, and both branches of the `'distance'` gradient,
+the traced one through `normal_plans.nearest_interface_offsets`). Steps of exactly 1 took none
+already, and scipy multiplies by a sampling of exactly 1 without rounding, so a square-pixel
+cell is unmoved; steps that genuinely differ still pass both. A record's other two choices are
+settled the same way: edges that agree to `1e-12` make the `u` edge the longer, as `max` keeps
+its first argument, and `'smooth'`'s kd-tree candidates are measured again from their integer
+offsets through `M^T M`, where lengths that agree to `1e-12` go to the smallest `(d_v, d_u)`
+(`normal_methods._nearest_settled`). Neither of those moves an eager answer: the length is the
+same either way.
+
+Pinned by `test_an_equal_sided_cell_does_not_jump_between_neighbouring_angles`,
+`test_a_hexagonal_cell_gives_one_answer_at_every_scale`,
+`test_square_pixels_in_a_non_square_cell_measure_one_signed_distance`,
+`test_equal_steps_hand_no_distance_transform_a_sampling` (the only one that can see the eager
+`'distance'` transform, since its output cannot),
+`test_a_side_derivative_at_equal_sides_does_not_follow_the_last_bit`,
+`test_an_equal_step_cell_records_one_set_of_choices` (four families of equal-step cells must
+each record one plan) and the equal-sided cases of
+`test_spectral_and_smooth_carry_the_cell_where_it_has_a_value`, which had moved to unequal
+sides to step around the jump. The old choice put back at any one of the seven places --
+five sampling sites, the longer edge, the kd-tree's own pick -- fails at least one of them,
+and so does a tolerance of zero.
+
+**What moved**, measured against a `git archive` of the base, each tree run twice and
+bit-identical to itself: fields with the circular magnitude, solves at `truncation_order` 2 and
+3 (3 floor-lifts an 8 x 8 raster) under both projectors, every choice a record keeps, and JAX
+derivatives of a solve with respect to the cell for the three constructions that carry one --
+6275 arrays over 321 scene-cell pairs on four rasters, rotated squares and hexagons included.
+**No eager value moved off a cell whose equal steps had landed off 1**: every field and solve
+on a cell whose steps came out exactly 1, or genuinely differ, is byte-identical. On the
+jittered cells:
+
+| construction | field | solve (any order's power or amplitude) | JAX derivative of a solve |
+|---|---|---|---|
+| `'spectral'` | up to 1.89 | up to 1.6e-2 on an 8 x 8 rod in `hexagonal(0.5)`, 1.7e-3 on a 32 x 32 disc | `d/d\|a2\|` up to 2.0e-2, `d/dA` up to 0.13 on `hexagonal(0.5)`, `d/d angle` up to 3.3e-3 |
+| `'distance'` | <= 5e-15 | <= 5e-14 | `d/d\|a2\|` up to 3.1e-3, `d/dA` up to 1.5e-2; `d/d angle` <= 1.4e-14 |
+| `'smooth'` | <= 5e-15 | <= 5e-14 | `d/d\|a2\|` up to 4.5e-3, `d/dA` up to 5.0e-3 |
+| `'contour'` | <= 5e-15 | <= 5e-14 | (refused) |
+
+The records moved further than the values, because `'smooth'`'s kd-tree tie was round-off on
+every equal-sided skewed cell, exact steps or not: its recorded offsets changed on 114
+scene-cell pairs whose steps are exactly 1, and its side derivative there by up to 6.0e-3 (a
+square turned by 0.3 rad); along the angle by round-off (<= 6e-17), except at exactly 60 and
+120 degrees (1.0e-3 and 3.0e-3), where the hexagon's third neighbour ties as well. On cells
+whose steps genuinely differ the only change is in that record too, at antipodal ties (`d`
+against `-d`, whose lengths are the same function of the cell, so a derivative cannot see the
+choice: the two unequal oblique cells measured are byte-identical) and, on turned rectangles,
+at mirror ties (`(a, b)` against `(a, -b)`, equally long in every rectangle, which a
+side-length derivative cannot see and a shear derivative can; not measured). Between neighbouring cells the side derivative is now smooth for all
+three: it moves by 2e-7 between angles 1e-7 rad apart, where on the base `'spectral'` jumped
+by up to 2.0e-2, `'distance'` by 3.1e-3 and `'smooth'` by 3.2e-3, and by 3e-10 between turns
+1e-9 rad apart of a square, where `'smooth'` jumped by 1.6e-3.
+
+A rotated square whose two steps sit an ulp under 1 *together* is the one case where the
+old switch passed a uniform sampling; uniform or not, it settles some ties differently from
+none (45 of 9216 pixels of the disc at `1 - 2**-52`), and a turned square at that offset moved
+`'spectral'` by 0.73 in the field and 9e-4 in the solve.
+
+**What is left is a genuine tie.** Steps that differ break every tie toward the shorter step,
+the physically nearer pixel, so `'spectral'` still changes donors where a sweep carries one
+side length through the other, and the crossing itself takes the scan order, a third value: on
+the rod at 100 degrees the read-out is -0.569672 with `|a2|` 1e-11 short of `|a1|`, -0.570004
+within 1e-12 of it and -0.569482 1e-11 long. A nearest-donor copy has no continuous way through
+an exact tie, and the same holds at every step ratio where two displacements are equally long.
+The traced `'distance'` derivative along one side at `|a1| = |a2|` is likewise a choice rather
+than a derivative -- the one-sided slopes there are 0.2421 and 0.2484, the code returns 0.2402
+-- but it is now one choice at every angle. `'smooth'`'s kd-tree measures the true metric, so
+it also sees the ties a particular angle makes: at exactly 60 or 120 degrees `|u - v|` or
+`|u + v|` equals `|u|`, every `hexagonal(a)` sits there, and its side derivative steps by up to
+2.0e-3 between the exact angle and one 1e-7 rad away. At the exact angle it is one choice,
+whatever the scale.
+
 ## `'smooth'`'s sigma is a length, not a pixel count per axis
 
 Changed 2026-08-21. It was `base_N/16` *pixels along each axis*, which on a
@@ -888,6 +1012,10 @@ bit for bit, and a cell no derivative reaches never enters the rebuild.
 | `'spectral'` | indicator, band, bulk donors, longer edge | low-pass and spectral gradient on Cartesian `G`, band normalisation |
 | `'smooth'` | phases, nearest other-phase pixel, branch, kernel radii | signed distance; scipy's truncated kernel as a circulant (axis-aligned) or the transform (skewed) |
 | `|grad d|` (circular) | nearest interface pixel | as `'distance'`, for every construction |
+
+Where two choices tie -- two pixels equally near, two cell edges equally long -- the choice is
+what a derivative reads, and a tie the cell's exact geometry makes is settled by a rule rather
+than by the last bit of its metric ([equal steps](#equal-steps-settle-their-ties-one-way-2026-11-13)).
 
 Measured on both scenes, every replayed derivative under eager `jax.grad`, `jax.jit(jax.grad)`,
 `jax.grad(jax.jit)`, `jax.vmap` and PyTorch matches the rebuilt field's central difference to
