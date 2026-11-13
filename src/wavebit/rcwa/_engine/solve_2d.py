@@ -1145,7 +1145,92 @@ def _cluster_split(xp, T, valid, pad):
             xp.where(take, cond2, cond))
 
 
-def _rebuild_defective_pairs(xp, A, Omega_R, W, V, q, w, pairs, clusters=None):
+def _chain_split(xp, T, valid, pad):
+    """A three-level split for a cluster holding a Jordan chain of length three; eager only.
+
+    No two-level split (:func:`_cluster_split`) represents a chain of length three, whose
+    coupling ``B`` has ``B**2 != 0``. Three levels do: ``X = [E_0 | C_0 Y_1 | C_0 C_1 Y_2]`` with
+    ``E_0`` some of ``eig(T)``'s unit eigenvectors, ``C_0`` the orthonormal complement of their
+    span, ``Y_1`` some eigenvectors of the quotient ``T_1 = C_0^H T C_0``, ``C_1`` the
+    complement of their span in it and ``Y_2`` the eigenvectors of ``C_1^H T_1 C_1`` (Golub and
+    Van Loan, sections 7.1.4 and 7.6, applied twice). Then ``X^-1 T X = L + B``, ``L`` diagonal
+    and ``B`` coupling each lane only to lanes of a higher level, so ``B**3 = 0``. With one lane
+    a level it is a Schur form (``cond(X) = 1``).
+
+    Every choice of the two eigenvector sets among a slot's members is tried -- for ``m``
+    members ``3**m - 3 * 2**m + 3`` (6 for three, 5796 for eight) -- and the one the check reads
+    least of, ``cond(X)`` times the part of ``X^-1 T X`` outside the levels' coupling, is kept.
+    Members are a slot's first lanes; a padded lane keeps the identity's row and column and
+    level 0, and no lane couples to it. Read slot by slot (eager only: the member count is a
+    Python integer). Returns ``(X, level, cond)``; a slot of fewer than three members keeps
+    ``X = I`` and ``cond = inf``.
+    """
+    import itertools
+
+    import numpy as np
+    S, k, _ = T.shape
+    C = T.dtype
+    dev = getattr(T, 'device', None)
+    nmem = [int(x) for x in np.asarray(_readable(xp.sum(xp.astype(valid, xp.int32), axis=1), xp))]
+    eye = xp.astype(xp.eye(k, device=dev), C)
+
+    def unit(V):
+        return V / xp.linalg.vector_norm(V, axis=0)[None, :]
+
+    def complement(E):
+        Qc, _ = xp.linalg.qr(E, mode='complete')
+        return Qc[:, E.shape[1]:]
+
+    def eigvecs(M):
+        return unit(_eig_raw(M)[1])
+
+    Xs, levels, conds = [], [], []
+    for s in range(S):
+        m = nmem[s]
+        best = (float('inf'), eye, [0] * k, float('inf'))
+        if m >= 3:
+            Tm = T[s, :m, :m]
+            E = eigvecs(Tm)
+            for j0 in range(1, m - 1):
+                for J0 in itertools.combinations(range(m), j0):
+                    E0 = xp.take(E, xp.asarray(list(J0), device=dev), axis=1)
+                    C0 = complement(E0)
+                    T1 = _conj_t(xp, C0) @ Tm @ C0
+                    Y = eigvecs(T1)
+                    for j1 in range(1, m - j0):
+                        for J1 in itertools.combinations(range(m - j0), j1):
+                            Y1 = xp.take(Y, xp.asarray(list(J1), device=dev), axis=1)
+                            C1 = complement(Y1)
+                            Y2 = eigvecs(_conj_t(xp, C1) @ T1 @ C1)
+                            X = unit(xp.concat([E0, C0 @ Y1, C0 @ (C1 @ Y2)], axis=1))
+                            lvl = [0] * j0 + [1] * j1 + [2] * (m - j0 - j1)
+                            sv = xp.linalg.svdvals(X)
+                            if not float(_readable(sv[-1], xp)) > 0:
+                                continue
+                            cond = float(_readable(sv[0] / sv[-1], xp))
+                            Mx = linear_solve(xp, X, Tm @ X)
+                            la = np.asarray(lvl)
+                            off = xp.asarray(~(la[:, None] < la[None, :]) & ~np.eye(m, dtype=bool),
+                                             device=dev)
+                            dropped = float(_readable(xp.linalg.matrix_norm(
+                                xp.where(off, Mx, xp.zeros_like(Mx))), xp))
+                            miss = cond * dropped
+                            if miss < best[0]:
+                                best = (miss, X, lvl + [0] * (k - m), cond)
+        _, X, lvl, cond = best
+        if X.shape[0] < k:
+            X = xp.concat([xp.concat([X, xp.zeros((X.shape[0], k - X.shape[0]), dtype=C,
+                                                  device=dev)], axis=1),
+                           eye[X.shape[0]:]], axis=0)
+        Xs.append(X)
+        levels.append(lvl)
+        conds.append(cond)
+    level = xp.asarray(np.asarray(levels, dtype=np.int32), device=dev)
+    cond = xp.asarray(np.asarray(conds, dtype=np.float64), device=dev)
+    return xp.stack(Xs, axis=0), level, xp.astype(cond, xp.real(T).dtype)
+
+
+def _rebuild_defective_pairs(xp, A, Omega_R, W, V, q, w, pairs, clusters=None, chains=False):
     """Each near-defective pair of a 2D layer as an orthonormal Schur pair; values only.
 
     ``A`` is the layer's product operator ``Omega2 = Omega_L Omega_R``, ``(W, V, q)`` the modes
@@ -1190,7 +1275,8 @@ def _rebuild_defective_pairs(xp, A, Omega_R, W, V, q, w, pairs, clusters=None):
     outside them as here; without it this function is the pairs' rebuild alone.
     """
     if clusters is not None:
-        return _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters)
+        return _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters,
+                                           chains=chains)
     a, b, mask, v, x0, overflow = pairs
     n2 = W.shape[0]
     C = W.dtype
@@ -1287,7 +1373,7 @@ _JOINT_IMPRECISE_2D = (
 
 
 def _joint_cluster_bases(xp, A, W0, Q0, Mc, Gc, members, cvalid, lam, is_a, m01_row, partner, F,
-                         pair_terms=None):
+                         pair_terms=None, chains=False):
     """Each defective cluster's corrected basis, split and check readings; values only.
 
     The part of the joint rebuild the two formulations share: :func:`_rebuild_defective_clusters`
@@ -1303,10 +1389,13 @@ def _joint_cluster_bases(xp, A, W0, Q0, Mc, Gc, members, cvalid, lam, is_a, m01_
 
     One Newton step for each cluster's invariant subspace and a chord step after it, kept where
     it at least halves the check's miss (:data:`_EP_STEP_GAIN`), then :func:`_cluster_split`:
-    the method :func:`_rebuild_defective_clusters` describes. Returns ``(Q1, X, Mx, dg, JK, res1,
-    tau, tau_res, cond, dropped)`` for the basis each cluster keeps: the corrected orthonormal
-    basis, the split ``X`` and ``X^-1 T X``, its diagonal, the coupled ``J x K`` entries, and the
-    check's subspace residual, thresholds, ``cond(X)`` and dropped part.
+    the method :func:`_rebuild_defective_clusters` describes. With ``chains`` (the caller's word
+    that no derivative is taken), eagerly a slot whose two-level split fails the check tries
+    three levels instead (:func:`_chain_split`). Returns ``(Q1, X, Mx, dg, JK, res1, tau,
+    tau_res, cond, dropped)`` for the basis each cluster keeps: the corrected orthonormal basis,
+    the split ``X`` and ``X^-1 T X``, its diagonal, the coupled entries (``J x K``, or each lane
+    to every lane of a higher level), and the check's subspace residual, thresholds, ``cond(X)``
+    and dropped part.
     """
     n2 = W0.shape[0]
     C = W0.dtype
@@ -1407,16 +1496,38 @@ def _joint_cluster_bases(xp, A, W0, Q0, Mc, Gc, members, cvalid, lam, is_a, m01_
         T = padded(T, F)
         X, J, cond = _cluster_split(xp, T, cvalid, F)
         Mx = linear_solve(xp, X, T @ X)
-        dg = xp.linalg.diagonal(Mx)
         JK = J[:, :, None] & (~J & cvalid)[:, None, :]
         dropped = xp.linalg.matrix_norm(xp.where(vv & ~(JK | (eyek != 0)), Mx, xp.zeros_like(Mx)))
         # The check's thresholds, at the cluster's scale.
+        dg = xp.linalg.diagonal(Mx)
         nvalid = xp.sum(xp.astype(cvalid, rdt), axis=1)
         lam_c = (xp.sum(xp.where(cvalid, dg, xp.zeros_like(dg)), axis=1)
                  / xp.maximum(nvalid, xp.ones_like(nvalid)))
         tau = (_EP_BACKWARD * (eps / 2.220446049250313e-16)
                * xp.maximum(xp.ones_like(xp.abs(lam_c)), xp.abs(lam_c)))
         tau_res = xp.maximum(tau, _EP_RESIDUAL * eps * norm_A * xp.ones_like(tau))
+
+        def split_miss(cond, dropped):
+            finite = xp.isfinite(cond)
+            return xp.where(finite, xp.where(finite, cond, xp.zeros_like(cond)) * dropped / tau,
+                            xp.full_like(cond, float('inf')))
+        if chains and _concrete(xp.any(split_miss(cond, dropped) > 1)):
+            # Eagerly, where no two-level split passes: three levels, for a Jordan chain of
+            # length three (_chain_split), kept where the check reads less of them. JK is then
+            # the levels' coupling, every lane to every lane of a higher level.
+            X3, lvl, cond3 = _chain_split(xp, T, cvalid, F)
+            Mx3 = linear_solve(xp, X3, T @ X3)
+            CK = vv & (lvl[:, :, None] < lvl[:, None, :])
+            dropped3 = xp.linalg.matrix_norm(xp.where(vv & ~(CK | (eyek != 0)), Mx3,
+                                                      xp.zeros_like(Mx3)))
+            take = ((split_miss(cond, dropped) > 1)
+                    & (split_miss(cond3, dropped3) < split_miss(cond, dropped)))
+            X = xp.where(take[:, None, None], X3, X)
+            Mx = xp.where(take[:, None, None], Mx3, Mx)
+            JK = xp.where(take[:, None, None], CK, JK)
+            cond = xp.where(take, cond3, cond)
+            dropped = xp.where(take, dropped3, dropped)
+            dg = xp.linalg.diagonal(Mx)
         finite = xp.isfinite(cond)
         miss = xp.maximum(res1 / tau_res, xp.where(finite, cond, xp.zeros_like(cond)) * dropped / tau)
         miss = xp.where(finite, miss, xp.full_like(miss, float('inf')))
@@ -1436,7 +1547,7 @@ def _joint_cluster_bases(xp, A, W0, Q0, Mc, Gc, members, cvalid, lam, is_a, m01_
     return Q1, X, Mx, dg, JK, res1, tau, tau_res, cond, dropped
 
 
-def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
+def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters, chains=False):
     """:func:`_rebuild_defective_pairs` for a layer holding defective clusters; values only.
 
     ``clusters`` is :func:`_defective_clusters`' answer. Each cluster is rebuilt jointly, and
@@ -1474,13 +1585,19 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
     exact square root of ``L + B`` (``B**2 = 0``), every ``r = sqrt(L)`` taken on the side of
     the cluster member whose label decays most, as a pair's roots are. ``W = Q1 X`` and
     ``V = Omega_R W q^-1`` satisfy both first-order relations to the rounding of the split.
+    With ``chains`` (the caller's word that no derivative is taken), eagerly a slot whose
+    two-level split fails the check tries three levels (:func:`_chain_split`): a Jordan chain of
+    length three, whose ``B`` reaches two levels up (``B**3 = 0``). Its root takes the Schur
+    square root's second-order term there and ``q^-1`` the term ``D^-1 N D^-1 N D^-1``; a
+    two-level split keeps its bits.
 
     **The check.** The corrected subspace's residual ``||A Q1 - Q1 T||_F`` (against
     :data:`_EP_RESIDUAL`) and the part of ``X^-1 T X`` the split drops, times ``cond(X)``,
     must stay below :data:`_EP_BACKWARD` at the cluster's scale. A start ``eig`` collapsed
     (a nearly rank-one basis for the cluster, beyond one Newton step) or a Jordan chain of length
-    three (no disjoint split exists) fails it: eagerly an :class:`ExceptionalPointWarning`,
-    under a trace a NaN answer, as an overflow of the trace's slots is.
+    three without ``chains`` (no disjoint split exists) fails it: eagerly an
+    :class:`ExceptionalPointWarning`, under a trace a NaN answer, as an overflow of the trace's
+    slots is.
     """
     members, cvalid, Q0, c_over = clusters
     n2 = W.shape[0]
@@ -1605,7 +1722,8 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
     Va = (Omega_R @ v1) / alpha[None, :]
     Vb = (Omega_R @ x1 - Va * t[None, :]) / beta[None, :]
     Q1, X, Mx, dg, JK, res1, tau, tau_res, cond, dropped = _joint_cluster_bases(
-        xp, A, W0, Q0, Mc, Gc, members, cvalid, lam, is_a, m01_row, partner, F, pair_terms)
+        xp, A, W0, Q0, Mc, Gc, members, cvalid, lam, is_a, m01_row, partner, F, pair_terms,
+        chains=chains)
     del W0, Gc
     # One side for the cluster: the root nearer the label of its most decaying member.
     qm = xp.reshape(xp.take(q, mflat), (S, k))
@@ -1618,7 +1736,20 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters):
     N = xp.where(JK, Mx / xp.where(JK, total, one(total)), xp.zeros_like(Mx))
     Wcl = Q1 @ X
     Dinv = 1 / r
-    Vcl = (Omega_R @ Wcl) @ (eyek * Dinv[:, None, :] - Dinv[:, :, None] * N * Dinv[:, None, :])
+    Minv = eyek * Dinv[:, None, :] - Dinv[:, :, None] * N * Dinv[:, None, :]
+    # A chain's three levels (_chain_split): the coupling reaches two levels up, where the root
+    # takes its second-order term, N_ij = (B_ij - sum_k N_ik N_kj) / (r_i + r_j) -- the Schur
+    # square root's recurrence (A. Bjorck and S. Hammarling, Linear Algebra Appl. 52/53, 127,
+    # 1983), exact here since N**3 = 0 -- and the inverse its term D^-1 N D^-1 N D^-1. Placed only
+    # on those entries, so a two-level split keeps its bits.
+    if chains:
+        hop = xp.astype(JK, xp.real(Mx).dtype)
+        two_up = (hop @ hop) > 0
+    if chains and _concrete(xp.any(two_up)):
+        N = xp.where(two_up, (Mx - N @ N) / xp.where(two_up, total, one(total)), N)
+        M1 = Dinv[:, :, None] * N * Dinv[:, None, :]
+        Minv = xp.where(two_up, eyek * Dinv[:, None, :] - M1 + M1 @ (N * Dinv[:, None, :]), Minv)
+    Vcl = (Omega_R @ Wcl) @ Minv
     W = place_c(Wcl, place(v1, x1, W))
     V = place_c(Vcl, place(Va, Vb, V))
     qd = xp.where(is_a, xp.take(alpha, pa), xp.where(is_b, xp.take(beta, pb), q))
@@ -2080,9 +2211,11 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
                                                            pairs)
             joint = None
         else:
+            # A Jordan chain of length three is rebuilt (eagerly) only where no derivative is
+            # taken: the derivative rules below take a coupling that reaches one level only.
             W, V, Q, a, b, mask = _rebuild_defective_pairs(
                 xp, A, _stop(Omega_R), _stop(W), _stop(V), _stop(q), _stop(w), pairs,
-                clusters=clusters)
+                clusters=clusters, chains=not differentiated)
             ii = xp.arange(w.shape[0], device=getattr(W, 'device', None))
             joint = xp.any((ii[:, None] == xp.reshape(clusters[0], (-1,))[None, :])
                            & xp.reshape(clusters[1], (-1,))[None, :], axis=1)
