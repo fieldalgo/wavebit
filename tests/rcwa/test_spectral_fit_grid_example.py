@@ -112,12 +112,12 @@ def test_progress_callback_receives_each_completed_fit_once():
 
 
 def test_rejected_final_trial_does_not_repeat_or_overwrite_the_accepted_solve(monkeypatch):
-    """Keep the accepted pair even when a model reuses its output buffers."""
+    """Keep the target and accepted pair when a model reuses output buffers."""
     calls = {}
+    values, jacobian = np.ones(1), np.empty((1, 1))
 
     def factory(grid):
         calls[grid] = []
-        values, jacobian = np.empty(1), np.empty((1, 1))
 
         def model(p):
             calls[grid].append(float(p[0]))
@@ -128,11 +128,11 @@ def test_rejected_final_trial_does_not_repeat_or_overwrite_the_accepted_solve(mo
     def stop_after_rejection(fun, x, *, jac, **kwargs):
         fun(x)
         jac(x)
-        fun(x + 1)
+        np.testing.assert_allclose(fun(x + 1), [30.])
         return SimpleNamespace(x=x.copy(), success=True)
 
     monkeypatch.setattr(example, 'least_squares', stop_after_rejection)
-    report = example.fit_grid_ladder(factory, [1.], [1.], grids=(1, 2, 4),
+    report = example.fit_grid_ladder(factory, [1.], values, grids=(1, 2, 4),
         noise_sigma=.1, parameter_tolerance=.01, spectrum_tolerance=.01)
     assert report.converged
     # Earlier grids are evaluated once more for the same-point cross-grid check.
