@@ -50,6 +50,8 @@ coarse optimizer is retried on the next grid and cannot count toward a pass.
 Invalid evaluations raise; rank-deficient fits cannot pass.
 The last accepted value/Jacobian pair is retained for reporting, so rejecting a
 final trial does not trigger another solve at the already evaluated optimum.
+Observed data is copied on entry so a model's reused output buffer cannot move
+the target during fitting.
 
 The returned `GridFit` has `parameters`, `stages`, `converged` and `reason`.
 Each stage records optimizer success, the noise-only standard deviations, the

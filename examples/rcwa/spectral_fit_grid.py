@@ -63,7 +63,8 @@ def fit_grid_ladder(model_factory, initial, data, *, grids, noise_sigma,
     if np.iscomplexobj(initial) or np.iscomplexobj(data):
         raise ValueError('initial and data must be real')
     x = np.asarray(initial, dtype=float).copy()
-    data = np.asarray(data, dtype=float)
+    # A model may reuse the buffer from which the target was generated.
+    data = np.asarray(data, dtype=float).copy()
     if x.ndim != 1 or data.ndim != 1 or not x.size or data.size < x.size:
         raise ValueError('initial and data must be vectors with m >= n > 0')
     if not np.all(np.isfinite(x)) or not np.all(np.isfinite(data)):
