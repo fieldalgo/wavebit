@@ -406,11 +406,12 @@ _CELL_CASES = {
     'one row, oblique angle': (_ONE_ROW, lambda p, lift: dict(lattice=wavebit.Lattice.oblique(0.77, 0.61, p)),
                                np.radians(100.0), [3, 0]),
 }
-#: An oblique cell whose sides differ. On ``'oblique angle'``'s equal sides the two pixel steps of
-#: ``'spectral'``'s bulk copy are equal in exact arithmetic, so its nearest-donor ties are settled
-#: by the last bit of the metric: at 100 degrees the step along ``v`` rounds to 1 - 2**-53, and
-#: 1e-7 rad away to 1 exactly, where 12 bulk pixels copy another donor and the read-out itself
-#: jumps by ~3e-4. That is the construction's forward answer, with or without a derivative.
+#: An oblique cell whose sides differ, beside ``'oblique angle'``'s equal ones. On equal sides the
+#: two pixel steps of ``'spectral'``'s bulk copy are equal in exact arithmetic, and its
+#: nearest-donor ties used to be settled by the last bit of the metric: at 100 degrees the step
+#: along ``v`` rounds to 1 - 2**-53, and 1e-7 rad away to 1 exactly, where bulk pixels copied
+#: another donor and the read-out itself jumped by ~3e-4 -- inside a central difference's stencil.
+#: Equal steps take one tie-break now (``normal_methods._edt_sampling``), so both are tested.
 _UNEQUAL_SIDES = {
     'oblique angle, unequal sides': (
         _SQUARE_ROD, lambda p, lift: dict(lattice=wavebit.Lattice.oblique(0.77, 0.69, p)),
@@ -475,8 +476,48 @@ def test_the_raster_normal_field_carries_the_cell_on_both_backends(case, backend
     assert got == pytest.approx(finite, rel=1e-6), (got, finite)
 
 
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_a_side_derivative_at_equal_sides_does_not_follow_the_last_bit(backend):
+    """At ``|a1| = |a2|`` the traced ``'distance'`` rebuild picks among equally near interface
+    pixels, and a derivative along one side reads which one it picked: the distance is the same
+    to every tied pixel, its slope along each step is not. The pick used to follow the last bit
+    of the steps -- an ulp under 1 at some angles, exactly 1 at their neighbours -- so ``d/d|a2|``
+    of this read-out came out 0.24021 or 0.24205 between angles 1e-7 rad apart, where it moves by
+    2e-7. It has no derivative there (the one-sided slopes are 0.2421 and 0.2484); what it must
+    not do is choose between them by round-off."""
+    from wavebit.rcwa._engine.normal_methods import _metric, _steps
+    if backend == 'jax':
+        jax = pytest.importorskip('jax')
+        import jax.numpy as xp
+        _legacy_wavebit_enable_x64()
+    else:
+        torch = xp = pytest.importorskip('torch')
+    exact = lambda g: _steps(_metric(wavebit.Lattice.oblique(0.77, 0.77, g), (8, 8))) == (1.0, 1.0)
+    angles = np.radians(100.0) + 1e-7 * np.arange(200)
+    split = [k for k in range(len(angles) - 1) if exact(angles[k]) != exact(angles[k + 1])]
+    assert split, 'no two neighbouring angles straddle the last bit; the scene tests nothing'
+
+    def slope(angle):
+        def read_out(length_v):
+            s = _legacy_wavebit_rcwa(backend=backend, structure=xp.asarray(_SQUARE_ROD), thickness=[0.2],
+                                     theta=0.2, phi=0.3, psi=0.4, wavelength=0.777, top=1.0, bot=2.25,
+                                     truncation_order=[2, 2], factorization='nvf', layer_algorithm='SMM',
+                                     lattice=wavebit.Lattice.oblique(0.77, length_v, angle))
+            r = s.solve()
+            a = r.r_s.reshape(-1)[3]
+            return r.R.sum().real - 0.7 * r.T.sum().real + 0.4 * a.real + 0.9 * a.imag
+        if backend == 'jax':
+            return float(jax.grad(read_out)(xp.asarray(0.77)))
+        x = torch.tensor(0.77, dtype=torch.float64, requires_grad=True)
+        return float(torch.autograd.grad(read_out(x), x)[0])
+
+    k = split[0]
+    jump = abs(slope(angles[k]) - slope(angles[k + 1]))
+    assert jump < 1e-5, f'd/d|a2| jumped by {jump:.3e} between angles 1e-7 rad apart'
+
+
 @pytest.mark.parametrize('backend', ['jax', 'torch', 'forward_ad'], ids=['jax', 'torch', 'torch, forward_ad'])
-@pytest.mark.parametrize('case', ['period', 'oblique angle, unequal sides'])
+@pytest.mark.parametrize('case', ['period', 'oblique angle', 'oblique angle, unequal sides'])
 @pytest.mark.parametrize('method', ['spectral', 'smooth'])
 def test_spectral_and_smooth_carry_the_cell_where_it_has_a_value(method, case, backend):
     """``'spectral'`` and ``'smooth'`` read the cell's metric in NumPy, and refused a traced cell
@@ -484,7 +525,7 @@ def test_spectral_and_smooth_carry_the_cell_where_it_has_a_value(method, case, b
     and 0.09% of this derivative). Where the cell has a value -- ``jax.grad``, PyTorch reverse
     and forward mode -- they take their choices on it and rebuild the rest in the traced metric
     (``normal_plans``), so the derivative is the central difference of the field rebuilt at each
-    cell. The oblique cell has unequal sides, for the reason ``_UNEQUAL_SIDES`` gives."""
+    cell. The oblique cell is tested with equal sides and with unequal ones (``_UNEQUAL_SIDES``)."""
     if backend == 'jax':
         jax = pytest.importorskip('jax')
         import jax.numpy as jnp

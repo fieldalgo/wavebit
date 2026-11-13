@@ -482,6 +482,160 @@ def test_smooths_kernel_is_a_length_rather_than_a_pixel_count_per_axis():
     assert err < 1.0, f'{err:.3f} deg — the per-axis kernel scored 2.22 here'
 
 
+# ------------------------------------------- equal steps: the last bit chooses nothing
+#
+# A cell whose two index steps are equal -- an equal-sided cell on a square raster, rhombic and
+# hexagonal included, or square pixels in a rectangle -- computes them as column norms, and they
+# land on 1 or an ulp or two either side of it by the angle and the scale. Scipy's distance
+# transform settles its many exact ties by whichever side of 1 that is, and every transform the
+# normal field runs used to switch on `step_v == step_u == 1.0` exactly. `'spectral'` copies the
+# tied donor's normal, so its answer jumped (`normal_methods._edt_sampling` has the numbers).
+
+#: The 8 x 8 rod the jump was found on: a 4 x 3 block, whose medial ridge is full of exact ties.
+EQUAL_STEP_ROD = np.ones((8, 8), dtype=complex)
+EQUAL_STEP_ROD[2:6, 2:5] = 9.0 + 0.2j
+
+
+def _old_switch_reads_one(lattice, shape):
+    """What the replaced switch asked of a cell: are both steps exactly 1."""
+    from wavebit.rcwa._engine.normal_methods import _metric, _steps
+    return _steps(_metric(lattice, shape)) == (1.0, 1.0)
+
+
+def _cells_the_old_switch_split(cells, shape):
+    """``(one, other)``: a cell the old switch read as exact and one it did not, or a failure.
+
+    Found rather than written down, because which cells land on exactly 1 is decided by the last
+    bit of a ``cos``, a ``sin`` and a ``hypot`` -- the platform's, which is the whole point. A
+    quarter to most of them do not, so a scene that found no such pair has stopped exercising
+    the tie, and that is a failure of the test, not a pass.
+    """
+    exact = [_old_switch_reads_one(c, shape) for c in cells]
+    if all(exact) or not any(exact):
+        pytest.fail(f'every one of {len(cells)} cells read the same to the old switch')
+    return exact
+
+
+def _neighbouring_angles_the_old_switch_split(centre_deg, shape=(8, 8)):
+    """Two ``oblique(0.77, 0.77, .)`` cells 1e-7 rad apart, one each side of the old switch."""
+    from wavebit.lattice import Lattice
+    g0 = np.deg2rad(centre_deg)
+    cells = [Lattice.oblique(0.77, 0.77, g0 + k * 1e-7) for k in range(200)]
+    exact = _cells_the_old_switch_split(cells, shape)
+    k = next(k for k in range(len(cells) - 1) if exact[k] != exact[k + 1])
+    return cells[k], cells[k + 1]
+
+
+def _rod_read_out(lattice, method, scale=1.0, backend='numpy', xp=np):
+    """A weighted read-out of the rod's solve: power both ways and one complex amplitude.
+
+    ``scale`` stretches the wavelength and thickness with the cell, so a cell drawn at another
+    scale is the same dimensionless problem and has to give the same number.
+    """
+    s = _legacy_wavebit_rcwa(backend=backend, structure=xp.asarray(EQUAL_STEP_ROD[None]),
+                             thickness=[0.2 * scale], theta=0.2, phi=0.3, psi=0.4,
+                             wavelength=0.777 * scale, top=1.0, bot=2.25, truncation_order=[2, 2],
+                             factorization='nvf', layer_algorithm='SMM', lattice=lattice,
+                             raster_normal_method=method)
+    r = s.solve()
+    a = r.r_s.reshape(-1)[3]
+    return r.R.sum().real - 0.7 * r.T.sum().real + 0.4 * a.real + 0.9 * a.imag
+
+
+@pytest.mark.parametrize('centre', [60.0, 100.0, 120.0])
+@pytest.mark.parametrize('method', METHODS)
+def test_an_equal_sided_cell_does_not_jump_between_neighbouring_angles(method, centre):
+    """Two cells 1e-7 rad apart are the same structure to seven digits, and so is their field.
+
+    Each pair straddles the switch the transforms used to read, one cell whose steps came out
+    exactly 1 and one an ulp off. ``'spectral'`` changed bulk donors across it: the field moved
+    by up to 1.8 at 6 of 64 pixels and the read-out by 3.3e-4 at 100 degrees, where the smooth
+    change over 1e-7 rad is 2e-10. The other three measure a distance, which does not care which
+    tied pixel it was measured to, and are here so that none of them acquires the same jump.
+    """
+    one, other = _neighbouring_angles_the_old_switch_split(centre)
+    f_one = np.stack(normal_vector_field(EQUAL_STEP_ROD, lattice=one, method=method))
+    f_other = np.stack(normal_vector_field(EQUAL_STEP_ROD, lattice=other, method=method))
+    moved = float(np.abs(f_one - f_other).max())
+    assert moved < 1e-5, f'{method} at {centre} deg: the field jumped by {moved:.3e}'
+    jump = abs(float(_rod_read_out(one, method)) - float(_rod_read_out(other, method)))
+    assert jump < 1e-7, f'{method} at {centre} deg: the read-out jumped by {jump:.3e}'
+
+
+@pytest.mark.parametrize('method', METHODS)
+def test_a_hexagonal_cell_gives_one_answer_at_every_scale(method):
+    """``hexagonal(a)`` is one shape of cell at every ``a``, so the field is one array to round-off.
+
+    Most scales put the steps an ulp off 1 and the rest exactly on it, so the old switch read
+    the same cell two ways. ``'spectral'`` gave two fields (apart by 1.8) and, in a scene scaled
+    with the cell, two read-outs (apart by 8.9e-4) where a scale-invariant problem has one.
+    """
+    from wavebit.lattice import Lattice
+    scales = np.geomspace(0.5, 2.0, 13)
+    cells = [Lattice.hexagonal(a) for a in scales]
+    _cells_the_old_switch_split(cells, EQUAL_STEP_ROD.shape)
+    fields = [np.stack(normal_vector_field(EQUAL_STEP_ROD, lattice=c, method=method)) for c in cells]
+    moved = max(float(np.abs(f - fields[0]).max()) for f in fields)
+    assert moved < 1e-12, f'{method}: the field moved by {moved:.3e} across scales'
+    outs = [float(_rod_read_out(c, method, scale=a / 0.77)) for c, a in zip(cells, scales)]
+    spread = max(outs) - min(outs)
+    assert spread < 1e-10, f'{method}: the read-out spread {spread:.3e} across scales'
+
+
+def test_square_pixels_in_a_non_square_cell_measure_one_signed_distance():
+    """``'smooth'``'s axis-aligned branch hands its steps to the distance transform, and square
+    pixels in a 3:7 cell come out exactly 1 at some scales and an ulp off at others. The signed
+    distance does not depend on the cell's scale at all, so it is one array: the old switch
+    returned four, one per last bit the steps landed on."""
+    from wavebit.lattice import Lattice
+    from wavebit.rcwa._engine.normal_methods import _metric, _periodic_signed_distance, _separable
+    inside = np.zeros((14, 6), dtype=bool)
+    inside[3:9, 1:4] = True
+    cells = [Lattice.rectangular(0.3 * k / 7, 0.7 * k / 7) for k in range(1, 41)]
+    _cells_the_old_switch_split(cells, inside.shape)
+    metrics = [_metric(c, inside.shape) for c in cells]
+    assert all(_separable(M) for M in metrics)
+    first = _periodic_signed_distance(inside, metrics[0])
+    differ = [k for k, M in enumerate(metrics) if not np.array_equal(
+        _periodic_signed_distance(inside, M), first)]
+    assert not differ, f'{len(differ)} of {len(cells)} scales measured another distance'
+
+
+def test_equal_steps_hand_no_distance_transform_a_sampling(monkeypatch):
+    """Every distance transform the normal field runs is told no sampling when the steps agree.
+
+    The contract the tests above observe through outputs, stated where all of them are made at
+    once. It is the only test of the eager ``'distance'`` transform: a distance is the same to
+    whichever tied pixel it was measured, so neither its field nor its exact zeros could show
+    which sampling it ran, and a revert of that one call would pass everything else.
+    """
+    import scipy.ndimage
+    from wavebit.lattice import Lattice
+    real = scipy.ndimage.distance_transform_edt
+    told = []
+
+    def spy(*args, **kwargs):
+        told.append(kwargs.get('sampling'))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(scipy.ndimage, 'distance_transform_edt', spy)
+    hexagons = [Lattice.hexagonal(a) for a in np.geomspace(0.5, 2.0, 13)]
+    hexagon = hexagons[_cells_the_old_switch_split(hexagons, EQUAL_STEP_ROD.shape).index(False)]
+    tall_rod = np.ones((14, 6))
+    tall_rod[3:9, 1:4] = 9.0
+    rectangles = [Lattice.rectangular(0.3 * k / 7, 0.7 * k / 7) for k in range(1, 41)]
+    rectangle = rectangles[_cells_the_old_switch_split(rectangles, tall_rod.shape).index(False)]
+    for eps, cell in ((EQUAL_STEP_ROD, hexagon), (tall_rod, rectangle)):
+        for method in ('distance', 'spectral', 'smooth'):
+            normal_vector_field(eps, lattice=cell, method=method, with_magnitude=True)
+    # On each cell: one for 'distance' (its magnitude reads the same transform), two for
+    # 'spectral' (its bulk copy, and 'distance''s transform for the magnitude beside it), and one
+    # for 'smooth''s magnitude -- plus 'smooth''s own two on the rectangle, where the metric is
+    # diagonal and its signed distance is a transform rather than the hexagon's kd-tree.
+    assert len(told) == 2 * (1 + 2 + 1) + 2, told
+    assert all(s is None for s in told), told
+
+
 # ------------------------------------------------------------------- the floor lift
 
 @pytest.mark.parametrize('method,base_n', [('contour', 16), ('smooth', 8)])

@@ -1068,6 +1068,8 @@ def _distance_gradient(interface_mask, shape, lattice=None):
     import numpy as np
     from scipy.ndimage import distance_transform_edt
 
+    from wavebit.rcwa._engine.normal_methods import _edt_sampling
+
     ny_, nx_ = shape
 
     def _periodic_edt(sampling=None):
@@ -1118,13 +1120,13 @@ def _distance_gradient(interface_mask, shape, lattice=None):
             # a1/n_u. Exact for an axis-aligned cell; for a sheared one it is the best
             # `sampling` can say, since scipy's transform has no way to express a non-diagonal
             # metric. The direction that survives normalisation is set by the gradient below,
-            # which is exact regardless.
+            # which is exact regardless. Equal steps -- to a tolerance, not to the bit, since an
+            # equal-sided cell lands an ulp either side of 1 by its angle -- are no sampling at
+            # all, so the transform's ties settle one way whatever the last bit says
+            # (`normal_methods._edt_sampling`).
             step_j = float(np.hypot(J[0, 1], J[1, 1]))
             step_i = float(np.hypot(J[0, 0], J[1, 0]))
-            if step_j == step_i == 1.0:
-                dist_map = _periodic_edt()
-            else:
-                dist_map = _periodic_edt(sampling=(step_j, step_i))
+            dist_map = _periodic_edt(sampling=_edt_sampling(step_j, step_i))
             g_j, g_i = _periodic_gradient(dist_map)
             # grad_xy f = J^-T @ (df/di, df/dj) -- the inverse transpose, not the Jacobian:
             # index steps push forward, gradients pull back.
@@ -1156,7 +1158,10 @@ def _distance_gradient(interface_mask, shape, lattice=None):
             from wavebit.rcwa._engine.normal_plans import distance_gradient_from_offsets
             from wavebit.rcwa._engine.normal_plans import nearest_interface_offsets
             xp_ = array_namespace(J)
-            # ``(dj, di)`` to the nearest interface pixel, on the 3x3 periodic tiling.
+            # ``(dj, di)`` to the nearest interface pixel, on the 3x3 periodic tiling, in the
+            # eager branch's sampling, so both pick the same pixel. On an equal-sided cell the
+            # pick is a tie, and the derivative is what reads which one won: the distance is the
+            # same either way, its slope along each step is not.
             _index_offsets = partial(nearest_interface_offsets, interface_mask)
 
             if 'jax' in xp_.__name__:

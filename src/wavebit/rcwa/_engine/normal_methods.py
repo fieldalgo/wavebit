@@ -94,7 +94,9 @@ def _metric(lattice, shape):
     is that switch, and the two places it sends elsewhere say so. One diagonal approximation
     survives, in :func:`spectral_normal_field`'s bulk copy, and it is documented where it is
     made rather than avoided: it decides which band pixel the *homogeneous interior* copies its
-    normal from, and every factorization rule agrees there whatever the normal says.
+    normal from. Every factorization rule agrees there in the continuum, but not through a
+    truncated Fourier series, so the choice does reach the solve (:func:`_edt_sampling` measured
+    how far).
     """
     if lattice is None:
         return np.eye(2)
@@ -128,6 +130,65 @@ def _steps(M):
     skewed cell is approximating, and says so at the line.
     """
     return float(np.hypot(M[0, 1], M[1, 1])), float(np.hypot(M[0, 0], M[1, 0]))
+
+
+#: Two per-axis steps closer than this, relatively, are one step: see :func:`_edt_sampling`.
+#: :func:`_separable`'s tolerance, for the same kind of reason: far above the ulp or two a
+#: column norm carries, far below any difference a cell was drawn with.
+_EQUAL_STEPS = 1e-12
+
+
+def _same_length(a, b):
+    """Whether two lengths in one cell's units agree to :data:`_EQUAL_STEPS`, relatively."""
+    return abs(a - b) <= _EQUAL_STEPS * max(abs(a), abs(b))
+
+
+def _edt_sampling(step_v, step_u):
+    """``distance_transform_edt``'s ``sampling`` for these steps: ``None`` when they are equal.
+
+    Every distance transform the raster normal field runs reads its sampling here -- the pair in
+    :func:`_periodic_signed_distance` and the pair in :func:`_signed_distance_offsets` that
+    reports its choice, the bulk copy in :func:`spectral_normal_field`, and both branches of
+    :func:`~wavebit.rcwa._engine.factorization._distance_gradient`, the traced one through
+    :func:`~wavebit.rcwa._engine.normal_plans.nearest_interface_offsets`, where a frozen
+    record's offsets come from too -- because the choice is not only about the metric. Equal
+    steps make the metric index space up to one uniform scale, and there whole families of
+    integer displacements are equally long -- ``(3, 4)`` and ``(5, 0)``, or ``(1, 0)`` and
+    ``(0, 1)`` -- so *which* tied pixel counts as nearest is the transform's tie-break. ``None`` settles those ties in scipy's scan order. A sampling of
+    ``(1 - 2**-53, 1)`` settles every one of them toward the axis-0 donor and
+    ``(1 + 2**-52, 1)`` toward the axis-1 donor, because the last bit is now the only
+    difference between them.
+
+    And the last bit is not something a cell controls. The steps are column norms, through a
+    division and a ``hypot``, so on an equal-sided cell they come out on 1 or an ulp or two
+    either side of it, depending on the angle and on the scale -- and on a turned basis the
+    axis-1 step does too, since its own column is no longer along x. This used to test
+    ``step_v == step_u == 1.0`` exactly, and measured on an 8 x 8 raster the test failed on 28
+    of 101 angles 1e-7 rad apart around ``oblique(0.77, 0.77, 100 deg)``, on 171 of 201
+    ``hexagonal(a)`` scales, and on a quarter of the rotations of a square cell, where both steps
+    land an ulp under 1 together; on a raster with square pixels in a non-square cell it failed
+    too.
+    A distance does not care which tied pixel it was measured to, so ``'distance'`` and
+    ``'smooth'`` moved by round-off. ``'spectral'`` copies the tied pixel's *normal*, so its
+    bulk changed donors at 6 of 64 pixels, the field jumped by up to 1.8 there, and its solve
+    jumped by 3e-4 between angles 1e-7 rad apart. The traced ``'distance'`` rebuild reads the
+    donor's offset, and its derivative with respect to one side length on an equal-sided cell
+    flipped by 0.8%.
+
+    Agreeing to :data:`_EQUAL_STEPS` is equal, then, and equal is ``None``. Every caller's steps
+    are in units of the axis-1 step -- their metrics are divided through by its length -- so
+    equal steps are both within ``1e-12`` of 1 and ``None`` measures the same distances to that
+    precision. Steps of exactly 1 were ``None`` already, and scipy multiplies by a sampling of
+    exactly 1 without rounding, so a square-pixel cell is unmoved on every path.
+
+    The tie the tolerance absorbs is the ulp one, not the geometric one. Steps that genuinely
+    differ still break every tie toward the shorter step, which is the physically nearer donor,
+    so a ``'spectral'`` field still changes donors where a cell's two steps cross: the
+    nearest-donor copy has no continuous way through an exact tie.
+    """
+    if _same_length(step_v, step_u):
+        return None
+    return (step_v, step_u)
 
 
 def _pixel_size(M):
@@ -282,8 +343,7 @@ def _periodic_signed_distance(inside, M):
     n_v, n_u = inside.shape
     if _separable(M):
         from scipy.ndimage import distance_transform_edt
-        step_v, step_u = _steps(M)
-        sampling = None if step_v == step_u == 1.0 else (step_v, step_u)
+        sampling = _edt_sampling(*_steps(M))
         t = np.tile(inside, (3, 3))
         sd = (distance_transform_edt(~t, sampling=sampling)
               - distance_transform_edt(t, sampling=sampling))
@@ -311,14 +371,23 @@ def _signed_distance_offsets(inside, M):
     tool on the same tiling -- the distance transform on an axis-aligned cell, the kd-tree on a
     skewed one -- so the distance it measured is the length of this offset in the cell's metric.
     Offsets may point into a neighbouring copy of the cell, which is what the tiling is for.
-    Where two pixels of the other phase are equally near, the tool's own pick is kept: the
-    distance is the same either way and only its derivative tells them apart.
+
+    Where two pixels of the other phase are equally near, the distance is the same either way
+    and only its derivative with respect to the cell tells them apart -- which is what a replay
+    reads this for. So a tie must not be settled by round-off. On an axis-aligned cell the
+    transform's own pick is kept, and equal steps hand it no sampling (:func:`_edt_sampling`).
+    On a skewed one the kd-tree compares lengths computed from rounded coordinates, and on an
+    equal-sided cell, where ``(d_u, d_v)`` and ``(d_v, d_u)`` are equally long, which of them it
+    returned followed the angle's last bit: ``d/d|a2|`` of a solve replayed from these offsets
+    moved by up to 2.3e-3 between angles 1e-7 rad apart, where it moves by 2e-7. Its
+    candidates are re-measured from their integer offsets instead, and lengths agreeing to
+    :data:`_EQUAL_STEPS` go to the smallest ``(d_v, d_u)`` (:func:`_nearest_settled`).
     """
     n_v, n_u = inside.shape
     if _separable(M):
         from scipy.ndimage import distance_transform_edt
-        step_v, step_u = _steps(M)
-        sampling = None if step_v == step_u == 1.0 else (step_v, step_u)
+        # `_periodic_signed_distance`'s sampling, so the pick reported is the pick it made.
+        sampling = _edt_sampling(*_steps(M))
         t = np.tile(inside, (3, 3))
         # Each transform measures to the zeros of its input: `~t`'s are the inside pixels, which
         # is what an outside pixel is nearest to, and `t`'s the outside ones.
@@ -332,21 +401,61 @@ def _signed_distance_offsets(inside, M):
         d_u = np.where(t, to_outside[1] - ii, to_inside[1] - ii)[core]
         return d_v.astype(np.int64), d_u.astype(np.int64)
 
-    from scipy.spatial import cKDTree
     Ii, Jj = np.meshgrid(np.arange(n_u, dtype=float), np.arange(n_v, dtype=float))
-    P = np.column_stack([Ii.ravel(), Jj.ravel()]) @ M.T
+    origins = np.column_stack([Ii.ravel(), Jj.ravel()])
 
     def nearest(phase):
         jj, ii = np.nonzero(phase)
         tiled = np.vstack([np.column_stack([ii + dx * n_u, jj + dy * n_v]).astype(float)
                            for dy in (-1, 0, 1) for dx in (-1, 0, 1)])
-        return tiled[cKDTree(tiled @ M.T).query(P, workers=-1)[1]]
+        return tiled[_nearest_settled(tiled, origins, M)]
 
     flat = inside.ravel()[:, None]
     target = np.where(flat, nearest(~inside), nearest(inside))
     d_u = np.rint(target[:, 0] - Ii.ravel()).astype(np.int64).reshape(n_v, n_u)
     d_v = np.rint(target[:, 1] - Jj.ravel()).astype(np.int64).reshape(n_v, n_u)
     return d_v, d_u
+
+
+#: How many of the kd-tree's nearest pixels :func:`_nearest_settled` measures first; a pixel
+#: whose last candidate still ties the nearest asks for twice as many.
+_TIE_CANDIDATES = 4
+
+
+def _nearest_settled(tiled, origins, M):
+    """For each of ``origins``, the index into ``tiled`` of its nearest point in the metric ``M``.
+
+    Both are index coordinates ``(u, v)``. The kd-tree finds the candidates in Cartesian
+    coordinates; each candidate's length is then taken again from its integer offset ``d``
+    through ``M^T M``, so that two displacements equally long in exact arithmetic come out
+    within a few ulps of each other whatever the coordinates' magnitudes, and lengths that agree
+    to :data:`_EQUAL_STEPS` are one length. Among those the smallest ``(d_v, d_u)`` wins: a rule
+    the cell's geometry decides, where the kd-tree's own pick was the last bit of its inputs.
+    Lengths that differ by more keep the nearest.
+    """
+    from scipy.spatial import cKDTree
+    tree = cKDTree(tiled @ M.T)
+    G = M.T @ M
+    points = origins @ M.T
+    total = len(tiled)
+    # A sort key that orders `(d_v, d_u)` lexicographically: |d_u| is below `span`.
+    span = int(np.abs(tiled).max() + np.abs(origins).max()) + 1
+    pick = np.empty(len(origins), dtype=np.int64)
+    rows = np.arange(len(origins))
+    k = min(_TIE_CANDIDATES, total)
+    while rows.size:
+        which = np.asarray(tree.query(points[rows], k=k, workers=-1)[1]).reshape(rows.size, k)
+        d = tiled[which] - origins[rows][:, None, :]
+        d_u, d_v = d[..., 0], d[..., 1]
+        length = np.sqrt(G[0, 0] * d_u ** 2 + 2.0 * G[0, 1] * d_u * d_v + G[1, 1] * d_v ** 2)
+        tied = length <= length.min(axis=1, keepdims=True) * (1.0 + _EQUAL_STEPS)
+        more = tied[:, -1] if k < total else np.zeros(rows.size, dtype=bool)
+        key = np.where(tied, d_v * (2 * span + 1) + d_u, np.inf)
+        settled = ~more
+        pick[rows[settled]] = which[settled, np.argmin(key[settled], axis=1)]
+        rows = rows[more]
+        k = min(2 * k, total)
+    return pick
 
 
 def _decided(decisions, kind, **detail):
@@ -1035,7 +1144,10 @@ def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None, de
     *Cartesian* wavevector ``G = 2*pi * M^-T @ (fi, fj)`` (:func:`_cartesian_frequencies`),
     so again there is no index-space difference to pull back. The bulk copy's
     nearest-donor search is the one place a diagonal metric is assumed, and it reaches only
-    the homogeneous interior, where every factorization rule agrees whatever the normal says.
+    the homogeneous interior, where every factorization rule agrees in the continuum whatever
+    the normal says. Not at finite truncation: the interior's normal enters the Fourier
+    coefficients of ``n n^T``, and a different donor at 6 of 64 interior pixels moved a solve by
+    3e-4 (:func:`_edt_sampling`).
 
     ``base_shape`` is accepted for the shared signature and deliberately unread: the
     cutoff is stated in physical orders per period, which a block-repeat of the raster
@@ -1116,20 +1228,27 @@ def spectral_normal_field(eps, interface_mask, lattice=None, base_shape=None, de
     # off on a wrap-crossing disc), while for shapes clear of the wrap the nearest donor
     # is in-cell either way and the tiling changes nothing.
     from scipy.ndimage import distance_transform_edt
-    # The one diagonal approximation in this construction, and it reaches nothing that
-    # matters: scipy's transform cannot express a non-diagonal metric, so on a skewed cell
-    # the per-axis steps are the most it can be told, and a bulk pixel may copy a donor that
-    # is not quite the physically nearest one. The *band* is untouched, and the bulk is where
-    # the layer is homogeneous -- every factorization rule agrees there whatever the normal
-    # says, which is why the field is extended into it at all rather than left at zero.
-    sampling = None if step_v == step_u == 1.0 else (step_v, step_u)
+    # The one diagonal approximation in this construction: scipy's transform cannot express a
+    # non-diagonal metric, so on a skewed cell the per-axis steps are the most it can be told,
+    # and a bulk pixel may copy a donor that is not quite the physically nearest one. The
+    # *band* is untouched, and the bulk is where the layer is homogeneous -- every
+    # factorization rule agrees there in the continuum whatever the normal says, which is why
+    # the field is extended into it at all rather than left at zero. A truncated Fourier series
+    # still sees which donor won, so the choice is small rather than invisible.
+    #
+    # Equal steps are a tie-break as well as a metric, and this is the one construction whose
+    # output depends on which of two equally near donors won -- see :func:`_edt_sampling`.
+    sampling = _edt_sampling(step_v, step_u)
     idx = distance_transform_edt(np.tile(~valid, (3, 3)), return_indices=True,
                                  sampling=sampling)[1]
     iy = idx[0][n_v:2 * n_v, n_u:2 * n_u] % n_v
     ix = idx[1][n_v:2 * n_v, n_u:2 * n_u] % n_u
-    # `max` keeps its first argument on a tie, and so does the record.
+    # `max` keeps its first argument on a tie, and so does the record -- on a tie to
+    # `_EQUAL_STEPS`, since equal edges land an ulp either way by the cell's angle and a replayed
+    # derivative reads which edge was taken as the longer.
+    edge_u, edge_v = n_u * step_u, n_v * step_v
     _decided(decisions, 'spectral', indicator=chi.astype(bool), band=valid, donor_v=iy,
-             donor_u=ix, longer_u=bool(n_u * step_u >= n_v * step_v))
+             donor_u=ix, longer_u=bool(edge_u >= edge_v or _same_length(edge_u, edge_v)))
     return nx_band[iy, ix], ny_band[iy, ix]
 
 
