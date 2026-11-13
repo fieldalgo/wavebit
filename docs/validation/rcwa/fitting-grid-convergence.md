@@ -5,6 +5,11 @@ checks the fitted parameters as well as the forward spectrum. This page records
 what its numerical controls establish; it does not certify one normal-field grid
 for all geometries.
 
+The measurements on solver `18bbcbfd` below describe the earlier normal-field
+construction. The integral construction landed in `2056a39e`; its fitting and
+grid convergence must be measured separately. Historical failures here are not
+measurements of that newer implementation.
+
 ## A complete small fit
 
 The example declares a 700 nm square period, air above glass (`epsilon=2.25`),
@@ -77,6 +82,38 @@ This CPU double-precision reproduction used JAX 0.12.0.1, NumPy 2.5.4 and SciPy
 It took seven evaluations. A separate NumPy grid-128 spectrum on NumPy 2.5.1
 agreed with the retained target to `2.8e-13` maximum absolute difference.
 These reproduce the grid effect; they do not establish convergence at 1024.
+
+### Automatic refinement through the default resolution
+
+The full automatic ladder used the same fixed target and solver `18bbcbfd`,
+JAX 0.12.0.1, NumPy 2.5.4, SciPy 1.18.1 and 30 lanes per batch. Unlike the LM
+reproduction above, the example uses TRF with `x_scale='jac'`,
+`ftol=xtol=gtol=1e-10`, `max_nfev=40` and the preceding fit as its next initial
+point. The [reviewed measurement](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_fitting_grid/measurement.json) preserves the target, target
+Jacobian, fitted parameters, noise-only standard deviations and settings.
+
+| Normal grid | Width (nm) | Angle (rad) | Center x (nm) | Thickness (nm) |
+| --- | ---: | ---: | ---: | ---: |
+| 128 | 420.000000 | 0.300000000 | 90.000000 | 300.000000 |
+| 256 | 420.341686 | 0.299912115 | 89.987132 | 299.730583 |
+| 512 | 420.393242 | 0.299577816 | 90.128351 | 299.547011 |
+| 1024 | 420.352219 | 0.299411942 | 90.218438 | 299.475121 |
+
+| Normal grid | Maximum parameter change / tolerance | Maximum same-point spectrum change / tolerance | Weighted residual norm |
+| --- | ---: | ---: | ---: |
+| 128 | — | — | 0.000 |
+| 256 | 67.354 | 236.497 | 19.564 |
+| 512 | 45.893 | 127.014 | 32.117 |
+| 1024 | 17.972 | 49.105 | 37.641 |
+
+A change ratio must be at most one to pass. **All four optimizers succeeded,
+but every adjacent refinement failed both grid checks.** The completed ladder
+therefore returned `converged=false` and exit code 2, with unchanged tolerances.
+The default 1024 did not establish convergence for this target and requested
+accuracy. The noise-only thickness standard deviation remains about 0.018 nm;
+it does not cover the displacement caused by changing the grid. Neither the
+coarse synthetic target nor this fixed-order study supplies an independent
+optical reference.
 
 ### Derivative check on the same baseline
 
