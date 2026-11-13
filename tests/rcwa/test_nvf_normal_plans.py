@@ -12,6 +12,8 @@ send each construction somewhere else.
 import numpy as np
 import pytest
 
+import wavebit
+
 from wavebit.rcwa._engine import normal_methods as nm
 from wavebit.rcwa._engine import normal_plans
 from wavebit.rcwa._engine.factorization import _interface_mask
@@ -216,6 +218,64 @@ def test_the_recorded_nearest_pixel_measures_the_signed_distance(cell):
     length = np.hypot(M[0, 0] * d_u + M[0, 1] * d_v, M[1, 0] * d_u + M[1, 1] * d_v)
     np.testing.assert_allclose(np.where(inside, -length, length),
                                nm._periodic_signed_distance(inside, M), rtol=0, atol=1e-12)
+
+
+def _turned(t, columns):
+    c, s = np.cos(t), np.sin(t)
+    return np.array([[c, -s], [s, c]]) @ np.asarray(columns, dtype=float)
+
+
+def _tall_disc():
+    """A disc on square pixels of a 3:7 rectangle (12 x 28 pixels)."""
+    eps = np.ones((28, 12))
+    j, i = np.mgrid[0:28, 0:12]
+    eps[(i - 4.8) ** 2 + (j - 15.4) ** 2 < 3.6 ** 2] = 12.25
+    return eps
+
+
+#: Families of cells with two equal pixel steps in exact arithmetic, whose computed steps land on
+#: 1 or an ulp or two either side of it, member by member. Each member draws the same raster
+#: (the 24 x 24 disc unless a scene is named) in the same geometry up to a scale, or a turn, or
+#: an angle 1e-7 rad away. ``'rhombic'`` and ``'turned square'`` send ``'smooth'`` to its
+#: kd-tree, ``'square pixels in a 3:7 rectangle'`` to its separable branch.
+EQUAL_STEPS = {
+    'rhombic': [wavebit.Lattice.oblique(1000., 1000., np.radians(100.) + 1e-7 * k)
+                for k in range(200)],
+    'hexagonal': [wavebit.Lattice.hexagonal(a) for a in np.geomspace(500., 2000., 13)],
+    'turned square': [_turned(0.3 + 1e-9 * k, np.diag([1000., 1000.])) for k in range(300)],
+    'square pixels in a 3:7 rectangle': [wavebit.Lattice.rectangular(300. * k / 7, 700. * k / 7)
+                                         for k in range(1, 41)],
+}
+
+
+def _one_of_each_step_pair(cells, shape):
+    """The first member of the family for each pair of steps it computes, which differ by ulps."""
+    first = {}
+    for cell in cells:
+        first.setdefault(nm._steps(nm._metric(cell, shape)), cell)
+    if len(first) < 2:
+        pytest.fail('every member computes the same steps; the family tests nothing')
+    return list(first.values())
+
+
+@pytest.mark.parametrize('family', sorted(EQUAL_STEPS))
+@pytest.mark.parametrize('method', ['distance', 'spectral', 'smooth'])
+def test_an_equal_step_cell_records_one_set_of_choices(method, family):
+    """A replay differentiates the cell through the choices a record took, and at a tie -- two
+    pixels equally near, two cell edges equally long -- the choice is what a derivative reads.
+    The record's choices used to follow the steps' last bit: the nearest interface pixel
+    (``nearest_interface_offsets``, sampled ``(s_v, s_u)`` always), ``'spectral'``'s donors and
+    which edge is the longer, ``'smooth'``'s nearest pixel of the other phase (its transform,
+    and on a skewed cell a kd-tree, whose pick among equal lengths was the round-off in its
+    coordinates). A side derivative of a replayed solve moved by up to 2.3e-3 between angles
+    1e-7 rad apart. Every member of a family must record the same plan."""
+    eps = _tall_disc() if family.startswith('square pixels') else _disc()
+    members = _one_of_each_step_pair(EQUAL_STEPS[family], eps.shape)
+    plans = [_record(eps, cell, method, magnitude=True)[1] for cell in members]
+    assert plans[0].direction == method
+    for cell, plan in zip(members[1:], plans[1:]):
+        assert plan == plans[0], (nm._steps(nm._metric(members[0], eps.shape)),
+                                  nm._steps(nm._metric(cell, eps.shape)))
 
 
 @pytest.mark.parametrize('n, sigma', [(16, 1.3), (16, 3.7), (10, 4.9), (9, 7.2)])

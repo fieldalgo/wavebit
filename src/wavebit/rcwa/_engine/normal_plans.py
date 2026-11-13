@@ -128,16 +128,20 @@ def nearest_interface_offsets(interface_mask, J=None):
     The one discrete choice in the ``'distance'`` construction, made on the 3x3 periodic tiling
     in the cell's per-axis steps, exactly as its traced-basis branch makes it (which calls this).
     ``J`` is the cell's index-to-Cartesian Jacobian (:func:`~wavebit.lattice.jacobian`); ``None``
-    is square pixels.
+    is square pixels. Equal steps take no sampling, as the eager branch does, so a tie settles
+    one way whatever the steps' last bit
+    (:func:`~wavebit.rcwa._engine.normal_methods._edt_sampling`).
     """
     from scipy.ndimage import distance_transform_edt
+
+    from wavebit.rcwa._engine.normal_methods import _edt_sampling
     ny_, nx_ = interface_mask.shape
     Jc = np.eye(2) if J is None else np.asarray(J, dtype=float)
     Jc = Jc / (float(np.hypot(Jc[0, 0], Jc[1, 0])) or 1.0)
     sj = float(np.hypot(Jc[0, 1], Jc[1, 1]))
     si = float(np.hypot(Jc[0, 0], Jc[1, 0]))
     tiled = np.tile(~interface_mask, (3, 3))
-    _, idx = distance_transform_edt(tiled, sampling=(sj, si), return_indices=True)
+    _, idx = distance_transform_edt(tiled, sampling=_edt_sampling(sj, si), return_indices=True)
     jj, ii = np.meshgrid(np.arange(3 * ny_), np.arange(3 * nx_), indexing='ij')
     core = (slice(ny_, 2 * ny_), slice(nx_, 2 * nx_))
     return ((idx[0] - jj)[core].astype(float), (idx[1] - ii)[core].astype(float))
