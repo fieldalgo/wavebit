@@ -7,7 +7,7 @@ for all geometries.
 
 The measurements labelled solver `18bbcbfd` describe the earlier normal-field
 construction. The integral construction landed in `2056a39e`; its fixed-point
-requalification is reported separately below. Historical failures here are not
+and refitting measurements are reported separately below. Historical failures here are not
 measurements of that newer implementation.
 
 ## A complete small fit
@@ -163,13 +163,53 @@ grid convergence.** These fixed-point results also do not establish stability
 of fitted parameters. Reproduce them with `check_grid.py` as described in the
 [study README](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_fitting_grid/README.md).
 
+## Refitting with the integral construction
+
+The [completed refitting record](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_fitting_grid/integral-fitting.json) uses solver `2056a39e`,
+JAX 0.12.0.1, NumPy 2.5.4, SciPy 1.18.1 and batches of five scalar calls.
+The run generated a new grid-128 target with this solver and held it fixed across
+all four fits. The earlier solver's target is retained separately; do not mix the
+change of normal-field construction with the effect of grid refinement.
+The parameter tolerances, spectrum tolerance, noise sigma, TRF settings and
+two-consecutive-pass rule are unchanged from the historical ladder above.
+
+| Normal grid | Width (nm) | Angle (rad) | Center x (nm) | Thickness (nm) |
+| --- | ---: | ---: | ---: | ---: |
+| 128 | 420.000000 | 0.300000000 | 90.000000 | 300.000000 |
+| 256 | 420.014209 | 0.300018938 | 89.989685 | 300.000675 |
+| 512 | 420.005667 | 0.300005112 | 89.995820 | 299.999960 |
+| 1024 | 420.005790 | 0.300005446 | 89.996013 | 299.999854 |
+
+| Normal grid | Maximum parameter change / tolerance | Maximum same-point spectrum change / tolerance | Weighted residual norm |
+| --- | ---: | ---: | ---: |
+| 128 | — | — | 0.000 |
+| 256 | 0.710 | 2.398 | 0.515 |
+| 512 | 0.427 | 0.892 | 0.434 |
+| 1024 | 0.026 | 0.264 | 0.409 |
+
+All four optimizers succeeded. The 128→256 transition fails the spectrum check;
+the next two transitions pass both checks without changing either tolerance.
+At 512→1024, thickness changes by `0.000105642 nm`, against `0.004 nm` allowed,
+and the maximum same-point reflectance change is `2.63504e-6`, against `1e-5`.
+The target and its Jacobian remain bit-for-bit equal to the grid-128 fixed-point
+record. The execution sources were also unchanged throughout the measurement.
+
+The completed ladder returns `converged=true` for the declared parameter
+and same-point spectrum criteria. A ratio must be at most one to pass. This
+fit decision is separate from the fixed-point angle-Jacobian check above,
+which still fails the `1e-3` grid-stability criterion. Noise-only standard
+deviations in the record exclude discretization bias. This fixed-order,
+same-family target does not establish independent optical accuracy.
+
 ## Controls and scope
 
 `tests/rcwa/test_spectral_fit_grid_example.py` uses exact linear inverse problems
 to check bias reduction and noise covariance, and negative controls where every
 optimizer succeeds while grid convergence fails. It checks an accidental
 plateau, unchanged parameters hiding forward drift, rank deficiency, nonfinite
-values/Jacobians and exhausted optimizer/grid budgets. These controls qualify
+values/Jacobians and exhausted optimizer/grid budgets. Reused-buffer controls
+check that the observed target and accepted evaluations stay fixed after a
+rejected trial; reporting does not repeat that accepted solve. These controls qualify
 the stopping logic; the optical example exercises the actual public solver.
 
 The default normal grid remains 1024 (or the Fourier bandwidth minimum if
