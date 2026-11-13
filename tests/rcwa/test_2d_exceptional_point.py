@@ -57,6 +57,18 @@ pytestmark = pytest.mark.shard_unit(per='test')
 _RELS = (0.0, 1e-15, -1e-15, 1e-12, -1e-12, 1e-9, -1e-9)
 
 
+def _patch_layer_modes(monkeypatch, fn):
+    """``solve_2d.layer_modes_2d`` replaced by ``fn`` for one test, where SMM reaches it too.
+
+    SMM's module binds the name when it is first imported, so a first import under a patch of
+    ``solve_2d`` alone kept ``fn`` for every later test in the process: the SMM gradient tests
+    then ran a spy that reads a tracer (``TracerArrayConversionError``), reproducibly in that
+    order. Imported first and patched there as well, both are restored after the test."""
+    from wavebit.rcwa._engine import scattering
+    monkeypatch.setattr(solve_2d, 'layer_modes_2d', fn)
+    monkeypatch.setattr(scattering, 'layer_modes_2d', fn)
+
+
 @pytest.fixture
 def rebuilt(monkeypatch):
     """How many layers the pair rebuild took, eager or traced."""
@@ -247,7 +259,7 @@ def test_the_rebuilt_layer_satisfies_both_first_order_relations(name, monkeypatc
         out = original(xp, Kx, Ky, I, epx, epy, epzi, epxy, epyx, C, **kw)
         seen.append((_omega_factors(Kx, Ky, epx, epy, epzi, epxy, epyx), out))
         return out
-    monkeypatch.setattr(solve_2d, 'layer_modes_2d', spy)
+    _patch_layer_modes(monkeypatch, spy)
     scene = PATTERNED[name]
     _strict(lambda: _solver(scene, two_d=True).solve(auto_detune=False))
     (OL, OR), (W, V, q, coupled) = seen[0]
@@ -303,7 +315,7 @@ def test_a_genuinely_2d_rebuilt_layer(first_order, monkeypatch):
             out = original(xp, Kx, Ky, I, epx, epy, epzi, epxy, epyx, C, **kw)
             seen.append((_omega_factors(Kx, Ky, epx, epy, epzi, epxy, epyx), out))
             return out
-        monkeypatch.setattr(solve_2d, 'layer_modes_2d', spy)
+        _patch_layer_modes(monkeypatch, spy)
     _strict(lambda: _genuine_solver(fy, wavelength, first_order=first_order).solve(auto_detune=False))
     operator, out = seen[0]
     assert out[-1], 'the layer was not rebuilt'
@@ -634,8 +646,7 @@ def test_more_pairs_than_the_trace_holds_is_loud(monkeypatch):
     _legacy_wavebit_enable_x64()
     jnp = jax.numpy
     original = solve_2d.layer_modes_2d
-    monkeypatch.setattr(solve_2d, 'layer_modes_2d',
-                        lambda *a, **k: original(*a, **{**k, 'pair_cap': 1}))
+    _patch_layer_modes(monkeypatch, lambda *a, **k: original(*a, **{**k, 'pair_cap': 1}))
     scene = PATTERNED['PA616']
     s = _solver(scene, backend='jax', two_d=True)
     R = np.asarray(jax.jit(lambda w: s.solve(wavelength=w, auto_detune=False).R)(
