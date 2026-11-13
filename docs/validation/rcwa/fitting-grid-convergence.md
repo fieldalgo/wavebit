@@ -138,7 +138,8 @@ parameters, with the same Fourier orders and CPU double precision. The
 retains all values, all four Jacobian columns, finite differences, versions and
 provenance. The study uses bounded groups of five scalar JIT calls; it preserves
 all observations while avoiding the memory expansion of an outer spectral
-`vmap`. Independent scalar and public wavelength-array comparisons agree.
+`vmap`. Two-wavelength, two-polarization comparisons against independent scalar
+calls and the public wavelength-array route agree.
 
 At grid 128, the original Richardson steps give relative column errors
 `(6.68e-9, 7.58e-9, 1.38e-9, 9.15e-12)`. **All four pass** the unchanged `1e-3`

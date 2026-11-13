@@ -2,6 +2,7 @@
 import importlib.util
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -108,6 +109,37 @@ def test_progress_callback_receives_each_completed_fit_once():
     report = fit(biased, spectrum_tolerance=.06, on_stage=seen.append)
     assert [s.grid for s in seen] == [s.grid for s in report.stages]
     assert len(seen) == 6
+
+
+def test_rejected_final_trial_does_not_repeat_or_overwrite_the_accepted_solve(monkeypatch):
+    """Keep the accepted pair even when a model reuses its output buffers."""
+    calls = {}
+
+    def factory(grid):
+        calls[grid] = []
+        values, jacobian = np.empty(1), np.empty((1, 1))
+
+        def model(p):
+            calls[grid].append(float(p[0]))
+            values[0], jacobian[0, 0] = p[0]**2, 2*p[0]
+            return values, jacobian
+        return model
+
+    def stop_after_rejection(fun, x, *, jac, **kwargs):
+        fun(x)
+        jac(x)
+        fun(x + 1)
+        return SimpleNamespace(x=x.copy(), success=True)
+
+    monkeypatch.setattr(example, 'least_squares', stop_after_rejection)
+    report = example.fit_grid_ladder(factory, [1.], [1.], grids=(1, 2, 4),
+        noise_sigma=.1, parameter_tolerance=.01, spectrum_tolerance=.01)
+    assert report.converged
+    # Earlier grids are evaluated once more for the same-point cross-grid check.
+    assert calls == {1: [1., 2., 1.], 2: [1., 2., 1.], 4: [1., 2.]}
+    assert all(stage.residual_norm == 0 for stage in report.stages)
+    for stage in report.stages:
+        np.testing.assert_allclose(stage.noise_std, [.05])
 
 
 @pytest.mark.parametrize('field', ['initial', 'data', 'noise_sigma'])
