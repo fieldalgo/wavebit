@@ -895,7 +895,8 @@ and four with `cond(X) <= 20.0`, and `cond(X)` reached 8.3 on the synthetic clus
 `eig` has handed back nearly parallel vectors at an eigenvalue of multiplicity two or more; the
 split is formed again from re-derived vectors, and the one the check reads less of is kept
 (*Collapsed eigenvectors*, below). Where a
-cluster holds a Jordan chain of length three no such split exists. A cluster smaller than its
+cluster holds a Jordan chain of length three no such split exists; eagerly, where no derivative
+is taken, three levels take it (*A chain in three levels*, below). A cluster smaller than its
 slot pads its last lanes: decoupled at a stand-in eigenvalue far from every mode, put back on
 their lanes by an explicit permutation rather than by `eig`'s order (the stand-in's eigenpairs,
 as many as there are padded lanes, last, the members in front, each part in `eig`'s order: the
@@ -1115,7 +1116,8 @@ span -- 7.1e-3 against 7.2e-5 at the band's edge, a margin of 1.4 below `_EP_SIN
 span leaves 140. No disjoint split represents the chain itself, so at the point the joint check
 warns, now on answers within 7.8e-13. It warns on 36 of the 66 solves within 1e-7 of the three
 points (46 before, 44 of them more than 1e-12 off), 32 of them on answers within 1.3e-13:
-false alarms. A rebuild that represents the chain would quiet them; it is not done. The
+false alarms. A rebuild that represents the chain quiets them where no derivative is taken
+(*A chain in three levels*, below). The
 first-order split, whose gate reads before its pair gate, already took the three jointly: quiet
 answers within 3.9e-14, loud ones within 1.4e-11 at the point.
 
@@ -1126,6 +1128,47 @@ threshold at 1e-6, the sine read against the pair's eigenvector alone, the pair 
 first slot, a pair member read as the third, every such ball taken jointly, and the third member
 found as the sum of a ball's unpaired lanes (an index past the layer on other balls: an
 `IndexError` eagerly, out of range under `torch.func.vmap`).
+
+*A chain in three levels* (2026-11-13). No two-level split represents a Jordan chain of length
+three: its coupling `B` has `B**2 != 0`. Three levels do. `solve_2d.py::_chain_split` takes
+`X = [E_0 | C_0 Y_1 | C_0 C_1 Y_2]`: `E_0` some of `eig(T)`'s unit eigenvectors, `C_0` the
+orthonormal complement of their span, `Y_1` some eigenvectors of the quotient `C_0^H T C_0`,
+`C_1` the complement of those in it and `Y_2` the eigenvectors of the second quotient (Golub
+and Van Loan, sections 7.1.4 and 7.6, applied twice). Then `X^-1 T X = L + B` with `B` coupling
+each lane only to lanes of a higher level, so `B**3 = 0`; with one member a level it is a Schur
+form, `cond(X) = 1`. Every choice of the two eigenvector sets among a slot's members is tried
+(`3**m - 3 * 2**m + 3` for `m` members: 6 for three, 5796 for eight) and the one the check reads
+least of is kept, where it reads less than the two-level split's. The rest follows from
+`B**3 = 0`:
+
+- the root `q = diag(r) + N` takes the Schur square root's recurrence
+  `N_ij = (B_ij - sum_k N_ik N_kj) / (r_i + r_j)` (A. Bjorck and S. Hammarling, Linear Algebra
+  Appl. 52/53, 127, 1983), whose sum is nonzero only two levels up;
+- `q^-1 = D^-1 - D^-1 N D^-1 + D^-1 N D^-1 N D^-1`;
+- the exponential gains the paths of two coupling steps, `sum_k N_ik N_kj f[x_i, x_k, x_j]`,
+  `k` a mode that is both a coupled row and a coupled column (an exact test on the value) and
+  the second divided difference of `exp` formed as the first ones are, by the series about one
+  point for a tight set and the recurrence over the widest pair for a spread one (McCurdy, Ng
+  and Parlett 1984): within 4.2e-16 of a 40-digit `expm` from a coincident chain to one split by
+  1e-3 and at scales from -40 to `2i`;
+- the first-order split's generator is the block `L + B` itself, and its split the same.
+
+A coupling on disjoint rows and columns has no two-step term: the three levels' arithmetic is
+placed only on the entries two levels up, so a two-level split keeps its bits.
+
+At the three third-order points (relative wavelength offsets 0 .. +-1e-7, against the Cauchy
+circle): every solve quiet, 2D within 2.4e-14 and first order within 3.9e-14, on NumPy, JAX and
+PyTorch; fields (six components at eighteen points inside the layer) within 3.7e-14 of the
+field's own circle. At the point the 2D path had warned on answers up to 7.8e-13 off and the
+first-order one up to 1.4e-11. The digests of *Eight modes* are identical: no slot there fails
+its two-level check.
+
+*Not yet.* The three levels are taken only eagerly and where no derivative is taken
+(`layer_modes_2d`'s and the first-order split's `chains` word). The derivative rules
+(`_pair_sylvester`, `_pair_inverse`, `two_face`'s tangent terms, `split_generator`) and the
+traced exponential's closed-form tangent take a coupling that reaches one level, so a
+derivative at the point (`jax.grad`, torch's backward pass) warns and a trace answers NaN, as
+before; neither gives a silent answer.
 
 *The screens under a trace* (2026-11-10). Nothing can warn under `jit`, `vmap` or
 `torch.func.vmap`, and the unresolved and backward-error screens used to be skipped there, so what
@@ -1202,8 +1245,9 @@ the Gram matrices of their columns, the defect measure on its slots, and on 2D o
   doublets sit within 3e-3 of another cluster or pair, their wide ball can hold more than eight modes
   and only the narrow radius reads them: silent, as before the wide radius (not met on any layer
   measured).
-- A length-3 Jordan chain is loud at its point, not exact; off it the gate takes its three
-  modes jointly, exact or loud (*Three modes, one eigenvector*, above).
+- A length-3 Jordan chain is exact and quiet eagerly where no derivative is taken (*A chain in
+  three levels*, above); a derivative there warns and a trace answers NaN. Off the point the
+  gate takes its three modes jointly (*Three modes, one eigenvector*, above).
 - Where `eig`'s start is poorer than the second step can absorb, the check warns; the answer is
   not exact. Two steps leave a remainder of third order in the start's error over the gap to
   the nearest block, so how poor depends on that gap: off by about 1e-4 with every block 1e-2
@@ -1452,8 +1496,9 @@ into the generator. Two survive: the rows' diagonal taken from `eig` instead of 
 pair terms in the chord step, which no measured model reaches (as when the chord step landed).
 
 *Limits.* What the joint rebuild does not take keeps §8's limits: a cluster of more than eight
-modes, a chain, a length-3 Jordan chain (its check fails, and the screen warns too: loud),
-complex64 (the gate stays closed). A ball of three holding a pair is a cluster here, unlike on
+modes, a chain, a length-3 Jordan chain under a derivative or a trace (its two-level check
+fails, and the screen warns too: loud; eagerly with no derivative three levels take it, §8's
+*A chain in three levels*), complex64 (the gate stays closed). A ball of three holding a pair is a cluster here, unlike on
 2D, since the gate reads before the pair gate; the synthetic rows above cover it. Under a trace
 more clusters than slots answer NaN: a coincident cluster left over would be loud anyway (the
 screen reads it), but the C4v doublets would not: with the gate closed they were up to 3.1e-13
@@ -1541,7 +1586,8 @@ cases. This covers those measured cases, not every possible opposite-label pair.
 
 - Coincident EPs of three to eight modes a direction are rebuilt jointly (above). What that
   rebuild does not take -- a cluster of more than eight modes, a chain, a length-3 Jordan chain
-  (its check fails) -- keeps the eigenvector arithmetic and warns eagerly; under `jit`, `vmap`
+  under a derivative (its two-level check fails; with none, three levels take it eagerly) --
+  keeps the eigenvector arithmetic and warns eagerly; under `jit`, `vmap`
   or `torch.func.vmap` the screen runs as data and the layer answers NaN. The screen's slots
   there are `max(slots, n / 16)`, `n` the split's mode count, and more candidate balls than that
   answer NaN as well, as more clusters than the gate's slots do.

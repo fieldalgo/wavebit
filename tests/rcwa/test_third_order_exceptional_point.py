@@ -21,18 +21,29 @@ dependent, and the three were too far apart for the unresolved screen's ball. Ag
 oracle the 2D path was silently up to 9.9e-12 off (eager) and 8.6e-12 (``jax.jit``); closer it
 warned and was up to 9.3e-3 off (SMM at the point).
 
-**Now** a ball of three holding one gated pair is taken jointly where its third column lies
+**Then** a ball of three holding one gated pair was taken jointly where its third column lies
 within ``_EP_SINE`` of the pair's span (``solve_2d._defective_clusters``). Every answer near the
-three points is within 1e-12 of the oracle or warns; the warnings are now on answers within
-7.8e-13. The first-order split, whose gate reads before its pair gate, already took the three
-jointly (quiet answers within 3.9e-14).
+three points was within 1e-12 of the oracle or warned; the warnings were on answers within
+7.8e-13 -- at the point the joint rebuild's two-level split cannot represent a chain of length
+three. The first-order split, whose gate reads before its pair gate, already took the three
+jointly (quiet answers within 3.9e-14, loud ones within 1.4e-11).
+
+**Now** (2026-11-13) a slot whose two-level split fails the check tries three levels
+(``solve_2d._chain_split``): the coupling reaches two levels up (``N**2 != 0``, ``N**3 = 0``),
+the root takes its second-order term, the inverse and the exponential theirs. Eagerly, where no
+derivative is taken, every answer near the three points is quiet and within 3.9e-14 of the
+oracle, on both formulations and every backend, fields within 3.7e-14. Derivatives and traces
+take the two-level split still: loud (a warning, or NaN under a trace).
 
 What this file pins:
 
 1. the points are third order;
 2. near them the 2D path is exact or loud, eagerly, with the gate taking the three jointly in
    the band where it did not;
-3. under ``jax.jit`` the values are exact or NaN.
+3. under ``jax.jit`` the values are exact or NaN;
+4. eagerly with no derivative, quiet and exact at and near the points, values and fields, both
+   formulations; the three-level split and the exponential's two-step paths on their own;
+5. a derivative there still warns, and a trace answers NaN.
 """
 
 import functools
@@ -268,3 +279,176 @@ def test_traced_values_near_a_third_order_point_are_exact_or_nan(algo):
         err = np.max(np.abs(got - _oracle(name, rel)))
         assert err < 1e-12, f'{algo} rel {rel:g}: {err:.1e}, finite'
     assert finite
+
+
+# ----------------------------------------------- 4. the chain in three levels, eagerly
+
+def _quiet(fn):
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter('always')
+        out = fn()
+    assert not any(issubclass(w.category, ExceptionalPointWarning) for w in rec), \
+        [str(w.message)[:80] for w in rec]
+    return out
+
+
+def _formulated(name, rel, algo, backend, first_order, theta=0.3):
+    s = _solver(name, rel, theta, algo, backend)
+    if first_order:
+        s.formulation = 'first_order'
+    return s
+
+
+_CHAIN_CASES = (
+    [(FIRST, r, fo, 'numpy') for r in (0.0, 1e-9, -1e-9) for fo in (False, True)]
+    + [pytest.param(n, r, fo, be, marks=pytest.mark.slow)
+       for n in EP3 for r in _NEAR + _FAR for fo in (False, True) for be in ('numpy', 'jax', 'torch')
+       if not (n == FIRST and r in (0.0, 1e-9, -1e-9) and be == 'numpy')])
+
+
+@pytest.mark.parametrize('name, rel, first_order, backend', _CHAIN_CASES)
+def test_at_a_third_order_point_the_answer_is_exact_and_quiet(name, rel, first_order, backend):
+    """Eagerly, with no derivative taken, ETM and SMM within 1e-12 of the Cauchy oracle and no
+    ``ExceptionalPointWarning``, at the point and off it, on both formulations. Measured: 2D
+    within 2.4e-14 and first-order within 3.9e-14 at all three points (offsets 0 .. +-1e-7),
+    NumPy, JAX and PyTorch alike; before the three levels the 2D path warned on 36 of the 66
+    NumPy solves within 1e-7 (up to 7.8e-13 off at the point) and first-order warned at the
+    point (up to 1.4e-11). Catches the three levels, the root's second-order term, the inverse's
+    or the exponential's dropped."""
+    if backend == 'jax':
+        pytest.importorskip('jax')
+        from wavebit._common.backend import _enable_x64
+        _enable_x64()
+    elif backend == 'torch':
+        pytest.importorskip('torch')
+    ref = _oracle(name, rel)
+    for algo in ('ETM', 'SMM'):
+        r = _quiet(lambda: _formulated(name, rel, algo, backend, first_order).solve(auto_detune=False))
+        err = np.max(np.abs(np.concatenate([_np(r.r_xyz).ravel(), _np(r.t_xyz).ravel()]) - ref))
+        assert err < 1e-12, f'{name} {algo} rel {rel:g} first_order={first_order}: {err:.1e}'
+
+
+_FIELD_AT = ([-200., 0., 130.], [0., 200.], [40., 150., 260.])
+
+
+def _field(name, rel, algo, first_order, theta=0.3):
+    r = _formulated(name, rel, algo, 'numpy', first_order, theta).solve(auto_detune=False,
+                                                                          answers='field')
+    return _np(r.reconstruct_field(*(np.asarray(v) for v in _FIELD_AT)))
+
+
+@pytest.mark.parametrize('name, rel', [(FIRST, 0.0)] + [pytest.param(n, r, marks=pytest.mark.slow)
+                                                        for n in EP3 for r in (0.0, 1e-9)
+                                                        if (n, r) != (FIRST, 0.0)])
+def test_fields_at_a_third_order_point_are_exact_and_quiet(name, rel):
+    """The six components at three x, two y and three z inside the layer, against the same
+    Cauchy circle of the field (it is analytic in ``theta``; no conjugate is taken), ETM and SMM,
+    both formulations: within 1e-12 of ``max|F|``, quiet. Measured 3.7e-14 (2D) and 1.7e-14
+    (first order) at the fy 0.5, 620.55 nm point."""
+    unit = np.exp(2j * np.pi * np.arange(16) / 16)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        ref = np.mean([_field(name, rel, 'ETM', False, 0.3 + 1e-4 * u) for u in unit], axis=0)
+    scale = np.max(np.abs(ref))
+    for first_order in (False, True):
+        for algo in ('ETM', 'SMM'):
+            got = _quiet(lambda: _field(name, rel, algo, first_order))
+            err = np.max(np.abs(got - ref)) / scale
+            assert err < 1e-12, f'{algo} first_order={first_order}: {err:.1e}'
+
+
+def test_the_chain_split_is_a_schur_form():
+    """A synthetic Jordan chain of length three (couplings 0.05 and 0.04, eigenvalue split by
+    rounding) in a random unitary basis, padded to four lanes: no two-level split passes, and the
+    three-level one puts one member on each level -- a Schur form, ``cond(X) = 1`` -- with
+    ``X^-1 T X`` coupling only upward, the padded lane untouched."""
+    rng = np.random.default_rng(5)
+    U, _ = np.linalg.qr(rng.normal(size=(3, 3)) + 1j * rng.normal(size=(3, 3)))
+    J = np.array([[0.3, 0.05, 0.0], [0.0, 0.3, 0.04], [0.0, 0.0, 0.3]], complex)
+    T = np.zeros((1, 4, 4), complex)
+    T[0, :3, :3] = U @ J @ U.conj().T
+    T[0, 3, 3] = 40.0
+    valid = np.array([[True, True, True, False]])
+    X, level, cond = solve_2d._chain_split(np, T, valid, 40.0)
+    assert sorted(np.asarray(level)[0, :3].tolist()) == [0, 1, 2]
+    assert abs(float(cond[0]) - 1.0) < 1e-12
+    Mx = np.linalg.solve(X[0], T[0] @ X[0])
+    lv = np.asarray(level)[0]
+    up = (lv[:, None] < lv[None, :]) | np.eye(4, dtype=bool)
+    up[3, :3] = up[:3, 3] = False
+    up[3, 3] = True
+    assert np.max(np.abs(np.where(up, 0, Mx))) < 1e-15
+    assert np.allclose(X[0][3], [0, 0, 0, 1]) and np.allclose(X[0][:, 3], [0, 0, 0, 1])
+
+
+def _taylor_expm(A, terms=40):
+    out, term = np.eye(A.shape[0], dtype=complex), np.eye(A.shape[0], dtype=complex)
+    for n in range(1, terms):
+        term = term @ A / n
+        out = out + term
+    return out
+
+
+@pytest.mark.parametrize('split', [0.0, 1e-6, 1e-3])
+@pytest.mark.parametrize('scale', [-5.0, -40.0, 2.0j])
+def test_the_exponential_takes_two_coupling_steps(split, scale):
+    """``modal_gradient.exponential`` of a chain's coupled ``q`` (couplings 0.05, 0.04 and 0.03,
+    the eigenvalue split by ``split``) beside two plain modes, against ``exp(s lambda)`` times a
+    float64 Taylor series of the chain block's small remainder: within 1e-14 relative. The two
+    plain modes' entries are their phases, and a coupling on disjoint rows and columns takes no
+    two-step term (``_chain_paths`` is ``None``). Catches the two-step paths dropped or their
+    series' degree shifted."""
+    from wavebit.rcwa._engine import modal_gradient
+    lam = 0.3 + 0.01j
+    d = np.array([lam, lam + split, lam - 2 * split, 1.1, 1.7 + 0.2j])
+    q = np.diag(d)
+    q[0, 1], q[1, 2], q[0, 2] = 0.05, 0.04, 0.03
+    E = modal_gradient.exponential(np, q, scale)
+    block = np.exp(scale * lam) * _taylor_expm(scale * (q[:3, :3] - lam * np.eye(3)))
+    assert np.max(np.abs(E[:3, :3] - block)) / np.max(np.abs(block)) < 1e-14
+    assert np.allclose(np.diag(E)[3:], np.exp(scale * d[3:]), rtol=1e-15)
+    pairs = np.diag(d)
+    pairs[0, 1], pairs[3, 4] = 0.05, 0.02
+    assert modal_gradient._chain_paths(np, pairs - np.diag(d), d, np.asarray(scale)) is None
+
+
+def test_the_exponential_takes_a_spread_chain():
+    """The two-step paths' recurrence (points more than 0.5 apart): a chain at 0.3, 1.4 and 2.9
+    (couplings 0.5, 0.4 and 0.3) against the eigendecomposition of the well-separated block:
+    within 1e-14 relative."""
+    from wavebit.rcwa._engine import modal_gradient
+    d = np.array([0.3, 1.4, 2.9, 1.1, 1.7], complex)
+    q = np.diag(d)
+    q[0, 1], q[1, 2], q[0, 2] = 0.5, 0.4, 0.3
+    s = -3.0
+    E = modal_gradient.exponential(np, q, s)
+    w, V = np.linalg.eig(s * q[:3, :3])
+    block = V @ np.diag(np.exp(w)) @ np.linalg.inv(V)
+    assert np.max(np.abs(E[:3, :3] - block)) / np.max(np.abs(block)) < 1e-14
+
+
+# ------------------------------------- 5. derivatives and traces there, for now loud
+
+def test_a_derivative_or_a_trace_at_a_third_order_point_stays_loud():
+    """The three levels are taken only eagerly and where no derivative is: the derivative rules
+    and the traced exponential take a coupling that reaches one level. So at the point
+    ``jax.grad`` and torch's backward pass warn, and ``jax.jit`` answers NaN, as before the three
+    levels -- never a silent answer from a rule that drops the second step. Catches the three
+    levels taken under a derivative or a trace."""
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+    import jax.numpy as jnp
+    from wavebit._common.backend import _enable_x64
+    _enable_x64()
+    _, wl, _ = EP3[FIRST]
+    s = _solver(FIRST, backend='jax')
+    with pytest.warns(ExceptionalPointWarning):
+        jax.grad(lambda w: jnp.sum(jnp.real(s.solve(wavelength=w, auto_detune=False).R)))(
+            jnp.asarray(wl))
+    st = _solver(FIRST, backend='torch')
+    w_t = torch.tensor(wl, dtype=torch.float64, requires_grad=True)
+    with pytest.warns(ExceptionalPointWarning):
+        torch.sum(torch.real(st.solve(wavelength=w_t, auto_detune=False).R)).backward()
+    jv = np.asarray(jax.jit(lambda w: s.solve(wavelength=w, auto_detune=False).r_xyz)(
+        jnp.asarray(wl)))
+    assert np.all(np.isnan(jv))

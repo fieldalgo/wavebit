@@ -1060,8 +1060,8 @@ def joint_layers(monkeypatch):
     seen = []
     original = solve_2d._rebuild_defective_clusters
 
-    def recorded(xp, A, Omega_R, W, V, q, w, pairs, clusters):
-        out = original(xp, A, Omega_R, W, V, q, w, pairs, clusters)
+    def recorded(xp, A, Omega_R, W, V, q, w, pairs, clusters, **kwargs):
+        out = original(xp, A, Omega_R, W, V, q, w, pairs, clusters, **kwargs)
         seen.append((np.asarray(A), [np.asarray(c) for c in clusters[:2]], out))
         return out
     monkeypatch.setattr(solve_2d, '_rebuild_defective_clusters', recorded)

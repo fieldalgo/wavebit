@@ -33,6 +33,7 @@ import numpy as np
 from wavebit._common.backend import ExceptionalPointWarning
 from wavebit._common.backend import array_namespace
 from wavebit._common.backend import as_array
+from wavebit._common.backend import carries_autodiff
 from wavebit._common.backend import eig
 from wavebit._common.backend import in_namespace
 from wavebit._common.backend import linear_solve
@@ -331,7 +332,7 @@ def _regular_pair(xp, M, values, psi, a, b, engaged):
     return unit * diagonal + coupling, psi
 
 
-def _regular_clusters(xp, M, values, psi, w, clusters):
+def _regular_clusters(xp, M, values, psi, w, clusters, chains=False):
     """Rebuild each defective cluster of a first-order layer jointly, in a regular basis.
 
     ``clusters`` is :func:`~wavebit.rcwa._engine.solve_2d._defective_clusters`' answer for the
@@ -356,6 +357,11 @@ def _regular_clusters(xp, M, values, psi, w, clusters):
     which :func:`~wavebit.rcwa._engine.modal_gradient.exponential` and
     :func:`~wavebit.rcwa._engine.modal_gradient.split_generator` take exactly, as they take a
     pair's. The first-order generator is the eigenvalue itself, so no root is taken.
+
+    With ``chains`` (no derivative taken), eagerly a slot no two-level split passes tries three
+    levels (:func:`~wavebit.rcwa._engine.solve_2d._chain_split`): a Jordan chain of length
+    three, its block ``L + B`` with ``B`` reaching two levels up, which the exponential takes
+    exactly too.
 
     Returns ``(values, psi, bad)``: ``bad`` per slot where the rebuild fails the 2D path's check
     (the corrected subspace misses ``M`` by more than rounding, or the split drops more than the
@@ -399,7 +405,8 @@ def _regular_clusters(xp, M, values, psi, w, clusters):
                      axis=1)
     del coupling
     Q1, X, Mx, dg, JK, res1, tau, tau_res, cond, dropped = _joint_cluster_bases(
-        xp, M, W0, Q0, Mc, Gc, members, cvalid, diagonal, is_a, m01_row, partner, F)
+        xp, M, W0, Q0, Mc, Gc, members, cvalid, diagonal, is_a, m01_row, partner, F,
+        chains=chains)
     del W0, Gc
     psi = place_c(Q1 @ X, psi)
     # The clusters' blocks by placement, never by a sum: `values` keeps its bits elsewhere.
@@ -545,7 +552,10 @@ def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1):
         for a, b, engaged in pairs:
             values, psi = _regular_pair(xp, frozen, values, psi, a, b, engaged)
         if clusters is not None:
-            values, psi, bad = _regular_clusters(xp, frozen, values, psi, eig_lam, clusters)
+            # A Jordan chain of length three only where no derivative is taken: split_generator
+            # takes a coupling that reaches one level only.
+            values, psi, bad = _regular_clusters(xp, frozen, values, psi, eig_lam, clusters,
+                                                 chains=not carries_autodiff(M))
             if c_over is None:
                 if _concrete(xp.any(bad)):
                     import warnings

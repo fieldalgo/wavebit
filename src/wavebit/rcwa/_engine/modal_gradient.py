@@ -6,6 +6,7 @@ We stop the eigensolve and represent that variation in the computed basis;
 modal admittances and exponentials then consume its full matrix variation.
 This is a first-order construction, not a differentiable eigendecomposition.
 """
+from wavebit._common.backend import _concrete
 from wavebit._common.backend import array_namespace
 from wavebit._common.backend import carries_autodiff
 from wavebit._common.backend import forward_tangent
@@ -417,7 +418,91 @@ def exponential(xp, q, scale, coupled=False):
     denominator = xp.where(difference != 0, difference, xp.ones_like(difference))
     divided = xp.where(difference != 0, numerator/denominator,
                        scale[..., None, None]*phases[..., None, :])
-    return eye*phases[..., None, :] + (q-eye*values)*divided
+    out = eye*phases[..., None, :] + (q-eye*values)*divided
+    chain = _chain_paths(xp, q - eye*values, values, scale)
+    return out if chain is None else out + chain
+
+
+def _chain_paths(xp, N, values, scale):
+    """The paths of two coupling steps in ``exp(scale (diag(values) + N))``, or ``None``.
+
+    A Jordan chain of length three rebuilt in three levels (``solve_2d._chain_split``) has a
+    coupling with ``N**2 != 0`` (``N**3 = 0``), and the divided-difference form of a function of
+    a triangular matrix (Opitz 1964; Davis 1973) gains the paths through a middle mode ``k``:
+    ``sum_k N_ik N_kj f[x_i, x_k, x_j]`` with ``f(x) = exp(scale x)``. ``k`` ranges over the
+    modes that are both a coupled row and a coupled column (an exact test on the value, no
+    threshold); a coupling on disjoint rows and columns has none, and the exponential is the
+    one-step formula alone, to the bit. Read eagerly only: under an abstract trace no chain is
+    rebuilt (``None``).
+    """
+    nz = N != 0
+    middle = xp.any(nz, axis=1) & xp.any(nz, axis=0)
+    if not _concrete(xp.any(middle)):
+        return None
+    import numpy as np
+    from wavebit._common.backend import _readable
+    dev = getattr(N, 'device', None)
+    m = N.shape[0]
+    idx = xp.arange(m, device=dev)
+    nz_np = np.asarray(_readable(nz, xp))
+    out = None
+    for k in np.nonzero(np.asarray(_readable(middle, xp)))[0].tolist():
+        rows = xp.asarray(np.nonzero(nz_np[:, k])[0], device=dev)
+        cols = xp.asarray(np.nonzero(nz_np[k, :])[0], device=dev)
+        x_i = xp.take(values, rows)[:, None]
+        x_j = xp.take(values, cols)[None, :]
+        x_k = values[k]
+        f2 = _exp_divided_2(xp, scale[..., None, None], x_i, x_k, x_j)
+        weight = xp.take(N[:, k], rows)[:, None] * xp.take(N[k, :], cols)[None, :]
+        Oi = xp.astype(idx[:, None] == rows[None, :], N.dtype)
+        Oj = xp.astype(idx[:, None] == cols[None, :], N.dtype)
+        term = Oi @ (weight * f2) @ xp.matrix_transpose(Oj)
+        out = term if out is None else out + term
+    return out
+
+
+def _exp_divided_2(xp, s, x0, x1, x2):
+    """``f[x0, x1, x2]`` for ``f(x) = exp(s x)``, stably: ``s**2 exp[p0, p1, p2]`` at
+    ``p = s x``. A tight set (diameter at most :data:`_DD_SERIES_DIAMETER`) takes the Taylor
+    series about ``p0`` (:func:`_series_about_first`'s, through degree
+    :data:`_DD_SERIES_TERMS`); a spread one the recurrence divided by its widest pair, each
+    first divided difference spelled with ``expm1`` as :func:`exponential` spells its own -- the
+    hybrid of McCurdy, Ng and Parlett (Math. Comp. 43, 501, 1984). Backend-generic; every
+    divisor guarded."""
+    import math
+    p0, p1, p2 = s * x0, s * x1, s * x2
+
+    def first(a, b):
+        d = a - b
+        right = xp.real(d) >= 0
+        num = xp.where(right, xp.exp(a) * (-xp.expm1(-xp.where(right, d, 0))),
+                       xp.exp(b) * xp.expm1(xp.where(right, 0, d)))
+        return xp.where(d != 0, num / xp.where(d != 0, d, xp.ones_like(d)), xp.exp(a))
+
+    pts = (p0, p1, p2)
+    pairs = [(0, 1), (0, 2), (1, 2)]
+    gaps = [xp.abs(pts[i] - pts[j]) for i, j in pairs]
+    # f[P - p_j] - f[P - p_i] over (p_i - p_j), for each pair (i, j) as the divisor.
+    omit = {0: first(p1, p2), 1: first(p0, p2), 2: first(p0, p1)}
+    cand = []
+    for i, j in pairs:
+        diff = pts[i] - pts[j]
+        cand.append((omit[j] - omit[i]) / xp.where(diff != 0, diff, xp.ones_like(diff)))
+    widest = xp.where(gaps[0] >= gaps[1], xp.where(gaps[0] >= gaps[2], 0, 2),
+                      xp.where(gaps[1] >= gaps[2], 1, 2))
+    recurrence = xp.where(widest == 0, cand[0], xp.where(widest == 1, cand[1], cand[2]))
+    y1, y2 = p1 - p0, p2 - p0
+    h = [xp.ones_like(y1 + y2)]
+    for _ in range(_DD_SERIES_TERMS):
+        h.append(h[-1] * y1)
+    for j in range(1, _DD_SERIES_TERMS + 1):
+        h[j] = h[j] + y2 * h[j - 1]
+    total = xp.zeros_like(h[0])
+    for j in range(_DD_SERIES_TERMS, -1, -1):
+        total = total + h[j] * (1.0 / math.factorial(j + 2))
+    series = xp.exp(p0) * total
+    diameter = xp.maximum(xp.maximum(gaps[0], gaps[1]), gaps[2])
+    return s * s * xp.where(diameter > _DD_SERIES_DIAMETER, recurrence, series)
 
 
 #: The largest 1-norm the degree-13 Pade approximant takes unscaled, ``theta_13`` (N. J. Higham,

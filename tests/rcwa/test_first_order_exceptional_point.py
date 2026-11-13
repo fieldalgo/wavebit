@@ -373,14 +373,20 @@ def _jordan_chain():
     return Q @ M @ Q.conj().T
 
 
-def test_a_length_three_jordan_chain_is_loud():
+def test_a_length_three_jordan_chain_is_rebuilt_in_three_levels():
     """A length-3 Jordan block has no split into blocks with a coupling on disjoint rows and
-    columns, so the joint rebuild's check fails on it: eagerly an ``ExceptionalPointWarning``,
-    under ``jax.jit`` NaN in both directions' generators. Catches the check's verdict dropped
-    from the first-order split (a silent answer in a basis that misses ``M``)."""
+    columns, so the two-level split fails the joint rebuild's check. Eagerly, with no derivative
+    taken, three levels take it (``solve_2d._chain_split``, since 2026-11-13): quiet, each
+    direction's modes an invariant subspace of ``M`` to rounding, the generator's coupling
+    reaching two levels up. Under ``jax.jit`` no chain is rebuilt yet, and the check's verdict
+    is NaN in both directions' generators. Catches the three levels dropped (loud) or the check's
+    verdict dropped under a trace (a silent answer in a basis that misses ``M``)."""
     M = _jordan_chain()
-    with pytest.warns(_legacy_wavebit_ExceptionalPointWarning, match='joint rebuild'):
-        fo._layer_split(np, M, 3)
+    miss, coupled = _quiet_split(M, 3)
+    assert coupled and miss < 1e-13, miss
+    lam_f = fo._layer_split(np, M, 3)[0]
+    N = lam_f - np.diag(np.diag(lam_f))
+    assert np.any(N @ N != 0)
     jax = pytest.importorskip('jax')
     _legacy_wavebit_enable_x64()
     jnp = jax.numpy
