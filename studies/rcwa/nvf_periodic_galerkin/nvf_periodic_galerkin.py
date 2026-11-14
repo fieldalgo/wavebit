@@ -61,7 +61,7 @@ def main():
                   degree=args.degree, gaps=GAPS, period=[700., 700.], width=350., epsilon=12.25,
                   background=1., top=1., bot=2.25, wavelength=900., thickness=300., theta=.2, phi=0.,
                   original_normal_grid=256,
-                  source_sha256={Path(p).name: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in sources}))
+                  source_sha256={Path(p).name: hashlib.sha256(Path(p).read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in sources}))
         for n in args.orders:
             for r in args.refinements:
                 obj = periodic_rectangle_galerkin.PeriodicRectangleGalerkinGapCell(

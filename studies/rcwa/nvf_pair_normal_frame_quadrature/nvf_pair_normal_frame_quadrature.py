@@ -73,7 +73,7 @@ def main():
         emit(dict(kind='header', numpy=np.__version__, platform=platform.system(), machine=platform.machine(),
                   quadratures=args.quadratures, orders=args.orders, geometry='touching 300x300 pair in 700x700 cell',
                   epsilon=[[12.25, 0.], [-10., 1.]], background=1.,
-                  source_sha256={Path(p).name: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in sources},
+                  source_sha256={Path(p).name: hashlib.sha256(Path(p).read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in sources},
                   memory_scope='fresh-process peak including imports; coefficient integration only'))
         cap, previous = max(args.orders), None
         coefficients = {}
