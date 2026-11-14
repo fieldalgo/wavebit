@@ -57,7 +57,7 @@ def main():
                   period=[700.,700.], widths=[300.,300.], height=300., background=1.,
                   wavelength=900., thickness=300., theta=.2, phi=0., top=1., bot=2.25,
                   coercivity_angle=1.53,
-                  source_sha256={p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}))
+                  source_sha256={p.name: hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in sources}))
         for n in args.orders:
             for refinement in args.refinements:
                 plan = cartesian_pair_opening.CartesianPairOpeningPlan.from_geometry(

@@ -457,7 +457,7 @@ def main(argv=None):
     log = Log(args.out)
     def digest(path):
         with open(path, 'rb') as source_file:
-            return hashlib.sha256(source_file.read()).hexdigest()
+            return hashlib.sha256(source_file.read().replace(b'\r\n', b'\n')).hexdigest()
     boundary = _study_module('wavebit.rcwa._engine.boundary', 'wavebit._core.boundary')
     interfaces = _study_module('wavebit._common.geometry.interfaces', 'wavebit._core.interfaces')
     log.emit(dict(kind='header', head=head, tag=args.tag, numpy=np.__version__,

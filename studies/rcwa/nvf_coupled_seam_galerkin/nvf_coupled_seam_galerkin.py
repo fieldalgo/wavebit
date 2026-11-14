@@ -43,7 +43,7 @@ def main():
                   refinements=args.refinements, quadrature=args.quadrature, gaps=GAPS,
                   period=[700., 700.], width=350., epsilon=12.25, background=1.,
                   wavelength=900., thickness=300., theta=.2, phi=0., top=1., bot=2.25,
-                  source_sha256={path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in sources}))
+                  source_sha256={path.name: hashlib.sha256(path.read_bytes().replace(b'\r\n', b'\n')).hexdigest() for path in sources}))
         for n in args.orders:
             for refinement in args.refinements:
                 obj = periodic_seam_galerkin.PeriodicSeamGalerkinGapCell(

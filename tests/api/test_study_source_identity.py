@@ -23,7 +23,8 @@ def test_angular_resolution_header_identifies_every_conforming_source(monkeypatc
     root = Path(__file__).resolve().parents[2]
     sources = list((root / 'src/wavebit/rcwa/_engine/conforming').glob('*.py'))
     assert len(sources) > 10
-    expected = {path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+    expected = {path.relative_to(root).as_posix():
+                hashlib.sha256(path.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
                 for path in sources}
     assert expected.items() <= header['source_sha256'].items()
 

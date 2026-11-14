@@ -37,7 +37,7 @@ def main():
                   gap=0., period=[700., 700.], pair_widths=[300., 300.], pair_height=300.,
                   periodic_width=350., background=1., degree=2,
                   scope='closed transverse constitutive error at fixed retained Fourier modes',
-                  source_sha256={p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}))
+                  source_sha256={p.name: hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in sources}))
         for n in args.orders:
             for kind in ('pair', 'periodic'):
                 for material in ('dielectric', 'metal'):

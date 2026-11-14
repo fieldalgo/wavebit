@@ -68,7 +68,7 @@ def main():
         sources = [gap_module.__file__, opening_module.__file__, pair_module.__file__, material_sector.__file__, __file__]
         emit(dict(kind="header", numpy=np.__version__, orders=args.orders,
                   refinements=args.refinements,
-                  source_sha256={Path(p).name: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in sources},
+                  source_sha256={Path(p).name: hashlib.sha256(Path(p).read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in sources},
                   coercivity_angle=1.53, gaps=GAPS,
                   cell=700., width=300., height=300., thickness=300., wavelength=900.,
                   theta=.2, phi=0., top=1., bot=2.25, background=1.))

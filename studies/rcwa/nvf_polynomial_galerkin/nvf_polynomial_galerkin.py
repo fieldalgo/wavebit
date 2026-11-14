@@ -44,7 +44,7 @@ def main():
         emit(dict(kind='header', numpy=np.__version__, orders=args.orders, spaces=spaces,
                   period=[700., 700.], widths=[300., 300.], height=300., gap=0., background=1.,
                   scope='closed transverse constitutive bound at fixed Fourier order; no optical certificate',
-                  source_sha256={p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}))
+                  source_sha256={p.name: hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in sources}))
         for order in args.orders:
             for material, epsilon in (('dielectric', (4., 4.)), ('metal', (12.25, -10+1j))):
                 for degree, refinement in spaces:

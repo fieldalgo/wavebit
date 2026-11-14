@@ -52,7 +52,7 @@ def main():
                 or previous['parameters'] != TRUE.tolist() or previous['orders'] != [4, 4]):
             parser.error('previous must be a completed lower grid of the same solver and case')
     record = dict(completed=False, solver_revision=args.solver_revision,
-                  instrument_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                  instrument_sha256=hashlib.sha256(Path(__file__).read_bytes().replace(b'\r\n', b'\n')).hexdigest(),
                   grid=args.grid, parameters=TRUE.tolist(), orders=[4, 4],
                   batch_size=args.batch_size, execution='bounded_scalar_calls',
                   versions=dict(jax=jax.__version__, numpy=np.__version__, scipy=scipy.__version__),

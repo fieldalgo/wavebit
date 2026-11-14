@@ -41,7 +41,7 @@ def main():
                   derivative_orders=args.derivative_orders, gaps=GAPS,
                   cell=700., width=300., height=300., thickness=300., wavelength=900.,
                   theta=.2, phi=0., top=1., bot=2.25, background=1., coercivity_angle=1.53,
-                  source_sha256={Path(p).name: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in sources}))
+                  source_sha256={Path(p).name: hashlib.sha256(Path(p).read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in sources}))
         for order in args.orders:
             for refinement in args.refinements:
                 plan = cartesian_pair_opening.CartesianPairOpeningPlan.from_geometry(**GEOMETRY, refinement=refinement)

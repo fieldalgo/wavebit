@@ -92,7 +92,7 @@ def main():
             sink.flush()
             print(line, flush=True)
         emit(dict(kind="header", numpy=np.__version__, repeats=5,
-                  source_sha256={Path(p).name: hashlib.sha256(Path(p).read_bytes()).hexdigest()
+                  source_sha256={Path(p).name: hashlib.sha256(Path(p).read_bytes().replace(b'\r\n', b'\n')).hexdigest()
                                  for p in (implementation.__file__, __file__)},
                   scope="NumPy weak-block assembly only; fresh child process RSS includes runtime/input overhead"))
         env = dict(os.environ, OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", VECLIB_MAXIMUM_THREADS="1")
