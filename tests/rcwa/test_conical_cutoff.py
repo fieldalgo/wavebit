@@ -1568,11 +1568,13 @@ def test_a_refused_coupling_gives_a_nan_traced_tangent(shape):
     never a silently partial derivative -- and leaves the value alone.
 
     The two halves of the closed form's ``ok``. Five coupled rows (the cap is four): the value
-    is still exact. A row that is also a column (``_coupled_frechet``'s premise broken; no
-    rebuilt layer forms one): the value is the divided-difference formula's, finite, and no
+    is still exact. A row that is also a column (``_coupled_frechet``'s premise broken; the
+    joint rebuild forms one eagerly only, for a Jordan chain of length three): under a trace no
+    chain is read, so the value is the one-step divided-difference formula's, finite, and no
     longer ``exp`` (a product of two couplings survives: 5.7e-2 off), so it is checked against
-    the formula. Nothing else in this file reaches either refusal: a refusal made silent, or
-    the premise check dropped, fails here alone.
+    that formula. Eagerly the formula takes the chain's two-step paths and is ``exp``
+    (``modal_gradient._chain_paths``). Nothing else in this file reaches either refusal: a
+    refusal made silent, or the premise check dropped, fails here alone.
     """
     jax = pytest.importorskip('jax')
     scipy_linalg = pytest.importorskip('scipy.linalg')
@@ -1582,8 +1584,13 @@ def test_a_refused_coupling_gives_a_nan_traced_tangent(shape):
     value, tangent = _coupled_tangent(q, E, -5.0, jit=True)
     assert np.all(np.isfinite(value))
     if shape == 'a row that is also a column':
-        expected = modal_gradient.exponential(np, q, -5.0)
-        off = np.max(np.abs(scipy_linalg.expm(-5.0 * q) - expected))
+        exact = scipy_linalg.expm(-5.0 * q)
+        eager = modal_gradient.exponential(np, q, -5.0)
+        assert np.max(np.abs(eager - exact)) <= 1e-13 * np.max(np.abs(exact)), 'eager: two steps'
+        with pytest.MonkeyPatch.context() as m:
+            m.setattr(modal_gradient, '_chain_paths', lambda *args: None)
+            expected = modal_gradient.exponential(np, q, -5.0)
+        off = np.max(np.abs(exact - expected))
         assert off > 1e-2 * np.max(np.abs(expected)), 'premise: two couplings chain'
     else:
         expected = scipy_linalg.expm(-5.0 * q)
