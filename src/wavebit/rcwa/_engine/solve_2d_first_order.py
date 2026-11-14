@@ -33,7 +33,6 @@ import numpy as np
 from wavebit._common.backend import ExceptionalPointWarning
 from wavebit._common.backend import array_namespace
 from wavebit._common.backend import as_array
-from wavebit._common.backend import carries_autodiff
 from wavebit._common.backend import eig
 from wavebit._common.backend import in_namespace
 from wavebit._common.backend import linear_solve
@@ -358,7 +357,7 @@ def _regular_clusters(xp, M, values, psi, w, clusters, chains=False):
     :func:`~wavebit.rcwa._engine.modal_gradient.split_generator` take exactly, as they take a
     pair's. The first-order generator is the eigenvalue itself, so no root is taken.
 
-    With ``chains`` (no derivative taken), eagerly a slot no two-level split passes tries three
+    With ``chains``, eagerly a slot no two-level split passes tries three
     levels (:func:`~wavebit.rcwa._engine.solve_2d._chain_split`): a Jordan chain of length
     three, its block ``L + B`` with ``B`` reaching two levels up, which the exponential takes
     exactly too.
@@ -552,10 +551,10 @@ def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1):
         for a, b, engaged in pairs:
             values, psi = _regular_pair(xp, frozen, values, psi, a, b, engaged)
         if clusters is not None:
-            # A Jordan chain of length three only where no derivative is taken: split_generator
-            # takes a coupling that reaches one level only.
+            # A Jordan chain of length three in three levels, eagerly (split_generator takes its
+            # two-level coupling); a trace reads no chain.
             values, psi, bad = _regular_clusters(xp, frozen, values, psi, eig_lam, clusters,
-                                                 chains=not carries_autodiff(M))
+                                                 chains=True)
             if c_over is None:
                 if _concrete(xp.any(bad)):
                     import warnings

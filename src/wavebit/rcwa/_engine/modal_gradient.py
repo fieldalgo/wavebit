@@ -307,6 +307,18 @@ def _split_sylvester(xp, N, gap, R, separate):
     rows = xp.any(N != 0, axis=1)[:, None]
     cols = xp.any(N != 0, axis=0)[None, :]
     X1 = xp.where(separate, R/gap, zero)
+    if _concrete(xp.any(rows[:, 0] & cols[0, :])):
+        # A Jordan chain of length three in three levels (solve_2d._chain_split): a mode both a
+        # coupled row and a coupled column, N**3 = 0. The passes below do not close; the series
+        # in N does. A `separate` entry joins the two directions, and each holds its own chain
+        # (an exceptional point of the first-order operator comes as +-q), so N reaches it from
+        # both sides, each N raising a level of three: a term with three on one side vanishes,
+        # and the first pass and four updates are exact, eagerly. Disjoint rows and columns keep
+        # the passes, to the bit.
+        X = X1
+        for _ in range(4):
+            X = xp.where(separate, (R - X @ N + N @ X)/gap, zero)
+        return X
     X2 = xp.where(separate, (R + N @ X1)/gap, zero)
     X3 = xp.where(separate, (R - X1 @ N)/gap, zero)
     Xa = xp.where(rows & ~cols, X2, xp.where(~rows & cols, X3, X1))
@@ -432,10 +444,10 @@ def _chain_paths(xp, N, values, scale):
     ``sum_k N_ik N_kj f[x_i, x_k, x_j]`` with ``f(x) = exp(scale x)``. ``k`` ranges over the
     modes that are both a coupled row and a coupled column (an exact test on the value, no
     threshold); a coupling on disjoint rows and columns has none, and the exponential is the
-    one-step formula alone, to the bit. Read eagerly only: under an abstract trace no chain is
-    rebuilt (``None``).
+    one-step formula alone, to the bit. Read eagerly only, off the stopped value: under an
+    abstract trace no chain is rebuilt (``None``).
     """
-    nz = N != 0
+    nz = _stop(N) != 0
     middle = xp.any(nz, axis=1) & xp.any(nz, axis=0)
     if not _concrete(xp.any(middle)):
         return None
@@ -890,6 +902,18 @@ def two_face(xp, q, scale, top, bottom, keep, coupled=False):
         ahead = xp.where(keep[None, :, None], divided[:, :, None] * top[None, :, :],
                          (e[:, None, None] * top[None, :, :] - bottom[None, :, :])
                          / denominator[:, :, None])
+        middle = xp.any(tau != 0, axis=1) & xp.any(tau != 0, axis=0)
+        if _concrete(xp.any(middle)):
+            # A Jordan chain of length three in three levels (solve_2d._chain_split): the mode
+            # in its middle couples onward, so its `bottom_k` holds that coupling's paths too.
+            # With h_k = sum over the paths from k of f[j, k, ...] top_end -- what a kept row j
+            # needs beside a dropped k -- the identity f[j, k, R] = (f[j, R] - f[k, R]) / (q_j -
+            # q_k) gives h_k = (e_j top_k + sum_m tau_km h_m - bottom_k) / (q_j - q_k): `ahead`
+            # plus the onward term, h_m being `ahead` at the chain's end. Still no growing
+            # exp(scale q_k) of a dropped mode.
+            onward = xp.matmul(tau[None, :, :], ahead)                 # [j, k] sum_m tau_km h_jm
+            ahead = xp.where((middle & ~keep)[None, :, None],
+                             ahead + onward / denominator[:, :, None], ahead)
         kept = kept + xp.sum((beside @ tau)[:, :, None] * ahead, axis=1)
     return xp.where(keep[:, None], kept, bottom)
 

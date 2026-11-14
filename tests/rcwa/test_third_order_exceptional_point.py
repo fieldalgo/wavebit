@@ -30,10 +30,12 @@ jointly (quiet answers within 3.9e-14, loud ones within 1.4e-11).
 
 **Now** (2026-11-13) a slot whose two-level split fails the check tries three levels
 (``solve_2d._chain_split``): the coupling reaches two levels up (``N**2 != 0``, ``N**3 = 0``),
-the root takes its second-order term, the inverse and the exponential theirs. Eagerly, where no
-derivative is taken, every answer near the three points is quiet and within 3.9e-14 of the
-oracle, on both formulations and every backend, fields within 3.7e-14. Derivatives and traces
-take the two-level split still: loud (a warning, or NaN under a trace).
+the root takes its second-order term, the inverse and the exponential theirs. Eagerly every
+answer near the three points is quiet and within 3.9e-14 of the oracle, on both formulations
+and every backend, fields within 3.7e-14. Since 2026-11-14 the derivative rules take the chain
+too (the generator's and the first-order split's Sylvester solves, the inverse's tangent, SMM's
+field state), and eager derivatives there are within 6.8e-13 of Cauchy derivative oracles,
+quiet. A trace reads no chain: NaN at the point.
 
 What this file pins:
 
@@ -41,9 +43,10 @@ What this file pins:
 2. near them the 2D path is exact or loud, eagerly, with the gate taking the three jointly in
    the band where it did not;
 3. under ``jax.jit`` the values are exact or NaN;
-4. eagerly with no derivative, quiet and exact at and near the points, values and fields, both
-   formulations; the three-level split and the exponential's two-step paths on their own;
-5. a derivative there still warns, and a trace answers NaN.
+4. eagerly, quiet and exact at and near the points, values and fields, both formulations; the
+   three-level split and the exponential's two-step paths on their own;
+5. eager derivatives there, amplitudes and fields, against Cauchy derivative oracles; each
+   derivative rule's chain term on its own; a trace answers NaN.
 """
 
 import functools
@@ -427,28 +430,247 @@ def test_the_exponential_takes_a_spread_chain():
     assert np.max(np.abs(E[:3, :3] - block)) / np.max(np.abs(block)) < 1e-14
 
 
-# ------------------------------------- 5. derivatives and traces there, for now loud
+# --------------------------------------- 5. derivatives there, eagerly; a trace NaN
 
-def test_a_derivative_or_a_trace_at_a_third_order_point_stays_loud():
-    """The three levels are taken only eagerly and where no derivative is: the derivative rules
-    and the traced exponential take a coupling that reaches one level. So at the point
-    ``jax.grad`` and torch's backward pass warn, and ``jax.jit`` answers NaN, as before the three
-    levels -- never a silent answer from a rule that drops the second step. Catches the three
-    levels taken under a derivative or a trace."""
+def _circle(f, z0, radius, K, derivative=False):
+    unit = np.exp(2j * np.pi * np.arange(K) / K)
+    return np.mean([f(z0 + radius * u) / (radius * u if derivative else 1) for u in unit], axis=0)
+
+
+@functools.lru_cache(maxsize=None)
+def _derivative_oracle(name, rel):
+    """``(a, da/dtheta, da/dwl, F, dF/dwl)``: the amplitudes and the field at ``_FIELD_AT`` and
+    their derivatives from NumPy values on circles with the rebuild gates closed (no autodiff,
+    no rebuild), as ``test_2d_exceptional_point.genuine_derivatives``: radius 3e-3 in theta and
+    0.5 nm in the wavelength, 32 points; values on a 1e-4 circle of 16."""
+    from wavebit.rcwa._engine import solve_2d_first_order as fo
+    fy, wl0, eps = EP3[name]
+    wl = wl0 * (1 + rel)
+
+    def amps(theta, w):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            r = _solver(name, w / wl0 - 1, theta).solve(auto_detune=False)
+        return np.concatenate([_np(r.r_xyz).ravel(), _np(r.t_xyz).ravel()])
+
+    def field(theta, w):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            r = _solver(name, w / wl0 - 1, theta).solve(auto_detune=False, answers='field')
+        return _np(r.reconstruct_field(*(np.asarray(v) for v in _FIELD_AT)))
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(solve_2d, '_EP_SINE', 0.0)
+        m.setattr(fo, '_PARALLEL_SIN', 0.0)
+        return (_circle(lambda z: amps(z, wl), 0.3, 1e-4, 16),
+                _circle(lambda z: amps(z, wl), 0.3, 3e-3, 32, derivative=True),
+                _circle(lambda z: amps(0.3, z), wl, 0.5, 32, derivative=True),
+                _circle(lambda z: field(z, wl), 0.3, 1e-4, 16),
+                _circle(lambda z: field(0.3, z), wl, 0.5, 32, derivative=True))
+
+
+def _rel(got, ref):
+    return float(np.max(np.abs(got - ref)) / np.max(np.abs(ref)))
+
+
+@pytest.mark.parametrize('name, rel', [(FIRST, 0.0)] + [
+    pytest.param(n, r, marks=pytest.mark.slow) for n, r in
+    (('fy 0.8, 664.35 nm', 0.0), ('fy 0.5, 645.23 nm', 0.0), (FIRST, 1e-9),
+     ('fy 0.8, 664.35 nm', -1e-8))])
+@pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
+def test_derivatives_at_a_third_order_point_match_cauchy_oracles(name, rel, first_order):
+    """Eagerly at and beside a third-order point, quiet, against :func:`_derivative_oracle`, to
+    1e-11 relative: ``jax.jacfwd`` of every amplitude in theta and the wavelength, ``jax.grad``,
+    torch's backward pass and ``forward_ad`` of ``sum |a|**2`` in the wavelength (oracle
+    ``2 Re(conj(a) . da)``), ETM and SMM. Measured 4.1e-13 .. 6.8e-13 at the fy 0.5, 620.55 nm
+    point, the oracle's own spread; before the derivative rules took the chain, every one of them
+    warned. Catches the chain's Sylvester terms, its inverse's tangent or the three levels under
+    a derivative dropped."""
     jax = pytest.importorskip('jax')
     torch = pytest.importorskip('torch')
+    import jax.numpy as jnp
+    import torch.autograd.forward_ad as fwad
+    from wavebit._common.backend import _enable_x64
+    _enable_x64()
+    a0, da_th, da_wl, _, _ = _derivative_oracle(name, rel)
+    g_ref = 2 * np.real(np.sum(np.conj(a0) * da_wl))
+    wl = EP3[name][1] * (1 + rel)
+    for algo in ('ETM', 'SMM'):
+        s = _formulated(name, rel, algo, 'jax', first_order)
+
+        def A(x):
+            r = s.solve(theta=x[0], wavelength=x[1], auto_detune=False)
+            return jnp.concatenate([r.r_xyz.ravel(), r.t_xyz.ravel()])
+        jac = _quiet(lambda: np.asarray(jax.jacfwd(A)(jnp.asarray([0.3, wl]))))
+        assert _rel(jac[:, 0], da_th) < 1e-11, ('theta', algo, _rel(jac[:, 0], da_th))
+        assert _rel(jac[:, 1], da_wl) < 1e-11, ('wl', algo, _rel(jac[:, 1], da_wl))
+        g = _quiet(lambda: float(jax.grad(lambda w: jnp.sum(jnp.abs(
+            A(jnp.stack([jnp.asarray(0.3), w]))) ** 2))(jnp.asarray(wl))))
+        assert abs(g - g_ref) < 1e-11 * abs(g_ref), ('grad', algo, g, g_ref)
+        st = _formulated(name, rel, algo, 'torch', first_order)
+        w_t = torch.tensor(wl, dtype=torch.float64, requires_grad=True)
+
+        def backward():
+            r = st.solve(wavelength=w_t, auto_detune=False)
+            torch.sum(torch.cat([r.r_xyz.ravel(), r.t_xyz.ravel()]).abs() ** 2).backward()
+            return float(w_t.grad)
+        tg = _quiet(backward)
+        assert abs(tg - g_ref) < 1e-11 * abs(g_ref), ('torch backward', algo, tg, g_ref)
+
+        def forward():
+            with fwad.dual_level():
+                w_d = fwad.make_dual(torch.tensor(wl, dtype=torch.float64),
+                                     torch.tensor(1.0, dtype=torch.float64))
+                r = st.solve(wavelength=w_d, auto_detune=False)
+                v = torch.sum(torch.cat([r.r_xyz.ravel(), r.t_xyz.ravel()]).abs() ** 2)
+                return float(fwad.unpack_dual(v).tangent)
+        tf = _quiet(forward)
+        assert abs(tf - g_ref) < 1e-11 * abs(g_ref), ('torch forward', algo, tf, g_ref)
+
+
+@pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
+def test_field_derivatives_at_a_third_order_point_match_a_cauchy_oracle(first_order):
+    """``jax.jacfwd`` of the six field components at :data:`_FIELD_AT` in the wavelength,
+    eagerly at the fy 0.5, 620.55 nm point, ETM and SMM, against :func:`_derivative_oracle`'s:
+    within 1e-11 relative, quiet. Measured 5.4e-13 (2D) and 5.8e-13 (first order). SMM's field
+    state reads the chain off its bottom face, and a kept mode beside it takes the chain's onward
+    term (``modal_gradient.two_face``)."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    from wavebit._common.backend import _enable_x64
+    _enable_x64()
+    _, _, _, _, dF = _derivative_oracle(FIRST, 0.0)
+    wl = EP3[FIRST][1]
+    for algo in ('ETM', 'SMM'):
+        s = _formulated(FIRST, 0.0, algo, 'jax', first_order)
+
+        def F(w):
+            r = s.solve(wavelength=w, auto_detune=False, answers='field')
+            return r.reconstruct_field(*(jnp.asarray(v) for v in _FIELD_AT))
+        got = _quiet(lambda: np.asarray(jax.jacfwd(F)(jnp.asarray(wl))))
+        assert _rel(got, dF) < 1e-11, (algo, _rel(got, dF))
+
+
+def _chain_q(seed=0, split=1e-7):
+    """A coupled ``q`` with a chain of three (rows 0, 1 -> columns 1, 2, level by level, and
+    0 -> 2) beside a Jordan pair (3 -> 4) and three plain modes, in the layout the rebuild
+    places, with its entry list ``(a, b, mask)``."""
+    rng = np.random.default_rng(seed)
+    d = np.array([0.6 + 0.1j, 0.6 + 0.1j + split, 0.6 + 0.1j - split, 1.3 + 0.05j, 1.3 + 0.05j,
+                  0.2 + 0.02j, 1.9 + 0.3j, 2.4 + 0.1j])
+    q = np.diag(d)
+    entries = [(0, 1), (1, 2), (0, 2), (3, 4)]
+    for i, j in entries:
+        q[i, j] = (rng.normal() + 1j * rng.normal()) * 0.1
+    a, b = (np.array(x) for x in zip(*entries))
+    return q, a, b, np.ones(len(entries), bool)
+
+
+def test_the_chain_sylvester_is_exact():
+    """``solve_2d._pair_sylvester`` with a chain in the coupling: ``T X + X T = S`` against a
+    dense Kronecker solve, within 1e-14 relative. Catches the update taken too few times (three
+    leaves the chain's fourth-order term out)."""
+    q, a, b, mask = _chain_q()
+    rng = np.random.default_rng(7)
+    S = rng.normal(size=q.shape) + 1j * rng.normal(size=q.shape)
+    X = solve_2d._pair_sylvester(np, q, S, a, b, mask)
+    n = q.shape[0]
+    K = np.kron(np.eye(n), q) + np.kron(q.T, np.eye(n))
+    ref = np.linalg.solve(K, S.reshape(-1, order='F')).reshape(n, n, order='F')
+    assert np.max(np.abs(X - ref)) / np.max(np.abs(ref)) < 1e-14
+
+
+def test_the_chain_inverse_and_its_tangent_are_exact():
+    """``solve_2d._pair_inverse`` of a coupled ``q`` with a chain: the value is ``q^-1`` and its
+    ``jax.jvp`` tangent ``-q^-1 dq q^-1``, within 1e-14 relative. Catches the inverse's
+    second-order term or the chain's own tangent dropped."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    from wavebit._common.backend import _enable_x64
+    _enable_x64()
+    q, a, b, mask = _chain_q()
+    rng = np.random.default_rng(8)
+    dq = rng.normal(size=q.shape) + 1j * rng.normal(size=q.shape)
+    inv, tangent = jax.jvp(lambda x: solve_2d._pair_inverse(jnp, x, jnp.asarray(a), jnp.asarray(b),
+                                                         jnp.asarray(mask)),
+                           (jnp.asarray(q),), (jnp.asarray(dq),))
+    ref = np.linalg.inv(q)
+    assert np.max(np.abs(np.asarray(inv) - ref)) / np.max(np.abs(ref)) < 1e-14
+    dref = -ref @ dq @ ref
+    assert np.max(np.abs(np.asarray(tangent) - dref)) / np.max(np.abs(dref)) < 1e-14
+
+
+def test_the_split_sylvester_takes_a_chain():
+    """``modal_gradient._split_sylvester`` with a chain in each direction, as the first-order
+    split holds one at an exceptional point (``+-q``): ``X (D + N) - (D + N) X = R`` on the
+    entries across the two, against a dense solve restricted to them, within 1e-14 relative.
+    ``N`` then reaches such an entry from both sides, and the series needs all five terms.
+    Catches the update taken too few times (three, or the two that one chain alone needs)."""
+    from wavebit.rcwa._engine import modal_gradient
+    q, _, _, _ = _chain_q()
+    back = np.diag(-np.diag(q)[:3])
+    back[0, 1], back[1, 2], back[0, 2] = -0.07 + 0.02j, 0.05 - 0.04j, 0.03 + 0.06j
+    q = np.block([[q, np.zeros((8, 3))], [np.zeros((3, 8)), back]])
+    d = np.diag(q)
+    N = q - np.diag(d)
+    forward = np.array([True] * 8 + [False] * 3)
+    separate = forward[:, None] != forward[None, :]
+    rng = np.random.default_rng(9)
+    R = rng.normal(size=q.shape) + 1j * rng.normal(size=q.shape)
+    gap = np.where(separate, d[None, :] - d[:, None], 1.0)
+    X = modal_gradient._split_sylvester(np, N, gap, R, separate)
+    n = q.shape[0]
+    K = np.kron(q.T, np.eye(n)) - np.kron(np.eye(n), q)
+    sel = separate.reshape(-1, order='F')
+    sol = np.linalg.solve(K[np.ix_(sel, sel)], R.reshape(-1, order='F')[sel])
+    ref = np.zeros(n * n, complex)
+    ref[sel] = sol
+    ref = ref.reshape(n, n, order='F')
+    assert np.max(np.abs(X - ref)) / np.max(np.abs(ref)) < 1e-14
+
+
+def test_two_face_takes_the_chains_onward_term():
+    """``modal_gradient.two_face`` with a chain: kept rows' first variation of
+    ``exp(scale Q) top`` against ``jax.jvp`` of the dense product ``expm(scale Q) @ top``, the
+    dropped rows read off ``bottom = expm(scale Q) top``, within 1e-12 relative. Catches the
+    chain's middle without its onward term."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    import jax.scipy.linalg as jsl
+    from wavebit.rcwa._engine import modal_gradient
+    from wavebit._common.backend import _enable_x64
+    _enable_x64()
+    q, _, _, _ = _chain_q(split=1e-3)
+    s = -1.5
+    rng = np.random.default_rng(10)
+    top = rng.normal(size=(q.shape[0], 3)) + 1j * rng.normal(size=(q.shape[0], 3))
+    dq = rng.normal(size=q.shape) + 1j * rng.normal(size=q.shape)
+    keep = np.ones(q.shape[0], bool)
+
+    def exact(x):
+        return jsl.expm(s * x) @ jnp.asarray(top)
+
+    def face(x):
+        bottom = jax.lax.stop_gradient(exact(x))
+        return modal_gradient.two_face(jnp, x, s, jnp.asarray(top), bottom, jnp.asarray(keep),
+                                       coupled='pairs')
+    v, dv = jax.jvp(face, (jnp.asarray(q),), (jnp.asarray(dq),))
+    ve, dve = jax.jvp(exact, (jnp.asarray(q),), (jnp.asarray(dq),))
+    kept = np.array([False, False, False, False, False, True, True, True])
+    assert np.max(np.abs(np.asarray(v) - np.asarray(ve))) < 1e-13
+    err = np.max(np.abs(np.asarray(dv)[kept] - np.asarray(dve)[kept]))
+    assert err / np.max(np.abs(np.asarray(dve)[kept])) < 1e-12, err
+
+
+def test_a_trace_at_a_third_order_point_answers_nan():
+    """Under ``jax.jit`` no chain is read (the three-level split is eager), so the joint rebuild's
+    two-level check answers NaN at the point -- never a silent answer from a rule that drops the
+    second step. Catches the three levels taken under a trace."""
+    jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     from wavebit._common.backend import _enable_x64
     _enable_x64()
     _, wl, _ = EP3[FIRST]
     s = _solver(FIRST, backend='jax')
-    with pytest.warns(ExceptionalPointWarning):
-        jax.grad(lambda w: jnp.sum(jnp.real(s.solve(wavelength=w, auto_detune=False).R)))(
-            jnp.asarray(wl))
-    st = _solver(FIRST, backend='torch')
-    w_t = torch.tensor(wl, dtype=torch.float64, requires_grad=True)
-    with pytest.warns(ExceptionalPointWarning):
-        torch.sum(torch.real(st.solve(wavelength=w_t, auto_detune=False).R)).backward()
     jv = np.asarray(jax.jit(lambda w: s.solve(wavelength=w, auto_detune=False).r_xyz)(
         jnp.asarray(wl)))
     assert np.all(np.isnan(jv))

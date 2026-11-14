@@ -169,9 +169,9 @@ generator (`rayleigh-points.md` §§8–9). Where exceptional points coincide or
 the pairs merge into a defective cluster of three to eight modes, which both builders rebuild
 as a whole (`solve_2d.py::_rebuild_defective_clusters`; on the first-order split
 `solve_2d_first_order.py::_regular_clusters`, within each direction), eagerly and under every
-trace, with a check of its own; a Jordan chain of length three, eagerly where no derivative is
-taken, in three levels (`solve_2d.py::_chain_split`). Clusters no rebuild takes (more than
-eight modes, chained ones, a Jordan chain of length three under a derivative or a trace), and
+trace, with a check of its own; a Jordan chain of length three, eagerly (derivatives included), in
+three levels (`solve_2d.py::_chain_split`). Clusters no rebuild takes (more than
+eight modes, chained ones, a Jordan chain of length three under a trace), and
 a joint rebuild that fails its check, emit
 `ExceptionalPointWarning` eagerly, which does not trigger detuning. Under an abstract trace the
 screens run as data: a layer that would warn, or that holds more eligible pairs or clusters
