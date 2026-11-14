@@ -13,7 +13,8 @@ from wavebit._common.backend import as_array
 from wavebit._common.pytrees import _pack, _unpack
 from wavebit.lattice import periods_of
 from wavebit.rcwa._engine.fields import LayerSamples
-from wavebit.rcwa._engine.fields import _lalanne_2d
+from wavebit.rcwa._engine.fields import _wall_rule_2d
+from wavebit.rcwa._engine.fields import check_reconstruction
 from wavebit.rcwa._engine.fields import is_count
 from wavebit.rcwa._engine.fields import field_1d
 from wavebit.rcwa._engine.fields import field_1d_conical
@@ -254,23 +255,25 @@ class FieldState:
     def _lalanne_rule(self, xp, sample_x, sample_y, reconstruction, sample_z=None):
         """What :meth:`reconstruct_on` takes for ``reconstruction``, ``None`` for the Fourier sum.
 
-        Refuses by name what the rule does not take. The TE path has nothing for it to change
-        without a permeability: its one electric component runs along every wall, and its ``H``
-        jumps only where ``mu`` does.
+        Refuses by name what the rule does not take. The TE path has nothing for the Lalanne
+        rule to change without a permeability: its one electric component runs along every
+        wall, and its ``H`` jumps only where ``mu`` does.
         """
-        if reconstruction not in ('plain', 'lalanne'):
-            raise ValueError(f"reconstruction must be 'plain' or 'lalanne', not {reconstruction!r}.")
+        check_reconstruction(reconstruction)
         if reconstruction == 'plain' or (self.merged is not None and not self.data['groups']):
             return None      # A stack that merged whole has no patterned layer left to read.
         from wavebit.rcwa._engine.lalanne import lalanne_rows
         from wavebit.rcwa._engine.lalanne import layers_holding
         from wavebit.rcwa._engine.lalanne import refusal as lalanne_refusal
         from wavebit.rcwa._engine.lalanne import samples_along_cell
+        from wavebit.rcwa._engine.splitw import refusal as splitw_refusal
+        from wavebit.rcwa._engine.splitw import splitw_rows
+        splitw = reconstruction == 'splitw'
         self._require_internal_fields()
         groups = self.data['groups']
         lattice = self.data.get('cell')
-        message = lalanne_refusal(self.kind, self.structure, lattice, groups[0].get('kx'), groups[0].get('ky'),
-                                  self.mu, self.merged)
+        message = (splitw_refusal if splitw else lalanne_refusal)(
+            self.kind, self.structure, lattice, groups[0].get('kx'), groups[0].get('ky'), self.mu, self.merged)
         if message is not None:
             raise NotImplementedError(message)
         if self.kind == 'te' and self.mu is None:
@@ -290,10 +293,12 @@ class FieldState:
         for g in groups:
             kx, ky = _order_axes(g)
             if (kx.shape[0], ky.shape[0]) not in by_size:
-                by_size[kx.shape[0], ky.shape[0]] = [None] * bottom + lalanne_rows(
-                    xp, self.structure[kept], None if self.mu is None else self.mu[kept], lattice, kx, ky, real,
-                    self.data['lattice'].dtype if self.kind == 'source' else g['T1'].dtype,
-                    two_d, sample_x, sample_y, held)
+                C = self.data['lattice'].dtype if self.kind == 'source' else g['T1'].dtype
+                by_size[kx.shape[0], ky.shape[0]] = [None] * bottom + (
+                    splitw_rows(xp, self.structure[kept], lattice, kx, ky, real, C, sample_x, sample_y, held)
+                    if splitw else
+                    lalanne_rows(xp, self.structure[kept], None if self.mu is None else self.mu[kept], lattice,
+                                 kx, ky, real, C, two_d, sample_x, sample_y, held))
         return dict(by_size=by_size, two_d=two_d, lattice=lattice, sample_x=sample_x, sample_y=sample_y)
 
     def _require_internal_fields(self):
@@ -391,7 +396,7 @@ class FieldState:
         (:meth:`_ordinary_coefficients`), so their sums, in ``field``, only need dividing by ``eps``
         and ``mu``. ``H`` follows ``E`` through each step on its own slots.
         The 2D rule is summed line by line in the kernels' frame, where
-        :func:`~wavebit.rcwa._engine.fields._lalanne_2d` lives and its operators are: undoing
+        :func:`~wavebit.rcwa._engine.fields._wall_rule_2d` lives and its operators are: undoing
         the parity of :meth:`_ordinary_coefficients` and, as
         ``CoreSolveMixin._centre_phase`` does, putting the phase of the incident wave at the
         cell's centre back afterwards. The order grid is the window's, so the specular order is
@@ -427,7 +432,7 @@ class FieldState:
                     continue
                 if rule['two_d']:
                     sx, sy = (xp.reshape(kernel[..., first + k], lead) for k in (0, 1))
-                    along_x, along_y = _lalanne_2d(xp, kx, ky, lattice, rule['sample_x'],
+                    along_x, along_y = _wall_rule_2d(xp, kx, ky, lattice, rule['sample_x'],
                                                    rule['sample_y'], 2 * np.pi / self.data['wavelength'],
                                                    coefficient.dtype, sx, sy, half)
                     read[first], read[first + 1] = along_x[:, 0] * phase, along_y[:, 0] * phase

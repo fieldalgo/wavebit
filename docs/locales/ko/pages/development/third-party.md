@@ -182,6 +182,7 @@ NGSolve 파일처럼 파일 전체가 `research`이고 `python -m unittest`만�
 | `fmmax` | MIT | stored | 별도 환경의 RCWA 레퍼런스 |
 | `FDTDX` | MIT | stored | 별도 환경의 FDTD 레퍼런스. `tests/references/interface/validate_grid_fdtdx*.py` 작업 스크립트는 FDTDX 프로세스에서 Wavebit을 불러옴 |
 | `PyMoosh` | MIT | stored | 일회용 환경의 다층막 레퍼런스 |
+| `gyptis` | MIT | stored | 별도 환경의 3D 유한요소 레퍼런스(1.2.0): `tests/references/golden_gyptis_cylinder_field.npz`의 원기둥 근접장. 앞선 블랙박스 비교는 RCWA 이론 노트에 인용 |
 | `NGSolve` | LGPL-2.1-only | local (research 등급) | NVF 연구용 선택 FEM 레퍼런스. 이를 불러오는 `tests/rcwa/test_nvf_*` 파일 8개는 문서화된 import 가드가 있는 research 시험. 설치 바이너리에 GPL-2.0-or-later UMFPACK 코드도 들어 있어 그 환경은 재배포하지 않음 |
 
 ### 과거 비교
@@ -202,7 +203,6 @@ import하지 않습니다.
 | `A-FMM` | 기록 없음 | MIT | 읽기만 하고 실행하지 않음(PyPI A-FMM 0.1.2 기준 MIT) |
 | `tmm` | 0.2.0 | MIT | 블랙박스 다층막 비교(Byrnes) |
 | `tmm-fast` | 0.3.0 | MIT | 블랙박스 다층막 비교 |
-| `gyptis` | 1.2.0 | MIT | 블랙박스 FEM 비교 |
 | `chiuhans-rcwa` | 기록 없음 | MIT | Hans Chiu의 `rcwa` 패키지 블랙박스 RCWA 비교([출처](https://github.com/chiuhans111/RCWA)) |
 | `rcwa4d` | 기록 없음 | MIT | 로컬 패치 뒤 실행한 RCWA 비교([출처](https://github.com/fancompute/rcwa4d)) |
 

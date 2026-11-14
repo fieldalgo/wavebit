@@ -19,7 +19,7 @@ class ResultFields:
         are per finite layer; explicit heights start at the stack bottom and
         choose the upper layer at an interface. No live solver state is read.
         ``incidence`` selects the solved input, or a retained pure 's'/'p' variant.
-        ``reconstruction`` is the solver's: ``'plain'``, or ``'lalanne'`` for the rule of
+        ``reconstruction`` is the solver's: ``'plain'``, or ``'lalanne'`` or ``'splitw'`` for the rules of
         :meth:`~wavebit.rcwa._engine.engine.CoreFactorizationMixin.reconstruct_field`.
         """
         return self._require_field_state().reconstruct(sample_x, sample_y, sample_z, incidence,

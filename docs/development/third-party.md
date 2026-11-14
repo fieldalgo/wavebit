@@ -196,6 +196,7 @@ files, and compares the Mode column below with `reference.mode`.
 | `fmmax` | MIT | stored | RCWA reference in a separate environment |
 | `FDTDX` | MIT | stored | FDTD reference in a separate environment; the `tests/references/interface/validate_grid_fdtdx*.py` workers import Wavebit in the FDTDX process |
 | `PyMoosh` | MIT | stored | Multilayer reference in a throwaway environment |
+| `gyptis` | MIT | stored | 3D finite-element reference (1.2.0) in a separate environment: the cylinder near field of `tests/references/golden_gyptis_cylinder_field.npz`. An earlier black-box comparison is cited in the RCWA theory notes |
 | `NGSolve` | LGPL-2.1-only | local (research tier) | Optional FEM reference for NVF research studies; the eight `tests/rcwa/test_nvf_*` files that import it are research tests with a documented import guard. Its installed binaries also carry GPL-2.0-or-later UMFPACK code, so that environment is never redistributed |
 
 ### Past comparisons
@@ -217,7 +218,6 @@ runs or imports them today.
 | `A-FMM` | not recorded | MIT | Read, not run (MIT per PyPI A-FMM 0.1.2) |
 | `tmm` | 0.2.0 | MIT | Black-box multilayer comparison (Byrnes) |
 | `tmm-fast` | 0.3.0 | MIT | Black-box multilayer comparison |
-| `gyptis` | 1.2.0 | MIT | Black-box FEM comparison |
 | `chiuhans-rcwa` | not recorded | MIT | Black-box RCWA comparison of Hans Chiu's `rcwa` package ([source](https://github.com/chiuhans111/RCWA)) |
 | `rcwa4d` | not recorded | MIT | RCWA comparison, run after a local patch ([source](https://github.com/fancompute/rcwa4d)) |
 

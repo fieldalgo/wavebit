@@ -63,6 +63,8 @@ from wavebit.rcwa._engine.lalanne import lalanne_rows
 from wavebit.rcwa._engine.lalanne import layers_holding
 from wavebit.rcwa._engine.lalanne import refusal as lalanne_refusal
 from wavebit.rcwa._engine.lalanne import solved_structure
+from wavebit.rcwa._engine.splitw import refusal as splitw_refusal
+from wavebit.rcwa._engine.splitw import splitw_rows
 from wavebit.rcwa._engine.enums import Answers
 from wavebit.rcwa._engine.enums import DEFAULT_ANSWERS
 from wavebit.rcwa._engine.enums import DEFAULT_FACTORIZATION
@@ -90,6 +92,7 @@ from wavebit.rcwa._engine.enums import factorization_of
 from wavebit.rcwa._engine.enums import formulation_of
 from wavebit.rcwa._engine.enums import resolve_fourier_options
 from wavebit.rcwa._engine.fields import _require_solved
+from wavebit.rcwa._engine.fields import check_reconstruction
 from wavebit.rcwa._engine.fields import field_1d
 from wavebit.rcwa._engine.fields import field_1d_conical
 from wavebit.rcwa._engine.fields import field_2d
@@ -4950,8 +4953,8 @@ class CoreFactorizationMixin:
             'the field after re-solving. Call solve() again first.')
 
     @device_scoped
-    def _refuse_lalanne(self):
-        """Refuse ``reconstruction='lalanne'`` where it is not built yet, by name."""
+    def _refuse_rule(self, reconstruction):
+        """Refuse ``reconstruction='lalanne'`` or ``'splitw'`` where it does not answer, by name."""
         # A solve that merged layers answers from its field state, which refuses for itself.
         if self._merged_field_state is not None:
             return
@@ -4959,8 +4962,9 @@ class CoreFactorizationMixin:
         # structure of `None` past this point can only be matrices handed to `solve_conv`.
         _require_solved(self.T1, self.layer_info_list)
         kx, ky = self.order_kxy()
-        message = lalanne_refusal(self._field_kind(), self._solved_structure, self.lattice, kx, ky,
-                                  self._solved_mu)
+        refusal = splitw_refusal if reconstruction == 'splitw' else lalanne_refusal
+        message = refusal(self._field_kind(), self._solved_structure, self.lattice, kx, ky,
+                          self._solved_mu)
         if message is not None:
             raise NotImplementedError(message)
 
@@ -4974,6 +4978,13 @@ class CoreFactorizationMixin:
         rows = lalanne_rows(self.xp, self._solved_structure, self._solved_mu, self.lattice, kx, ky,
                             self.float_dtype, self.complex_dtype, self._grating_type == 2,
                             sample_x, sample_y, held)
+        return rows if backside else rows[::-1]
+
+    def _splitw_rows(self, sample_x, sample_y, backside, held=None):
+        """:func:`~wavebit.rcwa._engine.splitw.splitw_rows` in the kernels' record order."""
+        kx, ky = self.order_kxy()
+        rows = splitw_rows(self.xp, self._solved_structure, self.lattice, kx, ky,
+                           self.float_dtype, self.complex_dtype, sample_x, sample_y, held)
         return rows if backside else rows[::-1]
 
     def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('incident',),
@@ -5004,10 +5015,16 @@ class CoreFactorizationMixin:
         ``E_y`` along the column). A layer that names a permeability takes the same rule for ``H``
         with ``B`` and ``mu``: ``H_x`` on the 1D TE and conical paths, ``H_x`` and ``H_y`` on the
         2D path. A diagonal tensor reads each axis's own entry. On a shape structure it takes walls
-        along x and y; what it does not take is refused by name (:meth:`_refuse_lalanne`). It reads the structure the
+        along x and y; what it does not take is refused by name (:meth:`_refuse_rule`). It reads the structure the
         solve was posed with, whatever has been assigned since. Its derivative holds each
         sample fixed, so it leaves out a wall sweeping across a sample: an objective over an area
         takes ``'plain'``.
+
+        ``'splitw'`` is the rule for a curved wall, which ``'lalanne'`` refuses: on a layer that
+        holds one circle it splits ``E_x`` and ``E_y`` along the circle's normal, near the wall
+        only, sums the normal ``D`` and the tangential ``E`` and divides the first by ``eps``
+        (:mod:`~wavebit.rcwa._engine.splitw`). It rebuilds ``E`` alone and refuses every other
+        patterned layer by name.
 
         ``incidences`` names which of the incidences the solve carries to reconstruct, one
         leading axis entry each, **in the order asked for**: ``'incident'`` is the incidence the
@@ -5045,11 +5062,10 @@ class CoreFactorizationMixin:
         """
         self._require_field_declaration()
         self._reject_stale_field_scene()
-        if reconstruction not in ('plain', 'lalanne'):
-            raise ValueError(f"reconstruction must be 'plain' or 'lalanne', not {reconstruction!r}.")
-        lalanne = reconstruction == 'lalanne'
-        if lalanne:
-            self._refuse_lalanne()
+        check_reconstruction(reconstruction)
+        ruled = reconstruction != 'plain'
+        if ruled:
+            self._refuse_rule(reconstruction)
         if self._merged_field_state is not None:
             return self._merged_field_cell(sample_x, sample_y, sample_z, incidences, reconstruction)
         # Top illumination walks downward, so restate public heights in that propagation
@@ -5058,12 +5074,13 @@ class CoreFactorizationMixin:
         # incidence walks the scene as given (see `_kernel_incidence_side`).
         backside = self._kernel_incidence_side == 'bottom'
         counted_z = is_count(sample_z)
-        held = layers_holding(sample_z, self.thickness) if lalanne else None
+        held = layers_holding(sample_z, self.thickness) if ruled else None
         if backside:
             sample_z = to_mirrored_z(sample_z, self.thickness)
         kx, ky = self.order_kxy()
 
-        rule_rows = self._lalanne_rows(sample_x, sample_y, backside, held) if lalanne else None
+        read = {'lalanne': self._lalanne_rows, 'splitw': self._splitw_rows}.get(reconstruction)
+        rule_rows = read(sample_x, sample_y, backside, held) if ruled else None
         if self._grating_type == 0:
             sample_y = 1
             field_cell = field_1d(self.wavelength, kx, self.T1, self.layer_info_list,
