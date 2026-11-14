@@ -860,7 +860,7 @@ def section_develop(rev):
         subprocess.run([sys.executable, os.path.abspath(__file__), '--dump', dump,
                         '--root', tree], check=True, capture_output=True,
                        env=dict(os.environ, PYTHONWARNINGS='ignore'))
-        theirs = dict(line.rstrip('\n').rsplit(' ', 1) for line in open(dump))
+        theirs = dict(line.rstrip('\n').rsplit(' ', 1) for line in open(dump, encoding='utf-8'))
     ours = develop_digests()
     same = sum(ours[k] == theirs[k] for k in theirs)
     fields = sum(k.endswith('field') for k in theirs)
@@ -924,7 +924,7 @@ def main():
     args = parser.parse_args()
     WORKERS = args.workers
     if args.dump:
-        with open(args.dump, 'w') as out:
+        with open(args.dump, 'w', encoding='utf-8') as out:
             for key, value in develop_digests().items():
                 out.write(f'{key} {value}\n')
         return

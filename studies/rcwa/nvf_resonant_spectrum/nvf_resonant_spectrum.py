@@ -87,7 +87,7 @@ def main():
     parser.add_argument('--wavelengths', nargs='+', type=float, default=[900.])
     parser.add_argument('--out', default=None, help='append JSON lines here as well')
     args = parser.parse_args()
-    sink = open(args.out, 'a') if args.out else None
+    sink = open(args.out, 'a', encoding='utf-8') if args.out else None
     try:
         for order in args.orders:
             for method in args.methods:

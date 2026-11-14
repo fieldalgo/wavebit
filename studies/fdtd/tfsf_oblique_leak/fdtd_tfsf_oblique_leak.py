@@ -616,7 +616,7 @@ def main():
                   f"dxa={r['dxa']:.6f} n={r['n']} steps={r['steps']} {r['seconds']:.1f}s",
                   flush=True)
             os.makedirs(os.path.dirname(args.out) or '.', exist_ok=True)
-            with open(args.out, 'w') as fh:
+            with open(args.out, 'w', encoding='utf-8') as fh:
                 json.dump(rows, fh, indent=1, default=float)
     if not args.quick:
         print()

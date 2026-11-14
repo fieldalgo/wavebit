@@ -588,7 +588,7 @@ def main():
         blob = {f'{k[0]}|{k[1]}|{k[2]}|{k[3]}|{k[4]:g}': {str(W): v for W, v in val.items()}
                 for k, val in results.items()}
         os.makedirs(os.path.dirname(args.json) or '.', exist_ok=True)
-        with open(args.json, 'w') as fh:
+        with open(args.json, 'w', encoding='utf-8') as fh:
             json.dump(dict(results=blob, controls={str(k): v for k, v in controls.items()},
                            truncations={str(k): v for k, v in truncations.items()}), fh)
     print(f'\n{len(results)} test runs, {seconds:.0f} s of worker time, '

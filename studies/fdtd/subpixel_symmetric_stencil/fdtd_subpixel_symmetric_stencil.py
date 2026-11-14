@@ -224,5 +224,5 @@ if __name__=='__main__':
         row=cylinder(args.cpw) if args.shape=='cylinder' else sphere(args.cpw,absorption_half=args.absorption_half)
     assert before==hashes()
     out.write_text(json.dumps(dict(status='research_control_not_C3_pass',source_sha256=before,
-        source_unchanged=True,warnings=[str(w.message) for w in notes],row=row),indent=2)+'\n')
+        source_unchanged=True,warnings=[str(w.message) for w in notes],row=row),indent=2)+'\n', encoding='utf-8')
     print(json.dumps({k:v for k,v in row.items() if k!='interior_energy'}),flush=True)

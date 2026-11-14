@@ -34,7 +34,7 @@ BACKENDS = ('numpy', 'jax', 'torch')
 def load_ref(item):
     path = (ROOT/item['path']).resolve()
     require(path.is_relative_to(ROOT.resolve()) and sha(path) == item['sha256'], 'Input reference/hash differs.')
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding='utf-8'))
 
 
 def ref(path):
@@ -195,7 +195,7 @@ def literal_assignment(path, name):
 def replay_algebra(algebra, item, calibrated_source):
     import numpy as np
     folder = contained(item['path']).parent
-    before = json.loads((folder/'before.json').read_text())
+    before = json.loads((folder/'before.json').read_text(encoding='utf-8'))
     require(before['before'] == algebra['guard_before'] and all(
                 calibrated_source.get(k) == v for k, v in before['before'].items()),
             'Independent algebra source map differs from calibration.')
@@ -316,7 +316,7 @@ def replay_gates(accepted, current):
     specs = literal_assignment(harness, 'SPECS')
     plugin = literal_assignment(harness, 'COLLECTION_PLUGIN')
     require(archive_bytes(mutation['collection_plugin']) == plugin.encode(), 'Collection plugin snapshot differs.')
-    functions = sorted(n.name for n in ast.parse((ROOT/TEST).read_text()).body
+    functions = sorted(n.name for n in ast.parse((ROOT/TEST).read_text(encoding='utf-8')).body
                        if isinstance(n, ast.FunctionDef) and n.name.startswith('test_'))
     require(len(specs) == len({s['name'] for s in specs}) == mutation['expected_mechanisms']
             and functions == mutation['expected_functions']
@@ -331,7 +331,7 @@ def replay_gates(accepted, current):
         '-B', '-m', 'pytest', '-q', '-p', 'no:cacheprovider', '-p', 'c9_collection_inventory', TEST, '--collect-only'],
         'Mutation collection command differs.')
     require(sha(contained(collection['nodes'])) == collection['nodes_sha256'], 'Actual callspec inventory changed.')
-    descriptors = json.loads(contained(collection['nodes']).read_text())
+    descriptors = json.loads(contained(collection['nodes']).read_text(encoding='utf-8'))
     require([d['nodeid'] for d in descriptors] == nodes(text)
             and set(nodes(text)) == set(baseline['node_status']), 'Mutation callspec/node inventories differ.')
     require(len(mutation['witnesses']) == len(specs) and len(mutation['bound_nodes']) == len(specs),
@@ -422,7 +422,7 @@ def budget_edit(accepted, calibration):
 
 
 def prerequisites(acceptance_path):
-    accepted = json.loads(acceptance_path.read_text())
+    accepted = json.loads(acceptance_path.read_text(encoding='utf-8'))
     require(accepted['decision'] == 'accepted' and accepted['reason'].strip(), 'Measured acceptance is missing.')
     budgets = accepted['budgets']
     require(set(budgets) == {'algebra', 'step', 'physical_alignment'}
@@ -497,7 +497,7 @@ def register(acceptance_path):
 
 
 def registered():
-    item = json.loads(REGISTRATION.read_text())
+    item = json.loads(REGISTRATION.read_text(encoding='utf-8'))
     require(hashlib.sha256(canonical({k: v for k, v in item.items() if k != 'fingerprint'})).hexdigest()
             == item['fingerprint'], 'Registration fingerprint differs.')
     require(item['protocol'] == protocol() and item['guard'] == guard(), 'Registered protocol/guard differs.')
@@ -690,9 +690,9 @@ def make_report(ledger, registration):
 
 def audit():
     registration = registered()
-    ledger = json.loads((RESULTS/(PREFIX+'_campaign_attempt1.json')).read_text())
+    ledger = json.loads((RESULTS/(PREFIX+'_campaign_attempt1.json')).read_text(encoding='utf-8'))
     expected = make_report(ledger, registration)
-    saved = json.loads((RESULTS/(PREFIX+'_report.json')).read_text())
+    saved = json.loads((RESULTS/(PREFIX+'_report.json')).read_text(encoding='utf-8'))
     require(saved == expected, 'Saved campaign report differs from raw-array replay.')
     result = {'complete': True, 'saved_array_replay': True, 'guard': guard(),
               'registration': ref(REGISTRATION), 'ledger': ref(RESULTS/(PREFIX+'_campaign_attempt1.json')),

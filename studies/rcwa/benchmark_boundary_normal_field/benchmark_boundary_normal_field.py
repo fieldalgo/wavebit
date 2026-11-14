@@ -224,7 +224,7 @@ def main():
     say('1024 is what the solver defaults to (spec.RCWASpec.shape_nvf_grid_size).')
 
     RESULTS.mkdir(exist_ok=True)
-    (RESULTS / 'boundary_normal_field.log').write_text('\n'.join(lines) + '\n')
+    (RESULTS / 'boundary_normal_field.log').write_text('\n'.join(lines) + '\n', encoding='utf-8')
     print('\nwrote', RESULTS / 'boundary_normal_field.log')
 
 

@@ -50,7 +50,7 @@ def identity():
 
 def verify():
     height.verify()
-    reg = json.loads(REG.read_text())
+    reg = json.loads(REG.read_text(encoding='utf-8'))
     assert reg['identity']==identity()
     assert height.sha(RESULTS/reg['copy'])==reg['identity']['source']
     return reg
@@ -63,7 +63,7 @@ def register():
         return
     height.verify()
     assert not LOG.exists() and not JOBS.exists()
-    known = json.loads(INPUTS[-1].read_text())
+    known = json.loads(INPUTS[-1].read_text(encoding='utf-8'))
     assert not height.c7.settled(known)
     ident = identity()
     fingerprint = hashlib.sha256(json.dumps(ident,sort_keys=True).encode()).hexdigest()
@@ -108,7 +108,7 @@ def run():
         with logfile.open('x',encoding='utf-8') as stream:
             got = subprocess.run([sys.executable,__file__,'worker',str(periods),str(output)],
                                  cwd=ROOT,stdout=stream,stderr=subprocess.STDOUT)
-        row = json.loads(output.read_text()) if output.exists() else dict(
+        row = json.loads(output.read_text(encoding='utf-8')) if output.exists() else dict(
             key=f'fd|tall|40|{periods}',periods=periods,status='error',
             error='Worker exited without a result',fingerprint=reg['fingerprint'])
         row.update(worker_exit=got.returncode,attempt=attempt,raw_file=output.name,raw_log=logfile.name)
@@ -121,14 +121,14 @@ def run():
 
 def report():
     reg = verify()
-    rows = {p:json.loads(f.read_text()) for p,f in zip((120,180),INPUTS[-2:])}
+    rows = {p:json.loads(f.read_text(encoding='utf-8')) for p,f in zip((120,180),INPUTS[-2:])}
     new = height.read_rows(LOG)
     for p in PERIODS:
         row = new[f'fd|tall|40|{p}']
         assert row['status']=='ok' and row['worker_exit']==0
         assert row['fingerprint']==reg['fingerprint']
         assert datetime.datetime.fromisoformat(row['started']) > datetime.datetime.fromisoformat(reg['registered'])
-        raw = json.loads((JOBS/row['raw_file']).read_text())
+        raw = json.loads((JOBS/row['raw_file']).read_text(encoding='utf-8'))
         assert all(row[k]==v for k,v in raw.items())
         rows[p] = row
     ps = sorted(rows)

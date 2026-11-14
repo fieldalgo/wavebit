@@ -12,7 +12,7 @@ import studies.cross_solver.metasurface_tall.fdtd_metasurface_tall_settled as st
 
 def main():
     study.verify()
-    result = json.loads(study.REPORT.read_text())
+    result = json.loads(study.REPORT.read_text(encoding='utf-8'))
     assert result['complete']
     rows = study.parent.read_rows(study.LOG)
     summary = dict(scope=__doc__,controls_valid=result['controls_valid'],scenes={})

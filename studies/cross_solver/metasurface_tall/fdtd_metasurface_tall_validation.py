@@ -23,8 +23,8 @@ from studies.fdtd.polygon_tie.fdtd_polygon_tie_validation import source_hash
 def main():
     reg = study.verify()
     previous = study.RESULTS/'fdtd_metasurface_fine_validation.json'
-    prior = json.loads(previous.read_text())
-    previous_reg = json.loads((study.RESULTS/'fdtd_metasurface_fine_registration.json').read_text())
+    prior = json.loads(previous.read_text(encoding='utf-8'))
+    previous_reg = json.loads((study.RESULTS/'fdtd_metasurface_fine_registration.json').read_text(encoding='utf-8'))
     assert prior['source'] == source_hash()
     assert previous_reg['identity']['package'] == reg['identity']['package']
     assert all(c['exit']==0 for c in prior['checks'])

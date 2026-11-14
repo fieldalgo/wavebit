@@ -117,4 +117,4 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--meep-reference', type=Path)
     args = parser.parse_args()
-    args.output.write_text(json.dumps(measure(args.meep_reference), indent=2)+'\n')
+    args.output.write_text(json.dumps(measure(args.meep_reference), indent=2)+'\n', encoding='utf-8')

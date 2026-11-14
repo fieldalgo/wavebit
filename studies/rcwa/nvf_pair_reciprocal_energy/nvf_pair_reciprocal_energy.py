@@ -35,7 +35,7 @@ def main():
     args.out.parent.mkdir(parents=True, exist_ok=True)
     sources = [frame.__file__, parametric.__file__, factorization.__file__, material_sector.__file__,
                __file__, repository_path('studies/rcwa/nvf_pair_material_sector/nvf_pair_material_sector.py')]
-    with args.out.open('a') as sink:
+    with args.out.open('a', encoding='utf-8') as sink:
         def emit(row):
             line = json.dumps(row)
             sink.write(line+'\n')

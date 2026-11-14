@@ -280,7 +280,7 @@ def main():
     expected = reference(32)
     records = []
     for path in args.time_records:
-        records.extend(json.loads(line) for line in Path(path).read_text().splitlines() if line.strip())
+        records.extend(json.loads(line) for line in Path(path).read_text(encoding='utf-8').splitlines() if line.strip())
     for resolution in args.resolution:
         data = capture_grid(resolution, pml_width=args.pml_width, pml_reflection=args.pml_reflection)
         result, amplitudes, cpml_amplitudes = {}, {}, {}

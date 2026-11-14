@@ -11,9 +11,10 @@ the defect at all. Under a Korean locale it stopped 26 of the 27 source-mutation
 ``linear_solve`` scan over ``src/wavebit`` and the three documentation checks of
 ``test_fdtd_table_golden.py``.
 
-The scan covers ``src``, ``tests``, ``tools``, ``examples``, ``tutorials`` and ``docs``. It
-leaves out ``studies``: its drivers are research records, and many of them are pinned byte
-for byte by ``tools/relocations.json``.
+The scan covers ``src``, ``tests``, ``tools``, ``examples``, ``tutorials``, ``docs`` and
+``studies``. It leaves out only the files the ``immutable`` ledger of
+``tools/relocations.json`` pins byte for byte: those are preserved records, which
+``test_every_preserved_reference_and_record_keeps_its_original_bytes`` forbids editing.
 
 What it reads as a file call missing its encoding:
 
@@ -32,14 +33,21 @@ is a variable, or a ``tempfile``/``io.TextIOWrapper`` text mode; there is none o
 the scanned trees today.
 """
 import ast
+import json
 import pathlib
 import warnings
 
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-SCANNED = ('src', 'tests', 'tools', 'examples', 'tutorials', 'docs')
+SCANNED = ('src', 'tests', 'tools', 'examples', 'tutorials', 'docs', 'studies')
 _MODE_LETTERS = set('rwxabt+')
+
+
+def _preserved():
+    """Repository paths whose bytes the relocation ledger pins: records, not maintained code."""
+    ledger = json.loads((ROOT / 'tools/relocations.json').read_text(encoding='utf-8'))['immutable']
+    return {row['target'] for row in ledger.values()}
 
 
 def _mode(call, index):
@@ -91,9 +99,12 @@ def test_every_text_file_the_repository_opens_names_its_encoding():
     files = [path for top in SCANNED for path in sorted((ROOT / top).rglob('*.py'))
              if '__pycache__' not in path.parts]
     assert len(files) > 500, len(files)                     # a wrong root must not pass empty
+    preserved = _preserved()
     offenders = []
     for path in files:
         name = path.relative_to(ROOT).as_posix()
+        if name in preserved:
+            continue
         tree = _parse(path.read_bytes().decode('utf-8'), name)
         offenders += [f'{name}:{line}: {form} without encoding=' for line, form in _unencoded(tree)]
     assert not offenders, '\n'.join(offenders)

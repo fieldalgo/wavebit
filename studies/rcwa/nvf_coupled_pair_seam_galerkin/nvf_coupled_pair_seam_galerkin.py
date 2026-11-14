@@ -47,7 +47,7 @@ def main():
     sources = [Path(m.__file__) for m in modules]+[Path(__file__)]
     args.out.parent.mkdir(parents=True, exist_ok=True)
     failed = False
-    with args.out.open('a') as sink:
+    with args.out.open('a', encoding='utf-8') as sink:
         def emit(row):
             line = json.dumps(row)
             sink.write(line+'\n'); sink.flush(); print(line, flush=True)

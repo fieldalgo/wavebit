@@ -76,7 +76,7 @@ def main():
     if any(order < 0 or order > 127 for order in args.orders):
         parser.error('orders must be between 0 and 127 for the fixed normal grid')
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    with args.out.open('a') as sink:
+    with args.out.open('a', encoding='utf-8') as sink:
         digest = lambda path: hashlib.sha256(Path(path).read_bytes().replace(b'\r\n', b'\n')).hexdigest()
         emit(sink, dict(kind='header', numpy=np.__version__, orders=args.orders, sections=args.sections,
                         source_sha256=dict(closure=digest(passive.__file__), parametric=digest(P.__file__),

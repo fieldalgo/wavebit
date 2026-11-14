@@ -26,7 +26,7 @@ INPUTS = [RESULTS / 'fdtd_metasurface_fine_scan.jsonl',
 
 
 def main():
-    rows = [json.loads(line) for path in INPUTS for line in path.read_text().splitlines()]
+    rows = [json.loads(line) for path in INPUTS for line in path.read_text(encoding='utf-8').splitlines()]
     plt.rcParams.update({'font.size': 11, 'svg.hashsalt': 'wavebit-fine-prescan'})
     fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.7), layout='constrained')
     colours = ['#0072B2', '#CC79A7', '#D55E00', '#009E73']

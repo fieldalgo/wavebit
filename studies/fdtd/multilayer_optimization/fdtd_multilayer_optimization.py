@@ -113,5 +113,5 @@ if __name__ == '__main__':
     parser.add_argument('--design', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    parameters = json.loads(args.design.read_text())['parameters']
-    args.output.write_text(json.dumps(measure(parameters), indent=2)+'\n')
+    parameters = json.loads(args.design.read_text(encoding='utf-8'))['parameters']
+    args.output.write_text(json.dumps(measure(parameters), indent=2)+'\n', encoding='utf-8')

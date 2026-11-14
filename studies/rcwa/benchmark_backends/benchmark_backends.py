@@ -535,7 +535,7 @@ _STATE = {}
 def checkpoint(update):
     _STATE.update(update)
     os.makedirs(os.path.dirname(RESULTS), exist_ok=True)
-    with open(RESULTS, 'w') as fh:
+    with open(RESULTS, 'w', encoding='utf-8') as fh:
         json.dump(_STATE, fh, indent=1, sort_keys=True)
 
 

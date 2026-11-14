@@ -956,7 +956,7 @@ def main():
             jax_reverse_mode(n, steps, report)
         lines += reverse_table({n: report['jax_reverse_mode'][n]['timings'] for n in GRAD_STEPS})
     print('\n'.join(lines))
-    with open(out_path, 'w') as f:
+    with open(out_path, 'w', encoding='utf-8') as f:
         json.dump(report, f, indent=1, allow_nan=False)
 
 

@@ -18,7 +18,7 @@ import studies.cross_solver.metasurface_tall.fdtd_metasurface_tall_settled as st
 
 def main():
     study.verify()
-    result = json.loads(study.REPORT.read_text())
+    result = json.loads(study.REPORT.read_text(encoding='utf-8'))
     assert result['complete'] and result['controls_valid']
     classes = ['low','second','mixed','unresolved']
     colors = ['#8f3343','#186961','#99711b','#e1e4e8']

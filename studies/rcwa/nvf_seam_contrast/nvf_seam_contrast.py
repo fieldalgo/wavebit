@@ -247,7 +247,7 @@ class Log:
         self.path = path
 
     def emit(self, row):
-        with open(self.path, 'a') as sink:
+        with open(self.path, 'a', encoding='utf-8') as sink:
             sink.write(json.dumps(_plain(row)) + '\n')
 
 
