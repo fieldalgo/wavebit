@@ -372,6 +372,10 @@ def freeze(solver):
               'basis': fac._to_numpy(solver.lattice).copy()}
     for quantity, structure in [('epsilon',solver.structure), ('mu', solver.mu if not isinstance(solver.structure,list) else solver.structure)]:
         if structure is None: continue
+        # Labelled on its values: an eager `jax.grad` or `jax.jacfwd` tracer through its
+        # primal, which `_labels` can read and the tracer cannot -- the record takes no
+        # derivative (`_primal_for_planning`). A shape list is not a tracer and is kept.
+        structure = fac._primal_for_planning(structure)
         # Cut, lifted and labelled under `_eager`, as `_sampled_fields` labels them: a raster
         # that is a constant of a `jax.jit` trace keeps its values. Staged, every layer of it
         # was a tracer with only the wavelength traced, and `_labels` could not read it.

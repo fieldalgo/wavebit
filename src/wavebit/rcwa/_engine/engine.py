@@ -5774,17 +5774,23 @@ class CoreFactorizationMixin:
         mu_normal_field = mu_normal_field_source = mu_compression = None
         normal_field_plan = mu_normal_field_plan = None
         if self._modeling_path == ModelingPath.RASTER:
+            # Planned on the values: a record holds decisions and no derivative, so an eager
+            # `jax.grad` or `jax.jacfwd` tracer is read through its primal and frozen as the
+            # eager freeze freezes the same raster. The normal field reads the raster whole,
+            # which the tracer refuses (`_primal_for_planning`).
+            raster = _fac._primal_for_planning(self.structure)
+            mu_raster = None if self._mu is None else _fac._primal_for_planning(self._mu)
             if factorization == Factorization.NVF:
                 # The choices beside the field, so a replay can carry a derivative with respect
                 # to the cell instead of holding the field (`normal_plans`).
                 normal_field_plan = []
                 normal_field = _fac.normal_field_for_raster(
-                    self.structure, half_width_u, half_width_v, lattice=basis,
+                    raster, half_width_u, half_width_v, lattice=basis,
                     method=self.raster_normal_method, nvf_projector=self.nvf_projector,
                     plans=normal_field_plan)
                 normal_field_source = _fac.normal_field_source_for_raster(
-                    self.structure, half_width_u, half_width_v, lattice=basis, method=self.raster_normal_method)
-                if self._mu is not None:
+                    raster, half_width_u, half_width_v, lattice=basis, method=self.raster_normal_method)
+                if mu_raster is not None:
                     # A separate record, off `mu`'s own raster. A magnetic inclusion need not
                     # sit where the dielectric one does, and the NVF rearrangement is written
                     # around *one* interface normal, so each tensor gets the normal of its own
@@ -5793,22 +5799,22 @@ class CoreFactorizationMixin:
                     # coincide, which is most of them, and silently wrong on the rest.
                     mu_normal_field_plan = []
                     mu_normal_field = _fac.normal_field_for_raster(
-                        self._mu, half_width_u, half_width_v, lattice=basis,
+                        mu_raster, half_width_u, half_width_v, lattice=basis,
                         method=self.raster_normal_method, nvf_projector=self.nvf_projector,
                         plans=mu_normal_field_plan)
                     mu_normal_field_source = _fac.normal_field_source_for_raster(
-                        self._mu, half_width_u, half_width_v, lattice=basis, method=self.raster_normal_method)
+                        mu_raster, half_width_u, half_width_v, lattice=basis, method=self.raster_normal_method)
             if coefficients == FourierCoefficients.INTEGRATED:
                 # Cut under `concrete_scope`, as the solve's `_compressed_layers` cuts them: a
                 # raster that is a constant of a `jax.jit` trace is compressed as it is eagerly.
                 # Staged, `structure[i]` was a tracer even of a constant, and the compression
                 # raised `TracerBoolConversionError` with only the wavelength traced.
-                with concrete_scope(array_namespace(self.structure)):
-                    compression = [_fac.compression_indices(self.structure[i])
-                                   for i in range(self.structure.shape[0])]
-                    if self._mu is not None:
-                        mu_compression = [_fac.compression_indices(self._mu[i])
-                                          for i in range(self._mu.shape[0])]
+                with concrete_scope(array_namespace(raster)):
+                    compression = [_fac.compression_indices(raster[i])
+                                   for i in range(raster.shape[0])]
+                    if mu_raster is not None:
+                        mu_compression = [_fac.compression_indices(mu_raster[i])
+                                          for i in range(mu_raster.shape[0])]
 
         geometry = StaticGeometry(normal_field=normal_field, compression=compression,
                                   normal_field_source=normal_field_source,

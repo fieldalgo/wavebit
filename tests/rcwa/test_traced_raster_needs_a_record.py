@@ -467,3 +467,36 @@ def test_a_freeze_inside_jit_plans_a_constant_raster_as_it_does_eagerly(path):
     (inside,) = kept
     _assert_same_record(inside, eager)
 
+
+@pytest.mark.parametrize('transform', ['grad', 'jacfwd'])
+@pytest.mark.parametrize('path', list(FREEZING))
+def test_a_freeze_under_an_eager_derivative_plans_on_the_primal(path, transform):
+    """An eager ``jax.grad`` or ``jax.jacfwd`` tracer carries its value; the freeze plans on it.
+
+    A record is decisions, not values, so it takes no derivative: it is the eager freeze's
+    record of the same raster. The NVF freeze read the whole raster through NumPy, which a
+    grad tracer refuses, and the tensor labels the same; the compression narrowed element by
+    element and was the one path that worked. The refusal of a traced raster asks of the
+    value, so it lets these through.
+    """
+    import jax
+    import jax.numpy as jnp
+    options, raster, extra = FREEZING[path]
+    keyword = 'mu' if 'mu' in extra else 'structure'
+    solver = _solver(options, raster, **extra)
+    eager, kept = solver.freeze_geometry(), []
+    value = _mu_rod() if keyword == 'mu' else raster()
+
+    def loss(scale):
+        # A real scale of 1.0, so `jacfwd` takes the complex tensor raster too; the product
+        # is exact, and the raster the freeze sees has the eager values to the bit.
+        c = jnp.asarray(value) * scale
+        setattr(solver, keyword, c)
+        kept.append(solver.freeze_geometry())
+        return jnp.sum(jnp.abs(c))
+    try:
+        getattr(jax, transform)(loss)(1.0)
+    finally:
+        setattr(solver, keyword, value)
+    (inside,) = kept
+    _assert_same_record(inside, eager)
