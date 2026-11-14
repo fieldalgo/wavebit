@@ -107,7 +107,7 @@ def main():
     placement = PLACEMENTS[args.placement]
     center = tuple(v/cpw for v in placement)
     def hashes():
-        return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+        return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
                 for p in sorted((ROOT/'src/wavebit/fdtd').rglob('*.py'))}
     source = hashes()
     out = dict(status='running', pid=os.getpid(), cpw=cpw, placement=placement,

@@ -189,7 +189,7 @@ if __name__=='__main__':
     if args.shape!='sphere' and args.absorption_half!=.4:parser.error('--absorption-half requires --shape sphere')
     if out.exists(): raise ValueError('DuplicateMeasurementRefused')
     watched=list((ROOT/'src/wavebit/fdtd').rglob('*.py'))+list((ROOT/'studies').glob('fdtd_subpixel*.py'))+[Path(__file__)]
-    def hashes():return {p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in watched}
+    def hashes():return {p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in watched}
     before=hashes()
     if args.sweep_cylinder:
         if args.shape!='cylinder': parser.error('--sweep-cylinder requires --shape cylinder')

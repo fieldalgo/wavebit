@@ -93,10 +93,10 @@ def main():
     if output.exists(): raise RuntimeError('Refusing to overwrite diagnostic')
     watched=[Path(__file__), ROOT/'src/wavebit/fdtd/_kernel/constitutive.py',
              ROOT/'src/wavebit/fdtd/_prepare/coefficients.py']
-    before={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in watched}
+    before={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in watched}
     rows=[measure(c,n,eps,et,dn) for n in ((1.,0.),(.6,.8))
           for eps in (1.,2.25,12.) for et,dn in ((1.,0.),(0.,1.)) for c in (16,32,64)]
-    assert before=={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in watched}
+    assert before=={p.relative_to(ROOT).as_posix():hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in watched}
     result=dict(status='completed_static_consistency_diagnostic_not_scattering_proof',
                 source_sha256=before,rows=rows)
     output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf8')

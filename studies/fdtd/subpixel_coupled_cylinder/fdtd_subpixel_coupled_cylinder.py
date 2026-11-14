@@ -165,7 +165,7 @@ def main():
         ROOT/'studies/fdtd/subpixel_tilted_tensor/fdtd_subpixel_tilted_tensor.py',
         ROOT/'tests/fixtures/fdtd/fd_helpers.py', ROOT/'tests/references/mie.py']
     def hashes():
-        return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+        return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
                 for p in files}
     source = hashes()
     def verify_source():

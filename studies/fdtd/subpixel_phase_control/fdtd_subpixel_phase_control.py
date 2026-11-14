@@ -168,7 +168,7 @@ def main():
         ROOT/'studies/fdtd/subpixel_mie_transform/fdtd_subpixel_mie_transform.py',
         ROOT/'tests/references/mie.py', ROOT/'tests/references/mie_fields.py']
     def hashes():
-        return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in watched}
+        return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in watched}
     before = hashes()
     out = dict(status='running_phase_diagnostic', cpw=args.cpw, eps=args.eps,
                periods=args.periods, reflection=args.reflection, source_sha256=before)

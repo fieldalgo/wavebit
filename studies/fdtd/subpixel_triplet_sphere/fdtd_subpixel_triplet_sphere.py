@@ -196,7 +196,7 @@ def main():
         Path(__file__), ROOT/'studies/fdtd/subpixel_triplet_cylinder/fdtd_subpixel_triplet_cylinder.py',
         ROOT/'studies/fdtd/subpixel_mie_sphere/fdtd_subpixel_mie_sphere.py']
     def hashes():
-        return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in watched}
+        return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in watched}
     source = hashes()
     out = dict(status='running_research_sphere', pid=os.getpid(), rows=[],
         source_sha256=source, production_operator_changed=False, eps=args.eps,
