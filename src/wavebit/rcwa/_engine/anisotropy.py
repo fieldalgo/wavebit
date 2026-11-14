@@ -363,6 +363,10 @@ def freeze(solver):
     if integrated_shapes(solver):
         import wavebit.rcwa._engine.tensor_shapes as tensor_shapes
         return tensor_shapes.freeze(solver)
+    if not isinstance(solver.structure, list):
+        # Every layer below is labelled from its values, a 1 x 1 one included; a raster with
+        # none to read is refused by name rather than inside `_labels`.
+        solver._refuse_a_freeze_on_a_traced_raster(['labels'])
     snapshot = _shape_snapshot(solver) if isinstance(solver.structure, list) and any(l.get('shapes') for l in solver.structure) else None
     record = {'snapshot': snapshot, 'epsilon': [], 'mu': [], 'settings': _settings(solver),
               'basis': fac._to_numpy(solver.lattice).copy()}

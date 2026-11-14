@@ -5720,9 +5720,13 @@ class CoreFactorizationMixin:
         **A solver holding a tracer it cannot read is refused, by name.** The freeze is the
         eager pass, and a cell or a shape layer that is a ``jax.jit`` tracer gives it nothing to
         decide from: the record it took held ``gamma_plans = [None]`` and replayed blind, which
-        is the guess it exists to avoid (:meth:`_refuse_a_freeze_on_a_tracer`). ``solve()``
-        puts a traced cell or structure back after its call, so a solver reaches that refusal
-        only when the tracer was assigned to it directly, inside a trace.
+        is the guess it exists to avoid (:meth:`_refuse_a_freeze_on_a_tracer`). A raster
+        ``structure`` or ``mu`` that a ``jax.jit`` or ``jax.vmap`` trace holds is refused the
+        same way wherever the freeze reads its values -- the NVF normal field, the integrated
+        block compression, the tensor NVF phase labels; the sampled Li and Laurent records
+        read none and are taken. ``solve()`` puts a traced cell or structure back after its
+        call, so a solver reaches that refusal only when the tracer was assigned to it
+        directly, inside a trace.
         """
         with self._conditions(kwargs):
             return self._freeze_geometry()
@@ -5916,9 +5920,12 @@ class CoreFactorizationMixin:
         The parametric structure is asked the same question, for the same reason: a lone
         ellipse of traced size under ``jax.jit`` is refused by the blind plan since
         2026-09-06, and a record taken off the tracer would send its recipe round the same
-        loop. A raster is not asked -- the NVF freeze cannot read a traced raster at all and
-        says so on its own, and the sampled Li build decides nothing, so an empty record of
-        it is an honest one.
+        loop. A raster is asked where its freeze reads values -- the NVF normal field, the
+        integrated block compression (:meth:`_refuse_a_freeze_on_a_traced_raster`). It was not
+        asked before, on the claim that the NVF freeze "says so on its own"; it did not, and
+        died in the planning with JAX's own ``TracerArrayConversionError`` or
+        ``TracerBoolConversionError``. The sampled Li and Laurent builds decide nothing, so an
+        empty record of a traced raster is an honest one and is still taken.
         """
         try:
             _parametric._cell_floats(basis)
@@ -5936,6 +5943,12 @@ class CoreFactorizationMixin:
                         what = f'structure (layer {index} holds a traced shape parameter)'
                         break
         if what is None:
+            if self._modeling_path == ModelingPath.RASTER:
+                reads = [plan for plan, read in (
+                    ('normal_field', self.factorization == Factorization.NVF),
+                    ('compression', self.fourier_coefficients == FourierCoefficients.INTEGRATED))
+                    if read]
+                self._refuse_a_freeze_on_a_traced_raster(reads)
             return
         raise ValueError(
             f"freeze_geometry: this solver's {what} is a traced value with no number to read "
@@ -5948,6 +5961,42 @@ class CoreFactorizationMixin:
             f'    jax.jit(lambda L: solver.solve(lattice=L, geometry=geometry))(A)\n'
             f'`solve()` puts a concrete cell or structure back after a call that traced one, so '
             f'a solver holds a tracer here only when it was assigned directly, inside a trace.')
+
+    def _refuse_a_freeze_on_a_traced_raster(self, reads):
+        """Refuse to freeze a raster that a ``jax.jit`` or ``jax.vmap`` trace holds, by name.
+
+        ``reads`` names what this freeze takes from the raster's values (keys of
+        :attr:`_RASTER_PLANS`); an empty list reads nothing, and nothing is refused. Asked of
+        the permittivity raster and, beside it, a raster ``mu``, each the way
+        :meth:`_refuse_to_plan_a_traced_raster` asks a solve's raster: :func:`_holds_tracer`
+        first, then :func:`~wavebit.rcwa._engine.factorization._has_no_value`, so an eager
+        ``jax.grad`` tracer, which carries its value, is planned on it as before.
+
+        Called by the scalar freeze (:meth:`_refuse_a_freeze_on_a_tracer`) and the tensor NVF
+        freeze (:func:`~wavebit.rcwa._engine.anisotropy.freeze`), past their option refusals.
+        ``solve()`` puts a traced structure or ``mu`` back after its call, so a solver holds
+        one here only when it was assigned directly, inside a trace.
+        """
+        if not reads:
+            return
+        rasters = [('permittivity', 'structure', self.structure)]
+        if self._mu is not None:
+            rasters.append(('permeability', 'mu', self._mu))
+        for quantity, keyword, raster in rasters:
+            if not _holds_tracer(raster) or not _fac._has_no_value(raster):
+                continue
+            what = ' and '.join(self._RASTER_PLANS[plan] for plan in reads)
+            raise ValueError(
+                f"freeze_geometry: this solver's {quantity} raster (`{keyword}`) is a traced "
+                f'value with no number to read -- a `jax.jit` or `jax.vmap` tracer -- and the '
+                f'freeze reads {what} off its values, so there is nothing to take the geometry '
+                f'decisions from. Freeze on a concrete solver, outside the trace, and hand the '
+                f'record to the traced call:\n'
+                f'    solver.{keyword} = x                 # as numbers\n'
+                f'    geometry = solver.freeze_geometry()\n'
+                f'    jax.jit(lambda x: solver.solve({keyword}=x, geometry=geometry))(x)\n'
+                f'`solve()` puts a concrete {keyword} back after a call that traced one, so a '
+                f'solver holds a tracer here only when it was assigned directly, inside a trace.')
 
     @device_scoped
     @_scoped_solve

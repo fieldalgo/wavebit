@@ -328,3 +328,112 @@ def test_a_held_preparation_replays_its_record_on_a_traced_raster(case, transfor
     want = float(f(raster))
     got = np.asarray(_traced(transform, f, raster))
     np.testing.assert_allclose(got if transform == 'jit' else got[1], want, rtol=0, atol=1e-13)
+
+
+# ------------------------------------------------------------ the freeze, inside the trace
+
+def _freeze_inside(transform, solver, keyword, x, kept=None):
+    """Assign a traced raster to the solver inside the trace and freeze there.
+
+    The one way a solver holds a raster tracer at the freeze: ``solve()`` puts a traced
+    structure back after its call, so only a direct assignment inside the trace leaves one.
+    The concrete raster is put back afterwards by hand, as the assignment is not undone.
+    """
+    import jax.numpy as jnp
+
+    def f(c):
+        setattr(solver, keyword, c)
+        record = solver.freeze_geometry()
+        if kept is not None:
+            kept.append(record)
+        return jnp.sum(jnp.abs(c)) * 0.0
+    try:
+        return _traced(transform, f, x)
+    finally:
+        setattr(solver, keyword, x)
+
+
+def _assert_freeze_refused(error, reads, quantity='permittivity', keyword='structure'):
+    message = str(error)
+    assert message.startswith('freeze_geometry:'), message
+    assert f"this solver's {quantity} raster (`{keyword}`)" in message, message
+    assert reads in message and 'concrete solver' in message, message
+    assert f'solve({keyword}=x, geometry=geometry)' in message, message
+
+
+#: What each planning path's freeze reads off the raster, as the refusal names it.
+FREEZE_READS = {'nvf': 'NVF normal field', 'nvf-integrated': 'NVF normal field',
+                'nvf-contour': 'NVF normal field', 'nvf-circular': 'NVF normal field',
+                'li-integrated': 'integrated block compression',
+                'laurent-integrated': 'integrated block compression',
+                'nvf-tensor': 'tensor NVF phase labels'}
+
+
+@pytest.mark.parametrize('transform', ['jit', 'vmap'])
+@pytest.mark.parametrize('path', list(PLANNING))
+def test_a_freeze_on_a_traced_raster_is_refused_by_name(path, transform):
+    """The freeze plans from the raster's values; a raster tracer has none, so it is refused.
+
+    It died inside the planning with JAX's own error: ``TracerArrayConversionError`` from
+    the normal field and the tensor labels, ``TracerBoolConversionError`` from the
+    compression -- while the freeze's own refusal skipped rasters, on the claim that they
+    said so on their own.
+    """
+    options, raster = PLANNING[path]
+    solver = _solver(options, raster)
+    with pytest.raises(ValueError) as caught:
+        _freeze_inside(transform, solver, 'structure', raster())
+    _assert_freeze_refused(caught.value, FREEZE_READS[path])
+    assert solver.freeze_geometry() is not None              # concrete again: a record
+
+
+@pytest.mark.parametrize('path', PLANNING_MU)
+def test_a_freeze_on_a_traced_permeability_raster_is_refused_by_name(path):
+    options, raster = PLANNING[path]
+    solver = _solver(options, raster, mu=_mu_rod())
+    with pytest.raises(ValueError) as caught:
+        _freeze_inside('jit', solver, 'mu', _mu_rod())
+    _assert_freeze_refused(caught.value, FREEZE_READS[path], quantity='permeability', keyword='mu')
+
+
+@pytest.mark.parametrize('path', list(PLANS_NOTHING))
+def test_a_freeze_that_reads_no_value_still_records_a_traced_raster(path):
+    """Sampled Li and Laurent, and tensor Li, decide nothing from values: an honest record.
+
+    It is the record the eager freeze takes, so the refusal must not reach these builds.
+    """
+    options, raster = PLANS_NOTHING[path]
+    solver = _solver(options, raster)
+    eager, kept = solver.freeze_geometry(), []
+    _freeze_inside('jit', solver, 'structure', raster(), kept=kept)
+    (traced,) = kept
+    assert traced.tensor_geometry == eager.tensor_geometry
+    for name in ('normal_field', 'compression', 'mu_normal_field', 'mu_compression'):
+        assert getattr(traced, name) is None and getattr(eager, name) is None, name
+
+
+def test_a_freeze_under_an_eager_grad_still_plans_on_the_primal():
+    """An eager ``jax.grad`` tracer carries its value, and the compression is planned on it.
+
+    The record matches the eager freeze's, block for block, so the refusal is asked of the
+    value and not of the framework.
+    """
+    import jax
+    import jax.numpy as jnp
+    options, raster = PLANNING['li-integrated']
+    solver = _solver(options, raster)
+    eager, kept = solver.freeze_geometry(), []
+
+    def loss(c):
+        solver.structure = c
+        kept.append(solver.freeze_geometry())
+        return jnp.sum(c) * 0.0
+    try:
+        jax.grad(loss)(jnp.asarray(raster()))
+    finally:
+        solver.structure = raster()
+    (traced,) = kept
+    assert len(traced.compression) == len(eager.compression)
+    for got, want in zip(traced.compression, eager.compression):
+        for a, b in zip(got, want):
+            np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
