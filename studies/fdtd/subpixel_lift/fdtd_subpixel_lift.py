@@ -93,7 +93,10 @@ import studies.fdtd.subpixel_cells_across.fdtd_subpixel_cells_across as s2b     
 
 OUT = ROOT / 'studies' / 'results' / 'fdtd_subpixel_lift.log'
 THETAS = (0.02, 0.05, 0.1, 0.2, 0.3)
-SOURCE = hashlib.sha256((ROOT / 'src/wavebit' / 'fd' / '_lower' / 'stars.py').read_bytes()).hexdigest()
+# The historical path; ROOT resolves it to the moved file through the relocation ledger. CRLF is
+# read as LF, so a Windows core.autocrlf checkout records what macOS/Linux does.
+SOURCE = hashlib.sha256((ROOT / 'src/wavebit' / 'fd' / '_lower' / 'stars.py')
+                        .read_bytes().replace(b'\r\n', b'\n')).hexdigest()
 DX = s2b.DX
 
 
