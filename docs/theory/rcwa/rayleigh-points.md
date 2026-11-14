@@ -895,8 +895,8 @@ and four with `cond(X) <= 20.0`, and `cond(X)` reached 8.3 on the synthetic clus
 `eig` has handed back nearly parallel vectors at an eigenvalue of multiplicity two or more; the
 split is formed again from re-derived vectors, and the one the check reads less of is kept
 (*Collapsed eigenvectors*, below). Where a
-cluster holds a Jordan chain of length three no such split exists; eagerly three levels take
-it (*A chain in three levels*, below). A cluster smaller than its
+cluster holds a Jordan chain of length three no such split exists; three levels take it,
+eagerly and under a trace (*A chain in three levels*, below). A cluster smaller than its
 slot pads its last lanes: decoupled at a stand-in eigenvalue far from every mode, put back on
 their lanes by an explicit permutation rather than by `eig`'s order (the stand-in's eigenpairs,
 as many as there are padded lanes, last, the members in front, each part in `eig`'s order: the
@@ -1188,10 +1188,41 @@ points), quiet: `jax.jacfwd` of every amplitude in both, `jax.grad`, torch's bac
 `forward_ad` of `sum |a|**2`, both formulations, ETM and SMM, within 6.8e-13 relative; the
 field's wavelength derivative within 5.8e-13. Before, each of these warned.
 
-*Not yet.* Under a trace no chain is read (the three-level split runs slot by slot eagerly), so
-the two-level check answers NaN at the point; the traced exponential's closed-form tangent
-(`_coupled_frechet`) takes a coupling that reaches one level and refuses one that reaches two.
-Neither gives a silent answer.
+*Under a trace* (2026-11-14). A trace cannot count a slot's members, so it cannot run the
+eager enumeration slot by slot. It forms a static family of those splits for every slot instead
+(`_chain_split_traced`): all of `eig(T)`'s unit eigenvectors but two, at positions `p < q`, on
+level 0; the two-dimensional complement of their span, split by one of its quotient's two
+eigenvectors, on lanes `p` (level 1) and `q` (level 2). That is `k (k - 1)` candidates for `k`
+lanes (56 for eight), selected per slot by the check's own reading, as `_cluster_split` selects
+its splits. For a slot of three members the family is exactly the eager splits; a larger slot
+holds the eager ones for one chain beside independent modes, but not for a chain beside a pair
+(whose level 1 holds two lanes), where the check answers NaN. Every chain term after it is
+formed for every slot and selected where a mode is both a coupled row and a coupled column, so a
+layer with no chain keeps its bits:
+
+- the root's and the inverse's second-order terms (`_rebuild_defective_clusters`);
+- `_pair_inverse`. A value-only `jax.jit` reaches it too, since every JAX value counts as
+  differentiated. With its chain form left eager, the 2D answer at the point was finite, quiet
+  and 7.0e-7 off.
+- the exponential's two-step paths (`_chain_paths_traced`). The middle modes are gathered to
+  the caller's count of coupled rows (an integer `coupled`: a 2D layer's pair cap, a first-order
+  layer's slots and cluster lanes). Each middle's rows and columns are gathered to a cluster's
+  lane count, `_EP_CLUSTER_SIZE`, by a stable sort of the masks. More of either answers NaN.
+  `coupled=True` (a conical cutoff layer) and `False` hold no chain and form no term.
+- the Sylvester solves (`_pair_sylvester`, `_split_sylvester`) and `two_face`'s onward term.
+  `torch.func.vmap` reads no value either, and torch's backward pass through it takes
+  `matrix_exp`'s derivative beside the formula's value. With that value left without its
+  two-step paths, the derivative was 2.1e-8 off, quiet.
+
+At the fy 0.5, 620.55 nm point (offsets 0, 1e-9 and -1e-8 against the Cauchy circle):
+`jax.jit`, `jax.vmap` and `torch.func.vmap` values within 2.8e-14, both formulations, ETM and
+SMM; `jax.jit` fields within 3.8e-14 of the field's circle; torch's backward pass through
+`torch.func.vmap` within 6.8e-13 of the derivative circle. Before, each was NaN at the point.
+
+*Not yet.* A traced JAX derivative (`jax.jit(jax.grad)`, `jax.vmap` of a gradient) at the point
+still answers NaN: the traced exponential's closed-form tangent (`_coupled_frechet`) takes a
+coupling that reaches one level and refuses one that reaches two. It never gives a silent
+answer.
 
 *The screens under a trace* (2026-11-10). Nothing can warn under `jit`, `vmap` or
 `torch.func.vmap`, and the unresolved and backward-error screens used to be skipped there, so what
@@ -1269,8 +1300,10 @@ the Gram matrices of their columns, the defect measure on its slots, and on 2D o
   and only the narrow radius reads them: silent, as before the wide radius (not met on any layer
   measured).
 - A length-3 Jordan chain is exact and quiet eagerly, derivatives included (*A chain in three
-  levels*, above); a trace answers NaN. Off the point the
-  gate takes its three modes jointly (*Three modes, one eigenvector*, above).
+  levels*, above). Under a trace its values and fields are exact too, and so is torch's
+  backward pass through `torch.func.vmap`; a traced JAX derivative answers NaN, and so does a
+  slot holding the chain beside a pair (*Under a trace*, above). Off the point the gate takes
+  its three modes jointly (*Three modes, one eigenvector*, above).
 - Where `eig`'s start is poorer than the second step can absorb, the check warns; the answer is
   not exact. Two steps leave a remainder of third order in the start's error over the gap to
   the nearest block, so how poor depends on that gap: off by about 1e-4 with every block 1e-2
@@ -1519,8 +1552,9 @@ into the generator. Two survive: the rows' diagonal taken from `eig` instead of 
 pair terms in the chord step, which no measured model reaches (as when the chord step landed).
 
 *Limits.* What the joint rebuild does not take keeps §8's limits: a cluster of more than eight
-modes, a chain, a length-3 Jordan chain under a trace (its two-level check fails, and the
-screen warns too: loud; eagerly three levels take it, §8's *A chain in three levels*), complex64 (the gate stays closed). A ball of three holding a pair is a cluster here, unlike on
+modes, a chain, complex64 (the gate stays closed). A length-3 Jordan chain is taken in three
+levels, eagerly and under a trace (§8's *A chain in three levels* and *Under a trace*); a
+traced JAX derivative there answers NaN. A ball of three holding a pair is a cluster here, unlike on
 2D, since the gate reads before the pair gate; the synthetic rows above cover it. Under a trace
 more clusters than slots answer NaN: a coincident cluster left over would be loud anyway (the
 screen reads it), but the C4v doublets would not: with the gate closed they were up to 3.1e-13
@@ -1607,9 +1641,9 @@ cases. This covers those measured cases, not every possible opposite-label pair.
 **Limits and unchanged behavior.**
 
 - Coincident EPs of three to eight modes a direction are rebuilt jointly (above). What that
-  rebuild does not take -- a cluster of more than eight modes, a chain, a length-3 Jordan chain
-  under a trace (its two-level check fails; eagerly three levels take it) --
-  keeps the eigenvector arithmetic and warns eagerly; under `jit`, `vmap`
+  rebuild does not take -- a cluster of more than eight modes, a chain -- keeps the
+  eigenvector arithmetic and warns eagerly (a length-3 Jordan chain it takes in three levels,
+  eagerly and under a trace); under `jit`, `vmap`
   or `torch.func.vmap` the screen runs as data and the layer answers NaN. The screen's slots
   there are `max(slots, n / 16)`, `n` the split's mode count, and more candidate balls than that
   answer NaN as well, as more clusters than the gate's slots do.

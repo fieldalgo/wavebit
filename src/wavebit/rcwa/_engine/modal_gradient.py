@@ -307,23 +307,28 @@ def _split_sylvester(xp, N, gap, R, separate):
     rows = xp.any(N != 0, axis=1)[:, None]
     cols = xp.any(N != 0, axis=0)[None, :]
     X1 = xp.where(separate, R/gap, zero)
-    if _concrete(xp.any(rows[:, 0] & cols[0, :])):
+    chain = xp.any(rows[:, 0] & cols[0, :])
+    some = _concrete(chain)
+    if some is not False:
         # A Jordan chain of length three in three levels (solve_2d._chain_split): a mode both a
         # coupled row and a coupled column, N**3 = 0. The passes below do not close; the series
         # in N does. A `separate` entry joins the two directions, and each holds its own chain
         # (an exceptional point of the first-order operator comes as +-q), so N reaches it from
         # both sides, each N raising a level of three: a term with three on one side vanishes,
-        # and the first pass and four updates are exact, eagerly. Disjoint rows and columns keep
-        # the passes, to the bit.
-        X = X1
+        # and the first pass and four updates are exact. Disjoint rows and columns keep the
+        # passes, to the bit: eagerly read off the value, under a trace both formed and one
+        # selected.
+        chained = X1
         for _ in range(4):
-            X = xp.where(separate, (R - X @ N + N @ X)/gap, zero)
-        return X
+            chained = xp.where(separate, (R - chained @ N + N @ chained)/gap, zero)
+        if some:
+            return chained
     X2 = xp.where(separate, (R + N @ X1)/gap, zero)
     X3 = xp.where(separate, (R - X1 @ N)/gap, zero)
     Xa = xp.where(rows & ~cols, X2, xp.where(~rows & cols, X3, X1))
     X4 = xp.where(separate, (R - Xa @ N + N @ Xa)/gap, zero)
-    return xp.where(rows & cols, X4, Xa)
+    X = xp.where(rows & cols, X4, Xa)
+    return X if some is False else xp.where(chain, chained, X)
 
 
 def _require_separated(valid, description, *, error=ValueError):
@@ -414,9 +419,32 @@ def exponential(xp, q, scale, coupled=False):
                 # layer's pair cap (`solve_2d._rebuild_defective_pairs`; a pair couples one row,
                 # a jointly rebuilt cluster its rows J) -- `True` the 1D default.
                 cap = _COUPLED_CAP if coupled is True else max(_COUPLED_CAP, int(coupled))
-                return _jax_coupled_exponential(cap)(q, scale)
+                return _jax_coupled_exponential(cap, _chain_capacity(coupled))(q, scale)
         exact = _expm(xp, a, count)
-        return exponential(xp, _stop(q), _stop(scale)) + (exact - _stop(exact))
+        # The value is the formula's (a torch.func.vmap reads no chain: it takes the capacity).
+        return (_exp_formula(xp, _stop(q), _stop(scale), _chain_capacity(coupled))
+                + (exact - _stop(exact)))
+    return _exp_formula(xp, q, scale, _chain_capacity(coupled))
+
+
+def _chain_capacity(coupled):
+    """How many middle modes of Jordan chains a trace gathers (:func:`_chain_paths`), or ``None``.
+
+    An integer ``coupled`` is the caller's count of the coupled rows its layer can hold -- a 2D
+    layer's pair cap, a first-order layer's slots and cluster lanes -- and a chain's middle mode
+    is one of them, so it bounds the middles too. ``True`` (a conical cutoff layer, whose
+    coupling is one block on disjoint rows and columns) and ``False`` hold no chain: a trace
+    forms no two-step term for them.
+    """
+    import numbers
+    if isinstance(coupled, bool) or not isinstance(coupled, numbers.Integral):
+        return None
+    return int(coupled)
+
+
+def _exp_formula(xp, q, scale, chains=None):
+    """:func:`exponential`'s divided-difference formula for a matrix ``q``; ``chains`` is
+    :func:`_chain_capacity`'s count, which only a trace reads."""
     values = xp.linalg.diagonal(q)
     eye = xp.eye(q.shape[0], dtype=q.dtype, device=getattr(q, 'device', None))
     scaled = scale[..., None]*values
@@ -431,11 +459,17 @@ def exponential(xp, q, scale, coupled=False):
     divided = xp.where(difference != 0, numerator/denominator,
                        scale[..., None, None]*phases[..., None, :])
     out = eye*phases[..., None, :] + (q-eye*values)*divided
-    chain = _chain_paths(xp, q - eye*values, values, scale)
-    return out if chain is None else out + chain
+    N = q - eye*values
+    chain = _chain_paths(xp, N, values, scale, chains)
+    if chain is None:
+        return out
+    nz = _stop(N) != 0
+    engaged = xp.any(xp.any(nz, axis=1) & xp.any(nz, axis=0))
+    # A selection under a trace, so that a layer with no chain keeps its bits.
+    return out + chain if _concrete(engaged) else xp.where(engaged, out + chain, out)
 
 
-def _chain_paths(xp, N, values, scale):
+def _chain_paths(xp, N, values, scale, cap=None):
     """The paths of two coupling steps in ``exp(scale (diag(values) + N))``, or ``None``.
 
     A Jordan chain of length three rebuilt in three levels (``solve_2d._chain_split``) has a
@@ -444,12 +478,16 @@ def _chain_paths(xp, N, values, scale):
     ``sum_k N_ik N_kj f[x_i, x_k, x_j]`` with ``f(x) = exp(scale x)``. ``k`` ranges over the
     modes that are both a coupled row and a coupled column (an exact test on the value, no
     threshold); a coupling on disjoint rows and columns has none, and the exponential is the
-    one-step formula alone, to the bit. Read eagerly only, off the stopped value: under an
-    abstract trace no chain is rebuilt (``None``).
+    one-step formula alone, to the bit. Read eagerly off the stopped value. Under an abstract
+    trace nothing can be read: with a capacity ``cap`` (:func:`_chain_capacity`) the paths are
+    gathered to static sizes (:func:`_chain_paths_traced`), and without one there are none.
     """
     nz = _stop(N) != 0
     middle = xp.any(nz, axis=1) & xp.any(nz, axis=0)
-    if not _concrete(xp.any(middle)):
+    some = _concrete(xp.any(middle))
+    if some is None and cap is not None:
+        return _chain_paths_traced(xp, N, values, scale, nz, middle, cap)
+    if not some:
         return None
     import numpy as np
     from wavebit._common.backend import _readable
@@ -471,6 +509,59 @@ def _chain_paths(xp, N, values, scale):
         term = Oi @ (weight * f2) @ xp.matrix_transpose(Oj)
         out = term if out is None else out + term
     return out
+
+
+def _chain_paths_traced(xp, N, values, scale, nz, middle, cap):
+    """:func:`_chain_paths` under an abstract trace, gathered to static sizes.
+
+    The middle modes are gathered to ``cap`` (:func:`_chain_capacity`) and each one's coupled
+    rows and columns to a cluster's lane count (``solve_2d._EP_CLUSTER_SIZE``: a chain's
+    coupling stays inside its cluster), by a stable sort of the masks -- no shape depends on a
+    value. The term is ``sum_c O_i^T (w o f[x_i, x_k, x_j]) O_j`` over the gathered middles
+    ``k``, with one-hot maps ``O`` back to the modes; padded lanes carry a zero weight and are
+    selected out. More middles, or more rows or columns on one, than the sizes hold multiply the
+    term by NaN: loud.
+    """
+    from wavebit.rcwa._engine.solve_2d import _EP_CLUSTER_SIZE
+    m = N.shape[0]
+    dev = getattr(N, 'device', None)
+    cm = max(1, min(int(cap), m))
+    cl = min(_EP_CLUSTER_SIZE, m)
+
+    def first(mask, c):
+        # The positions of the first `c` True entries along the last axis, and which are real.
+        pos = xp.argsort(xp.astype(~mask, xp.int32), axis=-1, stable=True)[..., :c]
+        count = xp.sum(xp.astype(mask, xp.int32), axis=-1)
+        return pos, xp.arange(c, device=dev) < count[..., None], count
+
+    kk, vk, nk = first(middle, cm)                                       # (cm,)
+    ii, vi, ni = first(xp.matrix_transpose(xp.take(nz, kk, axis=1)), cl)  # (cm, cl): N[i, k] != 0
+    jj, vj, nj = first(xp.take(nz, kk, axis=0), cl)                       # (cm, cl): N[k, j] != 0
+    over = (nk > cm) | xp.any(vk & ((ni > cl) | (nj > cl)))
+
+    def gather(v, index):
+        return xp.reshape(xp.take(v, xp.reshape(index, (-1,))), index.shape)
+
+    Nf = xp.reshape(N, (-1,))
+    w_i = gather(Nf, ii * m + kk[:, None])                                 # N[i, k]
+    w_j = gather(Nf, kk[:, None] * m + jj)                                 # N[k, j]
+    x_i, x_j, x_k = gather(values, ii), gather(values, jj), xp.take(values, kk)
+    f2 = _exp_divided_2(xp, scale[..., None, None, None], x_i[:, :, None], x_k[:, None, None],
+                        x_j[:, None, :])                                   # (..., cm, cl, cl)
+    ok = vk[:, None, None] & vi[:, :, None] & vj[:, None, :]
+    zero = xp.zeros_like(f2)
+    term = xp.where(ok, (w_i[:, :, None] * w_j[:, None, :]) * f2, zero)
+    # Block-diagonal over the middles, then back to the modes by one-hot maps.
+    same = xp.arange(cm, device=dev)[:, None] == xp.arange(cm, device=dev)[None, :]
+    block = xp.where(same[:, None, :, None], term[..., :, :, None, :], xp.zeros_like(term[..., :, :, None, :]))
+    block = xp.reshape(block, block.shape[:-4] + (cm * cl, cm * cl))
+    idx = xp.arange(m, device=dev)
+    Oi = xp.astype((idx[:, None] == xp.reshape(ii, (-1,))[None, :])
+                   & xp.reshape(vi & vk[:, None], (-1,))[None, :], N.dtype)   # (m, cm cl)
+    Oj = xp.astype((idx[:, None] == xp.reshape(jj, (-1,))[None, :])
+                   & xp.reshape(vj & vk[:, None], (-1,))[None, :], N.dtype)
+    out = Oi @ block @ xp.matrix_transpose(Oj)
+    return out * xp.where(over, float('nan'), 1.0)
 
 
 def _exp_divided_2(xp, s, x0, x1, x2):
@@ -763,11 +854,12 @@ def _coupled_frechet(q, scale, E, cap=None):
 _JAX_COUPLED_EXP = {}
 
 
-def _jax_coupled_exponential(cap=None):
+def _jax_coupled_exponential(cap=None, chains=None):
     """``exp(scale * q)`` for a coupled ``q`` under an abstract trace, as a ``jax.custom_jvp``.
 
     The value is :func:`exponential`'s divided-difference formula, exact for a coupled value
-    and all that a value-only trace forms; the tangent is exact for any variation::
+    and all that a value-only trace forms -- with ``chains`` (:func:`_chain_capacity`) its
+    two-step paths too; the tangent is exact for any variation::
 
         d exp(s q) = L(s q, s dq) + ds q exp(s q)
 
@@ -784,12 +876,12 @@ def _jax_coupled_exponential(cap=None):
     (measured bit-identical with ``L`` at the live ``q``).
     """
     cap = _COUPLED_CAP if cap is None else cap
-    if cap not in _JAX_COUPLED_EXP:
+    if (cap, chains) not in _JAX_COUPLED_EXP:
         import jax
 
         @jax.custom_jvp
         def coupled_exp(q, scale):
-            return exponential(array_namespace(q), q, scale)
+            return _exp_formula(array_namespace(q), q, scale, chains)
 
         @coupled_exp.defjvp
         def coupled_exp_tangent(primals, tangents):
@@ -801,8 +893,8 @@ def _jax_coupled_exponential(cap=None):
                        + d_scale[..., None, None] * (q @ out))
             return out, tangent
 
-        _JAX_COUPLED_EXP[cap] = coupled_exp
-    return _JAX_COUPLED_EXP[cap]
+        _JAX_COUPLED_EXP[(cap, chains)] = coupled_exp
+    return _JAX_COUPLED_EXP[(cap, chains)]
 
 
 def two_face(xp, q, scale, top, bottom, keep, coupled=False):
@@ -903,14 +995,15 @@ def two_face(xp, q, scale, top, bottom, keep, coupled=False):
                          (e[:, None, None] * top[None, :, :] - bottom[None, :, :])
                          / denominator[:, :, None])
         middle = xp.any(tau != 0, axis=1) & xp.any(tau != 0, axis=0)
-        if _concrete(xp.any(middle)):
+        if _concrete(xp.any(middle)) is not False:
             # A Jordan chain of length three in three levels (solve_2d._chain_split): the mode
             # in its middle couples onward, so its `bottom_k` holds that coupling's paths too.
             # With h_k = sum over the paths from k of f[j, k, ...] top_end -- what a kept row j
             # needs beside a dropped k -- the identity f[j, k, R] = (f[j, R] - f[k, R]) / (q_j -
             # q_k) gives h_k = (e_j top_k + sum_m tau_km h_m - bottom_k) / (q_j - q_k): `ahead`
             # plus the onward term, h_m being `ahead` at the chain's end. Still no growing
-            # exp(scale q_k) of a dropped mode.
+            # exp(scale q_k) of a dropped mode. Placed on the middle modes only, so a layer
+            # with none keeps its bits; under a trace it is formed for every coupled layer.
             onward = xp.matmul(tau[None, :, :], ahead)                 # [j, k] sum_m tau_km h_jm
             ahead = xp.where((middle & ~keep)[None, :, None],
                              ahead + onward / denominator[:, :, None], ahead)

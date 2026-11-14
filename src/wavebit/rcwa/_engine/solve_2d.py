@@ -1230,6 +1230,96 @@ def _chain_split(xp, T, valid, pad):
     return xp.stack(Xs, axis=0), level, xp.astype(cond, xp.real(T).dtype)
 
 
+def _chain_split_traced(xp, T, valid, pad):
+    """:func:`_chain_split` under an abstract trace: one lane in each of the upper two levels.
+
+    A trace cannot count a slot's members, so the candidates are a static family of the eager
+    splits, formed for every slot and selected per slot as :func:`_cluster_split` selects its
+    own: ``E_0`` all of ``eig(T)``'s unit eigenvectors but two, at positions ``p < q`` (both
+    members), ``C_0`` the two-dimensional complement of their span, ``y`` one of the two unit
+    eigenvectors of the quotient ``C_0^H T C_0`` and ``c`` its orthogonal complement there. Then
+    ``X`` holds ``E_0`` on its own lanes, ``C_0 y`` on lane ``p`` (level 1) and ``C_0 c`` on lane
+    ``q`` (level 2): ``k (k - 1)`` candidates for ``k`` lanes (56 for eight). For a slot of three
+    members they are exactly the eager splits (``3**3 - 3 * 2**3 + 3 = 6``); a larger slot also
+    holds the eager ones for one chain of length three beside independent modes, but not for a
+    chain beside a pair, whose level 1 holds two lanes -- there the check answers NaN.
+
+    ``eig``'s padded eigenvectors are put last (:func:`_dead_last`) and replaced by the
+    identity's columns before anything is formed, so a padded lane is level 0 with the identity's
+    row and column and never a candidate's ``p`` or ``q``. Returns ``(X, level, cond)``; a slot
+    with no admissible candidate (fewer than three members) keeps ``X = I`` and ``cond = inf``.
+    """
+    import itertools
+
+    import numpy as np
+    S, k, _ = T.shape
+    C = T.dtype
+    dev = getattr(T, 'device', None)
+    lane = xp.arange(k, device=dev)
+    eye = xp.astype(lane[:, None] == lane[None, :], C)
+    ndead = k - xp.sum(xp.astype(valid, xp.int32), axis=1)
+    vv = valid[:, :, None] & valid[:, None, :]
+    mu = pad * xp.ones(S, dtype=C, device=dev)
+    lam, E = _eig_raw(T)
+    E = E / xp.linalg.vector_norm(E, axis=-2)[..., None, :]
+    lam, E = _dead_last(xp, lam, E, mu, ndead)
+    E = xp.where(vv, E, xp.broadcast_to(eye, E.shape))
+    pq = list(itertools.combinations(range(k), 2))
+    nc = len(pq)
+    rest = np.array([[x for x in range(k) if x not in c] for c in pq])          # (nc, k - 2)
+    E0 = xp.permute_dims(xp.reshape(xp.take(E, xp.asarray(rest.reshape(-1), device=dev), axis=2),
+                                    (S, k, nc, k - 2)), (0, 2, 1, 3))           # (S, nc, k, k-2)
+    Qc, _ = xp.linalg.qr(E0, mode='complete')
+    C0 = Qc[..., k - 2:]                                                        # (S, nc, k, 2)
+    _, Y = _eig_raw(_conj_t(xp, C0) @ T[:, None] @ C0)
+    Y = Y / xp.linalg.vector_norm(Y, axis=-2)[..., None, :]
+    # P[c, x, l] = 1 where column x of [E_0 | level 1 | level 2] goes on lane l.
+    order = np.array([list(r) + [p, q] for r, (p, q) in zip(rest, pq)])          # (nc, k)
+    P = xp.astype(xp.asarray(order, device=dev)[:, :, None] == lane[None, None, :], C)
+    Xs, conds, misses, levels = [], [], [], []
+    for side in (0, 1):
+        y = Y[..., :, side]                                                     # (S, nc, 2)
+        c = xp.stack([-xp.conj(y[..., 1]), xp.conj(y[..., 0])], axis=-1)
+        X = xp.concat([E0, (C0 @ y[..., None]), (C0 @ c[..., None])], axis=-1) @ P[None]
+        X = X / xp.linalg.vector_norm(X, axis=-2)[..., None, :]
+        X = xp.where(vv[:, None], X, xp.broadcast_to(eye, X.shape))
+        Xs.append(X)
+    X = xp.concat(Xs, axis=1)                                                    # (S, 2 nc, k, k)
+    lvl = np.zeros((2 * nc, k), dtype=np.int32)
+    for i, (p, q) in enumerate(pq * 2):
+        lvl[i, p], lvl[i, q] = 1, 2
+    pos = np.array(pq * 2)
+    ok = (xp.take(valid, xp.asarray(pos[:, 1], device=dev), axis=1)
+          & xp.take(valid, xp.asarray(pos[:, 0], device=dev), axis=1)
+          & (ndead <= k - 3)[:, None])                                          # (S, 2 nc)
+    sv = xp.linalg.svdvals(X)
+    nonsingular = sv[..., -1] > 0
+    cond = xp.where(nonsingular, sv[..., 0] / xp.where(nonsingular, sv[..., -1],
+                                                       xp.ones_like(sv[..., -1])),
+                    xp.full_like(sv[..., 0], float('inf')))
+    # An inadmissible or singular candidate reads the identity, so that no solve meets a zero
+    # pivot (a padded lane at p or q repeats an identity column); it is never selected.
+    ok = ok & nonsingular
+    X = xp.where(ok[..., None, None], X, xp.broadcast_to(eye, X.shape))
+    Mx = linear_solve(xp, X, T[:, None] @ X)
+    up = lvl[:, :, None] < lvl[:, None, :]
+    off = xp.asarray(~up & ~np.eye(k, dtype=bool)[None], device=dev)            # (2 nc, k, k)
+    dropped = xp.linalg.matrix_norm(xp.where(vv[:, None] & off[None], Mx, xp.zeros_like(Mx)))
+    ok = ok & xp.isfinite(cond) & xp.isfinite(dropped)
+    miss = xp.where(ok, xp.where(ok, cond, xp.zeros_like(cond)) * dropped,
+                    xp.full_like(cond, float('inf')))
+    pick_c = xp.argmin(miss, axis=1)
+    has = xp.any(ok, axis=1)
+    pick = xp.arange(S, device=dev) * (2 * nc) + pick_c
+    Xb = xp.take(xp.reshape(X, (S * 2 * nc, k, k)), pick, axis=0)
+    Xb = xp.where(has[:, None, None], Xb, xp.broadcast_to(eye, Xb.shape))
+    cb = xp.take(xp.reshape(cond, (-1,)), pick)
+    cb = xp.where(has, cb, xp.full_like(cb, float('inf')))
+    level = xp.take(xp.asarray(lvl, device=dev), pick_c, axis=0)
+    level = xp.where(has[:, None], level, xp.zeros_like(level))
+    return Xb, level, cb
+
+
 def _rebuild_defective_pairs(xp, A, Omega_R, W, V, q, w, pairs, clusters=None, chains=False):
     """Each near-defective pair of a 2D layer as an orthonormal Schur pair; values only.
 
@@ -1390,8 +1480,9 @@ def _joint_cluster_bases(xp, A, W0, Q0, Mc, Gc, members, cvalid, lam, is_a, m01_
     One Newton step for each cluster's invariant subspace and a chord step after it, kept where
     it at least halves the check's miss (:data:`_EP_STEP_GAIN`), then :func:`_cluster_split`:
     the method :func:`_rebuild_defective_clusters` describes. With ``chains`` (the caller's word
-    that the chain's derivative rules are in place), eagerly a slot whose two-level split fails
-    the check tries three levels instead (:func:`_chain_split`). Returns ``(Q1, X, Mx, dg, JK, res1, tau,
+    that the chain's derivative rules are in place), a slot whose two-level split fails the check
+    tries three levels instead (:func:`_chain_split` eagerly, :func:`_chain_split_traced` under a
+    trace). Returns ``(Q1, X, Mx, dg, JK, res1, tau,
     tau_res, cond, dropped)`` for the basis each cluster keeps: the corrected orthonormal basis,
     the split ``X`` and ``X^-1 T X``, its diagonal, the coupled entries (``J x K``, or each lane
     to every lane of a higher level), and the check's subspace residual, thresholds, ``cond(X)``
@@ -1511,17 +1602,20 @@ def _joint_cluster_bases(xp, A, W0, Q0, Mc, Gc, members, cvalid, lam, is_a, m01_
             finite = xp.isfinite(cond)
             return xp.where(finite, xp.where(finite, cond, xp.zeros_like(cond)) * dropped / tau,
                             xp.full_like(cond, float('inf')))
-        if chains and _concrete(xp.any(split_miss(cond, dropped) > 1)):
-            # Eagerly, where no two-level split passes: three levels, for a Jordan chain of
-            # length three (_chain_split), kept where the check reads less of them. JK is then
-            # the levels' coupling, every lane to every lane of a higher level.
-            X3, lvl, cond3 = _chain_split(xp, T, cvalid, F)
+        failing = split_miss(cond, dropped) > 1
+        fails = _concrete(xp.any(failing)) if chains else False
+        if fails is not False:
+            # Where no two-level split passes: three levels, for a Jordan chain of length three
+            # -- eagerly every split of the slot's members (_chain_split), under a trace the
+            # static family with one lane in each upper level (_chain_split_traced) -- kept where
+            # the check reads less of them. JK is then the levels' coupling, every lane to every
+            # lane of a higher level. A slot that takes none keeps its bits.
+            X3, lvl, cond3 = (_chain_split if fails else _chain_split_traced)(xp, T, cvalid, F)
             Mx3 = linear_solve(xp, X3, T @ X3)
             CK = vv & (lvl[:, :, None] < lvl[:, None, :])
             dropped3 = xp.linalg.matrix_norm(xp.where(vv & ~(CK | (eyek != 0)), Mx3,
                                                       xp.zeros_like(Mx3)))
-            take = ((split_miss(cond, dropped) > 1)
-                    & (split_miss(cond3, dropped3) < split_miss(cond, dropped)))
+            take = failing & (split_miss(cond3, dropped3) < split_miss(cond, dropped))
             X = xp.where(take[:, None, None], X3, X)
             Mx = xp.where(take[:, None, None], Mx3, Mx)
             JK = xp.where(take[:, None, None], CK, JK)
@@ -1585,8 +1679,9 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters, cha
     exact square root of ``L + B`` (``B**2 = 0``), every ``r = sqrt(L)`` taken on the side of
     the cluster member whose label decays most, as a pair's roots are. ``W = Q1 X`` and
     ``V = Omega_R W q^-1`` satisfy both first-order relations to the rounding of the split.
-    With ``chains`` (the caller's word that its derivative rules take a chain), eagerly a slot whose
-    two-level split fails the check tries three levels (:func:`_chain_split`): a Jordan chain of
+    With ``chains`` (the caller's word that its derivative rules take a chain), a slot whose
+    two-level split fails the check tries three levels (:func:`_chain_split` eagerly,
+    :func:`_chain_split_traced` under a trace): a Jordan chain of
     length three, whose ``B`` reaches two levels up (``B**3 = 0``). Its root takes the Schur
     square root's second-order term there and ``q^-1`` the term ``D^-1 N D^-1 N D^-1``; a
     two-level split keeps its bits.
@@ -1741,11 +1836,11 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters, cha
     # takes its second-order term, N_ij = (B_ij - sum_k N_ik N_kj) / (r_i + r_j) -- the Schur
     # square root's recurrence (A. Bjorck and S. Hammarling, Linear Algebra Appl. 52/53, 127,
     # 1983), exact here since N**3 = 0 -- and the inverse its term D^-1 N D^-1 N D^-1. Placed only
-    # on those entries, so a two-level split keeps its bits.
+    # on those entries, so a two-level split keeps its bits; under a trace both are formed.
     if chains:
         hop = xp.astype(JK, xp.real(Mx).dtype)
         two_up = (hop @ hop) > 0
-    if chains and _concrete(xp.any(two_up)):
+    if chains and _concrete(xp.any(two_up)) is not False:
         N = xp.where(two_up, (Mx - N @ N) / xp.where(two_up, total, one(total)), N)
         M1 = Dinv[:, :, None] * N * Dinv[:, None, :]
         Minv = xp.where(two_up, eyek * Dinv[:, None, :] - M1 + M1 @ (N * Dinv[:, None, :]), Minv)
@@ -1820,8 +1915,9 @@ def _pair_sylvester(xp, T, S, a, b, mask):
     is both a coupled row and a coupled column, and the passes above do not close: ``X`` is the
     finite sum ``sum_n (-L)^n (S / total)``, ``L(X) = (N X + X N) / total``, in which every term
     holding three ``N`` on one side vanishes (each raises a level, and there are three). So
-    there, eagerly, ``X <- (S - N X - X N) / total`` is taken four times from ``S / total``:
-    exact. A coupling on disjoint rows and columns keeps the passes above, to the bit.
+    there ``X <- (S - N X - X N) / total`` is taken four times from ``S / total``: exact. A
+    coupling on disjoint rows and columns keeps the passes above, to the bit: eagerly read off
+    the value, under a trace both formed and one selected.
     """
     tv = xp.linalg.diagonal(T)
     total = tv[:, None] + tv[None, :]
@@ -1835,17 +1931,21 @@ def _pair_sylvester(xp, T, S, a, b, mask):
     def right(X):                                # X @ N: column b_p is t_p X[:, a_p]
         return (xp.take(X, a, axis=1) * t[None, :]) @ xp.matrix_transpose(Ob)
 
-    if _concrete(xp.any(rows[:, 0] & cols[0, :])):
-        X = S / total
+    chain = xp.any(rows[:, 0] & cols[0, :])
+    some = _concrete(chain)
+    if some is not False:
+        chained = S / total
         for _ in range(4):
-            X = (S - left(X) - right(X)) / total
-        return X
+            chained = (S - left(chained) - right(chained)) / total
+        if some:
+            return chained
     X1 = S / total
     X2 = (S - left(X1)) / total
     X3 = (S - right(X1)) / total
     Xa = xp.where(rows & ~cols, X2, xp.where(~rows & cols, X3, X1))
     X4 = (S - left(Xa) - right(Xa)) / total
-    return xp.where(rows & cols, X4, Xa)
+    X = xp.where(rows & cols, X4, Xa)
+    return X if some is False else xp.where(chain, chained, X)
 
 
 def _pair_generator(xp, operator, W, Q, a, b, mask):
@@ -1883,23 +1983,32 @@ def _pair_inverse(xp, Q, a, b, mask):
     they are zero and the arithmetic is :func:`~wavebit.rcwa._engine.modal_gradient.inverse`'s.
 
     A Jordan chain of length three in three levels (:func:`_chain_split`; a mode both a coupled
-    row and a coupled column, ``N**3 = 0``) takes, eagerly, the value
-    ``D^-1 - M + M N D^-1`` with its second-order term and the tangent ``-Q^-1 E Q^-1`` itself,
-    on a zero value: exact for any coupling. A coupling on disjoint rows and columns keeps the
-    terms above, to the bit.
+    row and a coupled column, ``N**3 = 0``) takes the value ``D^-1 - M + M N D^-1`` with its
+    second-order term and the tangent ``-Q^-1 E Q^-1`` itself, on a zero value: exact for any
+    coupling. A coupling on disjoint rows and columns keeps the terms above, to the bit: eagerly
+    read off the value, under a trace (where every JAX value counts as differentiated, so a
+    value-only ``jax.jit`` comes here too) both are formed and one is selected.
     """
     from wavebit.rcwa._engine.modal_gradient import _stop
-    from wavebit.rcwa._engine.modal_gradient import inverse
     Q0 = _stop(Q)
     t, Oa, Ob = _pair_coupling(xp, Q0, a, b, mask)
-    if _concrete(xp.any(xp.any(Oa != 0, axis=1) & xp.any(Ob != 0, axis=1))):
+    chain = xp.any(xp.any(Oa != 0, axis=1) & xp.any(Ob != 0, axis=1))
+    some = _concrete(chain)
+    if some is not False:
         dinv = 1 / xp.linalg.diagonal(Q0)
         N = Q0 - _diag(xp, xp.linalg.diagonal(Q0))
         M = dinv[:, None] * N * dinv[None, :]
         inv0 = _diag(xp, dinv) - M + M @ (N * dinv[None, :])
-        if not carries_autodiff(Q):
-            return inv0
-        return inv0 - inv0 @ (Q - Q0) @ inv0
+        chained = inv0 - inv0 @ (Q - Q0) @ inv0 if carries_autodiff(Q) else inv0
+        if some:
+            return chained
+    base = _disjoint_inverse(xp, Q, Q0, t, Oa, Ob, a, b)
+    return base if some is False else xp.where(chain, chained, base)
+
+
+def _disjoint_inverse(xp, Q, Q0, t, Oa, Ob, a, b):
+    """:func:`_pair_inverse` for a coupling on disjoint rows and columns."""
+    from wavebit.rcwa._engine.modal_gradient import inverse
     base = inverse(xp, Q)
     if not carries_autodiff(Q):
         return base
@@ -2237,8 +2346,8 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
                                                            pairs)
             joint = None
         else:
-            # A Jordan chain of length three is rebuilt eagerly in three levels, derivatives
-            # included (the rules below take its two-level coupling); a trace reads no chain.
+            # A Jordan chain of length three is rebuilt in three levels, eagerly and under a
+            # trace; the rules below take its two-level coupling.
             W, V, Q, a, b, mask = _rebuild_defective_pairs(
                 xp, A, _stop(Omega_R), _stop(W), _stop(V), _stop(q), _stop(w), pairs,
                 clusters=clusters, chains=True)
