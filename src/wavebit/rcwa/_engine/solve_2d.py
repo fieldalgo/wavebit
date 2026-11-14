@@ -1390,8 +1390,8 @@ def _joint_cluster_bases(xp, A, W0, Q0, Mc, Gc, members, cvalid, lam, is_a, m01_
     One Newton step for each cluster's invariant subspace and a chord step after it, kept where
     it at least halves the check's miss (:data:`_EP_STEP_GAIN`), then :func:`_cluster_split`:
     the method :func:`_rebuild_defective_clusters` describes. With ``chains`` (the caller's word
-    that no derivative is taken), eagerly a slot whose two-level split fails the check tries
-    three levels instead (:func:`_chain_split`). Returns ``(Q1, X, Mx, dg, JK, res1, tau,
+    that the chain's derivative rules are in place), eagerly a slot whose two-level split fails
+    the check tries three levels instead (:func:`_chain_split`). Returns ``(Q1, X, Mx, dg, JK, res1, tau,
     tau_res, cond, dropped)`` for the basis each cluster keeps: the corrected orthonormal basis,
     the split ``X`` and ``X^-1 T X``, its diagonal, the coupled entries (``J x K``, or each lane
     to every lane of a higher level), and the check's subspace residual, thresholds, ``cond(X)``
@@ -1585,7 +1585,7 @@ def _rebuild_defective_clusters(xp, A, Omega_R, W, V, q, w, pairs, clusters, cha
     exact square root of ``L + B`` (``B**2 = 0``), every ``r = sqrt(L)`` taken on the side of
     the cluster member whose label decays most, as a pair's roots are. ``W = Q1 X`` and
     ``V = Omega_R W q^-1`` satisfy both first-order relations to the rounding of the split.
-    With ``chains`` (the caller's word that no derivative is taken), eagerly a slot whose
+    With ``chains`` (the caller's word that its derivative rules take a chain), eagerly a slot whose
     two-level split fails the check tries three levels (:func:`_chain_split`): a Jordan chain of
     length three, whose ``B`` reaches two levels up (``B**3 = 0``). Its root takes the Schur
     square root's second-order term there and ``q^-1`` the term ``D^-1 N D^-1 N D^-1``; a
@@ -1815,6 +1815,13 @@ def _pair_sylvester(xp, T, S, a, b, mask):
     coupling has a few entries (:func:`_pair_coupling`). With no coupling every pass is
     ``S / (t_i + t_j)``, the arithmetic :func:`~wavebit.rcwa._engine.modal_gradient.generator`
     forms.
+
+    A Jordan chain of length three in three levels (:func:`_chain_split`) couples a mode that
+    is both a coupled row and a coupled column, and the passes above do not close: ``X`` is the
+    finite sum ``sum_n (-L)^n (S / total)``, ``L(X) = (N X + X N) / total``, in which every term
+    holding three ``N`` on one side vanishes (each raises a level, and there are three). So
+    there, eagerly, ``X <- (S - N X - X N) / total`` is taken four times from ``S / total``:
+    exact. A coupling on disjoint rows and columns keeps the passes above, to the bit.
     """
     tv = xp.linalg.diagonal(T)
     total = tv[:, None] + tv[None, :]
@@ -1828,6 +1835,11 @@ def _pair_sylvester(xp, T, S, a, b, mask):
     def right(X):                                # X @ N: column b_p is t_p X[:, a_p]
         return (xp.take(X, a, axis=1) * t[None, :]) @ xp.matrix_transpose(Ob)
 
+    if _concrete(xp.any(rows[:, 0] & cols[0, :])):
+        X = S / total
+        for _ in range(4):
+            X = (S - left(X) - right(X)) / total
+        return X
     X1 = S / total
     X2 = (S - left(X1)) / total
     X3 = (S - right(X1)) / total
@@ -1869,15 +1881,29 @@ def _pair_inverse(xp, Q, a, b, mask):
     ``M Eoff D^-1 + D^-1 Eoff M - M E M`` with ``M = D^-1 N D^-1``, ``E = Q - stop(Q)`` and
     ``Eoff`` its off-diagonal part -- by gathers, ``M`` listed entry by entry. With no coupling
     they are zero and the arithmetic is :func:`~wavebit.rcwa._engine.modal_gradient.inverse`'s.
+
+    A Jordan chain of length three in three levels (:func:`_chain_split`; a mode both a coupled
+    row and a coupled column, ``N**3 = 0``) takes, eagerly, the value
+    ``D^-1 - M + M N D^-1`` with its second-order term and the tangent ``-Q^-1 E Q^-1`` itself,
+    on a zero value: exact for any coupling. A coupling on disjoint rows and columns keeps the
+    terms above, to the bit.
     """
     from wavebit.rcwa._engine.modal_gradient import _stop
     from wavebit.rcwa._engine.modal_gradient import inverse
+    Q0 = _stop(Q)
+    t, Oa, Ob = _pair_coupling(xp, Q0, a, b, mask)
+    if _concrete(xp.any(xp.any(Oa != 0, axis=1) & xp.any(Ob != 0, axis=1))):
+        dinv = 1 / xp.linalg.diagonal(Q0)
+        N = Q0 - _diag(xp, xp.linalg.diagonal(Q0))
+        M = dinv[:, None] * N * dinv[None, :]
+        inv0 = _diag(xp, dinv) - M + M @ (N * dinv[None, :])
+        if not carries_autodiff(Q):
+            return inv0
+        return inv0 - inv0 @ (Q - Q0) @ inv0
     base = inverse(xp, Q)
     if not carries_autodiff(Q):
         return base
-    Q0 = _stop(Q)
     tv = xp.linalg.diagonal(Q0)
-    t, Oa, Ob = _pair_coupling(xp, Q0, a, b, mask)
     m = t / (xp.take(tv, a) * xp.take(tv, b))          # M[a_p, b_p]
     E = Q - Q0
     n2 = Q.shape[0]
@@ -2211,11 +2237,11 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
                                                            pairs)
             joint = None
         else:
-            # A Jordan chain of length three is rebuilt (eagerly) only where no derivative is
-            # taken: the derivative rules below take a coupling that reaches one level only.
+            # A Jordan chain of length three is rebuilt eagerly in three levels, derivatives
+            # included (the rules below take its two-level coupling); a trace reads no chain.
             W, V, Q, a, b, mask = _rebuild_defective_pairs(
                 xp, A, _stop(Omega_R), _stop(W), _stop(V), _stop(q), _stop(w), pairs,
-                clusters=clusters, chains=not differentiated)
+                clusters=clusters, chains=True)
             ii = xp.arange(w.shape[0], device=getattr(W, 'device', None))
             joint = xp.any((ii[:, None] == xp.reshape(clusters[0], (-1,))[None, :])
                            & xp.reshape(clusters[1], (-1,))[None, :], axis=1)

@@ -1128,8 +1128,8 @@ class ExceptionalPointWarning(UserWarning):
     when that joint rebuild fails its own check. An eager screen of each layer's final mode
     basis warns when it still contains a nearly dependent cluster with a non-normal restriction
     of the layer operator: a cluster no rebuild took exactly (more than eight modes, a chain of
-    nearly equal eigenvalues, or a Jordan chain of length three under a derivative or a trace;
-    eagerly with no derivative the joint rebuild takes one in three levels). On the 2D path a
+    nearly equal eigenvalues, or a Jordan chain of length three under a trace; eagerly the
+    joint rebuild takes one in three levels). On the 2D path a
     third eager screen warns when two or more pairs rebuilt one at a time share such a cluster
     and the rebuilt modes miss the layer operator by more than the layer's thickness and roots
     tolerate. Ordinary diagonalizable degeneracies trigger none of them.
