@@ -106,6 +106,11 @@ the candidate's Bernstein derivatives nor its factorial energy moments.
 Original nodal/Laurent equations and independent Duffy integration check the
 whole tensor and exact contact variation for degrees 2, 3 and 4, dielectric
 and passive metal pairs. Two quadrature orders must agree before comparison.
+The reference adds its quadrature terms pairwise. In one running sum its
+rounding grew with the number of points: for the quartic metal pair at 32x32
+points it differed from the candidate by 3.2e-9, beyond the absolute 3e-9
+normalized derivative check. Pairwise sums resolve that reference roundoff
+without changing the tolerance.
 
 Other checks cover the quadratic basis change, repeated-phase and collapsed
 Fourier moments, complex material holomorphy, additive simultaneous directions,
