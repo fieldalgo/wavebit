@@ -83,6 +83,16 @@ def test_complete_original_nodal_equations_and_contact_variation(degree, gap, ep
     np.testing.assert_allclose(answers[0][0], answers[1][0], atol=3e-10, rtol=0)
     np.testing.assert_allclose(tensor(value), answers[1][0], atol=3e-10, rtol=0)
     if gap == 0:
+        # Both bounds are absolute. For the quartic metal pair length*tangent has
+        # norm 3.4e3, so 3e-9 is 9e-13 of it: near round-off, and it holds only
+        # because the oracle adds its quadrature terms pairwise (quadrature_sum).
+        # In one running sum its error grew with the point count, 1.8e-9 from the
+        # candidate at 24x24 points, 3.2e-9 at 32x32 and 1.2e-8 at 64x64, and the
+        # last check below failed on a Zen 4 CPU under Windows and Linux alike.
+        # Pairwise, on every OpenBLAS kernel tried, the 32x32 oracle is within
+        # 4.3e-10 of the candidate and within 1.4e-9 of the 24x24 oracle. What
+        # remains is the oracle's floor: one ulp of noise in its weights moves it
+        # by up to 1e-9, but one ulp in the candidate's exact moments by 9e-11.
         np.testing.assert_allclose(length*answers[0][1], length*answers[1][1], atol=3e-9, rtol=0)
         np.testing.assert_allclose(length*tensor(tangent), length*answers[1][1], atol=3e-9, rtol=0)
     assert max(v for k,v in metadata.items() if k.endswith('residual')) < 1e-10

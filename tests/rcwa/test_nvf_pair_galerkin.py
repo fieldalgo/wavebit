@@ -32,6 +32,22 @@ def duffy(q):
     return np.stack([1-r, r*(1-s), r*s], -1).reshape(-1, 3), (w[:, None]*w[None, :]*r).ravel()
 
 
+def quadrature_sum(subscripts, *operands):
+    """``np.einsum(subscripts, *operands)``, adding the quadrature axis ``q`` pairwise.
+
+    ``np.einsum`` and a matrix product add the q terms into one running sum,
+    so their rounding error grows with the number of points (``q*q`` here).
+    The contact Laurent solve below amplifies it. Halving the terms pairwise
+    bounds it by ``log2`` of the point count instead.
+    """
+    inputs, output = subscripts.split('->')
+    terms = np.einsum(f'{inputs}->q{output}', *operands)
+    while len(terms) > 1:
+        half = len(terms)//2
+        terms = np.concatenate([terms[:half]+terms[half:2*half], terms[2*half:]])
+    return terms[0]
+
+
 @lru_cache(None)
 def reference(epsilon, gap, refinement=0, order=(1, 2), quadrature=24, shift=0):
     """Original unscaled nodal/Laurent equations and numerical simplex integrals.
@@ -182,7 +198,7 @@ def nodal_reference(g, epsilon, gap, order, quadrature, length, basis, *, degree
         a0, a1 = np.asarray(numerator[:, 1:, :], float)
         n0, n1 = reference_grad@a0, reference_grad@a1
         d0, d1 = map(float, det)
-        integral = lambda u, v: material[tag]*np.einsum('q,qia,qja->ij', weights, u, v)
+        integral = lambda u, v: material[tag]*quadrature_sum('q,qia,qja->ij', weights, u, v)
         if gap == 0:
             cross = integral(n0, n1)+integral(n1, n0)
             blocks = ([integral(n0, n0)/d1, cross/d1, integral(n1, n1)/d1] if thin else
@@ -196,9 +212,9 @@ def nodal_reference(g, epsilon, gap, order, quadrature, length, basis, *, degree
             product, change = np.linalg.det(jac)*grad, np.zeros_like(grad)
         phase = np.exp(-1j*(bary@(p+s*v))@wave.T)
         dphase = -1j*((bary@v)@wave.T)*phase
-        mixed = np.einsum('q,qia,qm->ami', weights, product, phase).reshape(2*N, len(triangle))
-        dmixed = (np.einsum('q,qia,qm->ami', weights, change, phase)
-                  +np.einsum('q,qia,qm->ami', weights, product, dphase)).reshape(2*N, len(triangle))
+        mixed = quadrature_sum('q,qia,qm->ami', weights, product, phase).reshape(2*N, len(triangle))
+        dmixed = (quadrature_sum('q,qia,qm->ami', weights, change, phase)
+                  +quadrature_sum('q,qia,qm->ami', weights, product, dphase)).reshape(2*N, len(triangle))
         ids = g['periodic'][triangle]-1
         for i, row in enumerate(ids):
             if row < 0:
@@ -209,8 +225,9 @@ def nodal_reference(g, epsilon, gap, order, quadrature, length, basis, *, degree
                 if column >= 0:
                     for target, block in zip((km, k0, k1), blocks):
                         target[row, column] += block[i, j]
-        gram = phase.T@(weights[:, None]*phase.conj())
-        dgram = dphase.T@(weights[:, None]*phase.conj())+phase.T@(weights[:, None]*dphase.conj())
+        gram = quadrature_sum('qm,q,qn->mn', phase, weights, phase.conj())
+        dgram = (quadrature_sum('qm,q,qn->mn', dphase, weights, phase.conj())
+                 +quadrature_sum('qm,q,qn->mn', phase, weights, dphase.conj()))
         a += material[tag]*(d0+s*d1)*gram
         da += material[tag]*(d1*gram+(d0+s*d1)*dgram)
     reverse = np.r_[np.arange(N-1, -1, -1), np.arange(2*N-1, N-1, -1)]
