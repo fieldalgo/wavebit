@@ -363,19 +363,31 @@ def freeze(solver):
     if integrated_shapes(solver):
         import wavebit.rcwa._engine.tensor_shapes as tensor_shapes
         return tensor_shapes.freeze(solver)
+    if not isinstance(solver.structure, list):
+        # Every layer below is labelled from its values, a 1 x 1 one included; a raster with
+        # none to read is refused by name rather than inside `_labels`.
+        solver._refuse_a_freeze_on_a_traced_raster(['labels'])
     snapshot = _shape_snapshot(solver) if isinstance(solver.structure, list) and any(l.get('shapes') for l in solver.structure) else None
     record = {'snapshot': snapshot, 'epsilon': [], 'mu': [], 'settings': _settings(solver),
               'basis': fac._to_numpy(solver.lattice).copy()}
     for quantity, structure in [('epsilon',solver.structure), ('mu', solver.mu if not isinstance(solver.structure,list) else solver.structure)]:
         if structure is None: continue
-        fields = _field(solver, structure, quantity, snapshot)
-        for t in fields:
-            uniform = t.shape[:2] == (1,1)
-            t = t if uniform else _at_floor(solver, t)
-            labels = _labels(t)
-            normal = None if uniform else fac.normal_vector_field(
-                labels.astype(float), lattice=solver.lattice, method=solver.raster_normal_method)
-            record[quantity].append((labels, normal))
+        # Labelled on its values: an eager `jax.grad` or `jax.jacfwd` tracer through its
+        # primal, which `_labels` can read and the tracer cannot -- the record takes no
+        # derivative (`_primal_for_planning`). A shape list is not a tracer and is kept.
+        structure = fac._primal_for_planning(structure)
+        # Cut, lifted and labelled under `_eager`, as `_sampled_fields` labels them: a raster
+        # that is a constant of a `jax.jit` trace keeps its values. Staged, every layer of it
+        # was a tracer with only the wavelength traced, and `_labels` could not read it.
+        with solver._eager():
+            fields = _field(solver, structure, quantity, snapshot)
+            for t in fields:
+                uniform = t.shape[:2] == (1,1)
+                t = t if uniform else _at_floor(solver, t)
+                labels = _labels(t)
+                normal = None if uniform else fac.normal_vector_field(
+                    labels.astype(float), lattice=solver.lattice, method=solver.raster_normal_method)
+                record[quantity].append((labels, normal))
     return StaticGeometry(tensor_geometry=record)
 
 

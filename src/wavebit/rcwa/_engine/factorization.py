@@ -1695,6 +1695,25 @@ def _has_no_value(array):
         return _concrete(xp.all(xp.isfinite(array))) is None
 
 
+def _primal_for_planning(array):
+    """``array`` as a freeze plans on it: a JAX derivative's tracer by the value it carries.
+
+    A frozen record holds decisions and no derivative, so it is planned on the primal and is
+    the record the eager freeze takes of the same raster. ``jax.lax.stop_gradient`` hands an
+    eager ``jax.grad`` or ``jax.jacfwd`` tracer's primal over as a concrete array (measured on
+    JAX 0.11), which the NVF normal field and the tensor labels read whole; the tracer itself
+    refuses that read. Only a JAX tracer changes: NumPy, PyTorch and a concrete JAX array come
+    back as they are. A tracer with no value -- ``jax.jit``, ``jax.vmap`` -- is refused before
+    the freeze gets here
+    (:meth:`~wavebit.rcwa._engine.engine.CoreFactorizationMixin._refuse_a_freeze_on_a_traced_raster`).
+    """
+    import sys
+    jax = sys.modules.get('jax')
+    if jax is None or not isinstance(array, jax.core.Tracer):
+        return array
+    return jax.lax.stop_gradient(array)
+
+
 def _cell_has_no_value(lattice):
     """Whether ``lattice`` is a basis held by a ``jax.jit`` or ``jax.vmap`` trace, with no value.
 
