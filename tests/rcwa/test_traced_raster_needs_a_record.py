@@ -412,28 +412,58 @@ def test_a_freeze_that_reads_no_value_still_records_a_traced_raster(path):
         assert getattr(traced, name) is None and getattr(eager, name) is None, name
 
 
-def test_a_freeze_under_an_eager_grad_still_plans_on_the_primal():
-    """An eager ``jax.grad`` tracer carries its value, and the compression is planned on it.
+def _assert_same_record(got, want, path='record'):
+    """Two frozen records equal field by field, every array to the byte and of the same dtype.
 
-    The record matches the eager freeze's, block for block, so the refusal is asked of the
-    value and not of the framework.
+    A record holds decisions only, so the one a freeze takes inside a transform has to be the
+    one the eager freeze takes on the same values -- with no tracer left in it, which
+    ``np.asarray`` would refuse.
+    """
+    import dataclasses
+    if dataclasses.is_dataclass(got):
+        assert type(got) is type(want), path
+        for field in dataclasses.fields(got):
+            _assert_same_record(getattr(got, field.name), getattr(want, field.name),
+                                f'{path}.{field.name}')
+    elif isinstance(got, dict):
+        assert isinstance(want, dict) and sorted(got, key=str) == sorted(want, key=str), path
+        for key in got:
+            _assert_same_record(got[key], want[key], f'{path}[{key!r}]')
+    elif isinstance(got, (list, tuple)):
+        assert isinstance(want, (list, tuple)) and len(got) == len(want), path
+        for i, (a, b) in enumerate(zip(got, want)):
+            _assert_same_record(a, b, f'{path}[{i}]')
+    elif hasattr(got, 'shape') or isinstance(got, np.generic):
+        a, b = np.asarray(got), np.asarray(want)
+        assert (a.dtype, a.shape) == (b.dtype, b.shape) and a.tobytes() == b.tobytes(), path
+    else:
+        assert got == want, path
+
+
+#: Every raster freeze that reads values, with the solver beside its raster: mu rasters too.
+FREEZING = dict({name: (options, raster, {}) for name, (options, raster) in PLANNING.items()},
+                **{'nvf-mu': (dict(factorization='nvf'), _rod, dict(mu=_mu_rod())),
+                   'li-integrated-mu': (PLANNING['li-integrated'][0], _rod, dict(mu=_mu_rod()))})
+
+
+@pytest.mark.parametrize('path', list(FREEZING))
+def test_a_freeze_inside_jit_plans_a_constant_raster_as_it_does_eagerly(path):
+    """Only the wavelength traced: the raster is a constant of the trace and has its values.
+
+    The solve plans such a raster as eagerly since its layers are cut under ``concrete_scope``;
+    the freeze cut them in the trace, so ``structure[i]`` was a tracer even of a constant and
+    the integrated compression and the tensor labels raised JAX's own errors. The record has
+    to be the eager one.
     """
     import jax
-    import jax.numpy as jnp
-    options, raster = PLANNING['li-integrated']
-    solver = _solver(options, raster)
+    options, raster, extra = FREEZING[path]
+    solver = _solver(options, raster, **extra)
     eager, kept = solver.freeze_geometry(), []
 
-    def loss(c):
-        solver.structure = c
-        kept.append(solver.freeze_geometry())
-        return jnp.sum(c) * 0.0
-    try:
-        jax.grad(loss)(jnp.asarray(raster()))
-    finally:
-        solver.structure = raster()
-    (traced,) = kept
-    assert len(traced.compression) == len(eager.compression)
-    for got, want in zip(traced.compression, eager.compression):
-        for a, b in zip(got, want):
-            np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
+    def traced(w):
+        kept.append(solver.freeze_geometry(wavelength=w))
+        return w
+    jax.jit(traced)(620.)
+    (inside,) = kept
+    _assert_same_record(inside, eager)
+

@@ -372,14 +372,18 @@ def freeze(solver):
               'basis': fac._to_numpy(solver.lattice).copy()}
     for quantity, structure in [('epsilon',solver.structure), ('mu', solver.mu if not isinstance(solver.structure,list) else solver.structure)]:
         if structure is None: continue
-        fields = _field(solver, structure, quantity, snapshot)
-        for t in fields:
-            uniform = t.shape[:2] == (1,1)
-            t = t if uniform else _at_floor(solver, t)
-            labels = _labels(t)
-            normal = None if uniform else fac.normal_vector_field(
-                labels.astype(float), lattice=solver.lattice, method=solver.raster_normal_method)
-            record[quantity].append((labels, normal))
+        # Cut, lifted and labelled under `_eager`, as `_sampled_fields` labels them: a raster
+        # that is a constant of a `jax.jit` trace keeps its values. Staged, every layer of it
+        # was a tracer with only the wavelength traced, and `_labels` could not read it.
+        with solver._eager():
+            fields = _field(solver, structure, quantity, snapshot)
+            for t in fields:
+                uniform = t.shape[:2] == (1,1)
+                t = t if uniform else _at_floor(solver, t)
+                labels = _labels(t)
+                normal = None if uniform else fac.normal_vector_field(
+                    labels.astype(float), lattice=solver.lattice, method=solver.raster_normal_method)
+                record[quantity].append((labels, normal))
     return StaticGeometry(tensor_geometry=record)
 
 

@@ -30,6 +30,7 @@ from wavebit._common.backend import host_foreign
 from wavebit._common.backend import as_array
 from wavebit._common.backend import check_input_precision
 from wavebit._common.backend import checked_float
+from wavebit._common.backend import concrete_scope
 from wavebit._common.declarations import static_float
 from wavebit._common.conventions import DoubleNegativeLayer
 from wavebit._common.conventions import _CHI_POLARIZATION_CLASH
@@ -5798,11 +5799,16 @@ class CoreFactorizationMixin:
                     mu_normal_field_source = _fac.normal_field_source_for_raster(
                         self._mu, half_width_u, half_width_v, lattice=basis, method=self.raster_normal_method)
             if coefficients == FourierCoefficients.INTEGRATED:
-                compression = [_fac.compression_indices(self.structure[i])
-                               for i in range(self.structure.shape[0])]
-                if self._mu is not None:
-                    mu_compression = [_fac.compression_indices(self._mu[i])
-                                      for i in range(self._mu.shape[0])]
+                # Cut under `concrete_scope`, as the solve's `_compressed_layers` cuts them: a
+                # raster that is a constant of a `jax.jit` trace is compressed as it is eagerly.
+                # Staged, `structure[i]` was a tracer even of a constant, and the compression
+                # raised `TracerBoolConversionError` with only the wavelength traced.
+                with concrete_scope(array_namespace(self.structure)):
+                    compression = [_fac.compression_indices(self.structure[i])
+                                   for i in range(self.structure.shape[0])]
+                    if self._mu is not None:
+                        mu_compression = [_fac.compression_indices(self._mu[i])
+                                          for i in range(self._mu.shape[0])]
 
         geometry = StaticGeometry(normal_field=normal_field, compression=compression,
                                   normal_field_source=normal_field_source,
