@@ -1,10 +1,12 @@
-"""The windowed split rule, ``Result.field(reconstruction='splitw')``, on a layer that holds a circle.
+"""The split rules, ``Result.field(reconstruction='split' | 'splitw')``, on a layer that holds a circle.
 
-What the rule is worth is pinned against a finite-element field in
-``tests/references/test_gyptis_cylinder_field_golden.py``. These pin what it is: which
-components it changes, what it makes continuous across the curved wall, that the two doors, the
-three backends and the two formulations agree on it, that its derivative is a finite
-difference's, and that everything it was not measured on is refused by name.
+What the rules are worth is pinned against a finite-element field in
+``tests/references/test_gyptis_cylinder_field_golden.py``. These pin what they are: which
+components they change, what they make continuous across the curved wall, that the two doors,
+the three backends and the two formulations agree on them, that their derivative is a finite
+difference's, and that everything they were not measured on is refused by name. ``'splitw'`` is
+the windowed rule and the one most tests read; ``'split'`` runs the same operators with the
+window at 1, and the tests that could tell the two apart take both.
 """
 import numpy as np
 import pytest
@@ -70,16 +72,17 @@ def test_only_the_in_plane_e_of_the_patterned_layer_changes():
     assert result.field(x=X, y=Y, z=z, reconstruction='splitw').metadata['reconstruction'] == 'splitw'
 
 
+@pytest.mark.parametrize('rule', ['split', 'splitw'])
 @pytest.mark.parametrize('side', ['top', 'bottom'])
-def test_a_result_answers_what_the_solver_answers(side):
-    public = _read(rcwa.run(_problem(side=side), numerics=NUMERICS))[0]
+def test_a_result_answers_what_the_solver_answers(side, rule):
+    public = _read(rcwa.run(_problem(side=side), numerics=NUMERICS), rule)[0]
     solver = engine(backend='numpy', top=1.0, bot=2.25, period=list(PERIOD), truncation_order=[3, 3],
                     wavelength=900.0, thickness=[150.0], theta=0.2, phi=0.3, polarization=(0, 1),
                     incidence_side=side, answers='field', factorization='nvf',
                     structure=[dict(background=1.0, shapes=[dict(
                         type='circle', cx=CENTRE[0], cy=CENTRE[1], lx=2 * RADIUS, material=EPSILON)])])
     solver.solve()
-    cell = np.asarray(solver.reconstruct_field(X, Y, Z, reconstruction='splitw'))[0]
+    cell = np.asarray(solver.reconstruct_field(X, Y, Z, reconstruction=rule))[0]
     np.testing.assert_allclose(public[..., :3], cell[..., :3], rtol=0, atol=1e-13)
     np.testing.assert_allclose(public[..., 3:] * Z0, cell[..., 3:], rtol=0, atol=1e-13)
 
@@ -96,8 +99,9 @@ def _across_the_wall(result, rule, angle, offset=1e-5):
     return out
 
 
+@pytest.mark.parametrize('rule', ['split', 'splitw'])
 @pytest.mark.parametrize('angle', [0.0, 0.6, 2.3, 4.0])
-def test_the_rule_carries_the_walls_jump_and_the_sum_does_not(finer, angle):
+def test_the_rule_carries_the_walls_jump_and_the_sum_does_not(finer, angle, rule):
     """``eps E_n`` and ``E_t`` are continuous across the wall, as far as the truncated projector is one.
 
     Measured at order 6 on these four rays: ``eps E_n`` mismatches by 0.4 to 1.4% of the outer
@@ -105,7 +109,7 @@ def test_the_rule_carries_the_walls_jump_and_the_sum_does_not(finer, angle):
     by the contrast, 5. A wrong frame or sign in the rule's operators fails this; an accurate
     field needs more (``tests/references/test_gyptis_cylinder_field_golden.py``).
     """
-    (n_out, t_out), (n_in, t_in) = _across_the_wall(finer, 'splitw', angle)
+    (n_out, t_out), (n_in, t_in) = _across_the_wall(finer, rule, angle)
     assert abs(n_out - EPSILON * n_in) < 0.04 * abs(n_out)
     assert abs(t_out - t_in) < 0.04 * max(abs(t_out), abs(n_out))
     (n_out, _), (n_in, _) = _across_the_wall(finer, 'plain', angle)
@@ -183,13 +187,22 @@ def test_a_layer_merged_into_a_half_space_keeps_the_sum_and_the_circle_takes_the
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
-def test_every_backend_reads_the_rule_alike(result, backend):
+def test_every_backend_reads_the_rules_alike(result, backend):
     pytest.importorskip(backend)
     if backend == 'jax':
         import jax
         jax.config.update('jax_enable_x64', True)
     other = rcwa.run(_problem(), numerics=NUMERICS, backend=backend)
-    np.testing.assert_allclose(_read(other), _read(result), rtol=0, atol=1e-11)
+    for rule in ('split', 'splitw'):
+        np.testing.assert_allclose(_read(other, rule), _read(result, rule), rtol=0, atol=1e-11, err_msg=rule)
+
+
+def test_the_two_rules_differ_only_by_the_window(result):
+    """``'split'`` is ``'splitw'`` with the window at 1: the same door, other operators, another field."""
+    split, windowed = _read(result, 'split'), _read(result)
+    np.testing.assert_array_equal(split[..., 2:], windowed[..., 2:])
+    assert np.max(np.abs(split[..., :2] - windowed[..., :2])) > 1e-3
+    assert result.field(x=X, y=Y, z=Z, reconstruction='split').metadata['reconstruction'] == 'split'
 
 
 OFF = dict(x=X, y=Y, z=Z)       # off the wall of the circle, where a derivative at a fixed point exists
@@ -270,6 +283,28 @@ def test_a_metal_takes_the_floor_the_nvf_solve_takes():
     assert np.all(np.isfinite(_read(result)))
 
 
+@pytest.mark.parametrize('rule', ['split', 'splitw'])
+@pytest.mark.parametrize('disk, background', [(-20.0 + 1.5j, 1.0), (2.25, -20.0 + 1.5j)])
+def test_where_eps_changes_sign_the_rule_answers_on_the_negative_side_only(rule, disk, background):
+    """A metal disk in air takes the rule inside the disk; a hole in a metal takes it outside the hole."""
+    layers = (rcwa.Layer(thickness=150.0, background=Material(background), regions=_circle(epsilon=disk)),)
+    result = rcwa.run(_problem(layers=layers), numerics=NUMERICS)
+    x = np.linspace(-190.0, 190.0, 39)
+    y = np.linspace(-170.0, 170.0, 35)
+    plain, ruled = _read(result, 'plain', x=x, y=y), _read(result, rule, x=x, y=y)
+    inside = np.hypot(*np.meshgrid(x - CENTRE[0], y - CENTRE[1])) < RADIUS
+    metal = inside if np.real(disk) < 0 else ~inside
+    np.testing.assert_allclose(ruled[:, :, ~metal], plain[:, :, ~metal], rtol=0, atol=1e-12)
+    assert np.min(np.max(np.abs(ruled[:, :, metal, :2] - plain[:, :, metal, :2]), axis=-1)) > 1e-6
+    np.testing.assert_array_equal(ruled[..., 2:], plain[..., 2:])
+
+
+def test_two_metals_take_the_rule_on_both_sides():
+    layers = (rcwa.Layer(thickness=150.0, background=Material(-8.0 + 1.0j), regions=_circle(epsilon=-20.0 + 1.5j)),)
+    result = rcwa.run(_problem(layers=layers), numerics=NUMERICS)
+    assert np.min(np.max(np.abs(_read(result) - _read(result, 'plain'))[..., :2], axis=-1)) > 1e-9
+
+
 def _ellipse():
     return (rcwa.Region(geometry=rcwa.Ellipse(radii=(90.0, 60.0)), material=Material(EPSILON)),)
 
@@ -307,11 +342,13 @@ REFUSED = [
 
 
 @pytest.mark.parametrize('problem, numerics, says', REFUSED)
-def test_what_the_rule_was_not_measured_on_is_refused_by_name(problem, numerics, says):
+def test_what_the_rules_were_not_measured_on_is_refused_by_name(problem, numerics, says):
     result = rcwa.run(problem(), numerics=numerics)
-    with pytest.raises(UnsupportedFeatureError, match=says) as refused:
-        result.field(x=X, y=Y, z=Z, reconstruction='splitw')
-    assert refused.value.code == 'field.reconstruction'
+    for rule in ('split', 'splitw'):
+        with pytest.raises(UnsupportedFeatureError, match=says) as refused:
+            result.field(x=X, y=Y, z=Z, reconstruction=rule)
+        assert refused.value.code == 'field.reconstruction'
+        assert f'reconstruction={rule!r}' in str(refused.value)
     result.field(x=X, y=Y, z=Z)                      # the sum still answers
 
 
@@ -326,9 +363,9 @@ def test_the_solvers_door_refuses_as_the_result_does():
         solver.reconstruct_field(X, Y, Z, reconstruction='splitw')
 
 
-def test_an_unknown_rule_names_the_three(result):
-    with pytest.raises(ValidationError, match="'plain', 'lalanne' or 'splitw'") as refused:
-        result.field(x=X, y=Y, z=Z, reconstruction='split')
+def test_an_unknown_rule_names_the_four(result):
+    with pytest.raises(ValidationError, match="'plain', 'lalanne', 'split' or 'splitw'") as refused:
+        result.field(x=X, y=Y, z=Z, reconstruction='splitv')
     assert refused.value.code == 'field.reconstruction'
 
 

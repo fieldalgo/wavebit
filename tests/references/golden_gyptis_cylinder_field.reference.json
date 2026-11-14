@@ -3,7 +3,7 @@
   "case": "golden_gyptis_cylinder_field",
   "physics": "rcwa",
   "comparison": "different-discretization",
-  "role": "external oracle for the electric near field inside a patterned layer with a curved wall: a 3D finite-element field of a dielectric cylinder, which the windowed split reconstruction and the plain Fourier sum are measured against",
+  "role": "external oracle for the electric near field inside a patterned layer with a curved wall: 3D finite-element fields of a dielectric cylinder and of a metal one in the same cell, which the split reconstructions and the plain Fourier sum are measured against",
   "references": [
     {
       "tool": "gyptis",
@@ -19,7 +19,7 @@
         "kind": null,
         "command": null
       },
-      "settings": "Maxwell3DPeriodic on one eighth of the cell, using the exact mirror symmetries of normal incidence with E along x (the x mirror a perfect electric wall, the y mirror a perfect magnetic wall, and an even/odd split in z, two solves); second-order edge (Nedelec) elements; perfectly matched layers above and below; relative residual of the two direct solves 3.0e-12 and 2.3e-12; R = 0.024309 and T = 0.975554 from the same solution. The stored phasors are in gyptis's time convention, the conjugate of Wavebit's; the consumer maps them as -exp(2 pi i h / wavelength) * conj(E), with h the layer thickness",
+      "settings": "Maxwell3DPeriodic on one eighth of the cell, using the exact mirror symmetries of normal incidence with E along x (the x mirror a perfect electric wall, the y mirror a perfect magnetic wall, and an even/odd split in z, two solves); second-order edge (Nedelec) elements; perfectly matched layers above and below. Dielectric run (E): relative residual of the two direct solves 3.0e-12 and 2.3e-12, R = 0.024309 and T = 0.975554 from the same solution. Metal run (E_metal): the same mesh, residuals 1.8e-12 and 1.4e-12, R = 0.187990 and T = 0.791543. The stored phasors are in gyptis's time convention, the conjugate of Wavebit's; the consumer maps them as -exp(2 pi i h / wavelength) * conj(E), with h the layer thickness",
       "discretization": "tetrahedral mesh graded toward the cylinder wall and its rims, 94078 cells and 621968 complex unknowns per solve, smallest edge 2.41 nm; the product side is a Fourier truncation of the same cell",
       "arrays": [
         "*"
@@ -34,7 +34,7 @@
   "generator": {
     "path": "private research repository",
     "sha256": "81a43ac453e4efea03bdefa90ec6e8d7d274839e1f512e76422503d16e1b74a6",
-    "command": "python fem_cyl.py c100_T4 c100 T4 12.25 1 (the finite-element run), then the plane samples laid out on the 48 x 48 grid",
+    "command": "python fem_cyl.py c100_T4 c100 T4 12.25 1 for E; the same model with the cylinder at -20-1.5j (gyptis's convention) for E_metal, from a later revision of the script whose hash was not kept; then the plane samples laid out on the 48 x 48 grid",
     "product_commit": null,
     "clean_tree": null
   },
@@ -45,9 +45,9 @@
     "threads": 4
   },
   "cost": {
-    "wall_seconds": 792.0,
-    "max_rss_gb": 5.06,
-    "note": "both solves, factorization out of core"
+    "wall_seconds": 1552.0,
+    "max_rss_gb": 5.86,
+    "note": "both runs, two solves each, factorization out of core"
   },
   "inputs": {
     "cell": {
@@ -57,7 +57,10 @@
       ],
       "layer_thickness_nm": 150.0,
       "cylinder_radius_nm": 100.0,
-      "cylinder_epsilon": 12.25,
+      "cylinder_epsilon": {
+        "E": 12.25,
+        "E_metal": "-20+1.5j in Wavebit's convention (loss is a positive imaginary part); the run takes its conjugate"
+      },
       "background_epsilon": 1.0,
       "half_spaces_epsilon": 1.0,
       "centre": "the cylinder axis is the cell centre"
@@ -71,37 +74,39 @@
       "plane": "mid-height of the layer, z = 75 nm above its lower face",
       "x_nm": "48 points, ((i + 0.37)/48 - 1/2) * 400",
       "y_nm": "48 points, ((j + 0.41)/48 - 1/2) * 400",
-      "layout": "E[j, i, component] at (x[i], y[j]), components (Ex, Ey, Ez)"
+      "layout": "E[j, i, component] and E_metal[j, i, component] at (x[i], y[j]), components (Ex, Ey, Ez)"
     },
     "mesh_level": "T4, the finest of four"
   },
   "outcomes": {
     "matched": null,
     "not_matched": null,
-    "reference_self_check": "the next coarser mesh level (53246 cells) differs from this one by 0.11% of the plane RMS of the in-plane field over the same 2304 samples, and by 2.0% of it at the worst sample and component; R moves from 0.024314 to 0.024309",
+    "reference_self_check": "the next coarser mesh level (53246 cells) differs from this one, over the same 2304 samples, by 0.11% of the plane RMS of the in-plane field for the dielectric cylinder (2.0% of it at the worst sample and component; R 0.024314 against 0.024309) and by 0.15% for the metal one (2.8% at the worst; R 0.188064 against 0.187990)",
     "failed_or_discarded": null,
     "not_run": null
   },
   "payload": {
     "file": "golden_gyptis_cylinder_field.npz",
     "format": "npz",
-    "file_sha256": "5877aa9e7c6f56da529553af77fb352ac6301ae9459f442a9cd9512fd45ef415",
+    "file_sha256": "ecdeffa8ed01d1d2f3512959fc974f16d19edee5bae03bc9ad9c1fc3bd470e66",
     "arrays": [
       "E",
+      "E_metal",
       "x",
       "y",
       "z"
     ]
   },
-  "values_sha256": "6f091b93dddc8f6762f60ba4585ea4a4ed6e528f2e2ecbfd5eaff43365e66708",
-  "content_sha256": "f80175a6f831803d68e5103abf0f96d7bf4211c1dd4259fc1d5c54406189fee4",
+  "values_sha256": "f72e85a041c846439770c618c4c7d0efea04c752a3b66b32b9e783f5e4351547",
+  "content_sha256": "b94f423846ad8ea5ae18091fcb1e92670d1563e87cbed7e2bd89f306ce2da2e5",
   "consumers": [
     "tests/references/test_gyptis_cylinder_field_golden.py"
   ],
   "provenance_status": "reconstructed",
   "sources": {
     "references[0]": "the run script, its log and the statistics stored with the run, read on 2026-11-14",
-    "references[0].independence": "the finite-element script imports numpy, dolfin, gmsh, gyptis and a NumPy-only module of sample points"
+    "references[0].independence": "the finite-element script imports numpy, dolfin, gmsh, gyptis and a NumPy-only module of sample points",
+    "generator.sha256": "the script of the dielectric run; the metal run's revision was not kept with its output"
   },
   "regeneration": [],
   "not_recorded": {

@@ -195,8 +195,9 @@ the continuous `D` or `B` series instead: sum `D`, then divide by `eps` at each 
 M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)), and the same for `B` and `mu`. The value is named after
 that paper, which treats a 1D TM grating; the 2D, conical and magnetic cases follow RETICOLO's `res3`
 (J. P. Hugonin and P. Lalanne). The default, `'plain'`, sums each component's own series. The samples'
-metadata records the rule under `'reconstruction'` when it is not the default. A third value,
-`'splitw'`, is the rule for a circle's curved wall and has its own section, *A curved wall*, below.
+metadata records the rule under `'reconstruction'` when it is not the default. Two more values,
+`'split'` and `'splitw'`, are the rules for a circle's curved wall and have their own section,
+*A curved wall*, below.
 
 - **What it changes.** `E_x` in the patterned layers of a 1D grating, on the pure TM and the
   conical paths; `E_x` and `E_y` in the patterned layers of a 2D cell. A layer that names a
@@ -259,8 +260,8 @@ metadata records the rule under `'reconstruction'` when it is not the default. A
     absorption from the ports, which neither rule changes.
   - On curved or slanted walls, not this rule, which is refused there (see *Which shapes* below).
     Give the true shape with `factorization='nvf'`, check that `R` and `T` have converged, and read
-    the default. A layer that holds one circle also takes `'splitw'`, which splits `E` along the
-    circle's normal (see *A curved wall* below).
+    the default. A layer that holds one circle also takes `'split'` and `'splitw'`, which split `E`
+    along the circle's normal (see *A curved wall* below).
 - **Why the default is `'plain'`.** The default never puts a jump where the field is continuous,
   and its derivatives across walls a component runs along, and of area averages, are right. What
   it misses is the jump at a wall normal to a component, which is what the Lalanne rule is for.
@@ -361,53 +362,79 @@ metadata records the rule under `'reconstruction'` when it is not the default. A
   count reads every layer, and so do heights under a trace, where a singular line in another layer
   leaves the value right and its gradient NaN.
 
-## A curved wall: `reconstruction='splitw'`
+## A curved wall: `reconstruction='split'` and `'splitw'`
 
 Across a curved wall neither `E_x` nor `E_y` is the normal component, so the line rule above has
 nothing to follow and is refused. `result.field(x=..., y=..., z=..., reconstruction='splitw')`
 splits the in-plane field with the wall's own normal `n` instead (M. Weismann, D. F. G. Gallagher
 and N. C. Panoiu, J. Opt. 17, 125612 (2015)): the normal part is read from `D`, the part along the
 wall from `E`, each is summed where it is continuous, and the first sum is divided by `eps` at the
-sample. It is opt-in, and the default stays `'plain'`.
+sample. `'split'` is the same rule without the window described below. Both are opt-in, and the
+default stays `'plain'`.
 
-- **Where it applies.** A layer that holds one circle of a scalar permittivity in a scalar
-  background, in a rectangular cell, anywhere in the cell and in any number of layers. That is
-  what it was measured on. Uniform layers keep the sum bit for bit, and so does a circle with its
-  background's permittivity unless one of the two is being differentiated.
-- **What it changes.** `E_x` and `E_y` in those layers. `E_z` and `H` are the default's, bit for
-  bit: the reference stored no `H`, so the rule rebuilds `E` alone.
-- **How it works.** With `P` the convolution matrix of `w n n^T` and `Q` the inverse of the
+- **Where they apply.** A layer that holds one circle of a scalar permittivity in a scalar
+  background, in a rectangular cell, anywhere in the cell; a stack may hold several such layers.
+  That is what they were measured on. Uniform layers keep the sum bit for bit, and so does a
+  circle with its background's permittivity unless one of the two is being differentiated.
+- **What they change.** `E_x` and `E_y` in those layers. `E_z` and `H` are the default's, bit for
+  bit: the reference stored no `H`, so the rules rebuild `E` alone.
+- **How they work.** With `P` the convolution matrix of `w n n^T` and `Q` the inverse of the
   matrix of `1/eps`, `D_n = (P Q + Q P)/2 E` and `E_t = (I - P) E`, and
-  `E = sum(D_n)/eps + sum(E_t)`. `n` is the circle's radial unit vector. `w` is a window: 1 within
-  `b/4` of the wall, falling as `cos^2` to 0 at `b`, where `b` is the smaller of the radius and
-  half the gap between the circle and its nearest image. The radial normal is right on the wall
-  and jumps at the circle's axis and at the cell's edge; the window keeps it away from both.
-  `Q` takes the same floor on a negative permittivity as the `'nvf'` solve.
-- **What it is measured against.** A 3D finite-element reference (gyptis, second-order edge
+  `E = sum(D_n)/eps + sum(E_t)`. `n` is the circle's radial unit vector, which is right on the wall
+  and jumps at the circle's axis and at the cell's edge. `'split'` uses it over the whole cell,
+  `w = 1`. `'splitw'` keeps it away from both jumps with a window: `w` is 1 within `b/4` of the
+  wall and falls as `cos^2` to 0 at `b`, the smaller of the radius and half the gap between the
+  circle and its nearest image. `Q` takes the same floor on a negative permittivity as the `'nvf'`
+  solve.
+- **What they are measured against.** A 3D finite-element reference (gyptis, second-order edge
   elements), over 2304 samples on the mid-layer plane, as the relative RMS error of the in-plane
   field, with `factorization='nvf'`:
 
-  | Cell (nm), `eps` 12.25 in air, normal incidence | Order | `'plain'` | `'splitw'` |
-  | --- | --- | --- | --- |
-  | period 400, radius 100, thickness 150, at 900 | 8 | 13.6% | 2.4% |
-  | the same | 16 | 9.6% | 1.3% |
-  | period 1000, radius 280, thickness 200, at 1363 (`R` = 0.77) | 16 | 6.3% | 2.5% |
+  | Cell (nm), `eps` 12.25 in air, normal incidence | Order | `'plain'` | `'split'` | `'splitw'` |
+  | --- | --- | --- | --- | --- |
+  | period 400, radius 100, thickness 150, at 900 | 8 | 13.6% | 3.1% | 2.4% |
+  | the same | 16 | 9.6% | 1.4% | 1.3% |
+  | period 1000, radius 280, thickness 200, at 1363 (`R` = 0.77) | 8 | 9.1% | 10.9% | 5.4% |
+  | the same | 16 | 6.3% | 4.4% | 2.5% |
 
   The first row is a test (`tests/references/test_gyptis_cylinder_field_golden.py`); the
-  reference's own next mesh level is 0.11% from it. On 16 dielectric circle cells at order 12
-  (radius 0.15 to 0.47 of the period, `eps` 2.25 to 25, one with loss) the rule's error was 0.06
-  to 0.67 times the default's on every one.
-- **Where it is not better, or not known.**
-  - Metals. At `eps = -20+1.5j`, order 12, the rule was 22% and 32% off on the two cells above,
-    the default 21% and 27%. Read the default in a layer that holds a metal.
+  reference's own next mesh level is 0.11% from it. On 16 dielectric circle cells (radius 0.15 to
+  0.47 of the period, `eps` 2.25 to 25, one with loss), `'splitw'` was 0.06 to 0.67 times the
+  default's error at order 12 and at most 0.64 times at order 8, on every one. `'split'` was 0.08
+  to 0.85 times at order 12; at order 8 it was further from the reference than the default on two
+  of the 16, the third row above among them.
+- **Choosing between the two.** `'splitw'`, unless the circle nearly fills the cell. It was the
+  closer of the two on 13 of the 16 cells at order 12. The other three have a radius of 0.40, 0.41
+  and 0.47 of the period, where the window is narrower than the orders resolve: 2.3%, 2.9% and
+  6.2% for `'split'` against 3.5%, 3.8% and 9.6%. A fourth cell at 0.47 went the other way, 3.8%
+  against 3.0%, so compare the two there rather than assume.
+- **Metals.** Where the permittivity changes sign across the wall, both rules answer on its
+  negative side only: inside a metal disk, or outside a dielectric hole in a metal. The other
+  side keeps the sum, to rounding.
+  - Against the reference of six metal circles (`eps` -20+1.5j at four sizes, -100+5j, -5+1j;
+    orders 8, 12 and 16) the rules were 2.4 to 3.9 times closer than the sum inside the metal, and
+    closer over the plane on every cell at every order. At order 12 the plane error falls from 17
+    to 28% for the sum to 13 to 27%.
+  - Applied outside the metal as well, the rules were further from the reference than the sum
+    on five of the six, near the wall and far from it: 22 to 33% over the plane against 20 to
+    28%. The sixth, `eps` -5+1j, was closer that way, 10.4% against 12.5% as shipped and 17.3% for
+    the sum.
+  - The cause is the solve, not the rule. On a metal the solve's high orders carry an error the
+    inverse rule amplifies; divided by the metal's `eps` it is small, and on the air side it is
+    not. At order 12 the solve's `R` is 2% and 4% off the reference on the two cells above with
+    a metal circle, where the dielectric's is 0.03% and 0.4% off. A finer projector grid,
+    `nvf_projector='circular'` and `formulation='first_order'` moved these errors by 5% of
+    themselves or less, in either direction.
+  - So beside a metal on the air side, where a plasmonic field peaks, no rule here is better
+    than the default, whose error within 0.1 period of the wall is 26 to 53% of the plane's RMS
+    field at order 12. Compare two orders before reading a value there. A hole in a metal and two metals in
+    one layer run the same operators and have no reference.
+- **Where they are not better, or not known.**
   - Right at the wall. On the second cell at order 16, `E_n` 0.3 nm either side of the wall is
-    still 18 to 59% off the reference. The plane error is a mean; do not read the rule's value
-    within a few nanometres of the wall as converged.
-  - A narrow window. Where the circle nearly fills the cell (radius 0.4 of the period and up),
-    the window is narrower than the orders resolve and the gain shrinks: 9.6% against 14.3% at
-    radius 0.47 of the period, order 12.
-  - The median. On the second cell the RMS gains 2.5 times and the median error does not: far
-    from the wall in the air the rule is slightly worse than the default.
+    still 18 to 59% off the reference with `'splitw'`. The plane error is a mean; do not read a
+    value within a few nanometres of the wall as converged.
+  - The median. On the second cell `'splitw'`'s RMS gains 2.5 times and its median error does
+    not: far from the wall in the air it is slightly worse than the default.
   - Spatial derivatives. The curl of the rule's `E` does not match the solve's `H_z` even 3 to
     20 nm from the wall, where the default's does, being one series with `H`. For a curl, a
     gradient of `|E|^2` or an optical force, read `'plain'`.
@@ -417,14 +444,14 @@ sample. It is opt-in, and the default stays `'plain'`.
 - **Derivatives.** With respect to the radius, the centre, a permittivity, a thickness or the
   period, the derivative agrees with a finite difference off the wall, on JAX and PyTorch. As
   with the line rule it holds each sample fixed and does not differentiate which side of the wall
-  a sample is on. The window's reach `b` has a kink where the radius is a quarter of the cell's
+  a sample is on. `'splitw'`'s reach `b` has a kink where the radius is a quarter of the cell's
   shorter side, and the two one-sided slopes differed there by 1.7 to 3.1% on the first cell
   above. Under `jax.jit` a traced material or thickness works; a traced radius is refused by the
   solve itself.
-- **Cost.** Each call samples the windowed normal on a 2048 by 2048 grid and builds two dense
-  operators over twice the orders: about a second per call at order 8, and 76 MB for each
-  operator at order 16, 2.8 GB at order 40. Sample all the points of a layer in one call.
-- **What it refuses, by name, with code `field.reconstruction`.** A rectangle, an ellipse, a
+- **Cost.** Each call samples the normal on a 2048 by 2048 grid and builds two dense operators
+  over twice the orders: about a second per call at order 8, and 76 MB for each operator at
+  order 16, 2.8 GB at order 40. Sample all the points of a layer in one call.
+- **What they refuse, by name, with code `field.reconstruction`.** A rectangle, an ellipse, a
   polygon, or several shapes in a layer; a raster; a tensor; a layer that names a permeability; a
   1D grating; a skewed lattice or one with a negative side; matrices handed to `solve_conv`. For
   walls along x and y, `'lalanne'` is the rule.
