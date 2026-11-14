@@ -71,7 +71,7 @@ def test_graded_scene_material_gradient_and_original_bottom_coordinates(backend)
 
 @pytest.mark.slow
 def test_graded_bottom_stack_against_independent_meep_reference():
-    ref=json.loads((repository_path('tests/references/golden_scene_bottom_meep.json')).read_text())
+    ref=json.loads((repository_path('tests/references/golden_scene_bottom_meep.json')).read_text(encoding='utf-8'))
     result=_legacy_wavebit_fdtd(structure=np.asarray(ref['epsilon'])[::-1].reshape(-1,1,1),backend='numpy',
                         **options(thickness=ref['thickness'][::-1],wavelength=ref['wavelengths'],
                                   resolution=80,incidence_side='bottom',n_periods=35))

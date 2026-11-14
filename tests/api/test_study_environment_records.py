@@ -71,6 +71,6 @@ def test_original_windows_record_remains_valid_on_its_recorded_host(family, monk
     assert not auditor._same_project_pythonpath(original + ';')
     assert not auditor._same_project_pythonpath(original + ';C:\\another-checkout')
     # This is an actual immutable historical fixture, not a regenerated record.
-    immutable = json.loads((ROOT / 'tools/relocations.json').read_text())['immutable']
+    immutable = json.loads((ROOT / 'tools/relocations.json').read_text(encoding='utf-8'))['immutable']
     entry, = [row for row in immutable.values() if row['target'] == path.relative_to(ROOT).as_posix()]
     assert hashlib.sha256(raw).hexdigest() == entry['sha256']

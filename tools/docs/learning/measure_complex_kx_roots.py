@@ -351,7 +351,7 @@ def gain(rcwa):
 def carried_reticolo(output, setup):
     """The RETICOLO block already recorded, if it was measured on this grating."""
     try:
-        old = json.loads(output.read_text())['grating']
+        old = json.loads(output.read_text(encoding='utf-8'))['grating']
     except (OSError, ValueError, KeyError):
         return None
     block = old.get('reticolo')
@@ -370,7 +370,7 @@ def measured_under_path_d(record):
 def carried_path_d(output):
     """The path-D block already recorded, or one made from a record that was measured under path D."""
     try:
-        old = json.loads(output.read_text())
+        old = json.loads(output.read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return None
     if 'path_d' in old:
@@ -445,7 +445,7 @@ def main():
         print('warning: the Wavebit checkout has uncommitted changes; the commit does not name the code measured')
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(record, indent=2, ensure_ascii=False) + '\n')
+    args.output.write_text(json.dumps(record, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
 
     print(f"Wavebit {record['versions']['wavebit']} at {record['wavebit_source']['describe']}")
     print('boundary_kz, air: ' + ', '.join(f"kx = {r['kx'][0]}{r['kx'][1]:+g}i -> {complex(*r['kz']):.6f}"

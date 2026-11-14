@@ -21,7 +21,7 @@ def checkout(tmp_path):
     shutil.copy2(ROOT / 'tools/run_verification.py', root / 'tools/run_verification.py')
     shutil.copytree(ROOT / 'tools/_verification', root / 'tools/_verification',
                     ignore=shutil.ignore_patterns('__pycache__'))
-    (root / 'pytest.ini').write_text('[pytest]\nmarkers =\n    research: research\n')
+    (root / 'pytest.ini').write_text('[pytest]\nmarkers =\n    research: research\n', encoding='utf-8')
     (root / 'tests/test_environment.py').write_text(textwrap.dedent('''
         import json
         import os
@@ -33,7 +33,7 @@ def checkout(tmp_path):
             seen = json.loads(path.read_text()) if path.exists() else []
             seen.append(os.environ.get('XLA_FLAGS'))
             path.write_text(json.dumps(seen))
-    '''))
+    '''), encoding='utf-8')
     return root
 
 
@@ -60,8 +60,8 @@ def test_xla_flags_are_inherited_recorded_and_required_for_resume(checkout, flag
     first = checkout / 'artifacts/first'
     result = invoke(checkout, first, flags)
     assert result.returncode == 0, result.stdout + result.stderr
-    inputs = json.loads((first / 'inputs.json').read_text())
-    receipt = json.loads((first / 'receipt.json').read_text())
+    inputs = json.loads((first / 'inputs.json').read_text(encoding='utf-8'))
+    receipt = json.loads((first / 'receipt.json').read_text(encoding='utf-8'))
     assert 'XLA_FLAGS' in inputs['environment']['controls']
     assert inputs['environment']['controls']['XLA_FLAGS'] == flags
     expected_hash = hashlib.sha256(json.dumps(
@@ -71,21 +71,21 @@ def test_xla_flags_are_inherited_recorded_and_required_for_resume(checkout, flag
     assert receipt['counts'] == {'passed': 1}
     assert receipt['reused_nodeids'] == []
     seen = checkout / 'artifacts/xla-flags-seen.json'
-    assert json.loads(seen.read_text()) == [flags]
+    assert json.loads(seen.read_text(encoding='utf-8')) == [flags]
 
     second = checkout / 'artifacts/second'
     result = invoke(checkout, second, flags, '--resume', str(first))
     assert result.returncode == 0, result.stdout + result.stderr
-    resumed = json.loads((second / 'receipt.json').read_text())
+    resumed = json.loads((second / 'receipt.json').read_text(encoding='utf-8'))
     assert resumed['fingerprint'] == expected_hash
     assert resumed['reused_nodeids'] == [node]
     assert resumed['counts'] == {'passed': 1}
     assert [phase['name'] for phase in resumed['phases']] == ['collection']
-    assert json.loads(seen.read_text()) == [flags]
+    assert json.loads(seen.read_text(encoding='utf-8')) == [flags]
 
     refused = checkout / 'artifacts/changed'
     result = invoke(checkout, refused, changed, '--resume', str(second))
     assert result.returncode == 2, result.stdout + result.stderr
     assert 'Resume refused' in result.stderr and 'environment' in result.stderr
     assert not refused.exists()
-    assert json.loads(seen.read_text()) == [flags]
+    assert json.loads(seen.read_text(encoding='utf-8')) == [flags]

@@ -129,5 +129,5 @@ if __name__=='__main__':
                      not a.no_averaging,a.after,a.pml_cells,a.gap,a.source,a.contour)
         row['seconds']=time.perf_counter()-start
         rows.append(row)
-        a.output.write_text(json.dumps(rows,indent=2))
+        a.output.write_text(json.dumps(rows,indent=2), encoding='utf-8')
         print('RESULT',json.dumps(row),flush=True)

@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_every_preserved_reference_and_record_keeps_its_original_bytes():
-    evidence = json.loads((ROOT / 'tools/relocations.json').read_text())['immutable']
+    evidence = json.loads((ROOT / 'tools/relocations.json').read_text(encoding='utf-8'))['immutable']
     # 7336 until 2026-10-14, when the 6,943 study records no test or live study input reads
     # were archived outside the repository and their ledger rows removed with them; 322 since the
     # same day, when the 71 tests/references rows left: goldens and oracles are regenerated and
@@ -30,7 +30,7 @@ def test_every_preserved_reference_and_record_keeps_its_original_bytes():
 
 
 def test_imported_learning_records_keep_their_original_bytes():
-    receipt = json.loads((ROOT / 'docs/development/learning-provenance/import-receipt.json').read_text())
+    receipt = json.loads((ROOT / 'docs/development/learning-provenance/import-receipt.json').read_text(encoding='utf-8'))
     records = [r for r in receipt['files']
                if r['decision'] == 'historical-evidence-preserved-not-revalidated']
     assert len(records) == 17
@@ -55,7 +55,7 @@ def test_only_joins_resolve_and_a_derived_path_names_one_file(monkeypatch):
     old location and passed for a path that is not under it.
     """
     old, new = 'examples/anisotropic_material.py', 'examples/rcwa/anisotropic_material.py'
-    assert json.loads((ROOT / 'tools/relocations.json').read_text())['paths'][old] == new
+    assert json.loads((ROOT / 'tools/relocations.json').read_text(encoding='utf-8'))['paths'][old] == new
     derived = (repository_root() / 'examples' / 'foo.py').with_name('anisotropic_material.py')
     assert str(Path(derived)) == str(derived) == str(ROOT / old)
     # Joins resolve the same name: `/`, `key / path` and absolute(), which joins the cwd.
@@ -73,7 +73,7 @@ def test_only_joins_resolve_and_a_derived_path_names_one_file(monkeypatch):
 
 
 def test_archived_globs_keep_the_historical_roster_without_duplicate_paths():
-    ledger = json.loads((ROOT / 'tools/relocations.json').read_text())['paths']
+    ledger = json.loads((ROOT / 'tools/relocations.json').read_text(encoding='utf-8'))['paths']
     old = [p for p in ledger if p.startswith('tests/test_fd_') and p.endswith('.py')]
     assert old
     paths = list((repository_root() / 'tests').glob('test_fd_*.py'))
@@ -117,7 +117,7 @@ def test_maintained_probe_identity_hashes_the_relocated_source_tree():
 
 
 def test_recursive_archived_inventory_preserves_every_old_filename():
-    ledger = json.loads((ROOT / 'tools/relocations.json').read_text())['paths']
+    ledger = json.loads((ROOT / 'tools/relocations.json').read_text(encoding='utf-8'))['paths']
     expected = {ROOT / new: Path(old).relative_to('studies/results')
                 for old, new in ledger.items() if old.startswith('studies/results/')}
     # The 276 records still tracked plus 37 relocated instruments (7256 before the
@@ -142,7 +142,7 @@ def test_recursive_archived_inventory_preserves_every_old_filename():
 
 def test_maintained_support_inventories_include_sources_tests_and_prior_evidence():
     import importlib
-    ledger = json.loads((ROOT / 'tools/relocations.json').read_text())['paths']
+    ledger = json.loads((ROOT / 'tools/relocations.json').read_text(encoding='utf-8'))['paths']
     expected_tests = {ROOT / new for old, new in ledger.items()
                       if old.startswith('tests/test_fd_') and old.endswith('.py')}
     expected_goldens = set((ROOT / 'tests/references').glob('fd_golden_stage*.npz'))
@@ -229,7 +229,7 @@ def test_historical_source_paths_select_the_preserved_engine_not_new_declaration
 
 
 def test_historical_directory_globs_keep_nested_campaign_evidence():
-    ledger = json.loads((ROOT / 'tools/relocations.json').read_text())
+    ledger = json.loads((ROOT / 'tools/relocations.json').read_text(encoding='utf-8'))
     historical = repository_path('studies/results')
     prefix = 'studies/results/fdtd_conductive_stack_mutations_attempt'
     expected = {ROOT / new for old, new in ledger['directory_prefixes'].items()

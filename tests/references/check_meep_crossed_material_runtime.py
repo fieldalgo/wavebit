@@ -62,12 +62,12 @@ def main():
                     errors[kind] = max(errors[kind], delta)
                 report['cases'][f'{name}.{leg}'] = dict(errors=errors, leak=leak, purity=purity,
                                                        seconds=time.perf_counter()-start)
-                args.output.write_text(json.dumps(report, indent=2, allow_nan=False)+'\n')
+                args.output.write_text(json.dumps(report, indent=2, allow_nan=False)+'\n', encoding='utf-8')
                 print('RUNTIME_RESULT', name, leg, errors, flush=True)
                 if errors['amplitude'] > .001 or leak > 1e-9 or purity > .01:
                     raise SystemExit('Runtime or source control failed; investigate without replacing the reference.')
     report['complete'] = True
-    args.output.write_text(json.dumps(report, indent=2, allow_nan=False)+'\n')
+    args.output.write_text(json.dumps(report, indent=2, allow_nan=False)+'\n', encoding='utf-8')
 
 
 if __name__ == '__main__':

@@ -58,4 +58,4 @@ if __name__ == '__main__':
     parser.add_argument('--resolution',type=int,default=80)
     parser.add_argument('--duration',type=float,default=30.)
     args=parser.parse_args()
-    args.output.write_text(json.dumps(worker(args.resolution,args.duration),indent=2)+'\n')
+    args.output.write_text(json.dumps(worker(args.resolution,args.duration),indent=2)+'\n', encoding='utf-8')

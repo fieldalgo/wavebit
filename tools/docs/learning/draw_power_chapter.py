@@ -10,7 +10,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / 'artifacts/docs/learning/ko'
-DATA = json.loads((ROOT / 'docs/validation/learning-records/power-example.json').read_text())
+DATA = json.loads((ROOT / 'docs/validation/learning-records/power-example.json').read_text(encoding='utf-8'))
 plt.rcParams.update({
     'font.family': ['Apple SD Gothic Neo', 'DejaVu Sans'],
     'font.size': 12, 'svg.fonttype': 'none', 'axes.unicode_minus': False,
@@ -58,8 +58,8 @@ def time_average():
     fig.savefig(OUT / '12-time-average.svg', metadata={'Title': '전기장과 자기장의 시간평균',
                    'Description': '원래 코사인 신호, 위상차, 곱의 주기 평균을 직접 계산한 설명용 그래프.'})
     svg = OUT / '12-time-average.svg'
-    svg.write_text(svg.read_text().replace('height="460.8pt"', 'height="430.8pt"')
-                   .replace('viewBox="0 0 828 460.8"', 'viewBox="0 30 828 430.8"'))
+    svg.write_text(svg.read_text(encoding='utf-8').replace('height="460.8pt"', 'height="430.8pt"')
+                   .replace('viewBox="0 0 828 460.8"', 'viewBox="0 30 828 430.8"'), encoding='utf-8')
     fig.savefig(OUT / '12-time-average.png', dpi=150)
     plt.close(fig)
 
@@ -90,7 +90,7 @@ class Diagram:
         self.parts.append(f'<polygon points="{x},{y2} {x-8},{back} {x+8},{back}" fill="{color}"/>')
 
     def save(self, filename):
-        (OUT / filename).write_text('\n'.join(self.parts + ['</svg>']) + '\n')
+        (OUT / filename).write_text('\n'.join(self.parts + ['</svg>']) + '\n', encoding='utf-8')
 
 
 def sub(symbol, index):

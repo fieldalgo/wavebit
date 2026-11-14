@@ -35,11 +35,11 @@ REUSABLE = {'passed', 'skipped', 'xfailed', 'xpassed'}
 
 
 def save(path, value):
-    path.write_text(json.dumps(value, indent=2, sort_keys=True) + '\n')
+    path.write_text(json.dumps(value, indent=2, sort_keys=True) + '\n', encoding='utf-8')
 
 
 def load(path):
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding='utf-8'))
 
 
 def validate_paths(root, paths):
@@ -116,7 +116,7 @@ def collections(directory):
     if any(record != first for record in records[1:]):
         errors.append('Workers collected different test lists.')
     for path in directory.glob('collection-errors-*.jsonl'):
-        errors.extend(json.loads(line)['message'] for line in path.read_text().splitlines())
+        errors.extend(json.loads(line)['message'] for line in path.read_text(encoding='utf-8').splitlines())
     return first['nodeids'], first['mutation_nodes'], first.get('shard_units', {}), errors
 
 

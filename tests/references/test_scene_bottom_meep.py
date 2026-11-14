@@ -13,7 +13,7 @@ import numpy as np
 
 
 def test_bottom_scene_complex_amplitudes_against_meep_in_original_coordinates():
-    ref=json.loads((repository_path('tests/references/golden_scene_bottom_meep.json')).read_text())
+    ref=json.loads((repository_path('tests/references/golden_scene_bottom_meep.json')).read_text(encoding='utf-8'))
     results=_legacy_wavebit_fdtd(structure=np.asarray(ref['epsilon'])[::-1].reshape(-1,1,1),
                          thickness=ref['thickness'][::-1],top=1.,bot=1.,period=.1,
                          wavelength=ref['wavelengths'],backend='numpy',incidence_side='bottom',

@@ -20,7 +20,7 @@ def build(directory, source_run):
             raise ValueError(f'{label}: incomplete baseline: {errors}')
         files = {}
         for folder in directories:
-            receipt = json.loads((folder / 'receipt.json').read_text())
+            receipt = json.loads((folder / 'receipt.json').read_text(encoding='utf-8'))
             if receipt.get('collect_only') or not receipt.get('inputs_unchanged'):
                 raise ValueError(f'{folder}: baseline must be an unchanged execution')
             if set(receipt['outcomes']) != set(receipt['collected_nodeids']):
@@ -50,7 +50,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     table = build(args.directory, args.source_run)
-    args.output.write_text(json.dumps(table, indent=2, sort_keys=True) + '\n')
+    args.output.write_text(json.dumps(table, indent=2, sort_keys=True) + '\n', encoding='utf-8')
 
 
 if __name__ == '__main__':

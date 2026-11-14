@@ -24,19 +24,19 @@ def _stub_tree(root, *, layout='flat', compatibility=False):
                'def enable_x64(): pass\n'
                'def helper(*args, **kwargs): return None\n'
                'GaussianBeam = Material = PlaneWave = meshgrid_xy = refractive_index_from_eps = helper\n')
-    (package / '__init__.py').write_text('MARKER = "selected package"\n' + exports)
+    (package / '__init__.py').write_text('MARKER = "selected package"\n' + exports, encoding='utf-8')
     enums = ('from enum import IntEnum\nclass Backend(IntEnum):\n'
              '    NUMPY=0\n    JAX=1\n    TORCH=2\n'
              'class Formulation:\n    pass\n')
     core = package / '_core'
     core.mkdir()
-    (core / '__init__.py').write_text('')
-    (core / 'enums.py').write_text(enums)
+    (core / '__init__.py').write_text('', encoding='utf-8')
+    (core / 'enums.py').write_text(enums, encoding='utf-8')
     if compatibility:
         compat = package / 'compat'
         compat.mkdir()
-        (compat / '__init__.py').write_text('')
-        (compat / 'legacy.py').write_text('MARKER = "compatibility API"\n' + exports)
+        (compat / '__init__.py').write_text('', encoding='utf-8')
+        (compat / 'legacy.py').write_text('MARKER = "compatibility API"\n' + exports, encoding='utf-8')
     return package
 
 
@@ -153,7 +153,7 @@ def test_historical_reference_helpers_are_read_from_the_selected_tree(tmp_path):
     _stub_tree(selected)
     tests = selected / 'tests'
     tests.mkdir()
-    (tests / '_oracle.py').write_text('MARKER = "archived oracle"\n')
+    (tests / '_oracle.py').write_text('MARKER = "archived oracle"\n', encoding='utf-8')
     result = _run('negative_index_media', tmp_path, args=('--root', selected), inspect='''
 assert _reference_module('_oracle').MARKER == 'archived oracle'
 assert _reference_path('_oracle.py') == _SELECTED_ROOT / 'tests' / '_oracle.py'

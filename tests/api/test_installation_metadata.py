@@ -35,7 +35,7 @@ def test_installed_metadata_matches_the_checkout_distribution_contract():
         # importlib finds then belongs to whatever else is installed; comparing it with this
         # pyproject would check that other copy.
         pytest.skip(f'the installed wavebit metadata was built from {built}, not this checkout')
-    project = tomllib.loads((root / 'pyproject.toml').read_text())['project']
+    project = tomllib.loads((root / 'pyproject.toml').read_text(encoding='utf-8'))['project']
     assert distribution.version == project['version']
     assert distribution.metadata['Name'] == project['name']
     assert distribution.metadata['License-Expression'] == project['license']
@@ -45,7 +45,7 @@ def test_installed_metadata_matches_the_checkout_distribution_contract():
 
 def test_every_version_the_package_states_is_the_pyproject_one():
     root = Path(__file__).resolve().parents[2]
-    version = tomllib.loads((root / 'pyproject.toml').read_text())['project']['version']
+    version = tomllib.loads((root / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
     assert wavebit.__version__ == version
 
 

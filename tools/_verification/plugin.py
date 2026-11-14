@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-CONTRACT = json.loads(Path(os.environ['WAVEBIT_VERIFICATION_PHASE']).read_text())
+CONTRACT = json.loads(Path(os.environ['WAVEBIT_VERIFICATION_PHASE']).read_text(encoding='utf-8'))
 DIRECTORY = Path(CONTRACT['directory'])
 WORKER = os.environ.get('PYTEST_XDIST_WORKER', 'controller')
 MUTATIONS = (
@@ -16,12 +16,12 @@ MUTATIONS = (
 
 
 def write(name, value):
-    (DIRECTORY / name).write_text(json.dumps(value, indent=2) + '\n')
+    (DIRECTORY / name).write_text(json.dumps(value, indent=2) + '\n', encoding='utf-8')
 
 
 def event(value):
     if WORKER == 'controller':
-        with (DIRECTORY / 'events.jsonl').open('a') as stream:
+        with (DIRECTORY / 'events.jsonl').open('a', encoding='utf-8') as stream:
             stream.write(json.dumps(value) + '\n')
             stream.flush()
 
@@ -90,7 +90,7 @@ def pytest_collection_modifyitems(config, items):
 
 def pytest_collectreport(report):
     if report.failed:
-        with (DIRECTORY / f'collection-errors-{WORKER}.jsonl').open('a') as stream:
+        with (DIRECTORY / f'collection-errors-{WORKER}.jsonl').open('a', encoding='utf-8') as stream:
             stream.write(json.dumps(dict(nodeid=report.nodeid, message=str(report.longrepr))) + '\n')
 
 

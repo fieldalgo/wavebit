@@ -545,7 +545,7 @@ def _historical_repo_links(root=ROOT):
     name = 'docs/development/learning-provenance/historical-links.json'
     if name not in tree(root):
         return frozenset()
-    rows = json.loads((root / name).read_text())['links']
+    rows = json.loads((root / name).read_text(encoding='utf-8'))['links']
     for row in rows:
         assert re.fullmatch(r'[0-9a-f]{40}', row['commit'])
         assert re.fullmatch(r'[0-9a-f]{40}', row['git_blob'])
