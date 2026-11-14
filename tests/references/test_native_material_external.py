@@ -18,7 +18,7 @@ HERE=repository_path('tests/references')
 def test_low_loss_mixed_metal_against_meep(resolution):
     pytest.importorskip('jax')
     worker = runpy.run_path(str(HERE/'interface/validate_grid_dispersive.py'))['worker']
-    reference = json.loads((HERE/'golden_low_loss_metal_meep.json').read_text())
+    reference = json.loads((HERE/'golden_low_loss_metal_meep.json').read_text(encoding='utf-8'))
     expected, = [v for v in reference['runs'] if v['resolution'] == resolution]
     actual = worker('wavebit', resolution, 'low-loss-mixed', duration=160., pole_sampling='point')
     for key in ('model', 'resolution', 'duration', 'wavelengths', 'pml_width', 'pole_sampling'):

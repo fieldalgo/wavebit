@@ -86,9 +86,9 @@ def test_a_count_on_a_skewed_cell_records_the_cell_points():
 
 def update_payload(path, name, data):
     (path/name).write_bytes(data)
-    manifest = json.loads((path/'manifest.json').read_text())
+    manifest = json.loads((path/'manifest.json').read_text(encoding='utf-8'))
     manifest['files'][name] = {'sha256': sha256(data), 'bytes': len(data)}
-    (path/'manifest.json').write_text(json.dumps(manifest))
+    (path/'manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
 
 
 def test_rcwa_fields_scattering_coordinates_and_job_roundtrip(tmp_path, solved):
@@ -172,11 +172,11 @@ def test_run_recorded_refuses_changed_source_during_sampling(tmp_path, monkeypat
     package = tmp_path/'installed'/'wavebit'
     package.mkdir(parents=True)
     source = package/'__init__.py'
-    source.write_text('VERSION = 1\n')
+    source.write_text('VERSION = 1\n', encoding='utf-8')
     monkeypatch.setattr(records, '_PACKAGE', package)
     monkeypatch.setattr(records, 'run', lambda _: solved[1])
     def mutate(result):
-        source.write_text('VERSION = 2\n')
+        source.write_text('VERSION = 2\n', encoding='utf-8')
         return {}
     with pytest.raises(ValidationError, match='changed during execution'):
         records.run_recorded(solved[0], tmp_path/'run', sample=mutate)
@@ -223,16 +223,16 @@ def test_numeric_dtypes_shapes_nonfinite_and_complex_scalars_are_preserved(tmp_p
 def test_corrupt_archives_fail_with_structured_errors(tmp_path, solved, damage):
     path = tmp_path/'run'
     records.save_run(path, job=solved[0], result=solved[1])
-    manifest = json.loads((path/'manifest.json').read_text())
+    manifest = json.loads((path/'manifest.json').read_text(encoding='utf-8'))
     if damage == 'checksum':
         with (path/'arrays.npz').open('ab') as stream:
             stream.write(b'changed')
     elif damage == 'source_identity':
         manifest['source']['identity'] = '0'*64
-        (path/'manifest.json').write_text(json.dumps(manifest))
+        (path/'manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
     elif damage == 'unknown_file':
         manifest['files']['../outside'] = {'bytes': 0, 'sha256': sha256(b'')}
-        (path/'manifest.json').write_text(json.dumps(manifest))
+        (path/'manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
     elif damage == 'incomplete':
         (path/'manifest.json').unlink()
     elif damage == 'symlink':
@@ -274,10 +274,10 @@ def test_a_v1_record_is_refused_with_the_migration_guide_named(tmp_path, solved)
     """Records written before the public names were renamed are refused, not read as v2."""
     path = tmp_path/'run'
     records.save_run(path, job=solved[0], result=solved[1], include_source=False)
-    manifest = json.loads((path/'manifest.json').read_text())
+    manifest = json.loads((path/'manifest.json').read_text(encoding='utf-8'))
     assert manifest['schema'] == 'wavebit.run/v2'
     manifest['schema'] = 'wavebit.run/v1'
-    (path/'manifest.json').write_text(json.dumps(manifest))
+    (path/'manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
     with pytest.raises(ValidationError, match='public-names.md') as raised:
         records.load_run(path)
     assert raised.value.code == 'record.format' and raised.value.path == 'manifest.schema'
@@ -302,14 +302,14 @@ def test_source_snapshot_has_modified_and_untracked_code_but_no_unrelated_files(
     source = package/'__init__.py'
     # Bytes, not text: text mode writes '\r\n' on Windows, and the snapshot keeps the bytes it finds.
     source.write_bytes(b'VERSION = 1\n')
-    (package/'private.env').write_text('DO_NOT_CAPTURE_THIS=1')
+    (package/'private.env').write_text('DO_NOT_CAPTURE_THIS=1', encoding='utf-8')
     subprocess.run(['git', '-C', str(tmp_path), 'add', '.'], check=True)
     subprocess.run(['git', '-C', str(tmp_path), '-c', 'user.name=Record test', '-c', 'user.email=record@example.invalid',
                     '-c', 'commit.gpgsign=false', 'commit', '-qm', 'fixture'], check=True)
     source.write_bytes(b'VERSION = 2\n')
     (package/'new.py').write_bytes(b'VALUE = 3\n')
-    (package/'private.env').write_text('DO_NOT_CAPTURE_THIS=2')
-    (tmp_path/'notes.txt').write_text('unrelated research notes')
+    (package/'private.env').write_text('DO_NOT_CAPTURE_THIS=2', encoding='utf-8')
+    (tmp_path/'notes.txt').write_text('unrelated research notes', encoding='utf-8')
     info, blob, patch = capture_source(package)
     assert info['git']['package_dirty']
     assert b'+VERSION = 2' in patch

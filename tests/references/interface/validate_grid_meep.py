@@ -81,7 +81,7 @@ def main():
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--duration',type=float,default=18.)
     args=parser.parse_args()
-    args.output.write_text(json.dumps(worker(args.backend,args.resolution,args.duration),indent=2)+'\n')
+    args.output.write_text(json.dumps(worker(args.backend,args.resolution,args.duration),indent=2)+'\n', encoding='utf-8')
 
 
 if __name__ == '__main__':

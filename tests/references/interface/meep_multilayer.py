@@ -91,4 +91,4 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--subpixel-tol', type=float, default=1e-8)
     args = parser.parse_args()
-    generate(json.loads(args.design.read_text())['parameters'], args.output, subpixel_tol=args.subpixel_tol)
+    generate(json.loads(args.design.read_text(encoding='utf-8'))['parameters'], args.output, subpixel_tol=args.subpixel_tol)

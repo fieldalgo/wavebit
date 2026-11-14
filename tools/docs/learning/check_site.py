@@ -36,7 +36,7 @@ for file in root.rglob('*.html'):
     if file.relative_to(root).parts[0] == '_static':
         continue  # Theme source templates are assets, not generated document pages.
     parser = Page()
-    parser.feed(file.read_text())
+    parser.feed(file.read_text(encoding='utf-8'))
     pages[file] = parser
 missing = []
 for file, page in pages.items():

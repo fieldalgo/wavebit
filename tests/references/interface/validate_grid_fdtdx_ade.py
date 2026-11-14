@@ -87,7 +87,7 @@ def main():
     parser.add_argument('--backend',choices=['fdtdx','wavebit'],required=True)
     parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args()
-    args.output.write_text(json.dumps(worker(args.backend),indent=2)+'\n')
+    args.output.write_text(json.dumps(worker(args.backend),indent=2)+'\n', encoding='utf-8')
 
 
 if __name__ == '__main__':

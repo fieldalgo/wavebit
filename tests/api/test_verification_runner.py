@@ -20,12 +20,12 @@ def checkout(tmp_path):
     root = tmp_path / 'checkout'
     (root / 'tests').mkdir(parents=True)
     (root / 'src' / 'wavebit').mkdir(parents=True)
-    (root / 'src/wavebit/__init__.py').write_text('VALUE = 7\n')
+    (root / 'src/wavebit/__init__.py').write_text('VALUE = 7\n', encoding='utf-8')
     (root / 'tools').mkdir()
     shutil.copy2(ROOT / 'tools/run_verification.py', root / 'tools/run_verification.py')
     shutil.copytree(ROOT / 'tools/_verification', root / 'tools/_verification',
                     ignore=shutil.ignore_patterns('__pycache__'))
-    (root / 'pytest.ini').write_text('[pytest]\nmarkers =\n    slow: slow\n    research: research\n')
+    (root / 'pytest.ini').write_text('[pytest]\nmarkers =\n    slow: slow\n    research: research\n', encoding='utf-8')
     return root
 
 
@@ -35,12 +35,12 @@ def run(root, output, *arguments):
     command = [sys.executable, str(root/'tools/run_verification.py'), '--root', str(root),
                '--profile', 'full', '--output', str(output), *arguments]
     result = subprocess.run(command, text=True, capture_output=True, env=env, timeout=60)
-    receipt = json.loads((output/'receipt.json').read_text()) if (output/'receipt.json').exists() else None
+    receipt = json.loads((output/'receipt.json').read_text(encoding='utf-8')) if (output/'receipt.json').exists() else None
     return result, receipt
 
 
 def suite(root, body):
-    (root/'tests/test_tiny.py').write_text(textwrap.dedent(body))
+    (root/'tests/test_tiny.py').write_text(textwrap.dedent(body), encoding='utf-8')
 
 
 def test_outcomes_have_exact_phases_and_no_secret_environment(checkout):
@@ -69,7 +69,7 @@ def test_outcomes_have_exact_phases_and_no_secret_environment(checkout):
     assert receipt['outcomes']['tests/test_tiny.py::test_teardown']['failed_phase'] == 'teardown'
     assert all(row['complete'] for row in receipt['outcomes'].values())
     assert (output/'tests/junit.xml').exists()
-    assert 'DO_NOT_RECORD_THIS_SECRET' not in (output/'inputs.json').read_text()
+    assert 'DO_NOT_RECORD_THIS_SECRET' not in (output/'inputs.json').read_text(encoding='utf-8')
     assert receipt['inputs_unchanged'] and not receipt['integrity_errors']
     again, _ = run(checkout, output)
     assert again.returncode == 2 and 'Output directory already exists' in again.stderr
@@ -93,7 +93,7 @@ def test_resume_reuses_only_completed_nonfailures_and_preserves_chain(checkout):
     assert two['counts'] == {'passed': 2}
     assert two['reused_nodeids'] == ['tests/test_tiny.py::test_pass']
     assert two['collected_nodeids'] == one['collected_nodeids']
-    reports = (checkout/'artifacts/second/tests/events.jsonl').read_text()
+    reports = (checkout/'artifacts/second/tests/events.jsonl').read_text(encoding='utf-8')
     assert 'test_pass' not in reports and 'test_retry' in reports
     _, three = run(checkout, checkout/'artifacts/third', '--resume', str(checkout/'artifacts/second'))
     assert len(three['reused_nodeids']) == 2 and len(three['phases']) == 1
@@ -129,9 +129,9 @@ def test_changed_resume_inputs_are_refused_before_output_creation(checkout, chan
     run(checkout, first)
     extra = []
     if change == 'source':
-        (checkout/'src/wavebit/__init__.py').write_text('VALUE = 8\n')
+        (checkout/'src/wavebit/__init__.py').write_text('VALUE = 8\n', encoding='utf-8')
     elif change == 'test':
-        (checkout/'tests/test_tiny.py').write_text('def test_other(): pass\n')
+        (checkout/'tests/test_tiny.py').write_text('def test_other(): pass\n', encoding='utf-8')
     elif change == 'configuration':
         extra = ['--workers', '1']
     else:
@@ -174,14 +174,14 @@ def test_collection_changes_and_duplicates_are_not_silently_reused(checkout):
         def pytest_collection_modifyitems(items):
             if Path('artifacts/change').exists():
                 items[0]._nodeid = 'tests/test_tiny.py::new_dynamic_name'
-    '''))
+    '''), encoding='utf-8')
     first = checkout/'artifacts/first'
     run(checkout, first)
     (checkout/'artifacts/change').touch()
     result, receipt = run(checkout, checkout/'artifacts/second', '--resume', str(first))
     assert result.returncode == 2
     assert any('collected nodeids changed' in error for error in receipt['integrity_errors'])
-    (checkout/'conftest.py').write_text('def pytest_collection_modifyitems(items): items.append(items[0])\n')
+    (checkout/'conftest.py').write_text('def pytest_collection_modifyitems(items): items.append(items[0])\n', encoding='utf-8')
     result, receipt = run(checkout, checkout/'artifacts/duplicate')
     assert result.returncode == 2
     assert receipt['integrity_errors']
@@ -216,7 +216,7 @@ def test_source_mutations_run_only_in_a_restored_snapshot(checkout):
     assert receipt['snapshot']['initially_byte_identical'] and receipt['snapshot']['restored']
     assert receipt['counts'] == {'passed': 1}
     assert (checkout/'src/wavebit/__init__.py').read_bytes() == before
-    origin = json.loads((checkout/'artifacts/run/mutations/import-origin-controller.json').read_text())
+    origin = json.loads((checkout/'artifacts/run/mutations/import-origin-controller.json').read_text(encoding='utf-8'))
     assert Path(origin['wavebit']).parts[-4:-1] == ('snapshot', 'src', 'wavebit')
 
 
@@ -227,7 +227,7 @@ def test_xdist_records_each_phase_once_and_resume_uses_the_same_membership(check
     result, one = run(checkout, first, '--workers', '2')
     assert result.returncode == 0, result.stdout + result.stderr
     assert one['counts'] == {'passed': 4} and not one['integrity_errors']
-    rows = [json.loads(x) for x in (first/'tests/events.jsonl').read_text().splitlines()]
+    rows = [json.loads(x) for x in (first/'tests/events.jsonl').read_text(encoding='utf-8').splitlines()]
     assert len([r for r in rows if r['event'] == 'report']) == 12
     result, two = run(checkout, checkout/'artifacts/second', '--workers', '2', '--resume', str(first))
     assert result.returncode == 0 and len(two['reused_nodeids']) == 4
@@ -249,7 +249,7 @@ def test_xpass_is_visible_and_strict_xpass_is_retried(checkout):
     assert result.returncode == 1
     assert two['counts'] == one['counts']
     assert two['reused_nodeids'] == ['tests/test_tiny.py::test_nonstrict']
-    assert 'test_strict' in (checkout/'artifacts/second/tests/events.jsonl').read_text()
+    assert 'test_strict' in (checkout/'artifacts/second/tests/events.jsonl').read_text(encoding='utf-8')
 
 
 @pytest.mark.skipif(os.name == 'nt', reason='POSIX signal delivery; Windows uses CTRL_BREAK_EVENT')
@@ -282,7 +282,7 @@ def test_external_interrupt_is_forwarded_and_the_receipt_is_resumable(checkout):
         if process.poll() is None:
             process.kill()
             process.communicate()
-    one = json.loads((first/'receipt.json').read_text())
+    one = json.loads((first/'receipt.json').read_text(encoding='utf-8'))
     assert one['interrupted']
     assert one['outcomes']['tests/test_tiny.py::test_first']['outcome'] == 'passed'
     result, two = run(checkout, checkout/'artifacts/second', '--resume', str(first))
@@ -318,7 +318,7 @@ def test_session_failure_cannot_become_green_or_disappear_on_resume(checkout):
 def pytest_sessionfinish(session, exitstatus):
     if not session.config.option.collectonly:
         session.exitstatus = 1
-""")
+""", encoding='utf-8')
     first = checkout/'artifacts/first'
     result, receipt = run(checkout, first)
     assert result.returncode != 0
@@ -333,7 +333,7 @@ def test_corrupt_receipt_membership_is_refused(checkout):
     first = checkout/'artifacts/first'
     _, receipt = run(checkout, first)
     receipt['outcomes']['tests/test_tiny.py::uncollected'] = dict(outcome='passed', complete=True)
-    (first/'receipt.json').write_text(json.dumps(receipt))
+    (first/'receipt.json').write_text(json.dumps(receipt), encoding='utf-8')
     result, _ = run(checkout, checkout/'artifacts/second', '--resume', str(first))
     assert result.returncode == 2 and 'exact collection' in result.stderr
 
@@ -380,9 +380,9 @@ def test_full_slow_shards_partition_the_original_full_profile(checkout):
 
 
 def test_shards_partition_the_collection_by_whole_file_and_the_check_notices_a_missing_one(checkout):
-    (checkout/'tests/test_a.py').write_text('def test_a1(): pass\ndef test_a2(): pass\ndef test_a3(): pass\n')
-    (checkout/'tests/test_b.py').write_text('def test_b1(): pass\ndef test_b2(): pass\n')
-    (checkout/'tests/test_c.py').write_text('def test_c1(): pass\n')
+    (checkout/'tests/test_a.py').write_text('def test_a1(): pass\ndef test_a2(): pass\ndef test_a3(): pass\n', encoding='utf-8')
+    (checkout/'tests/test_b.py').write_text('def test_b1(): pass\ndef test_b2(): pass\n', encoding='utf-8')
+    (checkout/'tests/test_c.py').write_text('def test_c1(): pass\n', encoding='utf-8')
     receipts = {}
     for index in (1, 2):
         result, receipt = run(checkout, checkout/'artifacts'/f'shard{index}', '--shard', f'{index}/2')
@@ -391,7 +391,7 @@ def test_shards_partition_the_collection_by_whole_file_and_the_check_notices_a_m
         assert receipt['shard']['index'] == index and receipt['shard']['count'] == 2
         assert receipt['shard']['nodes_total'] == 6
         assert receipt['counts'] == {'passed': receipt['shard']['nodes_in_shard']}
-        full = json.loads((checkout/'artifacts'/f'shard{index}/collected-nodeids-all.json').read_text())
+        full = json.loads((checkout/'artifacts'/f'shard{index}/collected-nodeids-all.json').read_text(encoding='utf-8'))
         assert len(full) == 6
         for node in receipt['collected_nodeids']:
             assert node.split('::')[0] in receipt['shard']['files']
@@ -444,15 +444,15 @@ def test_ci_configuration_changes_refuse_resume(checkout, options):
 def test_duration_shards_preserve_coverage_and_reject_changed_timing_inputs(checkout):
     # Count balancing would put the three cheap cases alone; measured time must
     # instead isolate the single expensive case, including an unmeasured file.
-    (checkout/'tests/test_a.py').write_text('def test_a1(): pass\ndef test_a2(): pass\ndef test_a3(): pass\n')
-    (checkout/'tests/test_b.py').write_text('def test_b(): pass\n')
-    (checkout/'tests/test_c.py').write_text('def test_c(): pass\n')
+    (checkout/'tests/test_a.py').write_text('def test_a1(): pass\ndef test_a2(): pass\ndef test_a3(): pass\n', encoding='utf-8')
+    (checkout/'tests/test_b.py').write_text('def test_b(): pass\n', encoding='utf-8')
+    (checkout/'tests/test_c.py').write_text('def test_c(): pass\n', encoding='utf-8')
     timing_path = checkout.parent/'timings.json'  # also fingerprint external tables
     table = dict(schema='wavebit.shard-timings/v1', partitions=dict(exclude={
         'tests/test_a.py': dict(nodes=3, seconds=3),
         'tests/test_b.py': dict(nodes=1, seconds=100),
     }))
-    timing_path.write_text(json.dumps(table))
+    timing_path.write_text(json.dumps(table), encoding='utf-8')
     options = ['--slow', 'exclude', '--shard-timings', str(timing_path)]
     outputs, receipts = [], []
     for index in (1, 2):
@@ -467,12 +467,12 @@ def test_duration_shards_preserve_coverage_and_reject_changed_timing_inputs(chec
     result = subprocess.run(command, text=True, capture_output=True, timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr
     table['partitions']['exclude']['tests/test_b.py']['seconds'] = 110
-    timing_path.write_text(json.dumps(table))
+    timing_path.write_text(json.dumps(table), encoding='utf-8')
     result, _ = run(checkout, checkout/'artifacts/resume-timed', '--shard', '1/2',
                     '--resume', outputs[0], *options)
     assert result.returncode == 2 and 'Resume refused' in result.stderr
     receipts[1]['shard']['timings_digest'] = 'different-table'
-    Path(outputs[1], 'receipt.json').write_text(json.dumps(receipts[1]))
+    Path(outputs[1], 'receipt.json').write_text(json.dumps(receipts[1]), encoding='utf-8')
     result = subprocess.run(command, text=True, capture_output=True, timeout=60)
     assert result.returncode == 1 and 'different timing tables' in result.stdout
 
@@ -498,7 +498,7 @@ def test_marked_units_leave_their_file_and_named_units_stay_together(checkout):
     timing_path.write_text(json.dumps(dict(schema='wavebit.shard-timings/v1', partitions=dict(exclude={
         heavy: dict(nodes=6, seconds=60),
         f'{heavy}::test_alone[1]': dict(nodes=1, seconds=40),
-        f'{heavy}::@pair': dict(nodes=2, seconds=30)}))))
+        f'{heavy}::@pair': dict(nodes=2, seconds=30)}))), encoding='utf-8')
     options = ['--slow', 'exclude', '--shard-timings', str(timing_path)]
     outputs, selected = [], []
     for index in (1, 2, 3):
@@ -554,7 +554,8 @@ def test_a_malformed_shard_unit_is_refused_at_collection(checkout, marker):
     suite(checkout, f'import pytest\n@pytest.mark.{marker}\ndef test_one(): pass\n')
     result, receipt = run(checkout, checkout/'artifacts/malformed', '--shard', '1/1')
     assert result.returncode != 0
-    log = (checkout/'artifacts/malformed/collection/pytest.log').read_text()
+    # The log is the child's console output, in its own encoding; only ASCII is looked for.
+    log = (checkout/'artifacts/malformed/collection/pytest.log').read_text(encoding='utf-8', errors='replace')
     assert "shard_unit takes no argument, per='test' or one name" in log
 
 
@@ -563,7 +564,7 @@ def test_invalid_shard_durations_are_refused_before_collection(checkout, seconds
     suite(checkout, 'def test_pass(): pass\n')
     timing_path = checkout.parent/'timings.json'
     timing_path.write_text(json.dumps(dict(schema='wavebit.shard-timings/v1',
-        partitions=dict(exclude={'tests/test_tiny.py': dict(nodes=1, seconds=seconds)}))))
+        partitions=dict(exclude={'tests/test_tiny.py': dict(nodes=1, seconds=seconds)}))), encoding='utf-8')
     result, receipt = run(checkout, checkout/'artifacts/invalid-time', '--shard', '1/1',
                           '--slow', 'exclude', '--shard-timings', str(timing_path))
     assert result.returncode == 2 and receipt is None
@@ -581,26 +582,26 @@ def test_timing_import_requires_complete_successful_shards(tmp_path):
                        collected_nodeids=nodes, counts=dict(passed=3), outcomes={
                            node: dict(complete=True, outcome='passed', duration=seconds)
                            for node, seconds in zip(nodes, (2.5, 3.5, 9.0))})
-        (directory/'receipt.json').write_text(json.dumps(receipt))
-        (directory/'collected-nodeids-all.json').write_text(json.dumps(nodes))
+        (directory/'receipt.json').write_text(json.dumps(receipt), encoding='utf-8')
+        (directory/'collected-nodeids-all.json').write_text(json.dumps(nodes), encoding='utf-8')
     output = tmp_path/'timings.json'
     command = [sys.executable, str(ROOT/'tools/update_shard_timings.py'), str(tmp_path),
                '--source-run', 'https://example.test/run/1', '--output', str(output)]
     result = subprocess.run(command, text=True, capture_output=True, timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr
-    table = json.loads(output.read_text())
+    table = json.loads(output.read_text(encoding='utf-8'))
     # A marked unit is its own row; the rest of the file stays the file's row.
     assert table['partitions']['exclude']['tests/test_example.py'] == dict(nodes=2, seconds=6)
     assert table['partitions']['exclude'][nodes[2]] == dict(nodes=1, seconds=9)
     assert table['partitions']['only'] == table['partitions']['exclude']
     original = output.read_bytes()
     receipt['outcomes'][nodes[0]]['complete'] = False
-    (directory/'receipt.json').write_text(json.dumps(receipt))
+    (directory/'receipt.json').write_text(json.dumps(receipt), encoding='utf-8')
     result = subprocess.run(command, text=True, capture_output=True, timeout=60)
     assert result.returncode != 0 and 'incomplete or invalid timing' in result.stderr
     assert output.read_bytes() == original
     receipt['shard']['count'] = 2
-    (directory/'receipt.json').write_text(json.dumps(receipt))
+    (directory/'receipt.json').write_text(json.dumps(receipt), encoding='utf-8')
     result = subprocess.run(command, text=True, capture_output=True, timeout=60)
     assert result.returncode != 0 and 'incomplete baseline' in result.stderr
     assert output.read_bytes() == original
@@ -655,7 +656,7 @@ def test_thread_timeout_preserves_completed_events_and_cannot_report_success(che
     assert phase['exit_code'] != 0
     assert '--timeout=0.5' in phase['command'] and '--timeout-method=thread' in phase['command']
     assert 'pytest_timeout' in phase['command']
-    assert 'Timeout' in Path(phase['directory'], 'pytest.log').read_text()
+    assert 'Timeout' in Path(phase['directory'], 'pytest.log').read_text(encoding='utf-8', errors='replace')
     assert receipt['inputs_unchanged']
     if mutation:
         assert receipt['snapshot']['restored'] and '-n' not in phase['command']
@@ -697,7 +698,7 @@ def test_live_output_is_flushed_before_a_running_test_finishes(checkout):
         reader.join(timeout=5)
         process.stdout.close()
     assert (output/'tests/pytest.log').read_bytes() in b''.join(chunks)
-    receipt = json.loads((output/'receipt.json').read_text())
+    receipt = json.loads((output/'receipt.json').read_text(encoding='utf-8'))
     assert receipt['counts'] == {'passed': 1}
     assert '-v' in receipt['phases'][1]['command']
     assert '-q' in receipt['phases'][0]['command']

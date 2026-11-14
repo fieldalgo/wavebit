@@ -101,5 +101,5 @@ if __name__=='__main__':
         row=run_case(cpw,a.eps,a.pol,a.period,a.gate)
         row['seconds']=time.perf_counter()-start
         rows.append(row)
-        a.output.write_text(json.dumps(rows,indent=2))
+        a.output.write_text(json.dumps(rows,indent=2), encoding='utf-8')
         print('RESULT',json.dumps(row),flush=True)

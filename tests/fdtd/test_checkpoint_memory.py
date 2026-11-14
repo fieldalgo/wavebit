@@ -186,7 +186,7 @@ _TORCH_PEAK = textwrap.dedent('''
 
 def _proc_status(field):
     """A ``kB`` field of ``/proc/self/status`` (Linux), in bytes."""
-    with open('/proc/self/status') as status:
+    with open('/proc/self/status', encoding='utf-8') as status:
         for line in status:
             if line.startswith(field + ':'):
                 return int(line.split()[1]) * 1024
@@ -230,7 +230,7 @@ def reset_peak():
     if sys.platform.startswith('linux'):
         import ctypes
         ctypes.CDLL('libc.so.6').malloc_trim(0)
-        with open('/proc/self/clear_refs', 'w') as refs:
+        with open('/proc/self/clear_refs', 'w', encoding='utf-8') as refs:
             refs.write('5')
         return _proc_status('VmRSS')
     return peak_bytes()

@@ -146,7 +146,7 @@ def test_incident_controls_are_clean(name, golden):
 
 
 def test_frozen_runtime_controls_belong_to_this_reference():
-    report = json.loads((HERE / 'golden_meep_crossed_materials_runtime.json').read_text())
+    report = json.loads((HERE / 'golden_meep_crossed_materials_runtime.json').read_text(encoding='utf-8'))
     assert report['complete']
     assert report['reference_sha256'] == hashlib.sha256(GOLDEN.read_bytes()).hexdigest()
     assert report['resolution'] == 40 and report['until_after_sources'] == 240.

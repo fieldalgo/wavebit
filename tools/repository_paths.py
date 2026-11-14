@@ -13,13 +13,13 @@ _ROOT = Path(__file__).resolve().parents[1]
 
 @lru_cache(maxsize=1)
 def _ledger():
-    return json.loads((_ROOT / 'tools' / 'relocations.json').read_text())
+    return json.loads((_ROOT / 'tools' / 'relocations.json').read_text(encoding='utf-8'))
 
 
 @lru_cache(maxsize=1)
 def _source_paths():
     """Final engine relocations, separate from immutable experiment records."""
-    return json.loads((_ROOT / 'docs/development/source-relocations.json').read_text())['paths']
+    return json.loads((_ROOT / 'docs/development/source-relocations.json').read_text(encoding='utf-8'))['paths']
 
 
 def resolve_repository_path(value):

@@ -54,7 +54,7 @@ def _relocate_cached_nodeids(config):
     if cache is None or not ledger_path.is_file():
         return
     import json
-    paths = json.loads(ledger_path.read_text())['paths']
+    paths = json.loads(ledger_path.read_text(encoding='utf-8'))['paths']
 
     def relocate(nodeid):
         path, separator, suffix = nodeid.partition('::')

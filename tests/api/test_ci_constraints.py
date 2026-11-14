@@ -104,11 +104,11 @@ def test_installed_keeps_the_first_copy_and_skips_nameless_metadata(monkeypatch)
 
 def test_merge_takes_the_union_and_refuses_a_disagreement(tmp_path):
     linux, windows = tmp_path / 'distribution-Linux.txt', tmp_path / 'distribution-Windows.txt'
-    linux.write_text('# header\nbuild==1.6.1\nsecretstorage==3.5.0\n')
-    windows.write_text('build==1.6.1\ncolorama==0.4.6\n')
+    linux.write_text('# header\nbuild==1.6.1\nsecretstorage==3.5.0\n', encoding='utf-8')
+    windows.write_text('build==1.6.1\ncolorama==0.4.6\n', encoding='utf-8')
     out = tmp_path / 'distribution.txt'
     ci_constraints.merge('distribution', [linux, windows], out)
     assert recorded(out) == ['build==1.6.1', 'colorama==0.4.6', 'secretstorage==3.5.0']
-    windows.write_text('build==1.7.0\n')
+    windows.write_text('build==1.7.0\n', encoding='utf-8')
     with pytest.raises(SystemExit, match='build'):
         ci_constraints.merge('distribution', [linux, windows], out)
