@@ -969,33 +969,36 @@ def field_2d(wavelength, kx, ky, T1, layer_info_list, lattice,
 
 
 #: The names ``reconstruction=`` takes, at every door.
-RECONSTRUCTIONS = ('plain', 'lalanne', 'splitw')
+RECONSTRUCTIONS = ('plain', 'lalanne', 'split', 'splitw')
 
-#: What the windowed split rule reads off one layer (:mod:`wavebit.rcwa._engine.splitw`):
+#: What a split rule reads off one layer (:mod:`wavebit.rcwa._engine.splitw`):
 #: ``normal`` turns the stacked ``(E_x, E_y)`` coefficients into those of the normal ``D``,
 #: ``tangential`` into those of the tangential ``E``, both ``(2 n, 2 n)`` over the orders
 #: flattened ``v``-major, and ``eps`` is the ``(n_y, n_x)`` permittivity at the samples.
-SplitHalf = namedtuple('SplitHalf', 'normal tangential eps')
+#: ``applies`` is ``None`` where every sample takes the rule, or the ``(n_y, n_x)`` samples that
+#: do; the others keep the plain sum.
+SplitHalf = namedtuple('SplitHalf', 'normal tangential eps applies')
 
 
 def check_reconstruction(reconstruction):
     """Refuse a ``reconstruction`` that names no rule."""
     if reconstruction not in RECONSTRUCTIONS:
-        raise ValueError(f"reconstruction must be 'plain', 'lalanne' or 'splitw', not {reconstruction!r}.")
+        raise ValueError(f"reconstruction must be 'plain', 'lalanne', 'split' or 'splitw', not {reconstruction!r}.")
 
 
 def _wall_rule_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, half):
     """The in-plane pair of a patterned 2D layer by the rule ``half`` was read for."""
-    rule = _splitw_2d if isinstance(half, SplitHalf) else _lalanne_2d
+    rule = _split_2d if isinstance(half, SplitHalf) else _lalanne_2d
     return rule(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, half)
 
 
-def _splitw_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, half):
-    """``E_x`` and ``E_y`` of a patterned 2D layer by the windowed split rule.
+def _split_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, half):
+    """``E_x`` and ``E_y`` of a patterned 2D layer by a split rule, windowed or not.
 
     The stacked coefficients are split into the normal ``D`` and the tangential ``E``, each
     continuous across the wall, each is summed, and the first sum is divided by ``eps`` at the
-    sample (:mod:`wavebit.rcwa._engine.splitw`). The arguments, the phases and the two
+    sample (:mod:`wavebit.rcwa._engine.splitw`). Samples ``half.applies`` leaves out keep the
+    plain sum of the same coefficients. The arguments, the phases and the two
     ``(nz, n_selected, n_y, n_x)`` arrays returned are :func:`_lalanne_2d`'s.
     """
     dev = _dev(kx)
@@ -1014,8 +1017,12 @@ def _splitw_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, half):
     def summed(coefficients):
         return py @ xp.reshape(coefficients, (*lead, n_v, n_u)) @ xp.permute_dims(px, (1, 0))
 
-    return (summed(normal[..., :n]) / eps + summed(tangential[..., :n]),
-            summed(normal[..., n:]) / eps + summed(tangential[..., n:]))
+    ruled = (summed(normal[..., :n]) / eps + summed(tangential[..., :n]),
+             summed(normal[..., n:]) / eps + summed(tangential[..., n:]))
+    if half.applies is None:
+        return ruled
+    plain = (summed(stacked[..., :n, 0]), summed(stacked[..., n:, 0]))
+    return tuple(xp.where(half.applies, r, p) for r, p in zip(ruled, plain))
 
 
 def _lalanne_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, half):

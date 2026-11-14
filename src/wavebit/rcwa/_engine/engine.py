@@ -63,8 +63,8 @@ from wavebit.rcwa._engine.lalanne import lalanne_rows
 from wavebit.rcwa._engine.lalanne import layers_holding
 from wavebit.rcwa._engine.lalanne import refusal as lalanne_refusal
 from wavebit.rcwa._engine.lalanne import solved_structure
-from wavebit.rcwa._engine.splitw import refusal as splitw_refusal
-from wavebit.rcwa._engine.splitw import splitw_rows
+from wavebit.rcwa._engine.splitw import refusal as split_refusal
+from wavebit.rcwa._engine.splitw import split_rows
 from wavebit.rcwa._engine.enums import Answers
 from wavebit.rcwa._engine.enums import DEFAULT_ANSWERS
 from wavebit.rcwa._engine.enums import DEFAULT_FACTORIZATION
@@ -4954,7 +4954,7 @@ class CoreFactorizationMixin:
 
     @device_scoped
     def _refuse_rule(self, reconstruction):
-        """Refuse ``reconstruction='lalanne'`` or ``'splitw'`` where it does not answer, by name."""
+        """Refuse ``reconstruction='lalanne'``, ``'split'`` or ``'splitw'`` where it does not answer, by name."""
         # A solve that merged layers answers from its field state, which refuses for itself.
         if self._merged_field_state is not None:
             return
@@ -4962,9 +4962,9 @@ class CoreFactorizationMixin:
         # structure of `None` past this point can only be matrices handed to `solve_conv`.
         _require_solved(self.T1, self.layer_info_list)
         kx, ky = self.order_kxy()
-        refusal = splitw_refusal if reconstruction == 'splitw' else lalanne_refusal
-        message = refusal(self._field_kind(), self._solved_structure, self.lattice, kx, ky,
-                          self._solved_mu)
+        asked = (self._field_kind(), self._solved_structure, self.lattice, kx, ky, self._solved_mu)
+        message = (lalanne_refusal(*asked) if reconstruction == 'lalanne' else
+                   split_refusal(*asked, rule=reconstruction))
         if message is not None:
             raise NotImplementedError(message)
 
@@ -4980,11 +4980,11 @@ class CoreFactorizationMixin:
                             sample_x, sample_y, held)
         return rows if backside else rows[::-1]
 
-    def _splitw_rows(self, sample_x, sample_y, backside, held=None):
-        """:func:`~wavebit.rcwa._engine.splitw.splitw_rows` in the kernels' record order."""
+    def _split_rows(self, sample_x, sample_y, backside, held=None, windowed=True):
+        """:func:`~wavebit.rcwa._engine.splitw.split_rows` in the kernels' record order."""
         kx, ky = self.order_kxy()
-        rows = splitw_rows(self.xp, self._solved_structure, self.lattice, kx, ky,
-                           self.float_dtype, self.complex_dtype, sample_x, sample_y, held)
+        rows = split_rows(self.xp, self._solved_structure, self.lattice, kx, ky, self.float_dtype,
+                          self.complex_dtype, sample_x, sample_y, held, windowed=windowed)
         return rows if backside else rows[::-1]
 
     def reconstruct_field(self, sample_x=20, sample_y=20, sample_z=20, incidences=('incident',),
@@ -5020,11 +5020,11 @@ class CoreFactorizationMixin:
         sample fixed, so it leaves out a wall sweeping across a sample: an objective over an area
         takes ``'plain'``.
 
-        ``'splitw'`` is the rule for a curved wall, which ``'lalanne'`` refuses: on a layer that
-        holds one circle it splits ``E_x`` and ``E_y`` along the circle's normal, near the wall
-        only, sums the normal ``D`` and the tangential ``E`` and divides the first by ``eps``
-        (:mod:`~wavebit.rcwa._engine.splitw`). It rebuilds ``E`` alone and refuses every other
-        patterned layer by name.
+        ``'split'`` and ``'splitw'`` are the rules for a curved wall, which ``'lalanne'`` refuses:
+        on a layer that holds one circle they split ``E_x`` and ``E_y`` along the circle's normal,
+        sum the normal ``D`` and the tangential ``E`` and divide the first by ``eps``
+        (:mod:`~wavebit.rcwa._engine.splitw`). ``'splitw'`` uses that normal near the wall only.
+        They rebuild ``E`` alone and refuse every other patterned layer by name.
 
         ``incidences`` names which of the incidences the solve carries to reconstruct, one
         leading axis entry each, **in the order asked for**: ``'incident'`` is the incidence the
@@ -5079,7 +5079,8 @@ class CoreFactorizationMixin:
             sample_z = to_mirrored_z(sample_z, self.thickness)
         kx, ky = self.order_kxy()
 
-        read = {'lalanne': self._lalanne_rows, 'splitw': self._splitw_rows}.get(reconstruction)
+        read = {'lalanne': self._lalanne_rows, 'splitw': self._split_rows,
+                'split': _functools.partial(self._split_rows, windowed=False)}.get(reconstruction)
         rule_rows = read(sample_x, sample_y, backside, held) if ruled else None
         if self._grating_type == 0:
             sample_y = 1

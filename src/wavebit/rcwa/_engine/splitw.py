@@ -1,4 +1,4 @@
-"""What the windowed split rule reads off a structure, for every door that reconstructs a field.
+"""What the split rules read off a structure, for every door that reconstructs a field.
 
 Across a wall it is the normal ``D`` and the tangential ``E`` that are continuous, so the rule
 splits the in-plane field with the wall's own normal ``n`` and sums each part's series where it
@@ -7,15 +7,26 @@ is continuous (M. Weismann, D. F. G. Gallagher and N. C. Panoiu, J. Opt. 17, 125
     D_n = 1/2 (P Q + Q P) E,   E_t = (I - P) E,   E(r) = sum(D_n)(r) / eps(r) + sum(E_t)(r)
 
 ``P`` is the convolution matrix of ``w n n^T`` and ``Q = [[1/eps]]^-1`` the inverse rule, floored
-as the NVF solve floors it. ``w`` is the window that gives the rule its name: 1 within ``a`` of
-the wall and falling as ``cos^2`` to 0 at ``b``, so that the radial normal is used only near the
-wall and not where it jumps for no reason, at the circle's axis and on the cell's edge. Where
-``w < 1`` the rest of the normal field stays in the plain sum, in one material. ``b`` is the
-smaller of the radius and half the gap to the nearest image's wall, and ``a = b / 4``.
+as the NVF solve floors it. There are two rules, one for each ``w``.
 
-The rule answers what it was measured on, a layer holding one circle of a scalar permittivity
-in a rectangular cell, and :func:`refusal` names everything else. Like the Lalanne rule
-(:mod:`~wavebit.rcwa._engine.lalanne`) it reads the solve's own copy of the structure, never
+``'split'`` takes ``w = 1``: the circle's radial normal over the whole cell. That field is right
+on the wall and jumps where nothing needs it, at the circle's axis and on the cell's edge.
+
+``'splitw'`` windows it: ``w`` is 1 within ``a`` of the wall and falls as ``cos^2`` to 0 at ``b``,
+so the radial normal is used only near the wall. Where ``w < 1`` the rest of the normal field
+stays in the plain sum, in one material. ``b`` is the smaller of the radius and half the gap to
+the nearest image's wall, and ``a = b / 4``.
+
+**Where the permittivity changes sign across the wall the rules answer on its negative side
+only**, and the other side keeps the plain sum (:func:`_applies`). There the solve's high
+orders carry an error the inverse rule amplifies; divided by a metal's ``eps`` it is small, and
+on the dielectric side it is not. Against the finite-element reference of six metal circles the
+rules were 2.4 to 3.9 times closer than the sum inside the metal and further than it outside,
+at every distance from the wall.
+
+Both answer what they were measured on, a layer holding one circle of a scalar permittivity in
+a rectangular cell, and :func:`refusal` names everything else. Like the Lalanne rule
+(:mod:`~wavebit.rcwa._engine.lalanne`) they read the solve's own copy of the structure, never
 the live one.
 """
 
@@ -58,47 +69,47 @@ from wavebit.rcwa._engine.parametric import layer_epsilons
 WINDOW_GRID = 2048
 
 _CIRCLES = ('circle', 'disk')
-_NAME = "reconstruction='splitw'"
 
 #: One layer's geometry as the rule reads it: the circle's centre from the cell's corner, its
 #: radius, the cell's two sides and the window's reach ``b``.
 _Circle = namedtuple('_Circle', 'cx cy radius side_x side_y reach')
 
 
-def refusal(kind, structure, lattice, kx, ky, mu=None, merged=None):
-    """Why the rule cannot answer this solve, by name, or ``None``.
+def refusal(kind, structure, lattice, kx, ky, mu=None, merged=None, rule='splitw'):
+    """Why ``rule``, ``'split'`` or ``'splitw'``, cannot answer this solve, by name, or ``None``.
 
-    The arguments are :func:`wavebit.rcwa._engine.lalanne.refusal`'s. What is refused is what
-    the rule was not measured on, against a 3D finite-element reference, rather than what its
-    algebra cannot be written for: shapes other than a circle, several shapes in a layer, a
-    raster, a tensor, a patterned permeability.
+    The other arguments are :func:`wavebit.rcwa._engine.lalanne.refusal`'s. What is refused is
+    what the rules were not measured on, against a 3D finite-element reference, rather than what
+    their algebra cannot be written for: shapes other than a circle, several shapes in a layer,
+    a raster, a tensor, a patterned permeability.
     """
+    name = f'reconstruction={rule!r}'
     if kind in ('te', 'tm', 'conical'):
-        return (f"{_NAME} splits the in-plane field along the normal of a curved wall in a 2D "
+        return (f"{name} splits the in-plane field along the normal of a curved wall in a 2D "
                 "cell. A 1D grating's walls all face x, where that split is the line rule: use "
                 "'lalanne'.")
     skewed = not getattr(lattice, 'axis_aligned', False) if kind == 'source' else np.ndim(kx) != 1
     if skewed or _negative_side(lattice):
-        return (f'{_NAME} is built for a rectangular cell with positive sides; a skewed lattice, '
+        return (f'{name} is built for a rectangular cell with positive sides; a skewed lattice, '
                 'one written with a negative side, and a lattice differentiated as a whole '
                 "matrix are refused. Keep 'plain'.")
     if structure is None:
-        return (f'{_NAME} reads the wall and its normal off the structure, and solve_conv solved '
+        return (f'{name} reads the wall and its normal off the structure, and solve_conv solved '
                 'matrices that need not be that structure. Use solve().')
     if not isinstance(structure, list):
-        return (f"{_NAME} reads the wall's normal off a shape, and a raster names none. Give the "
+        return (f"{name} reads the wall's normal off a shape, and a raster names none. Give the "
                 "circle as a shape and solve it with factorization='nvf', or keep 'plain'; "
                 "'lalanne' takes a raster's walls along x and y.")
     if mu is not None:
-        return f"{_NAME} rebuilds E alone, and this solve carries a permeability field. Keep 'plain'."
+        return f"{name} rebuilds E alone, and this solve carries a permeability field. Keep 'plain'."
     for index in _kept(merged, len(structure)):
-        message = _layer_refusal(structure[index], lattice, index)
+        message = _layer_refusal(structure[index], lattice, index, name)
         if message is not None:
             return message
     return None
 
 
-def _layer_refusal(layer, lattice, index):
+def _layer_refusal(layer, lattice, index, name):
     """One layer's refusal: anything patterned other than one circle of scalar permittivities."""
     shapes = layer.get('shapes')
     if not shapes:
@@ -106,22 +117,22 @@ def _layer_refusal(layer, lattice, index):
     kinds = [shape.get('type', 'rectangle') for shape in shapes]
     if len(shapes) != 1 or kinds[0] not in _CIRCLES:
         held = 'holds ' + ', '.join(f"{kinds.count(k)} {k}{'s' * (kinds.count(k) > 1)}" for k in dict.fromkeys(kinds))
-        return (f'{_NAME} is measured on a layer that holds one circle, whose normal is radial; '
+        return (f'{name} is measured on a layer that holds one circle, whose normal is radial; '
                 f'layer {index} {held}. Its normal near a corner, on an ellipse or between two '
                 "shapes has no measurement behind it. Keep 'plain', or 'lalanne' where every "
                 'wall is along x or y.')
     if is_magnetic(layer):
-        return (f'{_NAME} rebuilds E alone: its reference stored no H, so a patterned '
+        return (f'{name} rebuilds E alone: its reference stored no H, so a patterned '
                 f"permeability, which layer {index} names, has no measurement behind it. Keep "
                 "'plain'.")
     for value in (layer.get('background', 1.0), shapes[0].get('material', 1.0)):
         if tensor_shape(as_material(value).epsilon) != ():
-            return (f'{_NAME} divides D_n by a scalar eps, and layer {index} holds a tensor. '
+            return (f'{name} divides D_n by a scalar eps, and layer {index} holds a tensor. '
                     "Keep 'plain'.")
     diameter, sides = _host(shape_geometry(shapes[0], lattice)[3]), [_host(p) for p in periods_of(lattice)]
     if diameter is not None and not any(side is None for side in sides) and not 0 < float(
             np.real(diameter)) < min(float(np.real(side)) for side in sides):
-        return (f'{_NAME} tapers the normal between the wall and the nearest image of it, and '
+        return (f'{name} reads the normal between the wall and the nearest image of it, and '
                 f"the circle of layer {index} leaves no room: its diameter is not below the "
                 "cell's shorter side. Keep 'plain'.")
     return None
@@ -140,14 +151,14 @@ def _circle(xp, layer, lattice, real, dev):
 
 
 def _window(xp, distance, reach):
-    """1 within ``reach / 4`` of the wall, falling as ``cos^2`` to 0 at ``reach``."""
+    """``'splitw'``'s window: 1 within ``reach / 4`` of the wall, falling as ``cos^2`` to 0 at ``reach``."""
     inner = 0.25 * reach
     ramp = (distance - inner) / (reach - inner)
     ramp = xp.minimum(xp.maximum(ramp, xp.zeros_like(ramp)), xp.ones_like(ramp))
     return xp.cos(0.5 * np.pi * ramp) ** 2
 
 
-def _projector(xp, circle, lattice, half_u, half_v, real, C, grid):
+def _projector(xp, circle, lattice, half_u, half_v, real, C, grid, windowed):
     """The convolution matrices of ``w n n^T``: ``(xx, xy, yy)``, in the kernels' frame.
 
     Sampled with the circle at the cell's centre and carried to its place by a phase, as the NVF
@@ -158,7 +169,7 @@ def _projector(xp, circle, lattice, half_u, half_v, real, C, grid):
     dx, dy = X - 0.5 * circle.side_x, Y - 0.5 * circle.side_y
     rho = _hypot_safe(xp, dx, dy)
     nx, ny = dx / rho, dy / rho
-    w = _window(xp, xp.abs(rho - circle.radius), circle.reach)
+    w = _window(xp, xp.abs(rho - circle.radius), circle.reach) if windowed else xp.ones_like(rho)
     KKY, KKX = _grid(xp, half_u, half_v, _device_of(X), real)
     shift_u = (circle.cx - 0.5 * circle.side_x) / circle.side_x
     shift_v = (circle.cy - 0.5 * circle.side_y) / circle.side_y
@@ -183,8 +194,8 @@ def _eps_at(xp, circle, layer, sample_x, sample_y, C, dev):
     """``eps`` at the samples, ``(n_y, n_x)``: the circle's inside, wall included, or the background.
 
     A sample is read against the nearest image of the circle, so it need not be in the cell.
-    A circle a trace hides the fit of reads NaN where it leaves the window no room, which is
-    the refusal for a trace that cannot read one.
+    A circle a trace hides the fit of reads NaN where it reaches its own image, which is the
+    refusal for a trace that cannot read one.
     """
     x = xp.real(_axis_samples(xp, sample_x, circle.side_x, C, dev)) - circle.cx
     y = xp.real(_axis_samples(xp, sample_y, circle.side_y, C, dev)) - circle.cy
@@ -197,6 +208,21 @@ def _eps_at(xp, circle, layer, sample_x, sample_y, C, dev):
     return xp.where(circle.reach > 0, eps, xp.full_like(eps, float('nan')))
 
 
+def _applies(xp, layer, eps, C):
+    """The samples that take the rule, ``(n_y, n_x)``, or ``None`` where all of them do.
+
+    All of them where both materials can be read as ``Re eps > 0``, the case that needs no
+    array. Otherwise the samples on the negative side where ``Re eps`` changes sign across the
+    wall, and all of them where it does not; asked in ``xp``, so a trace answers it.
+    """
+    values = [as_material(item).epsilon for item in (layer.get('background', 1.0), layer['shapes'][0]['material'])]
+    host = [_host(value) for value in values]
+    if all(value is not None and bool(np.all(np.real(value) > 0)) for value in host):
+        return None
+    background, material = (xp.real(value) < 0 for value in layer_epsilons(xp, values, C))
+    return xp.where(xp.logical_xor(background, material), xp.real(eps) < 0, xp.ones_like(xp.real(eps) < 0))
+
+
 def _uniform(layer):
     """Is the circle its background, by value, with no derivative to tell them apart?"""
     values = [as_material(item).epsilon for item in (layer.get('background', 1.0), layer['shapes'][0]['material'])]
@@ -206,8 +232,9 @@ def _uniform(layer):
     return None not in host and bool(np.all(host[0] == host[1]))
 
 
-def splitw_rows(xp, structure, lattice, kx, ky, real, C, sample_x, sample_y, held=None, grid=WINDOW_GRID):
-    """What the rule reads off each layer, in the public order of the layers.
+def split_rows(xp, structure, lattice, kx, ky, real, C, sample_x, sample_y, held=None, windowed=True,
+               grid=WINDOW_GRID):
+    """What ``'splitw'`` (``windowed``) or ``'split'`` reads off each layer, in the public order of the layers.
 
     ``None`` where the layer has no wall, which keeps the Fourier sum bit for bit, and otherwise
     a :data:`~wavebit.rcwa._engine.lalanne.LayerRule` whose ``electric`` half is a
@@ -223,12 +250,12 @@ def splitw_rows(xp, structure, lattice, kx, ky, real, C, sample_x, sample_y, hel
             rows.append(None)
             continue
         circle = _circle(xp, layer, lattice, real, dev)
-        xx, xy, yy = _projector(xp, circle, lattice, half_u, half_v, real, C, grid)
+        xx, xy, yy = _projector(xp, circle, lattice, half_u, half_v, real, C, grid, windowed)
         Q = _inverse_rule(xp, layer, lattice, half_u, half_v, C)
         normal = 0.5 * xp.concat([xp.concat([xx @ Q + Q @ xx, xy @ Q + Q @ xy], axis=1),
                                   xp.concat([xy @ Q + Q @ xy, yy @ Q + Q @ yy], axis=1)], axis=0)
         projector = xp.concat([xp.concat([xx, xy], axis=1), xp.concat([xy, yy], axis=1)], axis=0)
         tangential = xp.eye(projector.shape[0], dtype=C, device=_device_of(projector)) - projector
-        rows.append(LayerRule(SplitHalf(normal, tangential,
-                                        _eps_at(xp, circle, layer, sample_x, sample_y, C, dev)), None))
+        eps = _eps_at(xp, circle, layer, sample_x, sample_y, C, dev)
+        rows.append(LayerRule(SplitHalf(normal, tangential, eps, _applies(xp, layer, eps, C)), None))
     return rows

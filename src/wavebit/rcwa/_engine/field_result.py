@@ -266,14 +266,14 @@ class FieldState:
         from wavebit.rcwa._engine.lalanne import layers_holding
         from wavebit.rcwa._engine.lalanne import refusal as lalanne_refusal
         from wavebit.rcwa._engine.lalanne import samples_along_cell
-        from wavebit.rcwa._engine.splitw import refusal as splitw_refusal
-        from wavebit.rcwa._engine.splitw import splitw_rows
-        splitw = reconstruction == 'splitw'
+        from wavebit.rcwa._engine.splitw import refusal as split_refusal
+        from wavebit.rcwa._engine.splitw import split_rows
+        split = reconstruction in ('split', 'splitw')
         self._require_internal_fields()
         groups = self.data['groups']
         lattice = self.data.get('cell')
-        message = (splitw_refusal if splitw else lalanne_refusal)(
-            self.kind, self.structure, lattice, groups[0].get('kx'), groups[0].get('ky'), self.mu, self.merged)
+        asked = (self.kind, self.structure, lattice, groups[0].get('kx'), groups[0].get('ky'), self.mu, self.merged)
+        message = split_refusal(*asked, rule=reconstruction) if split else lalanne_refusal(*asked)
         if message is not None:
             raise NotImplementedError(message)
         if self.kind == 'te' and self.mu is None:
@@ -295,8 +295,9 @@ class FieldState:
             if (kx.shape[0], ky.shape[0]) not in by_size:
                 C = self.data['lattice'].dtype if self.kind == 'source' else g['T1'].dtype
                 by_size[kx.shape[0], ky.shape[0]] = [None] * bottom + (
-                    splitw_rows(xp, self.structure[kept], lattice, kx, ky, real, C, sample_x, sample_y, held)
-                    if splitw else
+                    split_rows(xp, self.structure[kept], lattice, kx, ky, real, C, sample_x, sample_y, held,
+                               windowed=reconstruction == 'splitw')
+                    if split else
                     lalanne_rows(xp, self.structure[kept], None if self.mu is None else self.mu[kept], lattice,
                                  kx, ky, real, C, two_d, sample_x, sample_y, held))
         return dict(by_size=by_size, two_d=two_d, lattice=lattice, sample_x=sample_x, sample_y=sample_y)
