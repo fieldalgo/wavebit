@@ -344,13 +344,13 @@
     "gyptis": {
       "spdx": "MIT",
       "url": "https://pypi.org/project/gyptis/",
-      "use": "past black-box FEM comparison (1.2.0); results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
+      "use": "black-box FEM reference (1.2.0), run by hand in a separate environment: the stored cylinder field of tests/references/golden_gyptis_cylinder_field.npz, and earlier results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
       "forbidden_imports": [
         "gyptis"
       ],
       "reference": {
         "mode": [
-          "past"
+          "stored"
         ]
       }
     },

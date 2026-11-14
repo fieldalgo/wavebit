@@ -13,6 +13,7 @@ from ..errors import NumericalError, UnsupportedFeatureError, ValidationError
 from ..observations import FieldSamples
 from ..observations.fields import _component_units
 from ..units import Z0
+from ._engine.fields import RECONSTRUCTIONS
 
 
 #: The six collocated components every field sample carries.
@@ -162,8 +163,14 @@ class Result:
         each sample (P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). It changes
         ``E_x`` of a 1D TM or conical grating, and ``E_x`` and ``E_y`` of a 2D cell, in patterned
         layers only; a layer that names a permeability takes the same rule for ``H`` with ``B``
-        and ``mu``, and a diagonal tensor reads each axis's own entry. What it does not take is refused with ``field.reconstruction``, and a line
-        whose ``1/eps`` or ``1/mu`` matrix is singular fails with ``rcwa.singular``.
+        and ``mu``, and a diagonal tensor reads each axis's own entry. ``'splitw'`` is the rule for a curved wall,
+        which ``'lalanne'`` refuses: on a layer that holds one circle of a scalar permittivity
+        it splits ``E_x`` and ``E_y`` along the circle's normal, near the wall only, sums the
+        normal ``D`` and the tangential ``E`` and divides the first by ``eps`` (M. Weismann,
+        D. F. G. Gallagher and N. C. Panoiu, J. Opt. 17, 125612 (2015)). It rebuilds ``E`` alone,
+        is not ahead of ``'plain'`` on a metal, and its field is not for a spatial derivative.
+        What a rule does not take is refused with ``field.reconstruction``, and a singular
+        ``1/eps`` or ``1/mu`` matrix fails with ``rcwa.singular``.
         """
         records = self._fields()
         if any(getattr(state, 'bare_interface', False) for state in records):
@@ -175,8 +182,8 @@ class Result:
                 "half-spaces. Read the two half-spaces' fields at that interface with "
                 "boundary_fields(side='top' or 'bottom', x=..., y=..., part='total'), or add a "
                 'layer to sample inside it.', code='field.coordinates', path='z')
-        if reconstruction not in ('plain', 'lalanne'):
-            raise ValidationError(f"reconstruction must be 'plain' or 'lalanne', not {reconstruction!r}.",
+        if reconstruction not in RECONSTRUCTIONS:
+            raise ValidationError(f"reconstruction must be 'plain', 'lalanne' or 'splitw', not {reconstruction!r}.",
                                   code='field.reconstruction', path='reconstruction')
         for name, value in (('x', x), ('y', y), ('z', z)):
             _coordinates(name, value)
@@ -189,8 +196,10 @@ class Result:
                     raise UnsupportedFeatureError(str(error), code='field.reconstruction',
                                                   path='reconstruction') from error
                 except _singular_errors() as error:
-                    raise NumericalError("reconstruction='lalanne' inverts the 1/eps or 1/mu matrix of the "
-                                         'line through each sample, and one of them is singular: a '
+                    inverted = ('the 1/eps matrix of each patterned layer, and one of them'
+                                if reconstruction == 'splitw' else
+                                'the 1/eps or 1/mu matrix of the line through each sample, and one of them')
+                    raise NumericalError(f'reconstruction={reconstruction!r} inverts {inverted} is singular: a '
                                          'negative eps or mu at an unlucky fill factor. Compare another '
                                          "truncation, or keep 'plain'.",
                                          code='rcwa.singular', path='reconstruction') from error

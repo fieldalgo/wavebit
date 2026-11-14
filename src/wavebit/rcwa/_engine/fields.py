@@ -24,6 +24,8 @@ required by their internal mode variables. This algebraic conversion is separate
 propagation-frame restoration in the engine. See tests/rcwa/test_vertical_coordinates.py for
 independent plane-wave phase, curl and flux checks on every path and backend.
 """
+from collections import namedtuple
+
 import numpy as _np
 
 from wavebit._common.backend import array_namespace
@@ -792,14 +794,14 @@ def _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice, sample_x, s
             if electric is not None and conical:
                 comps[0] = comps[0] / xp.reshape(electric, (1, 1, 1, -1, 1, 1))
             elif electric is not None:
-                ex, ey = _lalanne_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C,
+                ex, ey = _wall_rule_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C,
                                      Sx, Sy, electric)
                 comps[0], comps[1] = ex[..., None, None], ey[..., None, None]
             comps += [-1j * (inv_f @ M[:, :, None, None, :, :]) for M in (-Ux, -Uy, Uz)]
             if magnetic is not None and conical:
                 comps[3] = comps[3] / xp.reshape(magnetic, (1, 1, 1, -1, 1, 1))
             elif magnetic is not None:
-                hx, hy = _lalanne_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C,
+                hx, hy = _wall_rule_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C,
                                      -Ux, -Uy, magnetic)
                 comps[3], comps[4] = -1j * hx[..., None, None], -1j * hy[..., None, None]
             val = xp.concat([c[..., 0] for c in comps], axis=-1)
@@ -921,10 +923,10 @@ def field_2d_first_order(wavelength, kx, ky, T1, layer_info_list, lattice,
             comps = [inv_f @ M[:, :, None, None, :, :]
                      for M in (Ex, Ey, Ez, Hx, Hy, Hz)]
             if electric is not None:
-                ex, ey = _lalanne_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Ex, Ey, electric)
+                ex, ey = _wall_rule_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Ex, Ey, electric)
                 comps[0], comps[1] = ex[..., None, None], ey[..., None, None]
             if magnetic is not None:
-                hx, hy = _lalanne_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Hx, Hy, magnetic)
+                hx, hy = _wall_rule_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Hx, Hy, magnetic)
                 comps[3], comps[4] = hx[..., None, None], hy[..., None, None]
             val = xp.concat([c[..., 0] for c in comps], axis=-1)
             cells.append(xp.moveaxis(val, 1, 0))
@@ -964,6 +966,56 @@ def field_2d(wavelength, kx, ky, T1, layer_info_list, lattice,
                           sample_x, sample_y, sample_z, incidences, conical=False,
                           interface_side=interface_side, _coefficients=_coefficients,
                           rule_rows=rule_rows)
+
+
+#: The names ``reconstruction=`` takes, at every door.
+RECONSTRUCTIONS = ('plain', 'lalanne', 'splitw')
+
+#: What the windowed split rule reads off one layer (:mod:`wavebit.rcwa._engine.splitw`):
+#: ``normal`` turns the stacked ``(E_x, E_y)`` coefficients into those of the normal ``D``,
+#: ``tangential`` into those of the tangential ``E``, both ``(2 n, 2 n)`` over the orders
+#: flattened ``v``-major, and ``eps`` is the ``(n_y, n_x)`` permittivity at the samples.
+SplitHalf = namedtuple('SplitHalf', 'normal tangential eps')
+
+
+def check_reconstruction(reconstruction):
+    """Refuse a ``reconstruction`` that names no rule."""
+    if reconstruction not in RECONSTRUCTIONS:
+        raise ValueError(f"reconstruction must be 'plain', 'lalanne' or 'splitw', not {reconstruction!r}.")
+
+
+def _wall_rule_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, half):
+    """The in-plane pair of a patterned 2D layer by the rule ``half`` was read for."""
+    rule = _splitw_2d if isinstance(half, SplitHalf) else _lalanne_2d
+    return rule(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, half)
+
+
+def _splitw_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, half):
+    """``E_x`` and ``E_y`` of a patterned 2D layer by the windowed split rule.
+
+    The stacked coefficients are split into the normal ``D`` and the tangential ``E``, each
+    continuous across the wall, each is summed, and the first sum is divided by ``eps`` at the
+    sample (:mod:`wavebit.rcwa._engine.splitw`). The arguments, the phases and the two
+    ``(nz, n_selected, n_y, n_x)`` arrays returned are :func:`_lalanne_2d`'s.
+    """
+    dev = _dev(kx)
+    period = periods_of(lattice)
+    x = _axis_samples(xp, sample_x, period[0], C, dev)
+    y = _axis_samples(xp, sample_y, period[1], C, dev)
+    px = xp.exp(1j * xp.reshape(x, (-1, 1)) * xp.reshape(kx, (1, -1)) * k0)     # (n_x, n_u)
+    py = xp.exp(1j * xp.reshape(y, (-1, 1)) * xp.reshape(ky, (1, -1)) * k0)     # (n_y, n_v)
+    n_u, n_v = kx.shape[0], ky.shape[0]
+    n, lead = n_u * n_v, Sx.shape[:2]
+    stacked = xp.concat([xp.reshape(Sx, (*lead, n)), xp.reshape(Sy, (*lead, n))], axis=-1)[..., None]
+    normal = (half.normal @ stacked)[..., 0]
+    tangential = (half.tangential @ stacked)[..., 0]
+    eps = xp.astype(half.eps, C)
+
+    def summed(coefficients):
+        return py @ xp.reshape(coefficients, (*lead, n_v, n_u)) @ xp.permute_dims(px, (1, 0))
+
+    return (summed(normal[..., :n]) / eps + summed(tangential[..., :n]),
+            summed(normal[..., n:]) / eps + summed(tangential[..., n:]))
 
 
 def _lalanne_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, half):

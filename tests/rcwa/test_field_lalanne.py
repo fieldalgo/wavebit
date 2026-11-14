@@ -148,7 +148,7 @@ def test_gradient_through_the_raster_values():
 
 def test_refusals_name_what_is_missing():
     s = _solver('tm')
-    with pytest.raises(ValueError, match="'plain' or 'lalanne'"):
+    with pytest.raises(ValueError, match="'plain', 'lalanne' or 'splitw'"):
         s.reconstruct_field(reconstruction='li')
     skewed = rcwa(backend='numpy', top=1.0, bot=1.0, lattice=wavebit.Lattice.hexagonal(PERIOD),
                   truncation_order=[2, 2], wavelength=620.0, thickness=[100.0],

@@ -195,7 +195,8 @@ the continuous `D` or `B` series instead: sum `D`, then divide by `eps` at each 
 M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)), and the same for `B` and `mu`. The value is named after
 that paper, which treats a 1D TM grating; the 2D, conical and magnetic cases follow RETICOLO's `res3`
 (J. P. Hugonin and P. Lalanne). The default, `'plain'`, sums each component's own series. The samples'
-metadata records the rule under `'reconstruction'` when it is not the default.
+metadata records the rule under `'reconstruction'` when it is not the default. A third value,
+`'splitw'`, is the rule for a circle's curved wall and has its own section, *A curved wall*, below.
 
 - **What it changes.** `E_x` in the patterned layers of a 1D grating, on the pure TM and the
   conical paths; `E_x` and `E_y` in the patterned layers of a 2D cell. A layer that names a
@@ -258,12 +259,8 @@ metadata records the rule under `'reconstruction'` when it is not the default.
     absorption from the ports, which neither rule changes.
   - On curved or slanted walls, not this rule, which is refused there (see *Which shapes* below).
     Give the true shape with `factorization='nvf'`, check that `R` and `T` have converged, and read
-    the default. A rule that splits `E` at each sample into the part normal to the local wall,
-    read from `D`, and the part along it, read from `E` (M. Weismann, D. F. G. Gallagher and N. C.
-    Panoiu, J. Opt. 17, 125612 (2015)), was more accurate than the default on all 16 dielectric
-    circle cells checked against a finite-element reference: 0.06 to 0.67 times its error over the
-    plane at order 12, with a window that switches the split off away from the wall. It is not in
-    Wavebit.
+    the default. A layer that holds one circle also takes `'splitw'`, which splits `E` along the
+    circle's normal (see *A curved wall* below).
 - **Why the default is `'plain'`.** The default never puts a jump where the field is continuous,
   and its derivatives across walls a component runs along, and of area averages, are right. What
   it misses is the jump at a wall normal to a component, which is what the Lalanne rule is for.
@@ -363,6 +360,74 @@ metadata records the rule under `'reconstruction'` when it is not the default.
   singular at those `x` and `y` fail; heights elsewhere answer, and a uniform layer keeps the sum. A
   count reads every layer, and so do heights under a trace, where a singular line in another layer
   leaves the value right and its gradient NaN.
+
+## A curved wall: `reconstruction='splitw'`
+
+Across a curved wall neither `E_x` nor `E_y` is the normal component, so the line rule above has
+nothing to follow and is refused. `result.field(x=..., y=..., z=..., reconstruction='splitw')`
+splits the in-plane field with the wall's own normal `n` instead (M. Weismann, D. F. G. Gallagher
+and N. C. Panoiu, J. Opt. 17, 125612 (2015)): the normal part is read from `D`, the part along the
+wall from `E`, each is summed where it is continuous, and the first sum is divided by `eps` at the
+sample. It is opt-in, and the default stays `'plain'`.
+
+- **Where it applies.** A layer that holds one circle of a scalar permittivity in a scalar
+  background, in a rectangular cell, anywhere in the cell and in any number of layers. That is
+  what it was measured on. Uniform layers keep the sum bit for bit, and so does a circle with its
+  background's permittivity unless one of the two is being differentiated.
+- **What it changes.** `E_x` and `E_y` in those layers. `E_z` and `H` are the default's, bit for
+  bit: the reference stored no `H`, so the rule rebuilds `E` alone.
+- **How it works.** With `P` the convolution matrix of `w n n^T` and `Q` the inverse of the
+  matrix of `1/eps`, `D_n = (P Q + Q P)/2 E` and `E_t = (I - P) E`, and
+  `E = sum(D_n)/eps + sum(E_t)`. `n` is the circle's radial unit vector. `w` is a window: 1 within
+  `b/4` of the wall, falling as `cos^2` to 0 at `b`, where `b` is the smaller of the radius and
+  half the gap between the circle and its nearest image. The radial normal is right on the wall
+  and jumps at the circle's axis and at the cell's edge; the window keeps it away from both.
+  `Q` takes the same floor on a negative permittivity as the `'nvf'` solve.
+- **What it is measured against.** A 3D finite-element reference (gyptis, second-order edge
+  elements), over 2304 samples on the mid-layer plane, as the relative RMS error of the in-plane
+  field, with `factorization='nvf'`:
+
+  | Cell (nm), `eps` 12.25 in air, normal incidence | Order | `'plain'` | `'splitw'` |
+  | --- | --- | --- | --- |
+  | period 400, radius 100, thickness 150, at 900 | 8 | 13.6% | 2.4% |
+  | the same | 16 | 9.6% | 1.3% |
+  | period 1000, radius 280, thickness 200, at 1363 (`R` = 0.77) | 16 | 6.3% | 2.5% |
+
+  The first row is a test (`tests/references/test_gyptis_cylinder_field_golden.py`); the
+  reference's own next mesh level is 0.11% from it. On 16 dielectric circle cells at order 12
+  (radius 0.15 to 0.47 of the period, `eps` 2.25 to 25, one with loss) the rule's error was 0.06
+  to 0.67 times the default's on every one.
+- **Where it is not better, or not known.**
+  - Metals. At `eps = -20+1.5j`, order 12, the rule was 22% and 32% off on the two cells above,
+    the default 21% and 27%. Read the default in a layer that holds a metal.
+  - Right at the wall. On the second cell at order 16, `E_n` 0.3 nm either side of the wall is
+    still 18 to 59% off the reference. The plane error is a mean; do not read the rule's value
+    within a few nanometres of the wall as converged.
+  - A narrow window. Where the circle nearly fills the cell (radius 0.4 of the period and up),
+    the window is narrower than the orders resolve and the gain shrinks: 9.6% against 14.3% at
+    radius 0.47 of the period, order 12.
+  - The median. On the second cell the RMS gains 2.5 times and the median error does not: far
+    from the wall in the air the rule is slightly worse than the default.
+  - Spatial derivatives. The curl of the rule's `E` does not match the solve's `H_z` even 3 to
+    20 nm from the wall, where the default's does, being one series with `H`. For a curl, a
+    gradient of `|E|^2` or an optical force, read `'plain'`.
+  - Not measured: other shapes, several shapes in a layer, oblique incidence, and `H`. Oblique
+    incidence, both formulations, a wave given as a source and a stack of several layers run the
+    same operators and are tested for consistency, not against a reference.
+- **Derivatives.** With respect to the radius, the centre, a permittivity, a thickness or the
+  period, the derivative agrees with a finite difference off the wall, on JAX and PyTorch. As
+  with the line rule it holds each sample fixed and does not differentiate which side of the wall
+  a sample is on. The window's reach `b` has a kink where the radius is a quarter of the cell's
+  shorter side, and the two one-sided slopes differed there by 1.7 to 3.1% on the first cell
+  above. Under `jax.jit` a traced material or thickness works; a traced radius is refused by the
+  solve itself.
+- **Cost.** Each call samples the windowed normal on a 2048 by 2048 grid and builds two dense
+  operators over twice the orders: about a second per call at order 8, and 76 MB for each
+  operator at order 16, 2.8 GB at order 40. Sample all the points of a layer in one call.
+- **What it refuses, by name, with code `field.reconstruction`.** A rectangle, an ellipse, a
+  polygon, or several shapes in a layer; a raster; a tensor; a layer that names a permeability; a
+  1D grating; a skewed lattice or one with a negative side; matrices handed to `solve_conv`. For
+  walls along x and y, `'lalanne'` is the rule.
 
 ## Earlier-interface field calls
 

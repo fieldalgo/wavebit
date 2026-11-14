@@ -163,6 +163,8 @@ beside_walls = result.field(x=x, y=[0.], z=[50.], reconstruction="lalanne")
 
 Use `"lalanne"` for values beside a wall normal to the component: `D`, `eps*E_n`, or absorption next to a sidewall. Keep the default for a smooth map of where the field concentrates, for a spatial derivative across a wall the component runs along, for layers that hold a metal, and for derivatives of an area average with respect to a shape's position or size. The default stays `"plain"` because which rule is better depends on what is read. The [fields guide](../../guide/rcwa/fields.md), under *Normal components inside a patterned layer*, gives the measurements behind these choices and what each rule refuses.
 
+A layer that holds one circle takes a third rule, `reconstruction="splitw"`. It splits the in-plane field along the circle's normal near the wall and reads the normal part from `D` (M. Weismann, D. F. G. Gallagher and N. C. Panoiu, J. Opt. 17, 125612 (2015)). Against a finite-element reference it cut the error of the in-plane field over a plane from 9.6% to 1.3% on one dielectric cylinder at order 16. It is not better than the default on a metal, it changes `E` only, and its field is not for a spatial derivative. The guide's *A curved wall* section says where it applies.
+
 (illumination-fields)=
 (fields-detail-id23)=
 ## Incoming, outgoing, and total fields at boundaries
