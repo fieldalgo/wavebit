@@ -64,7 +64,7 @@ def main():
     digest = hashlib.sha256()
     for path in files:
         digest.update(path.relative_to(ROOT).as_posix().encode())
-        digest.update(path.read_bytes())
+        digest.update(path.read_bytes().replace(b'\r\n', b'\n'))
     report = dict(schema=1, source_sha256=digest.hexdigest(),
                   git_head=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT,
                                                    text=True).strip(),

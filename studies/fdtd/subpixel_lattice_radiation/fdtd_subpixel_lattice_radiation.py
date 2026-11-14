@@ -90,7 +90,7 @@ def main():
         raise ValueError('DuplicateMeasurementRefused')
     watched = sorted((ROOT/'src/wavebit/fdtd').rglob('*.py'))+[Path(__file__)]
     def hashes():
-        return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in watched}
+        return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in watched}
     before = hashes()
     rows = [evaluate(p) for p in args.inputs]
     if hashes() != before:

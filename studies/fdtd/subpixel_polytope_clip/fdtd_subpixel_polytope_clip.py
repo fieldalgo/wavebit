@@ -238,12 +238,15 @@ def plan_table():
 
 
 def source_digest():
-    """SHA-256 over every ``src/wavebit`` Python file's path and bytes: what this row ran on."""
+    """SHA-256 over every ``src/wavebit`` Python file's path and text: what this row ran on.
+
+    CRLF is read as LF, so a Windows ``core.autocrlf`` checkout hashes what macOS/Linux does.
+    """
     import hashlib
     digest = hashlib.sha256()
     for path in sorted((ROOT / 'src' / 'wavebit').rglob('*.py')):
         digest.update(path.relative_to(ROOT).as_posix().encode())
-        digest.update(path.read_bytes())
+        digest.update(path.read_bytes().replace(b'\r\n', b'\n'))
     return digest.hexdigest()
 
 

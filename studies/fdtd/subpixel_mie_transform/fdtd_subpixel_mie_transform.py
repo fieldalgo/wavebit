@@ -133,7 +133,7 @@ def main():
     watched = sorted((ROOT/'src/wavebit/fdtd').rglob('*.py'))+[
         Path(__file__), ROOT/'tests/references/mie.py', ROOT/'tests/references/mie_fields.py']
     def hashes():
-        return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in watched}
+        return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in watched}
     before = hashes()
     out = dict(status='running_analytic_diagnostic', source_sha256=before, rows=[])
     def save():

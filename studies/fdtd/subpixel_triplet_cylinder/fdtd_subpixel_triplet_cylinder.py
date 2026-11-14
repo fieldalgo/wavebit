@@ -272,7 +272,7 @@ def main():
         Path(__file__)]
     def hashes():
         return {(p.relative_to(ROOT).as_posix() if p.is_relative_to(ROOT) else p.name):
-                hashlib.sha256(p.read_bytes()).hexdigest() for p in watched}
+                hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in watched}
     source=hashes()
     out=dict(status='running_research_comparator',pid=os.getpid(),source_sha256=source,
              public_scene_preparation=False,method='symmetric_edge_face_triplets',rows=[],references=[])
