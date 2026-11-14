@@ -206,7 +206,7 @@ def run(attempt):
         target = RESULTS/f'{PREFIX}_targeted.json'
         targeted, baseline, collection = saved_targeted(target)
         specs = mutations()
-        functions = {TEST+'::'+node.name for node in ast.parse((ROOT/TEST).read_text()).body
+        functions = {TEST+'::'+node.name for node in ast.parse((ROOT/TEST).read_text(encoding='utf-8')).body
                      if isinstance(node, ast.FunctionDef) and node.name.startswith('test_')}
         support.require(len(specs) == 13 and len({s[0] for s in specs}) == 13,
                         'Exactly thirteen unique reviewed mechanisms are required.')

@@ -15,7 +15,7 @@ import studies.cross_solver.metasurface_tall.fdtd_metasurface_tall_time as study
 
 def main():
     study.verify()
-    result = json.loads((study.RESULTS/'fdtd_metasurface_tall_time_report.json').read_text())
+    result = json.loads((study.RESULTS/'fdtd_metasurface_tall_time_report.json').read_text(encoding='utf-8'))
     ps = result['periods']
     rows = [result['rows'][str(p)] for p in ps]
     fig,axes = plt.subplots(1,2,figsize=(11,5.4))

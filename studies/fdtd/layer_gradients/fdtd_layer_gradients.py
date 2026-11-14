@@ -90,4 +90,4 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    args.output.write_text(json.dumps(measure(), indent=2)+'\n')
+    args.output.write_text(json.dumps(measure(), indent=2)+'\n', encoding='utf-8')

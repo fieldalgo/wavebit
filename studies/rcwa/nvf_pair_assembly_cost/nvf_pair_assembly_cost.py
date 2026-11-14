@@ -85,7 +85,7 @@ def main():
         child(args)
         return
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    with args.out.open("a") as sink, tempfile.TemporaryDirectory(prefix="nvf-assembly-") as scratch:
+    with args.out.open("a", encoding='utf-8') as sink, tempfile.TemporaryDirectory(prefix="nvf-assembly-") as scratch:
         def emit(row):
             line = json.dumps(row)
             sink.write(line+"\n")

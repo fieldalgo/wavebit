@@ -35,7 +35,7 @@ def main():
                nvf_periodic_galerkin, nvf_pair_material_sector)
     sources = [Path(module.__file__) for module in modules]+[Path(__file__)]
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    with args.out.open('a') as sink:
+    with args.out.open('a', encoding='utf-8') as sink:
         def emit(row):
             line = json.dumps(row)
             sink.write(line+'\n'); sink.flush(); print(line, flush=True)

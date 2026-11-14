@@ -96,7 +96,7 @@ def identity():
 def verify():
     parent.verify()
     calibration.verify()
-    reg = json.loads(REG.read_text())
+    reg = json.loads(REG.read_text(encoding='utf-8'))
     assert reg['identity']==identity()
     assert parent.sha(RESULTS/reg['copy'])==reg['identity']['source']
     return reg
@@ -232,7 +232,7 @@ def execute(job):
     with logfile.open('x',encoding='utf-8') as stream:
         got = subprocess.run([sys.executable,__file__,'worker',json.dumps(job),str(output)],
                              cwd=ROOT,stdout=stream,stderr=subprocess.STDOUT)
-    row = json.loads(output.read_text()) if output.exists() else dict(
+    row = json.loads(output.read_text(encoding='utf-8')) if output.exists() else dict(
         key=key(job),job=job,scene=job[1],kind='fd',status='error',
         error='Worker exited without result',fingerprint=reg['fingerprint'])
     row.update(worker_exit=got.returncode,attempt=attempt,raw_file=output.name,raw_log=logfile.name)
@@ -302,7 +302,7 @@ def report(stop_reason=None):
     gap = max(abs(complex(*a['values'][k][i])-complex(*b['values'][k][i])) for k in a['values'] for i in range(3))
     valid = gap<=SAME and all(not validity(rows,name) for name in HEIGHTS)
     if stop_reason is None and not valid and REPORT.exists():
-        previous = json.loads(REPORT.read_text())
+        previous = json.loads(REPORT.read_text(encoding='utf-8'))
         if previous.get('stop_reason'):
             stop_reason = previous['stop_reason']
     if gap>SAME:

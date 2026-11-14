@@ -378,7 +378,7 @@ def main():
                       'min/max', min((r['min_over_max'] for r in rows if 'min_over_max' in r),
                                      default=None), flush=True)
     args.output.write_text(json.dumps(dict(cells=cells, results=results,
-                                          seconds=time.perf_counter() - start), indent=2))
+                                          seconds=time.perf_counter() - start), indent=2), encoding='utf-8')
     return 0
 
 

@@ -92,7 +92,7 @@ def main():
     assert interval(1., 1., 1.) is None
     c7.PROV = c7.provenance()
     registration_path = ROOT / 'studies/cross_solver/metasurface/records/fdtd_metasurface_rcwa_registration.json'
-    registration = json.loads(registration_path.read_text())
+    registration = json.loads(registration_path.read_text(encoding='utf-8'))
     assert registration['sha256'] == sha(c7.__file__)
     assert registration['digest'] == c7.PROV['digest']
     rows = c7.load(c7.LOG)

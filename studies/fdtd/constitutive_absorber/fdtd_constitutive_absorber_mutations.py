@@ -363,7 +363,7 @@ def main(attempt):
                                 inside(baseline['log']).read_text(encoding='utf-8'))
         require(observed == baseline['observed'] and observed['totals']['passed'] == observed['collected'],
                 'Targeted baseline has unverified or nonpassed cases.')
-        functions = sorted(n.name for n in ast.parse(inside(NEW_TEST).read_text()).body
+        functions = sorted(n.name for n in ast.parse(inside(NEW_TEST).read_text(encoding='utf-8')).body
                            if isinstance(n, ast.FunctionDef) and n.name.startswith('test_'))
         require(set(functions) == {s['test_function'] for s in SPECS}, 'Every actual test function needs a witness.')
         record.update(targeted_manifest_sha256=sha(targetpath), targeted_manifest=relative(targetpath),

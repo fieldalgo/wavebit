@@ -33,7 +33,7 @@ def main():
     if any(q % 2 or q < max(8, 2*max(args.orders)+4) for q in args.quadratures):
         parser.error('quadratures must be even and at least max(8, 2*max(orders)+4)')
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    with args.out.open('a') as sink:
+    with args.out.open('a', encoding='utf-8') as sink:
         def emit(row):
             line = json.dumps(row)
             sink.write(line+'\n')

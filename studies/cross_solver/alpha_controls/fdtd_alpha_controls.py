@@ -83,10 +83,10 @@ def main():
                 if a in solutions and b in solutions:
                     entry['comparisons'][f'{a}_to_{b}'] = gaps(solutions[a], solutions[b])
             args.output.parent.mkdir(parents=True, exist_ok=True)
-            args.output.write_text(json.dumps(report, indent=2, allow_nan=False) + '\n')
+            args.output.write_text(json.dumps(report, indent=2, allow_nan=False) + '\n', encoding='utf-8')
             print(name, label, entry['runs'][label], entry['comparisons'], flush=True)
     report['complete'] = True
-    args.output.write_text(json.dumps(report, indent=2, allow_nan=False) + '\n')
+    args.output.write_text(json.dumps(report, indent=2, allow_nan=False) + '\n', encoding='utf-8')
 
 
 if __name__ == '__main__':

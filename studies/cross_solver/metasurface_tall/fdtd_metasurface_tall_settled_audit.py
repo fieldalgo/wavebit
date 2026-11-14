@@ -14,17 +14,17 @@ def calibration_audit():
     """Recompute the calibration record without rewriting a frozen input."""
     cal, parent = study.calibration, study.parent
     reg = cal.verify()
-    ledger = [json.loads(s) for s in cal.LOG.read_text().splitlines() if s.strip()]
+    ledger = [json.loads(s) for s in cal.LOG.read_text(encoding='utf-8').splitlines() if s.strip()]
     assert len(ledger)==len(cal.PERIODS)==len(parent.read_rows(cal.LOG))
     assert {r['periods'] for r in ledger}==set(cal.PERIODS)
     raw_files, logs = set(),set()
-    rows = {p:json.loads(f.read_text()) for p,f in zip((120,180),cal.INPUTS[-2:])}
+    rows = {p:json.loads(f.read_text(encoding='utf-8')) for p,f in zip((120,180),cal.INPUTS[-2:])}
     for row in ledger:
         assert row['fingerprint']==reg['fingerprint'] and row['status']=='ok'
         assert row['worker_exit']==0 and row['attempt']==1
         assert datetime.datetime.fromisoformat(reg['registered']) < datetime.datetime.fromisoformat(
             row['started']) < datetime.datetime.fromisoformat(row['finished'])
-        raw = json.loads((cal.JOBS/row['raw_file']).read_text())
+        raw = json.loads((cal.JOBS/row['raw_file']).read_text(encoding='utf-8'))
         assert all(row[k]==v for k,v in raw.items())
         raw_files.add(row['raw_file'])
         logs.add(row['raw_log'])
@@ -33,7 +33,7 @@ def calibration_audit():
     assert logs=={p.name for p in cal.JOBS.glob('*.log')}
     report_path = study.RESULTS/(cal.PREFIX+'_report.json')
     before = parent.sha(report_path)
-    saved = json.loads(report_path.read_text())
+    saved = json.loads(report_path.read_text(encoding='utf-8'))
     assert saved['fingerprint']==reg['fingerprint'] and saved['spatial_order_verdict'] is None
     assert saved['periods']==sorted(rows) and len(saved['cells'])==54
     vals = {p:parent.values(row,40) for p,row in rows.items()}
@@ -56,7 +56,7 @@ def main():
     reg = study.verify()
     calibration = calibration_audit()
     registered = datetime.datetime.fromisoformat(reg['registered'])
-    ledger = [json.loads(s) for s in study.LOG.read_text().splitlines() if s.strip()]
+    ledger = [json.loads(s) for s in study.LOG.read_text(encoding='utf-8').splitlines() if s.strip()]
     sources = {p.name:study.parent.read_rows(p) for p in (study.parent.LOG,study.calibration.LOG)}
     imported,completed = 0,0
     raw_files,logs = set(),set()
@@ -72,7 +72,7 @@ def main():
             imported += 1
         else:
             assert row['worker_exit']==0 and row['attempt']==1
-            raw = json.loads((study.JOBS/row['raw_file']).read_text())
+            raw = json.loads((study.JOBS/row['raw_file']).read_text(encoding='utf-8'))
             assert all(row[k]==v for k,v in raw.items())
             assert datetime.datetime.fromisoformat(row['started'])>registered
             assert datetime.datetime.fromisoformat(row['finished'])>datetime.datetime.fromisoformat(row['started'])
@@ -82,7 +82,7 @@ def main():
     assert len(ledger)==len(study.parent.read_rows(study.LOG))
     assert raw_files=={p.name for p in study.JOBS.glob('*.json')}
     assert logs=={p.name for p in study.JOBS.glob('*.log')}
-    saved = json.loads(study.REPORT.read_text())
+    saved = json.loads(study.REPORT.read_text(encoding='utf-8'))
     got = study.report(saved.get('stop_reason'))
     assert saved==json.loads(json.dumps(got))
     assert len(got['scenes']['base'])==len(got['scenes']['tall'])==54

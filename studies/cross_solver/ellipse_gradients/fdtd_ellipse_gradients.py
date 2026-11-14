@@ -124,4 +124,4 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--smoothing', type=float, default=.05)
     args = parser.parse_args()
-    args.output.write_text(json.dumps(measure(args.smoothing), indent=2, allow_nan=False)+'\n')
+    args.output.write_text(json.dumps(measure(args.smoothing), indent=2, allow_nan=False)+'\n', encoding='utf-8')

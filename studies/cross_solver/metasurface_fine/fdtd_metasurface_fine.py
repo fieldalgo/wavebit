@@ -134,7 +134,7 @@ def fingerprint():
 
 
 def verify():
-    record = json.loads(REG.read_text())
+    record = json.loads(REG.read_text(encoding='utf-8'))
     if record['identity'] != identity() or sha(RESULTS / record['copy']) != record['identity']['source']:
         raise RuntimeError('Study, package, dependencies, versions or historical inputs changed.')
     return record
@@ -181,7 +181,7 @@ def configure(name, variant='base'):
 
 
 def preflight():
-    old = json.loads(ridge.REGISTRATION.read_text())
+    old = json.loads(ridge.REGISTRATION.read_text(encoding='utf-8'))
     assert old['sha256'] == sha(ridge.__file__)
     assert all(sha(HERE / name) == digest for name, digest in old['dependencies'].items())
     measured = ridge.provenance()
@@ -235,7 +235,7 @@ def register():
 
 def import_history():
     old = read_rows(ridge.LOG)
-    oldreg = json.loads(ridge.REGISTRATION.read_text())
+    oldreg = json.loads(ridge.REGISTRATION.read_text(encoding='utf-8'))
     done = read_rows(LOG)
     expected = []
     for name in ('Y12', 'F12'):

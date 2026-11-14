@@ -164,7 +164,7 @@ def append(row):
 
 def old_rows():
     c7.PROV = c7.provenance()
-    old = json.loads(OLD_REG.read_text())
+    old = json.loads(OLD_REG.read_text(encoding='utf-8'))
     assert old['sha256'] == sha(c7.__file__)
     assert old['digest'] == c7.PROV['digest']
     assert old['rcwa']['M3'] == c7.PROV['rcwa']['M3']

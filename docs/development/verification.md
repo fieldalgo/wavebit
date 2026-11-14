@@ -35,8 +35,9 @@ commit missing from SHA ancestry alone.
 
 Use portable path, temporary-directory and subprocess APIs with explicit encodings.
 `tests/api/test_text_encoding.py` checks the file part: every `open`, `Path.open`,
-`read_text` and `write_text` in `src`, `tests`, `tools`, `examples`, `tutorials` and
-`docs` must name its encoding, since the locale's codec is cp949 or cp1252 on Windows.
+`read_text` and `write_text` in `src`, `tests`, `tools`, `examples`, `tutorials`, `docs`
+and `studies` must name its encoding, since the locale's codec is cp949 or cp1252 on
+Windows. Only files whose bytes `tools/relocations.json` preserves are exempt.
 Verify OS-sensitive behavior without weakening numerical gates or hiding failures
 with unexplained skips. English is canonical; update Korean documentation alongside
 its English counterpart. Keep executable examples and code in English.

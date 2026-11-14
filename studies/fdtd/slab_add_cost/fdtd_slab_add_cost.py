@@ -437,7 +437,7 @@ def dus_kernels(name):
     dump = max(glob.glob(os.path.join(DUMP, f'*jit_{name}.*buffer-assignment.txt')), key=os.path.getmtime)
     prefix = os.path.basename(dump).split('.')[0]
     files = glob.glob(os.path.join(DUMP, f'{prefix}.jit_{name}.*dynamic-update-slice*ir-with-opt.ll'))
-    return open(dump).read(), [open(f).read() for f in files]
+    return open(dump, encoding='utf-8').read(), [open(f, encoding='utf-8').read() for f in files]
 
 
 def hlo_evidence(program, args, n):
@@ -860,7 +860,7 @@ def main():
     lines = variants_section(report) if opts.section == 'all' else []
     lines += primitives_section(report)
     print('\n'.join(lines))
-    with open(out_path, 'w') as f:
+    with open(out_path, 'w', encoding='utf-8') as f:
         json.dump(report, f, indent=1, allow_nan=False)
     shutil.rmtree(DUMP, ignore_errors=True)
 

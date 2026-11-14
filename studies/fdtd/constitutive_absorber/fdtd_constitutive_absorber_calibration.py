@@ -52,8 +52,8 @@ def read_worker(row, expected_config, expected_identity):
     require(sha(log) == row['log_sha256'] and sha(result_path) == row['result_sha256'],
             'Worker raw log/result hash differs.')
     require(sha(ROOT/row['config']) == row['config_sha256'], 'Worker configuration hash differs.')
-    require(json.loads((ROOT/row['config']).read_text()) == expected_config, 'Written worker config differs.')
-    result = json.loads(result_path.read_text())
+    require(json.loads((ROOT/row['config']).read_text(encoding='utf-8')) == expected_config, 'Written worker config differs.')
+    result = json.loads(result_path.read_text(encoding='utf-8'))
     require(result['config'] == expected_config and result['complete']
             and all(result['checks'].values()), 'Worker did not complete the declared fixture.')
     require(result['source_before'] == result['source_after'] == expected_identity,

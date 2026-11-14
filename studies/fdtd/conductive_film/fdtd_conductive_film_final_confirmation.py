@@ -155,7 +155,7 @@ def mutations():
     manifest['all_nine_assertion_witnesses'] = (
         len(manifest['witnesses']) == 9 and all(w['accepted'] for w in manifest['witnesses']))
     manifest['passed'] = bool(manifest['all_nine_assertion_witnesses'] and manifest['restored']
-                              and code == 0 and re.search(r'53 passed', final.read_text()))
+                              and code == 0 and re.search(r'53 passed', final.read_text(encoding='utf-8')))
     manifest['ended_utc'] = campaign.now()
     for item in linked:
         assert campaign.sha(RESULTS / item['file']) == item['sha256'], item['file']
@@ -215,7 +215,7 @@ def register():
 
     for path in (ORIGINAL_REGISTRATION, ORIGINAL_LEDGER, ORIGINAL_REPORT):
         add(path, 'Original campaign completed before this confirmation; outcomes are known.')
-    prior_entries = [json.loads(line) for line in ORIGINAL_LEDGER.read_text().splitlines()]
+    prior_entries = [json.loads(line) for line in ORIGINAL_LEDGER.read_text(encoding='utf-8').splitlines()]
     assert len(prior_entries) == 20 and all(entry['exit_code'] == 0 for entry in prior_entries)
     for entry in prior_entries:
         for name in ('raw_log', 'result'):
@@ -271,7 +271,7 @@ def compare_and_audit():
     audited = campaign.audit()
     mutation_evidence()
     old_entries = {entry['key']: entry for entry in
-                   (json.loads(line) for line in ORIGINAL_LEDGER.read_text().splitlines())}
+                   (json.loads(line) for line in ORIGINAL_LEDGER.read_text(encoding='utf-8').splitlines())}
     new_entries = {entry['key']: entry for entry in campaign.ledger()}
     assert old_entries.keys() == new_entries.keys(), 'confirmation and original job sets differ'
     fields = ('r', 't', 'R', 'T', 'absorption', 'error_r', 'error_t', 'decay', 'energy_max',

@@ -20,8 +20,8 @@ def main():
     halt = json.loads((study.RESULTS/'fdtd_metasurface_tall_halt.json').read_text(encoding='utf-8-sig'))
     assert halt['status']=='aborted_after_validity_failure'
     registered = datetime.datetime.fromisoformat(reg['registered'])
-    ledger = [json.loads(line) for line in study.LOG.read_text().splitlines() if line.strip()]
-    old = {p.name: [json.loads(s) for s in p.read_text().splitlines() if s.strip()]
+    ledger = [json.loads(line) for line in study.LOG.read_text(encoding='utf-8').splitlines() if line.strip()]
+    old = {p.name: [json.loads(s) for s in p.read_text(encoding='utf-8').splitlines() if s.strip()]
            for p in (study.c7.LOG, study.c7.RCWA_LOG)}
     imported, workers, stopped = 0, 0, 0
     attempts, logs = [], []
@@ -45,7 +45,7 @@ def main():
                 stopped += 1
                 continue
             assert row['worker_exit'] == 0 and row['status'] == 'ok'
-            raw = json.loads((study.JOBS/row['raw_file']).read_text())
+            raw = json.loads((study.JOBS/row['raw_file']).read_text(encoding='utf-8'))
             assert all(row[k] == v for k,v in raw.items())
             assert datetime.datetime.fromisoformat(row['started']) > registered
             assert datetime.datetime.fromisoformat(row['finished']) > datetime.datetime.fromisoformat(row['started'])

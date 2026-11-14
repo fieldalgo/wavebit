@@ -41,7 +41,7 @@ def main():
     if any(n < 0 for n in args.orders):
         parser.error('orders must be nonnegative')
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    with args.out.open('a') as sink:
+    with args.out.open('a', encoding='utf-8') as sink:
         def emit(row):
             line = json.dumps(row)
             sink.write(line+'\n')

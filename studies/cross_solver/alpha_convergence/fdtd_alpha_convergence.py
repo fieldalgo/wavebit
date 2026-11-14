@@ -78,7 +78,7 @@ def main():
 
     def save():
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(json.dumps(report, indent=2, allow_nan=False) + '\n')
+        args.output.write_text(json.dumps(report, indent=2, allow_nan=False) + '\n', encoding='utf-8')
 
     for name, case in CASES.items():
         common = dict(wavelength=case['wavelength'], period=list(case['period']),
