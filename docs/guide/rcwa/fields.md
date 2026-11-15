@@ -345,12 +345,15 @@ metadata records the rule under `'reconstruction'` when it is not the default. T
   `eps = -20+0.1j`, order 3, the rule's peak is typically 3 times the default's and up to 4000
   times at the worst fill. Compare two truncations before trusting a peak on a metal line.
   Measured on a metal square (`eps` -20+1.5j, side 200 nm in a 400 nm cell, 150 nm thick, normal
-  incidence at 900 nm, `factorization='li'`) against an FDTD reference (Meep, 5 nm cells, which is
-  0.8% from its own 6.7 nm run), off the walls by 15 nm: the default is 21 / 19 / 13 / 14% of the
-  plane's RMS field away at orders 8 / 12 / 16 / 20 and the rule 31 / 26 / 21 / 20%. Inside the
-  metal the rule is the closer one, 8 / 6 / 5 / 4% against 27 / 15 / 17 / 13%; outside it is not.
-  The solve itself is the limit: its `R` is 0.351 to 0.352 at those orders where the reference
-  has 0.342, and `'nvf'` on the same square is further off than `'li'`. The same square as a
+  incidence at 900 nm, `factorization='li'`) against a 3D finite-element reference (gyptis,
+  second-order edge elements; its next coarser mesh is 0.6% of the plane's RMS field from it),
+  over 2304 samples of the mid-layer plane: the default is 32 / 26 / 23 / 18% of the plane's RMS
+  field away at orders 8 / 12 / 16 / 20 and the rule 35 / 30 / 27 / 23%. Inside the metal the
+  rule is the closer one, 9 / 8 / 6 / 6% against 48 / 20 / 34 / 20%; outside it is not. The
+  solve's `R` is 0.351 to 0.352 at those orders where the reference has 0.356. An FDTD solution
+  of the same square (Meep, 5 nm cells) is 3.9% from the reference, with `R` 0.342: on a metal
+  with corners it is the weaker check of the two. Against that FDTD solution, 15 nm or more off
+  the walls, `'nvf'` on the same square is further off than `'li'`, and the same square as a
   dielectric (`eps` 12.25) reads 2.0 / 1.2 / 0.9% for the rule against 5.7 / 4.0 / 2.6% at orders
   8 / 12 / 16.
 - **One order along an axis.** The lines still read the walls along that axis, though the solve
