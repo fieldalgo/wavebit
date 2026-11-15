@@ -289,7 +289,8 @@ def test_the_jax_path_is_one_loop_and_not_one_copy_per_chunk():
     value test cannot see that. Counting primitives can, and costs nothing -- `make_jaxpr`
     traces without allocating, so this runs at any grid.
 
-    `argmin` is the marker because `_nearest` has exactly one per copy of the body. Under the
+    `argmax` is the marker because `_nearest` has exactly one per copy of the body (its
+    tie-tolerant pick, `_nearest_index`, which replaced an `argmin` on 2026-11-15). Under the
     old loop the count is `ceil(npix / chunk)` and rises with the grid; under `lax.scan` it is
     one at every grid, next to one `scan`.
     """
@@ -301,10 +302,10 @@ def test_the_jax_path_is_one_loop_and_not_one_copy_per_chunk():
     for n in (64, 128, 256):
         text = str(jax.make_jaxpr(lambda: _b.distance_gradient_normal_field(
             jnp, [V], (n, n), CELL, jnp.float64))())
-        seen.append((text.count('argmin'), text.count('scan')))
+        seen.append((text.count('argmax'), text.count('scan')))
 
     assert seen == [(1, 1)] * 3, (
-        f'expected one argmin and one scan at every grid, got {seen}. More than one argmin '
+        f'expected one argmax and one scan at every grid, got {seen}. More than one argmax '
         f'means the body was unrolled once per chunk -- the JAX branch in '
         f'`_scanned_normals` is not being taken, and the memory this fix bought is gone '
         f'while every value stays right.')
@@ -951,7 +952,7 @@ def test_a_hole_inside_a_hole_is_material_again():
 
 
 def test_the_normal_field_does_not_care_which_way_a_hole_is_wound():
-    """The one output the winding *does* touch, and the measurement that says to accept it.
+    """Reversing a hole's winding moves no sample of the field, ties included.
 
     ``conv_mats`` hands the loops to the normal field exactly as the clipper produced them,
     holes wound clockwise included. That is safe by construction: the field is the direction to
@@ -959,17 +960,16 @@ def test_the_normal_field_does_not_care_which_way_a_hole_is_wound():
     wound, and only ``normal_x**2``, ``normal_x*normal_y``, ``normal_y**2`` are consumed, so the vector's own sign
     cancels as well.
 
-    Safe, but not bit-invariant, and the difference is pinned here precisely rather than hidden
-    under a loose tolerance. Reversing a loop renumbers its edges, so ``argmin`` breaks its
-    *exact* ties the other way. Measured: 20 pixels of 65536 move, each by 0.024541 in
-    ``normal_x**2`` -- ``sin(2*pi/256)``, one facet of the polygonised disc, so the tie is between two
-    adjacent facets. That is 6.0e-6 in ``c_xx`` and ``c_yy``, 7.0e-18 in ``c_xy``.
-
-    The last block is the part that decides it: against the **ideal** circle's radial normal,
-    both windings are wrong by 0.7031 degrees on every one of those pixels, and the two errors
-    sum to 1.4062 = 360/256, exactly one facet step. An exact tie -- so there is no accuracy
-    argument for normalising the loops before the field, and normalising would put back the
-    orientation conversion the clipper was rewritten to remove.
+    Until 2026-11-15 it was safe but not bit-invariant, and this test pinned the difference.
+    Reversing a loop renumbers its edges, and ``argmin`` broke its *exact* ties by index: 20
+    pixels of 65536 moved, each by 0.024541 in ``normal_x**2`` -- ``sin(2*pi/256)``, one facet of the
+    polygonised disc, the tie between two adjacent facets -- 6.0e-6 in ``c_xx`` and ``c_yy``. Against
+    the ideal circle's radial normal both windings were wrong by 0.7031 degrees on those pixels,
+    an exact tie with no accuracy argument either way. A tie inside a rounding margin, broken
+    by the lowest index, moved more of them (1.6e-5 in the coefficients). The nearest segment
+    now breaks a tie by its *foot*, lowest ``x`` then ``y`` (``boundary._nearest_index``), a point
+    of the geometry that a reversed edge shares: measured, the field moves by 1.1e-14 at most
+    and the coefficients by 7e-18.
     """
     recs, regions, _, _ = _b.plan_layer(ENCLOSED_SHAPES, CELL)
     verts = [_b.shape_vertices(xnp, s, CELL) for s in ENCLOSED_SHAPES]
@@ -983,33 +983,14 @@ def test_the_normal_field_does_not_care_which_way_a_hole_is_wound():
     b = _b.normal_projector_coeffs(xnp, ccw, (256, 256), CELL, 6, 6,
                                    xnp.float64, xnp.complex128)
     for got, want in zip(a, b):
-        assert np.abs(np.asarray(got) - np.asarray(want)).max() < 1e-5
+        assert np.abs(np.asarray(got) - np.asarray(want)).max() < 1e-15   # measured 7.0e-18
 
     fa = _b.distance_gradient_normal_field(xnp, asis, (256, 256), CELL, xnp.float64)
     fb = _b.distance_gradient_normal_field(xnp, ccw, (256, 256), CELL, xnp.float64)
-    moved = None
     for u, v in zip(fa, fb):
         # squared, because the field's own sign is meaningless -- see the docstring
         d = np.abs(np.asarray(u) ** 2 - np.asarray(v) ** 2)
-        m = d > 1e-12
-        # counted, not bounded: a genuine dependence on the winding would move the *field*,
-        # not twenty pixels of it, and a plain max() would read the same either way.
-        assert int(m.sum()) < 100, int(m.sum())
-        assert float(d[m].max()) == pytest.approx(np.sin(2 * np.pi / 256), abs=1e-6)
-        moved = m if moved is None else (moved | m)
-
-    # neither winding is closer to the true normal of the circle the polygon approximates
-    axis = (np.arange(256) + 0.5) / 256
-    X, Y = np.meshgrid(axis, axis)
-    dx, dy = X - 0.5, Y - 0.5
-    rad = np.hypot(dx, dy)
-    ux, uy = dx / rad, dy / rad
-    errs = []
-    for f in (fa, fb):
-        cos = np.abs(np.asarray(f[0]) * ux + np.asarray(f[1]) * uy)
-        errs.append(np.degrees(np.arccos(np.clip(cos[moved], -1.0, 1.0))))
-    assert errs[0].mean() == pytest.approx(errs[1].mean(), abs=1e-9)      # an exact tie
-    assert errs[0].mean() + errs[1].mean() == pytest.approx(360.0 / 256, abs=1e-3)
+        assert float(d.max()) < 1e-12, int((d > 1e-12).sum())          # measured 1.1e-14
 
 
 # ------------------------------------------------- the painting plan across backends
@@ -1763,3 +1744,93 @@ def test_continued_endpoints_in_row_blocks_match_the_one_array_form(backend, mon
         got = boundary._continued_in_pair(xp, arr(a), arr(e), arr(l2), arr(valid), tol2, rows=rows)
         for g, w in zip(got, want):
             np.testing.assert_array_equal(np.asarray(g), w, err_msg=f'rows={rows}')
+
+
+# --------------------------------------------------------------------------- medial-axis ties
+def _square_box(cx, cy, lx, ly, angle=0.0):
+    c, s = np.cos(angle), np.sin(angle)
+    corners = np.array([[-lx / 2, -ly / 2], [lx / 2, -ly / 2], [lx / 2, ly / 2], [-lx / 2, ly / 2]])
+    return np.stack([cx + c * corners[:, 0] - s * corners[:, 1],
+                     cy + s * corners[:, 0] + c * corners[:, 1]], axis=-1)
+
+
+_HEXAGONAL = np.array([[1.0, -0.5], [0.0, np.sqrt(3.0) / 2.0]])
+_HEX_CENTRE = (0.25, np.sqrt(3.0) / 4.0)
+#: cell, loops (one region each, permittivity 4, 9, ...): outlines whose medial axis a grid samples.
+_MEDIAL_SCENES = {
+    'box at 45 deg': (np.eye(2), [_square_box(0.5, 0.5, 0.5, 0.5, np.pi / 4)]),
+    'regular hexagon': (_HEXAGONAL, [np.stack([_HEX_CENTRE[0] + 0.3 * np.cos(np.pi * np.arange(6) / 3),
+                                               _HEX_CENTRE[1] + 0.3 * np.sin(np.pi * np.arange(6) / 3)],
+                                              axis=-1)]),
+    'two boxes, mirrored': (np.eye(2), [_square_box(0.25, 0.5, 0.3, 0.15, 0.3),
+                                        _square_box(0.75, 0.5, 0.3, 0.15, -0.3)]),
+}
+
+
+def _medial_fields(xp, name, grid):
+    """The hard nearest field the tensor layers read, and the raw probe's dyad, on ``xp``."""
+    from wavebit._common.geometry.interfaces import (interface_contrasts, plan_interfaces,
+                                                     replay_interfaces)
+    from wavebit.lattice import reduction_transform
+    cell, loops = _MEDIAL_SCENES[name]
+    A = as_lattice(lattice=cell)
+    transform = reduction_transform(A)
+    plan = plan_interfaces([(4.0 + 5 * k, [v]) for k, v in enumerate(loops)], A, transform)
+    regions = [(4.0 + 5 * k, [xp.asarray(v, dtype=xp.float64)]) for k, v in enumerate(loops)]
+    segments = replay_interfaces(xp, regions, 1.0, A, transform, plan)
+    contrasts = interface_contrasts(xp, regions, 1.0, plan, xp.float64)
+    nearest = _b.material_projector_fields(xp, (grid, grid), A, xp.float64, segments, contrasts,
+                                           plan, transform, average=False)
+    nx, ny = _b.distance_gradient_normal_field(xp, [r[1][0] for r in regions], (grid, grid), A,
+                                               xp.float64, transform=transform)
+    return list(nearest) + [nx * nx, nx * ny, ny * ny]
+
+
+def _medial_ties(name, grid):
+    """Samples whose two nearest feet are distinct and equally near to 1e-12: an independent count."""
+    from wavebit.lattice import reduction_transform
+    cell, loops = _MEDIAL_SCENES[name]
+    A = as_lattice(lattice=cell)
+    transform = reduction_transform(A)
+    a, e, l2 = _b.segments_of(xnp, loops)
+    a, e, l2 = _b.periodic_segments(xnp, a, e, l2, lattice=A, transform=transform)
+    pts = np.asarray(_b._folded_sample_points(xnp, (grid, grid), A, np.float64, transform))
+    d = pts[:, None, :] - np.asarray(a)[None]
+    t = np.clip((d * np.asarray(e)[None]).sum(-1) / np.asarray(l2)[None], 0.0, 1.0)
+    foot = np.asarray(a)[None] + t[..., None] * np.asarray(e)[None]
+    d2 = ((pts[:, None, :] - foot) ** 2).sum(-1)
+    order = np.argsort(d2, axis=1)
+    rows = np.arange(len(pts))[:, None]
+    d2, foot = d2[rows, order], foot[rows, order]
+    apart = np.linalg.norm(foot - foot[:, :1], axis=-1) > 1e-9
+    return int(np.count_nonzero(np.any((d2 - d2[:, :1] < 1e-12) & apart, axis=1)))
+
+
+@pytest.mark.parametrize('name, grid', [('box at 45 deg', 13), ('box at 45 deg', 65),
+                                        ('regular hexagon', 21), ('two boxes, mirrored', 65)])
+def test_a_medial_axis_sample_reads_one_segment_on_every_backend(name, grid):
+    """Two segments equally near a sample give it one normal on NumPy, PyTorch, JAX and jit.
+
+    A symmetric outline puts its medial axis on the grid: a box at 45 deg samples both its
+    diagonals, a regular hexagon on the hexagonal cell its mirrors, and two mirror-image boxes of
+    different materials the mirror between them. The feet there are distinct and their normals
+    mirror images, so the pick decides the dyad. ``argmin`` kept the first of *bitwise* equal
+    squared distances and ``argsort`` ordered the material pairs by them, so rounding chose, and
+    JAX's compiled body (``lax.scan``, eager or jitted) rounds apart from NumPy and PyTorch: it
+    read the other foot at 4 and 25 samples on the box at grids 13 and 65 and at 1 on the
+    hexagon at 21, and gave the other material pair the mass at 1 sample of the mirrored pair at
+    65 (2026-11-15). Within 64 eps of the cell the lowest index now wins, in both fields.
+    """
+    torch = pytest.importorskip('torch')
+    jax = pytest.importorskip('jax')
+    import array_api_compat.torch as atorch
+    jnp = pytest.importorskip('jax.numpy')
+    assert _medial_ties(name, grid) >= 1                       # the medial axis is on the grid
+    want = [np.asarray(f) for f in _medial_fields(xnp, name, grid)]
+    with jax.enable_x64(True):
+        got = {'torch': [f.numpy() for f in _medial_fields(atorch, name, grid)],
+               'jax': [np.asarray(f) for f in _medial_fields(jnp, name, grid)],
+               'jax.jit': [np.asarray(f) for f in jax.jit(lambda: _medial_fields(jnp, name, grid))()]}
+    for backend, fields in got.items():
+        for k, (g, w) in enumerate(zip(fields, want)):
+            assert np.abs(g - w).max() < 1e-9, (backend, k)
