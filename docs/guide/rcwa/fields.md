@@ -451,9 +451,16 @@ default stays `'plain'`.
   - A circle moved across the cell gives the same field moved, exactly. These shapes are sampled
     where they are: moved together they gave the same field to 3e-4 of a field of order 1 with
     `'split'` and 3e-5 with `'splitw'`.
-  - Not measured on these shapes: a metal (the rules answer inside it only, as on one circle),
-    circles of different radii, more than two circles, an ellipse of another aspect, oblique
-    incidence.
+  - The same two layers as a metal (`eps` -20+1.5j), against finite-element references of their
+    own that are not stored here. The rules answer inside the metal only, as on one circle, and
+    there they were 2.1 to 3.7 times closer than the sum at orders 8, 12 and 16: 30 to 75% of the
+    plane's RMS field for the sum, 11 to 32% for `'split'`, and `'splitw'` within a tenth of that.
+    Over the whole plane the gain is small, 26 to 56% against 23 to 50%, because the air side keeps
+    the sum. The solve's `R` is 1 to 7% from the references' on these two cells and moves with the
+    order, and the two metal circles at order 12 are the worst of the six rows for the sum and
+    the rules alike. See *Metals* below before reading a value beside a metal.
+  - Not measured on these shapes: a dielectric hole in a metal, circles of different radii, more
+    than two circles, an ellipse of another aspect, oblique incidence.
 - **Choosing between the two.** `'splitw'`, unless the circle nearly fills the cell. It was the
   closer of the two on 13 of the 16 cells at order 12. The other three have a radius of 0.40, 0.41
   and 0.47 of the period, where the window is narrower than the orders resolve: 2.3%, 2.9% and
