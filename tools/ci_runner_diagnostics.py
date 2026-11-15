@@ -110,7 +110,8 @@ def kernel_trace():
         base = Path('/sys/kernel/tracing')
         if not (base/'instances').is_dir():
             mounted = subprocess.run(['mount', '-t', 'tracefs', 'tracefs', str(base)],
-                                     capture_output=True, text=True, timeout=10)
+                                     capture_output=True, text=True, timeout=10,
+                                     encoding='utf-8', errors='replace')
             if mounted.returncode:
                 raise RuntimeError('tracefs mount unavailable: '+mounted.stderr.strip()[:300])
         instance = base/'instances'/f'wavebit-signals-{os.getpid()}'
@@ -178,7 +179,8 @@ def monitor(output, interval, samples, trace):
                 try:
                     helper = subprocess.Popen(['sudo', '-n', sys.executable, str(Path(__file__).resolve()),
                                                '--kernel-trace'], stdin=subprocess.PIPE,
-                                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
+                                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                              encoding='utf-8', errors='replace', start_new_session=True)
                     def pump():
                         for line in helper.stdout:
                             try:

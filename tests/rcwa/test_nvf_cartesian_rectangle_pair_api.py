@@ -256,7 +256,7 @@ assert not any(n == 'studies' or n.startswith('studies.') for n in sys.modules)
 assert 'jax' not in sys.modules
 """
     result = subprocess.run([sys.executable, '-c', code], cwd=tmp_path,
-                            env=dict(os.environ, PYTHONPATH=str(tmp_path)), capture_output=True, text=True, timeout=60)
+                            env=dict(os.environ, PYTHONPATH=str(tmp_path)), capture_output=True, text=True, timeout=60, encoding='utf-8')
     assert result.returncode == 0, result.stderr
 
 

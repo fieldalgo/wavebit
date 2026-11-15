@@ -458,7 +458,7 @@ def _two_host_devices(child):
                         ' --xla_force_host_platform_device_count=2').strip()
     env['PYTHONPATH'] = os.pathsep.join([str(tests.parent / 'src'), str(tests.parent)])   # src/: an uninstalled checkout
     out = subprocess.run([sys.executable, '-c', textwrap.dedent(child.format(tests=str(tests)))],
-                         capture_output=True, text=True, env=env, cwd=str(tests.parent))
+                         capture_output=True, text=True, env=env, cwd=str(tests.parent), encoding='utf-8')
     assert out.returncode == 0, out.stderr[-3000:]
     return out.stdout.strip().splitlines()
 

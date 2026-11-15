@@ -18,6 +18,9 @@ ROOT = Path(__file__).resolve().parents[1]
 CURRENT = ('tutorials/rcwa/00-unified-lifecycle.ipynb',
            'tutorials/fdtd/00-unified-lifecycle.ipynb')
 CHILD = '''import json, sys
+# -I ignores PYTHONIOENCODING: the child sets its own streams to the parent's UTF-8.
+for stream in (sys.stdin, sys.stdout, sys.stderr):
+    stream.reconfigure(encoding="utf-8")
 notebook = json.load(sys.stdin)
 namespace = {"__name__": "__main__"}
 for number, source in notebook["cells"]:
@@ -42,7 +45,7 @@ def main():
         with tempfile.TemporaryDirectory(prefix='wavebit-tutorial-') as work:
             env = dict(os.environ, MPLBACKEND='Agg', MPLCONFIGDIR=work)
             result = subprocess.run([sys.executable, '-I', '-c', CHILD], input=payload,
-                text=True, capture_output=True, check=False, cwd=work, env=env, timeout=120)
+                text=True, capture_output=True, check=False, cwd=work, env=env, timeout=120, encoding='utf-8')
         if result.returncode:
             print(result.stdout, end='')
             print(result.stderr, file=sys.stderr, end='')

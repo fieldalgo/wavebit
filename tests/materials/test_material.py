@@ -367,7 +367,7 @@ def test_import_wavebit_does_not_import_jax():
     code = ('import sys; import wavebit; m = wavebit.Material(2.25); '
             "assert 'jax' not in sys.modules, sorted(k for k in sys.modules if 'jax' in k); "
             'print(m)')
-    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True)
+    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, encoding='utf-8')
     assert out.returncode == 0, out.stderr
     assert 'Material(epsilon=2.25' in out.stdout
 
@@ -389,7 +389,7 @@ def test_material_built_after_jax_arrives_is_registered():
         'assert jax.tree_util.tree_leaves(early) == [2.25]\n'
         'assert jax.tree_util.tree_leaves(wavebit.Material(4.0, mu=1.0)) == [4.0, 1.0]\n'
         'print("ok")\n')
-    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True)
+    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, encoding='utf-8')
     assert out.returncode == 0, out.stderr
     assert 'ok' in out.stdout
 

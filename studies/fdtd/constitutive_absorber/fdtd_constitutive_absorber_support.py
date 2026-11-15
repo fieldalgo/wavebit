@@ -92,7 +92,7 @@ def versions():
 def require_base():
     if len(BASE) != 40 or any(c not in '0123456789abcdef' for c in BASE):
         raise ValueError('Resolve the full committed Decay predecessor before any execution.')
-    head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True, encoding='utf-8').strip()
     if head != BASE:
         raise ValueError('This pre-commit experiment requires the exact registered predecessor HEAD.')
     if os.environ.get('XLA_FLAGS'):

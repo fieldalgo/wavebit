@@ -34,7 +34,7 @@ def run(root, output, *arguments):
     env['UNRELATED_SECRET_FOR_TEST'] = 'DO_NOT_RECORD_THIS_SECRET'
     command = [sys.executable, str(root/'tools/run_verification.py'), '--root', str(root),
                '--profile', 'full', '--output', str(output), *arguments]
-    result = subprocess.run(command, text=True, capture_output=True, env=env, timeout=60)
+    result = subprocess.run(command, text=True, capture_output=True, env=env, timeout=60, encoding='utf-8')
     receipt = json.loads((output/'receipt.json').read_text(encoding='utf-8')) if (output/'receipt.json').exists() else None
     return result, receipt
 
@@ -268,7 +268,7 @@ def test_external_interrupt_is_forwarded_and_the_receipt_is_resumable(checkout):
     first = checkout/'artifacts/first'
     command = [sys.executable, str(checkout/'tools/run_verification.py'), '--root', str(checkout),
                '--profile', 'full', '--output', str(first)]
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
     try:
         deadline = time.monotonic() + 15
         while not (checkout/'artifacts/waiting').exists():
@@ -407,15 +407,15 @@ def test_shards_partition_the_collection_by_whole_file_and_the_check_notices_a_m
     assert 'shard' not in whole
     check = [sys.executable, str(ROOT/'tools/verify_shards.py'), '--count', '2']
     both = [str(checkout/'artifacts/shard1'), str(checkout/'artifacts/shard2')]
-    result = subprocess.run(check + both, text=True, capture_output=True, timeout=60)
+    result = subprocess.run(check + both, text=True, capture_output=True, timeout=60, encoding='utf-8')
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads(result.stdout.rsplit('\n}', 1)[0] + '\n}')['counts'] == {'passed': 6}
-    result = subprocess.run(check + both[:1], text=True, capture_output=True, timeout=60)
+    result = subprocess.run(check + both[:1], text=True, capture_output=True, timeout=60, encoding='utf-8')
     assert result.returncode == 1 and 'missing shard(s): 2/2' in result.stdout
-    result = subprocess.run(check + both + both[:1], text=True, capture_output=True, timeout=60)
+    result = subprocess.run(check + both + both[:1], text=True, capture_output=True, timeout=60, encoding='utf-8')
     assert result.returncode == 1 and 'also recorded by' in result.stdout
     result = subprocess.run(check + [str(checkout/'artifacts/whole'), both[1]], text=True,
-                            capture_output=True, timeout=60)
+                            capture_output=True, timeout=60, encoding='utf-8')
     assert result.returncode == 1 and 'not from a --shard run' in result.stdout
     for bad in ('0/2', '3/2', '2', 'a/b'):
         result, receipt = run(checkout, checkout/'artifacts'/('bad' + bad.replace('/', '_')), '--shard', bad)
@@ -464,7 +464,7 @@ def test_duration_shards_preserve_coverage_and_reject_changed_timing_inputs(chec
     assert receipts[0]['shard']['files'] == ['tests/test_b.py']
     assert receipts[1]['shard']['files'] == ['tests/test_a.py', 'tests/test_c.py']
     command = [sys.executable, str(ROOT/'tools/verify_shards.py'), '--count', '2', *outputs]
-    result = subprocess.run(command, text=True, capture_output=True, timeout=60)
+    result = subprocess.run(command, text=True, capture_output=True, timeout=60, encoding='utf-8')
     assert result.returncode == 0, result.stdout + result.stderr
     table['partitions']['exclude']['tests/test_b.py']['seconds'] = 110
     timing_path.write_text(json.dumps(table), encoding='utf-8')
@@ -473,7 +473,7 @@ def test_duration_shards_preserve_coverage_and_reject_changed_timing_inputs(chec
     assert result.returncode == 2 and 'Resume refused' in result.stderr
     receipts[1]['shard']['timings_digest'] = 'different-table'
     Path(outputs[1], 'receipt.json').write_text(json.dumps(receipts[1]), encoding='utf-8')
-    result = subprocess.run(command, text=True, capture_output=True, timeout=60)
+    result = subprocess.run(command, text=True, capture_output=True, timeout=60, encoding='utf-8')
     assert result.returncode == 1 and 'different timing tables' in result.stdout
 
 
@@ -514,7 +514,7 @@ def test_marked_units_leave_their_file_and_named_units_stay_together(checkout):
     assert selected == [['test_alone[1]'], ['test_pair_fill', 'test_pair_read'],
                         ['test_alone[2]', 'test_rest_one', 'test_rest_two']]
     command = [sys.executable, str(ROOT/'tools/verify_shards.py'), '--count', '3', *outputs]
-    result = subprocess.run(command, text=True, capture_output=True, timeout=60)
+    result = subprocess.run(command, text=True, capture_output=True, timeout=60, encoding='utf-8')
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -544,7 +544,7 @@ def test_a_file_marked_per_test_keeps_each_tests_cases_and_named_groups_together
     assert selected == [['test_cases[1]', 'test_cases[2]', 'test_cases[3]'],
                         ['test_fill', 'test_read'], ['test_other']]
     command = [sys.executable, str(ROOT/'tools/verify_shards.py'), '--count', '3', *outputs]
-    result = subprocess.run(command, text=True, capture_output=True, timeout=60)
+    result = subprocess.run(command, text=True, capture_output=True, timeout=60, encoding='utf-8')
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -587,7 +587,7 @@ def test_timing_import_requires_complete_successful_shards(tmp_path):
     output = tmp_path/'timings.json'
     command = [sys.executable, str(ROOT/'tools/update_shard_timings.py'), str(tmp_path),
                '--source-run', 'https://example.test/run/1', '--output', str(output)]
-    result = subprocess.run(command, text=True, capture_output=True, timeout=60)
+    result = subprocess.run(command, text=True, capture_output=True, timeout=60, encoding='utf-8')
     assert result.returncode == 0, result.stdout + result.stderr
     table = json.loads(output.read_text(encoding='utf-8'))
     # A marked unit is its own row; the rest of the file stays the file's row.
@@ -597,12 +597,12 @@ def test_timing_import_requires_complete_successful_shards(tmp_path):
     original = output.read_bytes()
     receipt['outcomes'][nodes[0]]['complete'] = False
     (directory/'receipt.json').write_text(json.dumps(receipt), encoding='utf-8')
-    result = subprocess.run(command, text=True, capture_output=True, timeout=60)
+    result = subprocess.run(command, text=True, capture_output=True, timeout=60, encoding='utf-8')
     assert result.returncode != 0 and 'incomplete or invalid timing' in result.stderr
     assert output.read_bytes() == original
     receipt['shard']['count'] = 2
     (directory/'receipt.json').write_text(json.dumps(receipt), encoding='utf-8')
-    result = subprocess.run(command, text=True, capture_output=True, timeout=60)
+    result = subprocess.run(command, text=True, capture_output=True, timeout=60, encoding='utf-8')
     assert result.returncode != 0 and 'incomplete baseline' in result.stderr
     assert output.read_bytes() == original
 
@@ -630,7 +630,7 @@ runpy.run_path(sys.argv[0], run_name='__main__')
     env = dict(os.environ, PYTHONPATH=str(checkout/'tools'))
     result = subprocess.run([sys.executable, '-c', script, str(checkout/'tools/run_verification.py'),
                              '--root', str(checkout), '--profile', 'full', '--timeout', '1',
-                             '--output', str(output)], env=env, text=True, capture_output=True, timeout=20)
+                             '--output', str(output)], env=env, text=True, capture_output=True, timeout=20, encoding='utf-8')
     assert result.returncode == 2
     assert '--timeout requires pytest-timeout' in result.stderr
     assert not output.exists()

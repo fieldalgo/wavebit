@@ -285,7 +285,7 @@ def test_skeleton_records_the_rule_and_execution_drops_masks():
     for _ in range(2):
         result = subprocess.run([sys.executable, '-c', command],
                                 cwd=repository_root(),
-                                capture_output=True, text=True, check=True)
+                                capture_output=True, text=True, check=True, encoding='utf-8')
         assert result.stdout.strip() == split.skeleton
 
 

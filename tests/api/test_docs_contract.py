@@ -126,7 +126,7 @@ def _tracked(root):
     """`git ls-files` at `root`, or None when `root` is not the top of a git checkout."""
     try:
         top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=root, env=_git_env(),
-                             capture_output=True, text=True)
+                             capture_output=True, text=True, encoding='utf-8')
     except OSError:                                  # no git on this machine
         return None
     # The top, not merely inside one: an sdist unpacked in some other project's checkout is not
@@ -167,7 +167,7 @@ def _local_env_vars():
     env = {k: v for k, v in os.environ.items() if k not in _LOCAL_ENV_VARS}
     try:
         asked = subprocess.run(['git', 'rev-parse', '--local-env-vars'], env=env,
-                               capture_output=True, text=True)
+                               capture_output=True, text=True, encoding='utf-8')
     except OSError:                                  # no git on this machine
         return frozenset(_LOCAL_ENV_VARS)
     names = asked.stdout.split()

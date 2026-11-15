@@ -1262,7 +1262,7 @@ print('OK' if np.isfinite(np.asarray(result.T)).all() else 'not finite')
     env['JAX_PLATFORMS'] = 'cpu'
     env['PYTHONPATH'] = os.pathsep.join((str(root / 'src'), str(root)))
     out = subprocess.run([sys.executable, '-c', child], capture_output=True, text=True, env=env,
-                         cwd=str(root))
+                         cwd=str(root), encoding='utf-8')
     assert out.returncode == 0, out.stderr[-3000:]
     assert out.stdout.strip().splitlines()[-1] == 'OK', out.stdout[-3000:]
 

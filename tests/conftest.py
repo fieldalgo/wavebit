@@ -26,9 +26,18 @@ naming a file, ``-k``, ``-m``, ``--run-slow`` or a cached failure rerun opts the
 rule is independent of research selection: ``--run-slow`` does not enable research tests.
 """
 
+import os
 import pathlib
 
 import pytest
+
+# A Python child writes its stdout and stderr to a pipe in the locale's codec unless told
+# otherwise. On a Korean-locale Windows machine that is cp949, which has no em-dash, so a child
+# that prints one dies with UnicodeEncodeError, and a localized OS error it prints reaches a
+# UTF-8 parent as undecodable bytes. Every test that starts a child decodes its pipes as UTF-8,
+# and every child the suite starts inherits this, so both ends agree on every platform. A child
+# run with -I ignores PYTHON* variables and sets its own streams instead.
+os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 
 def _named_files(config):

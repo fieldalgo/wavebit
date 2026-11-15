@@ -298,7 +298,7 @@ def test_two_processes_agree_on_a_prepared_skeleton():
                    NUMEXPR_NUM_THREADS='2', PYTHONUTF8='1')
     children = [subprocess.Popen([sys.executable, '-c', code], stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE, text=True, cwd=root,
-                                 env=dict(os.environ, PYTHONHASHSEED=seed, **threads))
+                                 env=dict(os.environ, PYTHONHASHSEED=seed, **threads), encoding='utf-8')
                 for seed in ('0', '1')]
     out = [child.communicate(timeout=900) for child in children]
     for child, (_, err) in zip(children, out):

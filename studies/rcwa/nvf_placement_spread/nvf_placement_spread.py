@@ -317,7 +317,7 @@ def main(argv=None):
     parser.add_argument('--out', default=DEFAULT_OUT)
     args = parser.parse_args(argv)
     head = subprocess.run(['git', 'rev-parse', '--short', 'HEAD'], capture_output=True,
-                          text=True, cwd=HERE).stdout.strip()
+                          text=True, cwd=HERE, encoding='utf-8').stdout.strip()
     log = Log(args.out)
     log.emit(dict(kind='header', head=head, numpy=np.__version__, ns=args.ns,
                   sections=args.sections, started=time.strftime('%Y-%m-%d %H:%M:%S')))

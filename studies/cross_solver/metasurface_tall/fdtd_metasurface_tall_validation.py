@@ -28,9 +28,9 @@ def main():
     assert prior['source'] == source_hash()
     assert previous_reg['identity']['package'] == reg['identity']['package']
     assert all(c['exit']==0 for c in prior['checks'])
-    diff = subprocess.check_output(['git','diff','33aab0f9','--','wavebit','tests'],cwd=study.ROOT,text=True)
+    diff = subprocess.check_output(['git','diff','33aab0f9','--','wavebit','tests'],cwd=study.ROOT,text=True, encoding='utf-8')
     untracked = subprocess.check_output(['git','ls-files','--others','--exclude-standard','wavebit','tests'],
-                                       cwd=study.ROOT,text=True)
+                                       cwd=study.ROOT,text=True, encoding='utf-8')
     assert not diff and not untracked, 'Production or tests changed since prior validation'
     folder = study.RESULTS/'fdtd_metasurface_tall_controls'
     folder.mkdir(exist_ok=True)

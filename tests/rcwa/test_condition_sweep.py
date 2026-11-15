@@ -714,7 +714,7 @@ def test_importing_a_backend_does_not_import_the_other_two():
             '             truncation_order=[1, 1], thickness=[150.], wavelength=900.).solve()\n'
             f'print([m for m in {absent!r} if m in sys.modules])\n')
         got = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True,
-                             cwd=str(repository_root()))
+                             cwd=str(repository_root()), encoding='utf-8')
         assert got.returncode == 0, got.stderr[-800:]
         assert got.stdout.strip() == '[]', (
             f'solving on backend {backend} imported {got.stdout.strip()}; the backends package '

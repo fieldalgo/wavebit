@@ -222,7 +222,7 @@ def register():
     with copy.open('xb') as out:
         out.write(Path(__file__).read_bytes())
     record = dict(registered=datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).isoformat(),
-                  base=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
+                  base=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True, encoding='utf-8').strip(),
                   identity=ident, fingerprint=fingerprint(), copy=copy.name,
                   scenes=SCENES, rungs=RUNGS, wavelengths=WLS, same_line=SAME,
                   reference_share=SHARE, floor_share=FLOOR_SHARE,

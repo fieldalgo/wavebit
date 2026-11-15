@@ -1,5 +1,6 @@
 """
-A gate, not a measurement: every text file the repository's own code opens names its encoding.
+A gate, not a measurement: every text file and process pipe the repository's own code reads or
+writes names its encoding.
 
 ``open()``, ``Path.open()``, ``Path.read_text()`` and ``Path.write_text()`` without
 ``encoding=`` use the locale's codec. That is UTF-8 on macOS and on most Linux setups, cp949 on a
@@ -27,14 +28,33 @@ What it reads as a file call missing its encoding:
   with no argument, except on ``Boundaries`` (``fdtd.Boundaries.open()`` builds an open
   boundary, not a file).
 
-It does not see a process pipe (``subprocess.run(..., text=True)``): those bytes are in the
-child's encoding, which no repository decision fixes. Nor does it see a ``.open`` whose mode
-is a variable, or a ``tempfile``/``io.TextIOWrapper`` text mode; there is none of either in
-the scanned trees today.
+A process pipe decodes with the locale's codec as well. What it reads as a pipe missing its
+encoding:
+
+* ``run``, ``check_output``, ``Popen``, ``call``, ``check_call``, ``getoutput`` and
+  ``getstatusoutput`` of ``subprocess``, under any name an import binds to them, that ask for
+  text (``text=``, ``universal_newlines=`` or ``errors=``) and pass no ``encoding=``;
+* ``os.popen(...)``, which has no ``encoding=`` and always decodes with the locale's codec.
+
+The parent's encoding is only half of a pipe: the child writes the other half. A Python child
+writes in the locale's codec too, so on a Korean-locale machine a child that prints an
+em-dash, which cp949 cannot encode, dies with ``UnicodeEncodeError``. The repository makes its
+Python children write UTF-8. ``tests/conftest.py`` sets ``PYTHONIOENCODING=utf-8`` for every
+child of the suite, and ``test_a_child_of_the_suite_writes_utf8`` checks that it takes effect.
+The tools and studies set the same variable for each child they start, and a child run with
+``-I``, which ignores ``PYTHON*`` variables, sets its own streams. A child that is another
+program writes its own encoding: ``git`` writes UTF-8, and ``tasklist`` is read in the
+console's ``oem`` code page.
+
+It does not see text mode passed through ``**kwargs``, a ``.open`` whose mode is a variable,
+or a ``tempfile``/``io.TextIOWrapper`` text mode; there is none of these in the scanned trees
+today. It does not check the child's side of a pipe.
 """
 import ast
 import json
 import pathlib
+import subprocess
+import sys
 import warnings
 
 import pytest
@@ -42,6 +62,8 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCANNED = ('src', 'tests', 'tools', 'examples', 'tutorials', 'docs', 'studies')
 _MODE_LETTERS = set('rwxabt+')
+_PROCESS_CALLS = {'run', 'check_output', 'Popen', 'call', 'check_call', 'getoutput', 'getstatusoutput'}
+_TEXT_MODE = ('text', 'universal_newlines', 'errors')
 
 
 def _preserved():
@@ -62,13 +84,44 @@ def _mode(call, index):
     return None
 
 
+def _subprocess_names(tree):
+    """Names that reach ``subprocess`` in ``tree``: module aliases, and imported functions."""
+    modules, functions = {'subprocess'}, {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules |= {alias.asname or alias.name for alias in node.names if alias.name == 'subprocess'}
+        elif isinstance(node, ast.ImportFrom) and node.module == 'subprocess':
+            functions |= {alias.asname or alias.name: alias.name for alias in node.names
+                          if alias.name in _PROCESS_CALLS}
+    return modules, functions
+
+
+def _asks_for_text(call):
+    return any(k.arg in _TEXT_MODE and not (isinstance(k.value, ast.Constant) and k.value.value in (False, None))
+               for k in call.keywords)
+
+
 def _unencoded(tree):
-    """``(line, form)`` of every text-mode file call in ``tree`` that passes no ``encoding=``."""
+    """``(line, form)`` of every text-mode file call or pipe in ``tree`` that passes no ``encoding=``."""
+    modules, functions = _subprocess_names(tree)
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or any(k.arg == 'encoding' for k in node.keywords):
             continue
         func = node.func
-        if isinstance(func, ast.Name) and func.id == 'open':
+        process = None
+        if isinstance(func, ast.Name) and func.id in functions:
+            process = functions[func.id]
+        elif (isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name)
+              and func.value.id in modules and func.attr in _PROCESS_CALLS):
+            process = func.attr
+        if process is not None:
+            if process in ('getoutput', 'getstatusoutput') or _asks_for_text(node):
+                yield node.lineno, f'subprocess.{process}'
+            continue
+        if (isinstance(func, ast.Attribute) and func.attr == 'popen'
+                and isinstance(func.value, ast.Name) and func.value.id == 'os'):
+            yield node.lineno, 'os.popen'
+        elif isinstance(func, ast.Name) and func.id == 'open':
             mode = _mode(node, 1)
             if mode is None or mode == '?' or 'b' not in mode:
                 yield node.lineno, 'open'
@@ -95,7 +148,7 @@ def _parse(source, name):
         return ast.parse(source, name)
 
 
-def test_every_text_file_the_repository_opens_names_its_encoding():
+def test_every_text_file_and_pipe_the_repository_opens_names_its_encoding():
     files = [path for top in SCANNED for path in sorted((ROOT / top).rglob('*.py'))
              if '__pycache__' not in path.parts]
     assert len(files) > 500, len(files)                     # a wrong root must not pass empty
@@ -133,7 +186,33 @@ def test_every_text_file_the_repository_opens_names_its_encoding():
     ("fdtd.Boundaries.open(pml)", False),
     ("tarfile.open(sdist)", False),
     ("archive.open('manifest.json')", False),
+    ("subprocess.run(c, text=True)", True),
+    ("subprocess.run(c, capture_output=True, text=True, encoding='utf-8')", False),
+    ("subprocess.run(c, capture_output=True)", False),
+    ("subprocess.run(c, text=False)", False),
+    ("subprocess.check_output(c, universal_newlines=True)", True),
+    ("subprocess.Popen(c, stdout=PIPE, errors='replace')", True),
+    ("subprocess.Popen(c, encoding='oem', errors='replace')", False),
+    ("subprocess.getoutput('ls')", True),
+    ("import subprocess as sp\nsp.call(c, text=True)", True),
+    ("from subprocess import check_output as out\nout(c, text=True)", True),
+    ("from subprocess import run\nrun(c, capture_output=True)", False),
+    ("os.popen('ls')", True),
+    ("runner.run(c, text=True)", False),
 ])
 def test_the_scan_sees_each_form_it_claims(call, flagged):
     """The gate's own instrument, on each spelling its docstring names, both ways round."""
     assert bool(list(_unencoded(_parse(call, '<case>')))) is flagged
+
+
+def test_a_child_of_the_suite_writes_utf8():
+    """The child half of a pipe: a Python child the suite starts prints what cp949 cannot encode.
+
+    Without ``PYTHONIOENCODING=utf-8`` from ``tests/conftest.py``, a Korean-locale Windows child
+    dies on the em-dash. Where the locale is already UTF-8 (macOS, Linux CI) this passes either way.
+    """
+    text = '— ✓ θ'
+    child = subprocess.run([sys.executable, '-c', f'print({text!r})'], capture_output=True,
+                           text=True, encoding='utf-8')
+    assert child.returncode == 0, child.stderr
+    assert child.stdout.strip() == text

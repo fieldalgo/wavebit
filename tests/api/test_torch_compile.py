@@ -455,7 +455,7 @@ def test_an_eager_solve_never_imports_dynamo():
         (r.R.sum() + r.reconstruct_field([57.], [0.], [83.]).abs().sum()).backward()
         print('torch._dynamo' in sys.modules)
     """)
-    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, timeout=300)
+    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, timeout=300, encoding='utf-8')
     assert out.stdout.strip().splitlines()[-1] == 'False', out.stderr[-2000:]
 
 
@@ -478,7 +478,7 @@ def test_jit_trace_is_refused_while_dynamo_is_not_loaded():
             print('traced')
         print('torch._dynamo' in sys.modules)
     """)
-    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, timeout=300)
+    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, timeout=300, encoding='utf-8')
     assert out.stdout.split()[-2:] == ['refused', 'False'], (out.stdout, out.stderr[-2000:])
 
 

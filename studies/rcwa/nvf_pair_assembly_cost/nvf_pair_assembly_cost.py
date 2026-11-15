@@ -95,7 +95,8 @@ def main():
                   source_sha256={Path(p).name: hashlib.sha256(Path(p).read_bytes().replace(b'\r\n', b'\n')).hexdigest()
                                  for p in (implementation.__file__, __file__)},
                   scope="NumPy weak-block assembly only; fresh child process RSS includes runtime/input overhead"))
-        env = dict(os.environ, OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", VECLIB_MAXIMUM_THREADS="1")
+        env = dict(os.environ, OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", VECLIB_MAXIMUM_THREADS="1",
+                   PYTHONIOENCODING="utf-8")
         for refinement in args.refinements:
             inputs = captured_inputs(refinement)
             input_path = Path(scratch)/"input.npz"
@@ -105,7 +106,7 @@ def main():
                 output = Path(scratch)/(kernel+".npz")
                 run = subprocess.run([sys.executable, __file__, "--kernel", kernel,
                                       "--input", str(input_path), "--output", str(output)],
-                                     env=env, capture_output=True, text=True, check=True, timeout=60)
+                                     env=env, capture_output=True, text=True, check=True, timeout=60, encoding='utf-8')
                 records[kernel] = json.loads(run.stdout)
                 with np.load(output) as archive:
                     matrices[kernel] = [archive[name] for name in ("H00", "H01", "H11")]

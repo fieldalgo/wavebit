@@ -67,7 +67,7 @@ print(json.dumps({
     return subprocess.run(
         [sys.executable, '-c', code, str(_study(name)), json.dumps(list(map(str, args))),
          'yes' if preload else 'no', inspect], cwd=tmp_path, env=env,
-        capture_output=True, text=True, timeout=45)
+        capture_output=True, text=True, timeout=45, encoding='utf-8')
 
 
 @pytest.mark.parametrize('name', STUDIES)

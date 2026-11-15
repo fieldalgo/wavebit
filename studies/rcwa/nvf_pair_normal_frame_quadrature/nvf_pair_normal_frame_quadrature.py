@@ -8,6 +8,7 @@ from tools.repository_paths import repository_path
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import platform
 import resource
@@ -84,7 +85,8 @@ def main():
                 path = Path(scratch)/f'{mode}-{q}.npy'
                 command = [sys.executable, '-m', 'studies.rcwa.nvf_pair_normal_frame_quadrature.nvf_pair_normal_frame_quadrature',
                            '--worker', mode, '--quadrature', str(q), '--cap', str(cap), '--array', str(path)]
-                completed = subprocess.run(command, check=True, capture_output=True, text=True)
+                completed = subprocess.run(command, check=True, capture_output=True, text=True,
+                                           encoding='utf-8', env=dict(os.environ, PYTHONIOENCODING='utf-8'))
                 row = json.loads(completed.stdout)
                 arrays[mode] = np.load(path)
                 if mode == 'tiled':

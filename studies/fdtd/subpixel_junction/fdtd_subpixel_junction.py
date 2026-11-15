@@ -1166,7 +1166,7 @@ def provenance():
     files = {f: _sha(repository_path('src/wavebit/fd', f)) for f in FILES}
     try:
         got = subprocess.run(['git', '-C', str(SNAP), 'rev-parse', 'HEAD'], capture_output=True,
-                             text=True, timeout=20)
+                             text=True, timeout=20, encoding='utf-8')
         commit = got.stdout.strip() if got.returncode == 0 else None
     except OSError:
         commit = None

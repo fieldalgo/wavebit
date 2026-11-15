@@ -11,6 +11,7 @@ if __package__ in (None, ""):
 from tools.repository_paths import repository_root
 import hashlib
 import json
+import os
 import subprocess
 import sys
 
@@ -72,7 +73,8 @@ def main():
             test = target if target.startswith('tests/') else TESTS+target
             result = subprocess.run([sys.executable, '-m', 'pytest', '-q', '-p',
                                      'no:cacheprovider', test],
-                                    cwd=ROOT, capture_output=True, text=True)
+                                    cwd=ROOT, capture_output=True, text=True, encoding='utf-8',
+                                    env=dict(os.environ, PYTHONIOENCODING='utf-8'))
             output = result.stdout+'\n'+result.stderr
             (logs/(name+'.log')).write_text(output, encoding='utf-8')
         finally:

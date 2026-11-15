@@ -51,7 +51,7 @@ def main():
         digest.update(path.read_bytes().replace(b'\r\n', b'\n'))
     report = dict(complete=False, source_sha256=digest.hexdigest(),
                   git_head=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT,
-                                                   text=True).strip(),
+                                                   text=True, encoding='utf-8').strip(),
                   python=platform.python_version(), platform=platform.platform(),
                   versions={n: importlib.metadata.version(n) for n in ('numpy', 'scipy')},
                   runs={}, comparisons={})

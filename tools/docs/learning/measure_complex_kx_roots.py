@@ -170,7 +170,7 @@ def solve(rcwa, **kw):
 
 def git(checkout, *args):
     try:
-        out = subprocess.run(['git', '-C', str(checkout), *args], capture_output=True, text=True, check=True)
+        out = subprocess.run(['git', '-C', str(checkout), *args], capture_output=True, text=True, check=True, encoding='utf-8')
     except (OSError, subprocess.CalledProcessError):
         return None
     return out.stdout.strip()

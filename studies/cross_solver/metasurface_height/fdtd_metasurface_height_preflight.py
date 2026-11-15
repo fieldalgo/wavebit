@@ -97,7 +97,7 @@ def main():
     assert registration['digest'] == c7.PROV['digest']
     rows = c7.load(c7.LOG)
     result = dict(scope=__doc__, commit=subprocess.check_output(
-        ['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
+        ['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True, encoding='utf-8').strip(),
         sources={Path(p).relative_to(ROOT).as_posix(): sha(p) for p in
                  (Path(__file__), Path(c7.__file__), Path(lifted.__file__), c7.LOG,
                   c7.RCWA_LOG, registration_path)},

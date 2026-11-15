@@ -829,7 +829,7 @@ def test_the_manifest_does_not_import_an_optional_backend_to_answer():
             'd = m.manifest(); '
             'print(json.dumps({"jax": "jax" in sys.modules, "torch": "torch" in sys.modules, '
             '"backends": sorted(d["backends"])}))')
-    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True)
+    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, encoding='utf-8')
     assert out.returncode == 0, out.stderr
     seen = json.loads(out.stdout.strip().splitlines()[-1])
     assert seen['backends'] == ['jax', 'numpy', 'torch'], seen

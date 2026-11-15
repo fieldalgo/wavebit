@@ -61,7 +61,7 @@ def test_sidecar_flushes_memory_and_received_sigterm_without_touching_parent(tmp
     output = tmp_path/'events.jsonl'
     process = subprocess.Popen([sys.executable, '-u', diagnostic.__file__, '--output', str(output),
                                 '--interval', '0.05', '--no-kernel-trace'],
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
     try:
         deadline = time.monotonic()+10
         while time.monotonic() < deadline:
