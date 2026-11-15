@@ -165,8 +165,9 @@ class Result:
         layers only; a layer that names a permeability takes the same rule for ``H`` with ``B``
         and ``mu``, and a diagonal tensor reads each axis's own entry. ``'split'`` and
         ``'splitw'`` are the rules for a curved wall, which ``'lalanne'`` refuses: on a layer
-        that holds one circle of a scalar permittivity they split ``E_x`` and ``E_y`` along the
-        circle's normal, sum the normal ``D`` and the tangential ``E`` and divide the first by
+        that holds one circle, one ellipse along the cell's axes or several circles of one
+        material, of a scalar permittivity, they split ``E_x`` and ``E_y`` along the wall's
+        normal, sum the normal ``D`` and the tangential ``E`` and divide the first by
         ``eps`` (M. Weismann, D. F. G. Gallagher and N. C. Panoiu, J. Opt. 17, 125612 (2015));
         ``'splitw'`` uses that normal near the wall only. They rebuild ``E`` alone, and their
         field is not for a spatial derivative. Where ``Re eps`` changes sign across the wall, a

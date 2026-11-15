@@ -196,7 +196,7 @@ M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)), and the same for `B` and `mu`. The v
 that paper, which treats a 1D TM grating; the 2D, conical and magnetic cases follow RETICOLO's `res3`
 (J. P. Hugonin and P. Lalanne). The default, `'plain'`, sums each component's own series. The samples'
 metadata records the rule under `'reconstruction'` when it is not the default. Two more values,
-`'split'` and `'splitw'`, are the rules for a circle's curved wall and have their own section,
+`'split'` and `'splitw'`, are the rules for the curved walls of circles and of an ellipse and have their own section,
 *A curved wall*, below.
 
 - **What it changes.** `E_x` in the patterned layers of a 1D grating, on the pure TM and the
@@ -260,8 +260,8 @@ metadata records the rule under `'reconstruction'` when it is not the default. T
     absorption from the ports, which neither rule changes.
   - On curved or slanted walls, not this rule, which is refused there (see *Which shapes* below).
     Give the true shape with `factorization='nvf'`, check that `R` and `T` have converged, and read
-    the default. A layer that holds one circle also takes `'split'` and `'splitw'`, which split `E`
-    along the circle's normal (see *A curved wall* below).
+    the default. A layer of circles, or of one ellipse along the cell's axes, also takes `'split'`
+    and `'splitw'`, which split `E` along the wall's normal (see *A curved wall* below).
 - **Why the default is `'plain'`.** The default never puts a jump where the field is continuous,
   and its derivatives across walls a component runs along, and of area averages, are right. What
   it misses is the jump at a wall normal to a component, which is what the Lalanne rule is for.
@@ -384,10 +384,15 @@ wall from `E`, each is summed where it is continuous, and the first sum is divid
 sample. `'split'` is the same rule without the window described below. Both are opt-in, and the
 default stays `'plain'`.
 
-- **Where they apply.** A layer that holds one circle of a scalar permittivity in a scalar
-  background, in a rectangular cell, anywhere in the cell; a stack may hold several such layers.
-  That is what they were measured on. Uniform layers keep the sum bit for bit, and so does a
-  circle with its background's permittivity unless one of the two is being differentiated.
+- **Where they apply.** A layer of a scalar permittivity in a scalar background, in a
+  rectangular cell, that holds one of these, anywhere in the cell:
+  - one circle;
+  - one ellipse with its axes along the cell's;
+  - several circles of one material that do not touch each other or each other's images.
+
+  A stack may hold several such layers. That is what they were measured on. Uniform layers keep
+  the sum bit for bit, and so do shapes with their background's permittivity unless one of the
+  two is being differentiated.
 - **What they change.** `E_x` and `E_y` in those layers. `E_z` and `H` are the default's, bit for
   bit: the reference stored no `H`, so the rules rebuild `E` alone.
 - **How they work.** With `P` the convolution matrix of `w n n^T` and `Q` the inverse of the
@@ -397,7 +402,9 @@ default stays `'plain'`.
   `w = 1`. `'splitw'` keeps it away from both jumps with a window: `w` is 1 within `b/4` of the
   wall and falls as `cos^2` to 0 at `b`, the smaller of the radius and half the gap between the
   circle and its nearest image. `Q` takes the same floor on a negative permittivity as the `'nvf'`
-  solve.
+  solve. For an ellipse or several circles `n` is the solve's own analytic normal field of the
+  shapes, and the window is on the distance to the nearest wall, with `b` the smallest inradius:
+  a circle's radius, an ellipse's shorter semi-axis.
 - **What they are measured against.** A 3D finite-element reference (gyptis, second-order edge
   elements), over 2304 samples on the mid-layer plane, as the relative RMS error of the in-plane
   field, with `factorization='nvf'`:
@@ -418,6 +425,35 @@ default stays `'plain'`.
   default's error at order 12 and at most 0.64 times at order 8, on every one. `'split'` was 0.08
   to 0.85 times at order 12; at order 8 it was further from the reference than the default on two
   of the 16, the third row above among them.
+- **An ellipse and two circles.** Two more cells against finite-element references of their own
+  (`eps` 12.25 in air, period 400, thickness 150, normal incidence at 900, `factorization='nvf'`),
+  over the same 2304 samples, which include the samples on the walls:
+
+  | Layer (nm) | Order | `'plain'` | `'split'` | `'splitw'` |
+  | --- | --- | --- | --- | --- |
+  | one ellipse, semi-axes 130 and 80 | 8 | 15.5% | 5.0% | 3.2% |
+  | the same | 12 | 12.8% | 3.0% | 2.3% |
+  | the same | 16 | 11.3% | 2.1% | 1.6% |
+  | two circles of radius 60, 180 apart | 8 | 17.2% | 4.8% | 4.2% |
+  | the same | 12 | 13.7% | 3.9% | 3.6% |
+  | the same | 16 | 11.4% | 2.7% | 2.3% |
+
+  - The order 8 rows are a test (`tests/references/test_gyptis_shapes_field_golden.py`). The
+    references' coarser mesh level is 0.38% from them, and an FDTD solution (Meep, 5 nm cells)
+    agrees with them to 0.3% of the plane's RMS field 15 nm or more from the walls.
+  - Within 10 nm of a wall the default is 35 to 51% of the plane's RMS field off and the rules 3
+    to 8%.
+  - The window. With `b` the smallest inradius `'splitw'` was never behind `'split'` on these two
+    cells. With the smaller `b` one circle uses, half the gap where that is narrower, it was
+    behind at order 8 on the two circles, 6.8% against 4.8%. One circle keeps its own `b`: with
+    the inradius it was closer on five of the 16 cells above, by 8 to 45%, and 10 to 29% further
+    on one, a circle of radius 0.47 of the period.
+  - A circle moved across the cell gives the same field moved, exactly. These shapes are sampled
+    where they are: moved together they gave the same field to 3e-4 of a field of order 1 with
+    `'split'` and 3e-5 with `'splitw'`.
+  - Not measured on these shapes: a metal (the rules answer inside it only, as on one circle),
+    circles of different radii, more than two circles, an ellipse of another aspect, oblique
+    incidence.
 - **Choosing between the two.** `'splitw'`, unless the circle nearly fills the cell. It was the
   closer of the two on 13 of the 16 cells at order 12. The other three have a radius of 0.40, 0.41
   and 0.47 of the period, where the window is narrower than the orders resolve: 2.3%, 2.9% and
@@ -467,13 +503,15 @@ default stays `'plain'`.
   solve on frozen geometry (`freeze_geometry`). A trace has no value to refuse by name, so there
   a period that turns out negative, or a radius that no longer fits the cell, answers NaN in
   `E_x` and `E_y` of that layer.
-- **Cost.** Each call samples the normal on a 2048 by 2048 grid and builds two dense operators
-  over twice the orders: about a second per call at order 8, and 76 MB for each operator at
-  order 16, 2.8 GB at order 40. Sample all the points of a layer in one call.
-- **What they refuse, by name, with code `field.reconstruction`.** A rectangle, an ellipse, a
-  polygon, or several shapes in a layer; a raster; a tensor; a layer that names a permeability; a
-  1D grating; a skewed lattice or one with a negative side; matrices handed to `solve_conv`. For
-  walls along x and y, `'lalanne'` is the rule.
+- **Cost.** Each call samples the normal on a grid (2048 by 2048 for one circle, 1024 by 1024
+  for the other shapes) and builds two dense operators over twice the orders: about a second
+  per call at order 8, and 76 MB for each operator at order 16, 2.8 GB at order 40. Sample all
+  the points of a layer in one call.
+- **What they refuse, by name, with code `field.reconstruction`.** A rectangle or a polygon; an
+  ellipse turned off the cell's axes, or beside another shape; circles of several materials;
+  circles that touch; a raster; a tensor; a layer that names a permeability; a 1D grating; a
+  skewed lattice or one with a negative side; matrices handed to `solve_conv`. For walls along x
+  and y, `'lalanne'` is the rule.
 
 ## Earlier-interface field calls
 

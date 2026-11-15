@@ -1,4 +1,4 @@
-"""The split rules, ``Result.field(reconstruction='split' | 'splitw')``, on a layer that holds a circle.
+"""The split rules, ``Result.field(reconstruction='split' | 'splitw')``, on a layer of round shapes.
 
 What the rules are worth is pinned against a finite-element field in
 ``tests/references/test_gyptis_cylinder_field_golden.py``. These pin what they are: which
@@ -6,7 +6,9 @@ components they change, what they make continuous across the curved wall, that t
 the three backends and the two formulations agree on them, that their derivative is a finite
 difference's, and that everything they were not measured on is refused by name. ``'splitw'`` is
 the windowed rule and the one most tests read; ``'split'`` runs the same operators with the
-window at 1, and the tests that could tell the two apart take both.
+window at 1, and the tests that could tell the two apart take both. One circle is the layer most
+tests read. An ellipse and several circles are built another way (the solve's analytic normal
+field, a window on the distance to the nearest wall) and have their own tests at the end.
 """
 import numpy as np
 import pytest
@@ -26,6 +28,10 @@ X = np.array([-150.0, -80.0, -45.0, 33.0, 60.0, 170.0])
 Y = np.array([-130.0, -65.0, 25.0, 70.0])
 Z = np.array([30.0, 75.0])
 NUMERICS = rcwa.Numerics(orders=(3, 3), factorization='nvf')
+
+# One CI shard unit per test function (tests.yml, --shard): the file is about 15 worker-minutes,
+# and no test reads what another left behind (the module fixtures are solves each shard repeats).
+pytestmark = pytest.mark.shard_unit(per='test')
 
 
 def _circle(radius=RADIUS, centre=CENTRE, epsilon=EPSILON):
@@ -363,16 +369,17 @@ def test_a_circle_a_trace_hides_the_fit_of_answers_nan_on_both_sides_of_its_wall
     assert np.all(np.isfinite(np.asarray(traced(RADIUS))))
 
 
-def _ellipse():
-    return (rcwa.Region(geometry=rcwa.Ellipse(radii=(90.0, 60.0)), material=Material(EPSILON)),)
+def _ellipse(radii=(90.0, 60.0), centre=(0.0, 0.0), epsilon=EPSILON, angle=0.0):
+    return (rcwa.Region(geometry=rcwa.Ellipse(radii=radii, center=centre, angle=angle), material=Material(epsilon)),)
 
 
 def _rectangle():
     return (rcwa.Region(geometry=rcwa.Rectangle(size=(150.0, 90.0)), material=Material(EPSILON)),)
 
 
-def _two_circles():
-    return _circle(radius=50.0, centre=(-90.0, 0.0)) + _circle(radius=50.0, centre=(90.0, 0.0))
+def _two_circles(radius=50.0, centres=((-90.0, 0.0), (90.0, 0.0)), epsilon=EPSILON, other=None):
+    return (_circle(radius=radius, centre=centres[0], epsilon=epsilon)
+            + _circle(radius=radius, centre=centres[1], epsilon=epsilon if other is None else other))
 
 
 def _raster():
@@ -383,9 +390,11 @@ def _raster():
 
 
 REFUSED = [
-    (lambda: _problem(_rectangle()), NUMERICS, 'holds one circle'),
-    (lambda: _problem(_ellipse()), NUMERICS, 'holds one circle'),
-    (lambda: _problem(_two_circles()), NUMERICS, 'layer 0 holds 2 circles'),
+    (lambda: _problem(_rectangle()), NUMERICS, 'layer 0 holds 1 rectangle'),
+    (lambda: _problem(_ellipse(angle=0.4)), NUMERICS, 'is turned'),
+    (lambda: _problem(_ellipse(radii=(70.0, 50.0), centre=(-100.0, 0.0)) + _circle(radius=40.0, centre=(110.0, 0.0))),
+     NUMERICS, 'layer 0 holds 1 ellipse, 1 circle'),
+    (lambda: _problem(_two_circles(other=4.0)), NUMERICS, 'are of several'),
     (lambda: _problem((rcwa.Region(geometry=rcwa.Polygon(vertices=((-90.0, -60.0), (80.0, -60.0), (0.0, 90.0))),
                                    material=Material(EPSILON)),)), NUMERICS, 'layer 0 holds 1 polygon'),
     (lambda: _problem(_circle(epsilon=(4.0, 5.0, 6.0))), NUMERICS, 'holds a tensor'),
@@ -410,14 +419,30 @@ def test_what_the_rules_were_not_measured_on_is_refused_by_name(problem, numeric
     result.field(x=X, y=Y, z=Z)                      # the sum still answers
 
 
+def test_circles_that_touch_are_refused_images_counted():
+    """Asked of the refusal itself: solving overlapping circles to ask it would cost minutes."""
+    lattice = wavebit.Lattice.rectangular(*PERIOD)
+
+    def refused(*circles):
+        layer = dict(background=1.0, shapes=[dict(type='circle', cx=cx, cy=cy, lx=2 * r, material=EPSILON)
+                                             for cx, cy, r in circles])
+        return splitw._layer_refusal(layer, lattice, 0, "reconstruction='splitw'")
+
+    assert refused((-90.0, 0.0, 50.0), (90.0, 0.0, 50.0)) is None
+    assert 'touch or overlap' in refused((-90.0, 0.0, 90.0), (90.0, 0.0, 90.0))        # tangent
+    assert 'touch or overlap' in refused((-90.0, 0.0, 95.0), (90.0, 0.0, 95.0))
+    assert 'touch or overlap' in refused((-150.0, 0.0, 55.0), (150.0, 0.0, 55.0))      # across the cell's edge: 100 apart
+    assert 'leaves no room' in refused((-90.0, 0.0, 180.0), (90.0, 0.0, 20.0))
+
+
 def test_the_solvers_door_refuses_as_the_result_does():
     solver = engine(backend='numpy', top=1.0, bot=2.25, period=list(PERIOD), truncation_order=[2, 2],
                     wavelength=900.0, thickness=[150.0], theta=0.2, phi=0.3, polarization=(0, 1),
                     answers='field', factorization='nvf',
-                    structure=[dict(background=1.0, shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=180.0,
+                    structure=[dict(background=1.0, shapes=[dict(type='rectangle', cx=0.0, cy=0.0, lx=180.0,
                                                                  ly=120.0, material=EPSILON)])])
     solver.solve()
-    with pytest.raises(NotImplementedError, match='holds one circle'):
+    with pytest.raises(NotImplementedError, match='holds 1 rectangle'):
         solver.reconstruct_field(X, Y, Z, reconstruction='splitw')
 
 
@@ -430,3 +455,133 @@ def test_an_unknown_rule_names_the_four(result):
 def test_lalanne_still_refuses_the_circle_and_points_at_nothing_new(result):
     with pytest.raises(UnsupportedFeatureError, match='slanted or curved'):
         result.field(x=X, y=Y, z=Z, reconstruction='lalanne')
+
+
+# ------------------------------------------------------------ an ellipse, several circles
+
+SHAPES = {'ellipse': lambda **kw: _ellipse(radii=(110.0, 70.0), centre=(8.0, -6.0), **kw),
+          'circles': lambda **kw: _two_circles(radius=52.0, centres=((-88.0, 12.0), (95.0, -20.0)), **kw)}
+
+
+@pytest.fixture(scope='module', params=sorted(SHAPES))
+def shaped(request):
+    return request.param, rcwa.run(_problem(SHAPES[request.param]()), numerics=NUMERICS)
+
+
+def test_other_round_shapes_change_the_in_plane_e_alone_and_each_rule_its_own_way(shaped):
+    _, result = shaped
+    plain, split, windowed = (_read(result, rule) for rule in ('plain', 'split', 'splitw'))
+    for ruled in (split, windowed):
+        np.testing.assert_array_equal(ruled[..., 2:], plain[..., 2:])
+        assert np.max(np.abs(ruled[..., :2] - plain[..., :2])) > 1e-2
+    assert np.max(np.abs(split[..., :2] - windowed[..., :2])) > 1e-3
+
+
+def test_other_round_shapes_answer_alike_at_both_doors_and_on_every_backend(shaped):
+    name, result = shaped
+    structure = [dict(background=1.0, shapes=[
+        dict(type='ellipse', cx=8.0, cy=-6.0, lx=220.0, ly=140.0, material=EPSILON)] if name == 'ellipse' else [
+        dict(type='circle', cx=cx, cy=cy, lx=104.0, material=EPSILON) for cx, cy in ((-88.0, 12.0), (95.0, -20.0))])]
+    solver = engine(backend='numpy', top=1.0, bot=2.25, period=list(PERIOD), truncation_order=[3, 3],
+                    wavelength=900.0, thickness=[150.0], theta=0.2, phi=0.3, polarization=(0, 1),
+                    answers='field', factorization='nvf', structure=structure)
+    solver.solve()
+    for rule in ('split', 'splitw'):
+        public, cell = _read(result, rule)[0], np.asarray(solver.reconstruct_field(X, Y, Z, reconstruction=rule))[0]
+        np.testing.assert_allclose(public[..., :3], cell[..., :3], rtol=0, atol=1e-12, err_msg=rule)
+        np.testing.assert_allclose(public[..., 3:] * Z0, cell[..., 3:], rtol=0, atol=1e-12, err_msg=rule)
+    for backend in ('jax', 'torch'):
+        if backend == 'jax':
+            jax = pytest.importorskip('jax')
+            jax.config.update('jax_enable_x64', True)
+        else:
+            pytest.importorskip('torch')
+        other = rcwa.run(_problem(SHAPES[name]()), numerics=NUMERICS, backend=backend)
+        np.testing.assert_allclose(_read(other), _read(result), rtol=0, atol=1e-10, err_msg=backend)
+
+
+def test_two_circles_read_the_same_rule_at_mirrored_samples():
+    """Normal incidence with E along x, two equal circles placed symmetrically: a half turn about the
+    cell's centre maps the scene to itself and E_x, E_y to themselves, and the rule must keep that."""
+    result = rcwa.run(_problem(_two_circles(radius=30.0, centres=((-300.0, 0.0), (300.0, 0.0))), period=(1200.0, 360.0),
+                               theta=0.0, phi=0.0), numerics=rcwa.Numerics(orders=(6, 3), factorization='nvf'))
+    x, y = np.array([-345.0, -322.0, -300.0, -275.0, -262.0]), np.array([-28.0, 0.0, 17.0])
+    here, there = _read(result, x=x, y=y), _read(result, x=-x[::-1], y=-y[::-1])
+    np.testing.assert_allclose(there[:, :, ::-1, ::-1, :2], here[..., :2], rtol=0, atol=1e-9)
+    assert np.max(np.abs(here[..., :2] - _read(result, 'plain', x=x, y=y)[..., :2])) > 1e-2
+
+
+def test_shapes_moved_together_give_the_same_field_moved_to_what_the_grid_resolves(shaped):
+    """One circle is carried by a phase and moves exactly. These are sampled where they are, and the
+    grid meets the seams of their normal field elsewhere after a move: measured 2.9e-4 of a field of
+    order 1 for ``'split'`` on the ellipse and 1.4e-4 on the circles, 1.1e-6 and 2.7e-5 for ``'splitw'``,
+    whose window is zero at most seams. The sum itself moves to 2e-14."""
+    name, result = shaped
+    shift = (37.0, -22.0)
+    regions = (_ellipse(radii=(110.0, 70.0), centre=(8.0 + shift[0], -6.0 + shift[1])) if name == 'ellipse' else
+               _two_circles(radius=52.0, centres=((-88.0 + shift[0], 12.0 + shift[1]), (95.0 + shift[0], -20.0 + shift[1]))))
+    moved = rcwa.run(_problem(regions, theta=0.0, phi=0.0), numerics=NUMERICS)
+    still = rcwa.run(_problem(SHAPES[name](), theta=0.0, phi=0.0), numerics=NUMERICS)
+    for rule, atol in (('split', 1e-3), ('splitw', 1e-4)):
+        np.testing.assert_allclose(_read(moved, rule, x=X + shift[0], y=Y + shift[1])[..., :2],
+                                   _read(still, rule)[..., :2], rtol=0, atol=atol, err_msg=rule)
+    np.testing.assert_allclose(_read(moved, 'plain', x=X + shift[0], y=Y + shift[1]), _read(still, 'plain'),
+                               rtol=0, atol=1e-12)
+
+
+def test_shapes_of_the_backgrounds_permittivity_keep_the_sum_bit_for_bit():
+    for name in SHAPES:
+        result = rcwa.run(_problem(SHAPES[name](epsilon=1.0)), numerics=NUMERICS)
+        np.testing.assert_array_equal(_read(result), _read(result, 'plain'))
+
+
+@pytest.mark.parametrize('name', sorted(SHAPES))
+def test_on_other_metal_shapes_the_rule_answers_inside_them_only(name):
+    result = rcwa.run(_problem(SHAPES[name](epsilon=-20.0 + 1.5j)), numerics=NUMERICS)
+    x, y = np.linspace(-190.0, 190.0, 39), np.linspace(-170.0, 170.0, 35)
+    plain, ruled = _read(result, 'plain', x=x, y=y), _read(result, x=x, y=y)
+    gx, gy = np.meshgrid(x, y)
+    if name == 'ellipse':
+        inside = ((gx - 8.0) / 110.0) ** 2 + ((gy + 6.0) / 70.0) ** 2 < 1
+    else:
+        inside = (np.hypot(gx + 88.0, gy - 12.0) < 52.0) | (np.hypot(gx - 95.0, gy + 20.0) < 52.0)
+    np.testing.assert_allclose(ruled[:, :, ~inside], plain[:, :, ~inside], rtol=0, atol=1e-12)
+    assert np.min(np.max(np.abs(ruled[:, :, inside, :2] - plain[:, :, inside, :2]), axis=-1)) > 1e-6
+
+
+def test_the_reach_of_other_shapes_is_their_smallest_inradius_and_their_room_is_the_narrowest_gap():
+    lattice = wavebit.Lattice.rectangular(400.0, 360.0)
+    ellipse = dict(shapes=[dict(type='ellipse', cx=0.0, cy=0.0, lx=220.0, ly=140.0, material=EPSILON)])
+    rows, sides = splitw._round_shapes(np, ellipse, lattice, np.float64, None)
+    assert float(splitw._reach(np, rows)) == 70.0
+    assert float(splitw._clearance(np, rows, sides)) == 180.0            # 400 - 220 against 360 - 140
+    circles = dict(shapes=[dict(type='circle', cx=cx, cy=0.0, lx=2 * r, material=EPSILON)
+                           for cx, r in ((-90.0, 60.0), (90.0, 40.0))])
+    rows, sides = splitw._round_shapes(np, circles, lattice, np.float64, None)
+    assert float(splitw._reach(np, rows)) == 40.0
+    assert float(splitw._clearance(np, rows, sides)) == pytest.approx(80.0)    # 180 - 100, the pair in the cell
+    x, y = np.array([[-90.0, -25.0, 0.0, 135.0]]), np.zeros((1, 4))
+    distance, inside = splitw._wall_distance(np, rows, sides, x + 200.0, y + 180.0)
+    np.testing.assert_allclose(distance[0], [60.0, 5.0, 30.0, 5.0], atol=1e-9)
+    assert inside[0].tolist() == [True, False, False, False]
+
+
+def test_jax_grad_on_other_shapes_matches_a_finite_difference():
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    jnp = jax.numpy
+    cases = (('circles', lambda v: _two_circles(radius=v, centres=((-88.0, 12.0), (95.0, -20.0))), 52.0),
+             ('ellipse', lambda v: _ellipse(radii=(110.0, v), centre=(8.0, -6.0)), 70.0))
+    for name, regions, at in cases:
+        def numeric(v):
+            return _objective(_read(rcwa.run(_problem(regions(v)), numerics=NUMERICS)))
+
+        prepared = rcwa.prepare(_problem(regions(at)), numerics=NUMERICS, backend='jax')
+
+        def objective(v):
+            values = prepared.run(_problem(regions(v))).field(reconstruction='splitw', **OFF).values
+            return jnp.sum(jnp.abs(values[..., :2]) ** 2)
+
+        difference = (numeric(at + 1e-4) - numeric(at - 1e-4)) / 2e-4
+        assert float(jax.grad(objective)(at)) == pytest.approx(difference, rel=1e-5), name
+
