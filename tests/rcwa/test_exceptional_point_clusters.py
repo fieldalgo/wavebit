@@ -25,6 +25,12 @@ from wavebit.rcwa._engine import solve_2d
 from tests.rcwa import test_conical_cutoff as _conical_cutoff
 from tests.rcwa.test_conical_cutoff import PATTERNED, _np, _pillar, _solver, _vector
 
+# One CI shard unit per test function (tests.yml, --shard): as one unit the file held one worker
+# of one shard for 107 minutes while the other shards took about 17. No test here reads what
+# another left behind. The three whose cases each trace their own solve, at 1 to 5 minutes a
+# case, carry a bare mark, so each case is a unit.
+pytestmark = pytest.mark.shard_unit(per='test')
+
 PL952 = dict(structure=_pillar(), wavelength=952.0673283430336, period=1000., thickness=[200.],
              top=1.0, bot=2.25, theta=0.3)
 SCENES = {'PA616': PATTERNED['PA616'], 'PL952': PL952}
@@ -1270,6 +1276,7 @@ def test_derivatives_at_a_coincidence_are_the_1d_rebuild_s(name, dth, algo, firs
 @pytest.mark.parametrize('first_order', [False, True], ids=['2d', 'first_order'])
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('name, dth', LITTROW_CASES)
+@pytest.mark.shard_unit
 def test_a_coincidence_under_an_abstract_trace(name, dth, algo, first_order):
     """A jointly rebuilt cluster under ``jit``, ``jit(vmap)`` and ``torch.func.vmap`` (values), and
     ``jit(grad(sum vmap))``, ``jit(vmap(grad))``, torch backward through ``torch.func.vmap``
@@ -1332,6 +1339,7 @@ def test_a_coincidence_under_an_abstract_trace(name, dth, algo, first_order):
 @pytest.mark.parametrize('first_order', [False, True], ids=['2d', 'first_order'])
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('name, dth', LITTROW_CASES)
+@pytest.mark.shard_unit
 def test_a_coincidence_field_and_its_gradient_are_the_1d_rebuild_s(name, dth, algo, first_order):
     """Six components on a 12 x 1 x 8 grid against the 1D field (its global phase removed), and
     ``jax.grad`` of ``sum |E|**2`` at nine points in the raster and the wavelength, eagerly and
@@ -1919,6 +1927,7 @@ def test_what_the_2d_screens_warn_on_is_nan_under_jit(algo, dth, says, monkeypat
 @pytest.mark.parametrize('kind', ['near-degenerate', 'normal incidence'])
 @pytest.mark.parametrize('first_order', [False, True], ids=['2d', 'first_order'])
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+@pytest.mark.shard_unit
 def test_degenerate_clusters_keep_their_bits_under_jit(kind, first_order, algo, monkeypatch):
     """:func:`test_degenerate_clusters_stay_quiet` under ``jax.jit``: the traced screen reads a
     uniform layer's degenerate clusters, in whatever basis ``eig`` chose, as quiet, and a quiet
