@@ -262,6 +262,41 @@ def test_nonfinite_observables_raise_on_both_backends(monkeypatch):
     assert seen['jax'] == seen['torch'] == ('rcwa.nonfinite', 'result')
 
 
+# ------------------------------------------------------------------ two instances of a round shape
+
+def upright_ellipse(minor):
+    """An ellipse stood upright on the unit hexagonal cell, which it leaves (support 0.525 > 0.5).
+
+    The cell's mirror through its centre maps it to itself and carries one of its instances onto
+    another, and odd grids sample that mirror, where the two boundaries are equally near.
+    """
+    region = rcwa.Region(geometry=rcwa.Ellipse(radii=(.6, minor), angle=np.pi/2), material=Material(4.))
+    return rcwa.Problem(
+        stack=rcwa.Stack(lattice=Lattice.hexagonal(1.), bottom=Material(2.25),
+                         layers=(rcwa.Layer(thickness=.25, background=Material(1.5), regions=(region,)),)),
+        excitation=rcwa.Excitation(wavelength=1.3, sources=(rcwa.PlaneWave(theta=.2, phi=.3, polarization='s'),)))
+
+
+@pytest.mark.parametrize('grid', [13, 21, 65])
+def test_a_hexagonal_ellipse_that_leaves_its_cell_differentiates_alike_on_every_backend(grid):
+    """The ring of instances reads one of two equidistant boundaries, whatever the rounding.
+
+    The ring took its nearest instance by a strict ``<`` between two exact distances, each a
+    bisection polished by Newton, so on the mirror the last bits chose -- and they moved with the
+    radius: NumPy's ``sum(T)`` jumped by 4e-6 between ``b`` and ``b + 1e-6`` at grid 21, and its
+    central difference read 1.69 where ``jax.grad`` and PyTorch read -0.32. The difference missed
+    both by 9.3e-5 relative at 13, 1.2 at 21 and 0.31 at 65 (2026-11-15). The derivatives agreed
+    with each other throughout; ``jax.jit`` and PyTorch flipped other samples of the same field
+    (``tests/rcwa/test_gamma_plan.py``, ties between two instances).
+    """
+    numerics = rcwa.Numerics(orders=(3, 3), shape_nvf_grid_size=grid)
+    through_jax, through_torch, finite_difference = derivatives(
+        upright_ellipse, .15, .15, lambda result: result.T.sum(), numerics, step=1e-6)
+    assert abs(finite_difference) > 1e-1
+    assert through_jax == pytest.approx(through_torch, rel=1e-10)        # measured 3.6e-12 at worst
+    assert through_jax == pytest.approx(finite_difference, rel=1e-7)     # measured 6.3e-9 at worst
+
+
 # ------------------------------------------------------------------ the eager doors
 
 def test_run_inside_eager_jax_grad_prepares_on_the_primal_as_pytorch_does():

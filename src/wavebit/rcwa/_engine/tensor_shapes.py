@@ -373,23 +373,28 @@ def _curve_candidate(xp, X, Y, shape, lattice, reduced, dtype, imgs, threshold2)
     if len(imgs) > 1:
         instances = P._instance_displacements(xp, X, Y, cx, cy, reduced, imgs)
     elif circle:
-        instances = (P._nearest_centre_displacement(xp, X, Y, cx, cy, reduced),)
+        instances = ((*P._nearest_centre_displacement(xp, X, Y, cx, cy, reduced), None),)
     else:
         instances = P._instance_displacements(xp, X, Y, cx, cy, reduced, _NEIGHBOURS)
-    best = nx_best = ny_best = None
-    for dx, dy in instances:
+    # Two instances tie on every sample of a mirror that carries one onto the other, and the
+    # grid samples it; the tie goes to the lower absolute index, as in the scalar ring
+    # (`parametric._nearer_instance`), whatever order `imgs` lists them in.
+    margin = P._instance_tie_margin(xp, reduced, a, b, dtype)
+    best = nx_best = ny_best = best_index = None
+    for dx, dy, index in instances:
         xr = dx * cos_a + dy * sin_a
         yr = -dx * sin_a + dy * cos_a
         distance, c, s = P._ellipse_nearest_point(xp, xr, yr, a, b)
         nx, ny = _curve_direction(xp, xr, yr, a, b, c, s, distance * distance <= threshold2,
                                   cos_a, sin_a, circle)
         if best is None:
-            best, nx_best, ny_best = distance, nx, ny
+            best, nx_best, ny_best, best_index = distance, nx, ny, index
         else:
-            take = distance < best
+            take = P._nearer_instance(distance, best, index, best_index, margin)
             best = xp.where(take, distance, best)
             nx_best = xp.where(take, nx, nx_best)
             ny_best = xp.where(take, ny, ny_best)
+            best_index = tuple(xp.where(take, k, k_best) for k, k_best in zip(index, best_index))
     return best, nx_best, ny_best
 
 
