@@ -2182,6 +2182,11 @@ def _instance_displacements(xp, X, Y, cx, cy, reduced, imgs):
     shared with the tensor curve candidates
     (:func:`~wavebit.rcwa._engine.tensor_shapes._curve_candidate`). A generator, so a long ring holds
     one instance's displacement at a time.
+
+    Each displacement comes with the instance's *absolute* index ``(km + m, kn + n)``, the
+    cells of ``reduced`` from ``(cx, cy)`` to it, which names the instance whatever ``km``,
+    ``kn`` rounded to and wherever ``(m, n)`` sits in ``imgs``: the key a tie between two
+    instances is broken by (:func:`_nearer_instance`).
     """
     a1x, a2x = reduced[0][0], reduced[0][1]
     a1y, a2y = reduced[1][0], reduced[1][1]
@@ -2190,7 +2195,72 @@ def _instance_displacements(xp, X, Y, cx, cy, reduced, imgs):
     km = xp.round((a2y * dx0 - a2x * dy0) / det)
     kn = xp.round((-a1y * dx0 + a1x * dy0) / det)
     for m, n in imgs:
-        yield dx0 - (km + m) * a1x - (kn + n) * a2x, dy0 - (km + m) * a1y - (kn + n) * a2y
+        yield (dx0 - (km + m) * a1x - (kn + n) * a2x, dy0 - (km + m) * a1y - (kn + n) * a2y,
+               (km + m, kn + n))
+
+
+#: The tie width of :func:`_nearer_instance`, in units of ``eps`` times the scene's length
+#: scale ``|a1|_1 + |a2|_1 + a + b``. See there for what it has to cover.
+_INSTANCE_TIE_ULPS = 1024.0
+
+
+def _instance_tie_margin(xp, reduced, a, b, dtype):
+    """How much nearer one instance's boundary must be to beat another's: a bound on rounding.
+
+    :data:`_INSTANCE_TIE_ULPS` ``eps (|a1x| + |a1y| + |a2x| + |a2y| + |a| + |b|)``, on the
+    basis the instances are counted on and the shape's two semi-axes -- the lengths every
+    :func:`_ellipse_distance` is a difference of. Taken through ``abs`` so it reads a traced
+    basis or a traced radius as it reads a float; it only ever meets a comparison, so its
+    derivative goes nowhere.
+    """
+    a1x, a2x = reduced[0][0], reduced[0][1]
+    a1y, a2y = reduced[1][0], reduced[1][1]
+    scale = abs(a1x) + abs(a1y) + abs(a2x) + abs(a2y) + abs(a) + abs(b)
+    return _INSTANCE_TIE_ULPS * float(xp.finfo(dtype).eps) * scale
+
+
+def _nearer_instance(distance, best, index, best_index, margin):
+    """Where the instance ``index`` at ``distance`` takes over from ``best``: a hard minimum
+    whose ties go to the lowest absolute index, on every backend.
+
+    A round shape's nearest boundary among its periodic instances (:func:`_round_instances`,
+    and the tensor curve candidates,
+    :func:`~wavebit.rcwa._engine.tensor_shapes._curve_candidate`) is a hard minimum, and a
+    grid commensurate with the cell lands *exactly* on its switching locus. A mirror of the
+    lattice that maps the shape to itself -- an ellipse at 0 or 90 deg on the hexagonal cell,
+    whose odd grids sample both mirror lines through its centre -- carries one instance onto
+    another and leaves every sample on the mirror equidistant from the two, whose normals are
+    each other's mirror images (``ny`` flips sign). A strict ``distance < best`` then read the
+    winner off rounding: 2 to 30 tied samples per grid at 13, 21 and 65 on a 1.2 x 0.3
+    ellipse that leaves its cell, of which ``jax.jit`` flipped one at 21 and PyTorch one at
+    65 against NumPy. The rounding moved with the shape, too: NumPy's own ``sum(T)`` jumped by
+    3.7e-6 between ``b`` and ``b + 1e-6`` at grid 21, so its central difference read +1.69
+    where every backend's exact derivative read -0.32 (2026-11-15,
+    ``docs/validation/rcwa/normal-field-known-limits.md`` section 8f).
+
+    Unlike :func:`_fold_to_nearest_image`, whose squared distances are a few ulps of a
+    polynomial, these come from a bisection polished by Newton (:func:`_ellipse_distance`,
+    exact to 5e-13 on a 360 nm ellipse), computed independently per instance from
+    displacements that round apart, so the margin (:func:`_instance_tie_margin`) covers that
+    error rather than one ulp: 1024 eps of the scale is ~100 times that bound (about 5 eps of
+    the ellipse's size per distance), over 2000 times the largest gap measured between two
+    exactly tied distances (0.5 eps of the scale, NumPy, PyTorch and jitted JAX, hexagonal,
+    square and rectangular cells at periods 1 and 700, grids 13, 21 and 65) and 4e-8 of the
+    nearest untied gap there (5.9e-6 of the scale). Within the margin the lower absolute index
+    ``(M, N)`` wins, lexicographically -- not the first in ``imgs``: a planned ring, the 3x3
+    of a single-image ellipse and a frozen record that searches a superset of either do not
+    list their instances in one order, and the record must replay the fresh build. While
+    every tie sits within the margin and every other gap exceeds it, the first candidate of
+    the nearest cluster to be swept takes over from anything farther, nothing farther takes
+    over from it, and within the cluster only a lower index does, so the sweep ends on the
+    cluster's lowest index whatever order it ran in. An exactly tied sample is ~1e-13 of the
+    cell from a boundary where the field is discontinuous anyway, so nothing a solve reads
+    moves except which side of that boundary the sample is counted on.
+    """
+    m, n = index
+    bm, bn = best_index
+    lower = (m < bm) | ((m == bm) & (n < bn))
+    return (distance < best - margin) | ((distance <= best + margin) & lower)
 
 
 def _round_instances(xp, X, Y, shape, lattice, reduced, dtype, imgs):
@@ -2211,13 +2281,16 @@ def _round_instances(xp, X, Y, shape, lattice, reduced, dtype, imgs):
     already switches instance across the cell's edge, and this moves that switch to the
     Voronoi boundary between the two boundaries, which is where the geometry has it. The
     fold and the offsets count cells of ``reduced``, as everywhere; ``lattice`` is the origin.
+    On that boundary two instances tie, and a grid lands there; the tie goes to the lower
+    absolute index on every backend (:func:`_nearer_instance`).
     """
     _stype, cx, cy, lx, ly, angle = shape_geometry(shape, lattice)
     cos_a = xp.cos(as_array(xp, angle, dtype=dtype))
     sin_a = xp.sin(as_array(xp, angle, dtype=dtype))
     a, b = lx / 2.0, ly / 2.0
-    best = gx_best = gy_best = None
-    for dx, dy in _instance_displacements(xp, X, Y, cx, cy, reduced, imgs):
+    margin = _instance_tie_margin(xp, reduced, a, b, dtype)
+    best = gx_best = gy_best = best_index = None
+    for dx, dy, index in _instance_displacements(xp, X, Y, cx, cy, reduced, imgs):
         xr = dx * cos_a + dy * sin_a
         yr = -dx * sin_a + dy * cos_a
         gxr, gyr = 2.0 * xr / (a ** 2), 2.0 * yr / (b ** 2)
@@ -2227,12 +2300,13 @@ def _round_instances(xp, X, Y, shape, lattice, reduced, dtype, imgs):
         gx, gy = gx / norm, gy / norm
         dist = _ellipse_distance(xp, xr, yr, a, b)
         if best is None:
-            best, gx_best, gy_best = dist, gx, gy
+            best, gx_best, gy_best, best_index = dist, gx, gy, index
         else:
-            take = dist < best
+            take = _nearer_instance(dist, best, index, best_index, margin)
             best = xp.where(take, dist, best)
             gx_best = xp.where(take, gx, gx_best)
             gy_best = xp.where(take, gy, gy_best)
+            best_index = tuple(xp.where(take, k, k_best) for k, k_best in zip(index, best_index))
     return best, gx_best, gy_best
 
 

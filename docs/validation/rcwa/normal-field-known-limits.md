@@ -1217,10 +1217,60 @@ and by the two `test_the_fold_reads_*` tests in `tests/rcwa/test_gamma_plan.py`:
 every grid-13 sample one ulp each way, the other compares NumPy, PyTorch, eager JAX and jitted
 JAX.
 
-**Still outside this fix.** The hard minimum over a round piece's ring of instances
-(`_round_instances`, and the tensor ellipse candidates) also picks a direction by a strict `<`
-between two distances. It is reached only by a shape that leaves its Wigner-Seitz cell, and it
-is not changed here.
+**Still outside this fix, then closed (2026-11-15): two instances of a round shape.** Two more
+hard minima chose a direction by a strict `<` between two distances: `_round_instances`, the
+ring of an `'arc'` piece whose shape leaves its Wigner-Seitz cell, and
+`tensor_shapes.py::_curve_candidate`, the tensor curve candidate, which searches that ring or,
+for a single-image ellipse, the 3x3 around the fold. A grid lands exactly on their switching
+locus too. A mirror of the lattice that maps the shape to itself carries one instance onto
+another, so every sample on that mirror is equidistant from two boundaries whose normals are
+each other's mirror images. On `Lattice.hexagonal(1.)` an ellipse with radii `(0.6, 0.15)` at
+`angle=pi/2` leaves its cell (support 0.525 along `a2`), and odd grids sample both mirror lines
+through its centre: 2, 4 and 10 exactly tied samples at grids 13, 21 and 65. Both distances come
+from `_ellipse_distance`, a bisection polished by Newton, and are computed from displacements
+that round apart, so rounding chose the winner. Against NumPy, `jax.jit` read the other instance
+at one sample at grid 21 and PyTorch at one at grid 65, in the ring and the tensor candidate
+alike. A 1.1 x 0.3 ellipse at 30 deg, which stays in its cell, flipped under `jax.jit` at one
+sample at 21 and one at 65 in the tensor 3x3. The rounding also moved with the shape. NumPy's
+`sum(T)` (orders `(3, 3)`, the scene of the circle above with this ellipse in place of the
+circle) jumped by 3.7e-6 between `b = 0.15` and `0.15 + 1e-6` at grid 21. Its central
+difference of `d sum(T) / d b` read +1.69 there, where `jax.grad` and PyTorch both read -0.320.
+The difference missed both by 9.3e-5 relative at grid 13, 1.2 at 21 and 0.31 at 65, while the
+two exact derivatives agreed with each other to 2e-11.
+
+The fix is in `parametric.py::_nearer_instance`, which both loops now call. A candidate takes over
+when it is nearer by more than a margin, and within the margin the lower absolute instance
+index `(M, N)` wins, compared lexicographically. The index counts cells of the reduced basis
+from the shape's centre (`_instance_displacements`), and the rule does not depend on the order of
+`imgs`. That order differs between a planned ring, the 3x3 and a frozen record that searches a
+superset of either, and the record must replay the fresh build. "First in the sweep" would
+not do. The margin covers the error of `_ellipse_distance` rather than one ulp:
+`1024 eps (|a1x| + |a1y| + |a2x| + |a2y| + |a| + |b|)`, 7.1e-13 on this scene. That is about 100
+times the tested accuracy of `_ellipse_distance` (5e-13 on a 360 nm ellipse). On NumPy, PyTorch
+and jitted JAX, across hexagonal, square and rectangular cells at periods 1 and 700 and grids
+13, 21 and 65, exactly tied distances were within 0.5 eps of the scene's length scale. The
+nearest untied pair was 5.9e-6 of it. Afterwards no backend differs from NumPy at any sample,
+reversing `imgs` changes nothing, and a one-ulp nudge of every sample either way changes nothing
+off the shape's own centre. The central difference meets `jax.grad` to 7.9e-11, 6.3e-9 and
+2.1e-9 at grids 13, 21 and 65, and the derivatives agree to ≤ 6.3e-12. NumPy's `sum(T)` is
+unchanged at grid 13 and moved by -1.0e-6 at 21 and -8.8e-7 at 65, at the ties its rounding had
+given to the higher index. On a disjoint tensor layer (that ellipse with a diagonal tensor,
+beside a radius-0.1 circle at `(0.5, 0)`), `sum(T)` is bit-identical before and after at all
+three grids. The default grid (1024, even) does not sample these mirrors for a lone shape, whose
+field is built at the cell centre. Pinned by
+`tests/api/test_eager_grad_parity.py::test_a_hexagonal_ellipse_that_leaves_its_cell_differentiates_alike_on_every_backend`
+(grids 13, 21 and 65) and
+`tests/rcwa/test_gamma_plan.py::test_a_round_shape_reads_one_instance_where_two_tie_on_every_backend`
+(the ring and the tensor candidate at grids 21 and 65, against PyTorch, eager JAX, `jax.jit`,
+reversed `imgs` and one-ulp nudges). Both fail under a strict `<`.
+
+**Still outside this fix.** An odd grid also samples the shape's own centre, where the level set
+has no gradient. The normal there is whatever `_hypot_safe` leaves, and a one-ulp nudge turns it
+arbitrarily. Every backend reads the same value unnudged. This is a degeneracy of one instance,
+not a tie between two, and it is not changed here. The polygon and segment candidates in
+`boundary.py` choose their nearest foot with `argmin`, which keeps the first of equal squared
+distances, and their medial-axis samples were not audited for backend neutrality in this
+change.
 
 ## 9. The cases, A to L, as of 2026-09-11
 

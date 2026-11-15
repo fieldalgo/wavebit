@@ -715,6 +715,103 @@ def test_the_fold_reads_the_same_image_on_every_backend_and_under_jit():
         assert np.abs(gx - want[0]).max() < 1e-12 and np.abs(gy - want[1]).max() < 1e-12, name
 
 
+HEXAGONAL = np.array([[1.0, -0.5], [0.0, np.sqrt(3.0) / 2.0]])
+#: Upright on the hexagonal cell, so the cell's mirror through its centre maps it to itself and
+#: carries instance ``a2`` onto ``-a1 - a2``. It leaves its Wigner-Seitz cell (support 0.525
+#: along ``a2`` against 0.5): a ring of 19 instances. The second one is single-image, which
+#: the tensor candidates search over the 3x3.
+UPRIGHT = dict(type='ellipse', cx=0.0, cy=0.0, lx=1.2, ly=0.3, angle=np.pi / 2, material=4.0)
+AT_30 = dict(type='ellipse', cx=0.0, cy=0.0, lx=1.1, ly=0.3, angle=np.pi / 6, material=4.0)
+
+
+def _instance_minimum(xp, which, shape, grid, imgs=None, nudge=None):
+    """``(distance, nx, ny)`` of the scalar ring or the tensor curve candidate on the hexagonal grid,
+    every NumPy sample moved one ulp towards ``nudge`` when one is given."""
+    from wavebit.rcwa._engine import boundary
+    from wavebit.rcwa._engine import tensor_shapes as TS
+    A = as_lattice(lattice=HEXAGONAL)
+    plan = P.plan_gamma([shape], A)
+    reduced = reduced_basis(A, plan.reduction)
+    imgs = plan.pieces[0].imgs if imgs is None else imgs
+    X, Y = sample_grid(xp, (grid, grid), A, xp.float64)
+    if nudge is not None:
+        X, Y = np.nextafter(X, nudge[0]), np.nextafter(Y, nudge[1])
+    if which == 'ring':
+        return P._round_instances(xp, X, Y, shape, A, reduced, xp.float64, imgs)
+    return TS._curve_candidate(xp, X, Y, shape, A, reduced, xp.float64, imgs,
+                               boundary._on_interface_threshold2(xp, A, xp.float64))
+
+
+def _exact_ties(shape, grid, imgs):
+    """Samples whose two nearest instances are equidistant to 1e-12: an independent count."""
+    A = as_lattice(lattice=HEXAGONAL)
+    reduced = np.asarray(reduced_basis(A, P.plan_gamma([shape], A).reduction), dtype=float)
+    X, Y = sample_grid(np, (grid, grid), A, np.float64)
+    _, cx, cy, lx, ly, angle = P.shape_geometry(shape, A)
+    c, s = np.cos(angle), np.sin(angle)
+    a1, a2 = reduced[:, 0], reduced[:, 1]
+    k = np.round(np.linalg.solve(reduced, np.stack([X.ravel() - cx, Y.ravel() - cy])))
+    d = []
+    for m, n in imgs:
+        dx = X.ravel() - cx - (k[0] + m) * a1[0] - (k[1] + n) * a2[0]
+        dy = Y.ravel() - cy - (k[0] + m) * a1[1] - (k[1] + n) * a2[1]
+        d.append(P._ellipse_distance(np, dx * c + dy * s, -dx * s + dy * c, lx / 2, ly / 2))
+    d = np.sort(np.stack(d), axis=0)
+    return np.count_nonzero(d[1] - d[0] < 1e-12)
+
+
+@pytest.mark.parametrize('which, shape, grid', [('ring', UPRIGHT, 21), ('ring', UPRIGHT, 65),
+                                                ('curve', UPRIGHT, 21), ('curve', UPRIGHT, 65),
+                                                ('curve', AT_30, 21), ('curve', AT_30, 65)])
+def test_a_round_shape_reads_one_instance_where_two_tie_on_every_backend(which, shape, grid):
+    """Two instances equidistant from a sample give it one normal on NumPy, PyTorch, JAX and jit.
+
+    The hexagonal cell's mirrors map an upright ellipse to itself and one of its instances onto
+    another, and odd grids sample the mirror, where the two boundaries are equally near and their
+    normals are each other's mirror images. The hard minimum picked by a strict ``<`` between two
+    distances from :func:`~wavebit.rcwa._engine.parametric._ellipse_distance`, each good to
+    ~1e-13, so rounding chose: against NumPy, ``jax.jit`` read the other instance at one sample
+    at grid 21 and PyTorch at one at 65, for the leaving ellipse's ring and its tensor curve
+    candidate alike, and ``jax.jit`` at one sample at 21 and one at 65 for the single-image
+    ellipse's 3x3 (2026-11-15). The tie now goes to the lower absolute index, the same answer
+    whatever order the instances are listed in and a one-ulp nudge of every sample either way.
+    """
+    torch = pytest.importorskip('torch')
+    jax = pytest.importorskip('jax')
+    import array_api_compat.numpy as anp
+    import array_api_compat.torch as atorch
+    jnp = pytest.importorskip('jax.numpy')
+    from wavebit.rcwa._engine import tensor_shapes as TS
+    imgs = P.plan_gamma([shape], as_lattice(lattice=HEXAGONAL)).pieces[0].imgs
+    searched = imgs if which == 'ring' or len(imgs) > 1 else TS._NEIGHBOURS
+    assert _exact_ties(shape, grid, searched) >= 2                  # the tie is on the grid
+
+    want = [np.asarray(t) for t in _instance_minimum(anp, which, shape, grid)]
+    with jax.enable_x64(True):
+        got = {'torch': [t.numpy() for t in _instance_minimum(atorch, which, shape, grid)],
+               'jax': [np.asarray(t) for t in _instance_minimum(jnp, which, shape, grid)],
+               'jax.jit': [np.asarray(t) for t in
+                           jax.jit(lambda: _instance_minimum(jnp, which, shape, grid))()]}
+    if len(imgs) > 1:
+        got['reversed'] = [np.asarray(t) for t in
+                           _instance_minimum(anp, which, shape, grid, imgs[::-1])]
+    for ex in (-np.inf, np.inf):
+        for ey in (-np.inf, np.inf):
+            got[f'nudged {ex:+} {ey:+}'] = [np.asarray(t) for t in
+                                            _instance_minimum(anp, which, shape, grid, nudge=(ex, ey))]
+    # An odd grid also samples the shape's own centre, where the level set has no gradient and
+    # a nudge turns the normal at will: a degeneracy of one instance, not a tie between two, and
+    # one every backend reads alike unnudged. The nudged fields are compared off it.
+    X, Y = sample_grid(np, (grid, grid), as_lattice(lattice=HEXAGONAL), np.float64)
+    centre = 0.5 * (HEXAGONAL[:, 0] + HEXAGONAL[:, 1])
+    off_centre = np.hypot(X - centre[0], Y - centre[1]) > 1e-9
+    for name, (d, nx, ny) in got.items():
+        keep = off_centre if name.startswith('nudged') else np.ones_like(off_centre)
+        assert np.abs(d - want[0]).max() < 1e-12, name
+        assert np.abs(nx - want[1])[keep].max() < 1e-9, name
+        assert np.abs(ny - want[2])[keep].max() < 1e-9, name
+
+
 @pytest.mark.parametrize('name, shape', [('350 box', _box(lx=350.0, ly=350.0)),
                                          ('500 x 700 box', _box(lx=500.0, ly=PERIOD)),
                                          ('693 circle', CIRCLE_693),
