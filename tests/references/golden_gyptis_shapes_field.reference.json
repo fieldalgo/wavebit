@@ -1,0 +1,115 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_gyptis_shapes_field",
+  "physics": "rcwa",
+  "comparison": "different-discretization",
+  "role": "external oracle for the electric near field inside a patterned layer whose curved walls are not one circle's: 3D finite-element fields of a dielectric ellipse and of two dielectric circles, which the split reconstructions and the plain Fourier sum are measured against",
+  "references": [
+    {
+      "tool": "gyptis",
+      "version": "1.2.0",
+      "build": "FEniCS (dolfin) 2019.1.0 underneath, gmsh 4.15.2 for the geometry and the mesh, MUMPS direct solve out of core; Python 3.14.10, from conda-forge",
+      "modified": {
+        "value": false,
+        "description": "used through its public Python API; the package itself was not changed"
+      },
+      "spdx": "MIT",
+      "source": "https://anaconda.org/conda-forge/gyptis",
+      "install": {
+        "kind": "conda",
+        "command": "micromamba create -n gyptis -c conda-forge gyptis=1.2.0"
+      },
+      "settings": "Maxwell3DPeriodic on one eighth of the cell, using the exact mirror symmetries of normal incidence with E along x (the x mirror a perfect electric wall, the y mirror a perfect magnetic wall, and an even/odd split in z, two solves); second-order edge (Nedelec) elements; a perfectly matched layer above. The model of the cylinder reference with the cylinder replaced by the shape; the two circles enter as one half circle in the quarter cell, the other being its mirror image. Ellipse (E_ellipse): relative residual of the two direct solves 2.0e-10 and 1.7e-12, R = 0.052820 and T = 0.946815 from the same solution. Two circles (E_two_circles): residuals 1.2e-12 and 1.4e-12, R = 0.022449 and T = 0.977402. The stored phasors are in gyptis's time convention, the conjugate of Wavebit's; the consumer maps them as -exp(2 pi i h / wavelength) * conj(E), with h the layer thickness",
+      "discretization": "tetrahedral meshes graded toward the walls and their rims: 32238 cells and 216320 complex unknowns per solve for the ellipse (smallest edge 3.69 nm), 34326 cells and 229648 unknowns for the two circles (3.62 nm); the product side is a Fourier truncation of the same cell",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "private research repository",
+    "sha256": "dc6cc2ef2127d564cd1fd2f86e147e5a08a4d600a4f5fca30299e3dfebddba95",
+    "command": "python fem_shape.py e1_T2 e1 T2 12.25 1 for E_ellipse and python fem_shape.py cc_T2 cc T2 12.25 1 for E_two_circles; then the plane samples laid out on the 48 x 48 grid",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-11-15T11:20:00Z",
+  "environment": {
+    "python": "3.14.10",
+    "numpy": "2.5.4",
+    "threads": 4
+  },
+  "cost": {
+    "wall_seconds": 2323.0,
+    "max_rss_gb": null,
+    "note": "both runs, two solves each, factorization out of core, on a machine that ran other work at the same time"
+  },
+  "inputs": {
+    "cell": {
+      "period_nm": [
+        400.0,
+        400.0
+      ],
+      "layer_thickness_nm": 150.0,
+      "shapes": {
+        "E_ellipse": "one ellipse at the cell centre, semi-axes 130 nm along x and 80 nm along y",
+        "E_two_circles": "two circles of radius 60 nm centred at (-90, 0) and (90, 0) nm from the cell centre"
+      },
+      "shape_epsilon": 12.25,
+      "background_epsilon": 1.0,
+      "half_spaces_epsilon": 1.0
+    },
+    "incidence": {
+      "wavelength_nm": 900.0,
+      "direction": "normal",
+      "polarization": "E along x"
+    },
+    "samples": {
+      "plane": "mid-height of the layer, z = 75 nm above its lower face",
+      "x_nm": "48 points, ((i + 0.37)/48 - 1/2) * 400",
+      "y_nm": "48 points, ((j + 0.41)/48 - 1/2) * 400",
+      "layout": "E_ellipse[j, i, component] and E_two_circles[j, i, component] at (x[i], y[j]), components (Ex, Ey, Ez)"
+    },
+    "mesh_level": "T2, the second of the ladder; the first is the self-check"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": "the next coarser mesh level differs from this one, over the same 2304 samples, by 0.38% of the plane RMS of the in-plane field for the ellipse (19478 cells; R 0.052843 against 0.052820) and by 0.38% for the two circles (20532 cells; R 0.022438 against 0.022449). The same script and environment on the cylinder of golden_gyptis_cylinder_field, at its coarsest stored level, are 0.15% from that stored level and 0.16% from the stored finest one. An FDTD solution (Meep 1.35.0, 5 nm cells) agrees with the coarser level to 0.29% of the plane RMS 15 nm or more from the walls on both cells",
+    "failed_or_discarded": "the first run of the ellipse was discarded: two faces of the x mirror were missed by a bounding-box search and carried no boundary condition, and its R + T was 1.051. The search was widened and the faces found are now checked by area; the stored run has R + T = 0.9996",
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_gyptis_shapes_field.npz",
+    "format": "npz",
+    "file_sha256": "1ab51c114d8827ac150c848c36af3f8c5854523403319d62d24ad5870fa596c6",
+    "arrays": [
+      "E_ellipse",
+      "E_two_circles",
+      "x",
+      "y",
+      "z"
+    ]
+  },
+  "values_sha256": "8707a40961835d8fdcdf4dc5b31489ec99aabf7ca104baf52b9173d67001b3f3",
+  "content_sha256": "927e4042d6c779441db2f29425a5f5a074908a6e7d6eb0fda3057bedf91146c4",
+  "consumers": [
+    "tests/references/test_gyptis_shapes_field_golden.py"
+  ],
+  "provenance_status": "complete",
+  "sources": {},
+  "regeneration": [],
+  "not_recorded": {
+    "generator.product_commit": "the generator does not load the product and records no commit",
+    "generator.clean_tree": "the generator does not load the product and records no commit",
+    "cost.max_rss_gb": "the run script reports the peak in the wrong unit on Linux",
+    "outcomes.matched": "what the comparison found is in the consumer test",
+    "outcomes.not_matched": "what the comparison found is in the consumer test",
+    "outcomes.not_run": "what the comparison found is in the consumer test"
+  }
+}

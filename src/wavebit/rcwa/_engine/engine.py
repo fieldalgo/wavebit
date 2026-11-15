@@ -5021,7 +5021,8 @@ class CoreFactorizationMixin:
         takes ``'plain'``.
 
         ``'split'`` and ``'splitw'`` are the rules for a curved wall, which ``'lalanne'`` refuses:
-        on a layer that holds one circle they split ``E_x`` and ``E_y`` along the circle's normal,
+        on a layer of circles, or of one ellipse along the cell's axes, they split ``E_x`` and ``E_y``
+        along the wall's normal,
         sum the normal ``D`` and the tangential ``E`` and divide the first by ``eps``
         (:mod:`~wavebit.rcwa._engine.splitw`). ``'splitw'`` uses that normal near the wall only.
         They rebuild ``E`` alone and refuse every other patterned layer by name. Where ``Re eps``
