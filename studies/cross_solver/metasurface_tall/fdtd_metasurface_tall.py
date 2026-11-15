@@ -229,7 +229,7 @@ def register():
     with copy.open('xb') as stream:
         stream.write(Path(__file__).read_bytes())
     record = dict(registered=timestamp(), identity=ident, fingerprint=fingerprint,
-                  base=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
+                  base=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True, encoding='utf-8').strip(),
                   copy=copy.name, protocol=__doc__, layouts=layouts,
                   reference_ladders=REFS, memory=instrument.memory())
     with REG.open('x',encoding='utf-8',newline='\n') as stream:

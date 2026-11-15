@@ -71,7 +71,7 @@ def test_the_moved_operator_is_an_fd_module_that_imports_with_no_cycle():
             'assert not leaked, leaked\n'
             'print(diagonal)\n')
     out = subprocess.run([sys.executable, '-c', code], cwd=ROOT, capture_output=True,
-                         text=True, timeout=300)
+                         text=True, timeout=300, encoding='utf-8')
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip() == '[1.0, 1.0, 1.0]'
 

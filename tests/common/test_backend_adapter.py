@@ -790,7 +790,7 @@ def test_a_concrete_jax_array_reaches_torch_by_value(x64):
     import wavebit
     env = dict(os.environ, PYTHONPATH=str(Path(wavebit.__file__).parents[1]))
     done = subprocess.run([sys.executable, '-W', 'ignore', '-c', _JAX_INTO_TORCH, x64], env=env,
-                          cwd=tempfile.gettempdir(), capture_output=True, text=True)
+                          cwd=tempfile.gettempdir(), capture_output=True, text=True, encoding='utf-8')
     assert done.returncode == 0 and done.stdout.strip() == 'ok', done.stderr[-3000:]
 
 

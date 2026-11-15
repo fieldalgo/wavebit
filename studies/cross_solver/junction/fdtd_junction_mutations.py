@@ -12,6 +12,7 @@ from tools.repository_paths import repository_root
 from pathlib import Path
 import hashlib
 import json
+import os
 import subprocess
 import sys
 
@@ -108,7 +109,8 @@ for name, changes, test in mutants:
             (root/path).write_text(text.replace(before, after), encoding='utf-8')
         result = subprocess.run([sys.executable, '-m', 'pytest', '-q', '-p', 'no:cacheprovider',
                                  test if '::' in test else 'tests/fdtd/test_fd_junction.py::'+test],
-                                cwd=root, capture_output=True, text=True)
+                                cwd=root, capture_output=True, text=True, encoding='utf-8',
+                                env=dict(os.environ, PYTHONIOENCODING='utf-8'))
         output = result.stdout+'\n'+result.stderr
         (logs / (name+'.log')).write_text(output, encoding='utf-8')
         assert result.returncode == 1 and 'FAILED' in output, (name, result.returncode, output[-1500:])

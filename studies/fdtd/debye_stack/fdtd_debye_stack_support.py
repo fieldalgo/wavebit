@@ -91,7 +91,7 @@ def write(path, value, *, exclusive=False):
 
 def start():
     require(re.fullmatch(r'[0-9a-f]{40}', BASE), 'Expected full predecessor commit identity.')
-    head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True, encoding='utf-8').strip()
     require(head == BASE, 'Run this milestone before committing it, on the registered base.')
     require(not os.environ.get('XLA_FLAGS'), 'Do not use XLA_FLAGS for this milestone.')
     CONTROL.mkdir(parents=True, exist_ok=True)

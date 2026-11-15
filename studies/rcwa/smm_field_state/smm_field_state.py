@@ -635,7 +635,7 @@ def other_tree(rev, sections=None):
     candidates = ('src/wavebit/__init__.py', 'wavebit/__init__.py')
     tracked = subprocess.run(
         ['git', '-C', ROOT, 'ls-tree', '-r', '--name-only', rev, '--', *candidates],
-        check=True, capture_output=True, text=True).stdout.splitlines()
+        check=True, capture_output=True, text=True, encoding='utf-8').stdout.splitlines()
     package = next((str(Path(name).parent) for name in candidates if name in tracked), None)
     if package is None:
         raise RuntimeError(f'No wavebit source package in archived revision: {rev}')
@@ -646,8 +646,8 @@ def other_tree(rev, sections=None):
         command = [sys.executable, os.path.abspath(__file__), '--root', tmp, '--emit-json']
         if sections is not None:
             command += ['--only', *map(str, sections)]
-        run = subprocess.run(command, cwd=tmp, env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'),
-                             check=True, capture_output=True, text=True)
+        run = subprocess.run(command, cwd=tmp, env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1', PYTHONIOENCODING='utf-8'),
+                             check=True, capture_output=True, text=True, encoding='utf-8')
         return json.loads(run.stdout.splitlines()[-1])
 
 

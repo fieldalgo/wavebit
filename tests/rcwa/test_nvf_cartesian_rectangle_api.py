@@ -239,7 +239,7 @@ assert 'jax' not in sys.modules
 """
     environment = dict(os.environ, PYTHONPATH=str(tmp_path))
     result = subprocess.run([sys.executable, '-c', code], cwd=tmp_path, env=environment,
-                            capture_output=True, text=True, timeout=60)
+                            capture_output=True, text=True, timeout=60, encoding='utf-8')
     assert result.returncode == 0, result.stderr
 
 

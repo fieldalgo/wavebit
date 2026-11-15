@@ -1811,7 +1811,7 @@ def provenance():
     this = Path(__file__).resolve()
 
     def git(*a):
-        return subprocess.check_output(['git', *a], cwd=ROOT, text=True).strip()
+        return subprocess.check_output(['git', *a], cwd=ROOT, text=True, encoding='utf-8').strip()
     return dict(
         study_sha256=_digest([this]), references_sha256=_digest(references),
         package_sha256=_digest(package), source_sha256=_digest([this, *references, *package]),
@@ -1826,7 +1826,8 @@ def machine_snapshot():
     """Other Python processes at this moment; wall clock with any of them alive is contended."""
     try:
         rows = subprocess.run(['tasklist', '/FI', 'IMAGENAME eq python.exe', '/FO', 'CSV', '/NH'],
-                              capture_output=True, text=True, timeout=30).stdout
+                              capture_output=True, text=True, timeout=30,
+                              encoding='oem', errors='replace').stdout   # console code page
     except (OSError, subprocess.SubprocessError) as error:
         return dict(error=str(error))
     others = []

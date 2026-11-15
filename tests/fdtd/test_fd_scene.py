@@ -101,7 +101,7 @@ def _skeleton_in_a_subprocess(hashseed):
             'print(fd.plan(reference_scene()).skeleton)')
     env = dict(os.environ, PYTHONHASHSEED=str(hashseed))
     out = subprocess.run([PY, '-c', code], cwd=ROOT, env=env, capture_output=True, text=True,
-                         check=True, timeout=300)
+                         check=True, timeout=300, encoding='utf-8')
     return out.stdout.strip()
 
 
@@ -356,7 +356,7 @@ def _digest_in_a_subprocess(hashseed):
             'print(_digest((a, b))[1])')
     env = dict(os.environ, PYTHONHASHSEED=str(hashseed))
     out = subprocess.run([PY, '-c', code], cwd=ROOT, env=env, capture_output=True, text=True,
-                         check=True, timeout=300)
+                         check=True, timeout=300, encoding='utf-8')
     return out.stdout.strip()
 
 

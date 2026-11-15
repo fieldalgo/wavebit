@@ -1310,6 +1310,6 @@ back = jax.jit(lambda S: S)(early)
 assert (back.entry_port.channel, back.exit_port.channel) == ('te', 'te')
 print('ok')
 """).replace('REPAIR', REPAIRS[repair])
-    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True)
+    out = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, encoding='utf-8')
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip().endswith('ok')

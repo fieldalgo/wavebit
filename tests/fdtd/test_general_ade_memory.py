@@ -237,7 +237,7 @@ print(json.dumps(rows))
     for seed in ('13', '71'):
         env = dict(os.environ, PYTHONPATH=str(root/'src'), PYTHONHASHSEED=seed)
         process = subprocess.run([sys.executable, '-c', source], cwd=root, env=env,
-                                 capture_output=True, text=True, check=True)
+                                 capture_output=True, text=True, check=True, encoding='utf-8')
         outputs.append(json.loads(process.stdout.strip().splitlines()[-1]))
     assert outputs[0] == outputs[1]
     assert outputs[0]['cpu'] == dict(skeleton=ORDINARY_SKELETON, term='PoleTerm')

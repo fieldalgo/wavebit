@@ -71,8 +71,8 @@ def main():
     args = parser.parse_args()
     assert args.attempt > 0
     assert len(args.expected_base) == 40 and all(c in '0123456789abcdef' for c in args.expected_base)
-    head = subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
-    branch = subprocess.check_output(['git','branch','--show-current'],cwd=ROOT,text=True).strip()
+    head = subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True, encoding='utf-8').strip()
+    branch = subprocess.check_output(['git','branch','--show-current'],cwd=ROOT,text=True, encoding='utf-8').strip()
     assert (head,branch) == (args.expected_base,args.expected_branch)
     directory = ROOT/'studies/results'/f'{PREFIX}algebra_attempt{args.attempt}'
     directory.mkdir(parents=True,exist_ok=False)

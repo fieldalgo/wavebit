@@ -426,10 +426,10 @@ def provenance():
     base = Path(fd.__file__).resolve().parent
     try:
         got = subprocess.run(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], capture_output=True,
-                             text=True, timeout=20)
+                             text=True, timeout=20, encoding='utf-8')
         commit = got.stdout.strip() if got.returncode == 0 else 'unknown'
         dirty = subprocess.run(['git', '-C', str(ROOT), 'status', '--porcelain', 'src/wavebit'],
-                               capture_output=True, text=True, timeout=20).stdout.strip()
+                               capture_output=True, text=True, timeout=20, encoding='utf-8').stdout.strip()
     except OSError:
         commit, dirty = 'unknown', ''
     versions = {'numpy': np.__version__, 'python': platform.python_version()}

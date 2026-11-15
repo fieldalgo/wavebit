@@ -29,10 +29,13 @@ push·공유 브랜치 강제 push·반영 시 squash·통합 merge 커밋을 �
 원본마다 `Ports: <sha>`를 적습니다(SHA만). SHA 조상 관계만으로 커밋 누락을 보고하지 않습니다.
 
 경로·임시 디렉터리·subprocess는 이식 가능한 API와 명시적 인코딩을 사용합니다.
-파일 쪽은 `tests/api/test_text_encoding.py`가 확인합니다. Windows에서는 로캘 코덱이 cp949나
-cp1252이므로 `src`, `tests`, `tools`, `examples`, `tutorials`, `docs`, `studies`의 모든
-`open`, `Path.open`, `read_text`, `write_text`는 인코딩을 명시해야 합니다.
-`tools/relocations.json`이 바이트를 보존하는 파일만 예외입니다.
+파일과 파이프 쪽은 `tests/api/test_text_encoding.py`가 확인합니다. Windows에서는 로캘 코덱이
+cp949나 cp1252이므로 `src`, `tests`, `tools`, `examples`, `tutorials`, `docs`, `studies`의
+모든 `open`, `Path.open`, `read_text`, `write_text`와 텍스트 모드 `subprocess` 호출은
+인코딩을 명시해야 합니다. `tools/relocations.json`이 바이트를 보존하는 파일만 예외입니다.
+Python 자식 프로세스도 UTF-8로 써야 합니다. 테스트 스위트의 모든 자식 프로세스에는
+`tests/conftest.py`가 `PYTHONIOENCODING=utf-8`을 설정하고, Python 자식 프로세스를 띄우는
+도구와 연구 스크립트는 그 자식 프로세스에 같은 값을 설정합니다.
 수치 기준을 낮추거나 설명 없는 skip으로 실패를 감추지 않고 OS별 동작을 확인합니다.
 기본 언어는 영어이며 한국어 문서를 영어판과 함께 갱신합니다. 실행 예제와 코드는 영어로 유지합니다.
 

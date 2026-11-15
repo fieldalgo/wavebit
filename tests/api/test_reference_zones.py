@@ -351,7 +351,7 @@ def _tracked(root):
 
 def _repository_sources(root):
     try:
-        top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=root, capture_output=True, text=True)
+        top = subprocess.run(['git', 'rev-parse', '--show-toplevel'], cwd=root, capture_output=True, text=True, encoding='utf-8')
     except OSError:
         pytest.skip('git is not available, so the tracked files are unknown')
     if top.returncode != 0 or not pathlib.Path(top.stdout.rstrip('\n')).samefile(root):

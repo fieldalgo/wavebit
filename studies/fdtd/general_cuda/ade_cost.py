@@ -157,7 +157,7 @@ def main(argv=None):
             precision='float64', cpu_threads=torch.get_num_threads())
         print(json.dumps(report['environment']), flush=True)
         report['product_head'] = subprocess.check_output(
-            ['git', '-C', str(args.source_root), 'rev-parse', 'HEAD'], text=True).strip()
+            ['git', '-C', str(args.source_root), 'rev-parse', 'HEAD'], text=True, encoding='utf-8').strip()
         names = ('_api.py', '_runtime.py', '_execution.py', '_kernel/poles.py', '_kernel/step.py',
                  '_kernel/observe.py', '_prepare/plan.py', '_prepare/params.py',
                  '_prepare/coefficients.py', '_prepare/report.py', '_prepare/compact.py',

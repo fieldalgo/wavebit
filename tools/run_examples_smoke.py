@@ -96,6 +96,9 @@ def run_one(script: Path) -> tuple[bool, float, list[str], str]:
     # Plot examples must also finish on runners without an interactive display.
     env['MPLBACKEND'] = 'Agg'
 
+    # The example writes its output in UTF-8, the encoding this process decodes it with.
+    env['PYTHONIOENCODING'] = 'utf-8'
+
     # Select this worktree explicitly, including when a shared scientific environment
     # has an editable installation pointing at another checkout.
     env['PYTHONPATH'] = os.pathsep.join(
@@ -115,6 +118,7 @@ def run_one(script: Path) -> tuple[bool, float, list[str], str]:
                 env=env,
                 capture_output=True,
                 text=True,
+                encoding='utf-8',
                 errors='replace',
                 timeout=budget,
             )

@@ -47,7 +47,7 @@ def invoke(root, output, flags, *arguments):
                '--root', str(root), '--profile', 'full', '--output', str(output),
                *arguments]
     return subprocess.run(command, cwd=root, env=environment, text=True,
-                          capture_output=True, timeout=60)
+                          capture_output=True, timeout=60, encoding='utf-8')
 
 
 @pytest.mark.parametrize(('flags', 'changed'), [

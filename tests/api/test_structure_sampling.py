@@ -79,6 +79,8 @@ def test_layer_selection_and_no_scattering_or_compat_import():
     package = Path(wavebit.__file__).resolve()
     code = f'''
 import sys
+sys.stdout.reconfigure(encoding='utf-8')            # -I ignores PYTHONIOENCODING
+sys.stderr.reconfigure(encoding='utf-8')
 from pathlib import Path
 sys.path.insert(0, {str(package.parents[1])!r})
 import wavebit
@@ -101,7 +103,7 @@ np.testing.assert_array_equal(rcwa.sample_structure(p,layer=1,samples=8),np.full
 assert not any(m.startswith('wavebit.compat') for m in sys.modules)
 assert 'jax' not in sys.modules and 'torch' not in sys.modules
 '''
-    child = subprocess.run([sys.executable, '-I', '-c', code], capture_output=True, text=True)
+    child = subprocess.run([sys.executable, '-I', '-c', code], capture_output=True, text=True, encoding='utf-8')
     assert child.returncode == 0, child.stderr
 
 

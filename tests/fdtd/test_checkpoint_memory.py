@@ -241,7 +241,7 @@ def torch_peak_rise(steps, block):
     env = dict(os.environ, MALLOC_MMAP_THRESHOLD_='65536', PYTHONPATH=os.pathsep.join(
         [root] + [p for p in (os.environ.get('PYTHONPATH'),) if p]))
     out = subprocess.run([sys.executable, '-c', _TORCH_PEAK, str(steps), str(block).lower()],
-                         cwd=root, env=env, capture_output=True, text=True, check=True)
+                         cwd=root, env=env, capture_output=True, text=True, check=True, encoding='utf-8')
     rise = json.loads(out.stdout.strip().splitlines()[-1])
     # A gradient always allocates; a zero is a blind instrument, not a small gradient.
     assert rise > 0, f'the peak-memory reading saw no gradient ({steps} steps, block {block})'

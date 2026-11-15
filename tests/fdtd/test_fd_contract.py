@@ -142,7 +142,7 @@ def test_the_skeleton_is_the_same_in_another_process():
     code = ('import sys; sys.path.insert(0, "tests")\n'
             'import wavebit.fdtd._legacy as fd\nfrom tests.fixtures.fdtd.fd_helpers import cavity_box\n'
             'print(fd.plan(cavity_box("pec", N=8, steps=20)[0]).skeleton)')
-    out = subprocess.run([PY, '-c', code], capture_output=True, text=True, check=True).stdout
+    out = subprocess.run([PY, '-c', code], capture_output=True, text=True, check=True, encoding='utf-8').stdout
     assert out.strip() == fd.plan(_scene()).skeleton
 
 
@@ -150,7 +150,7 @@ def test_importing_wavebit_or_wavebit_fd_does_not_import_jax():
     code = ('import sys, wavebit, wavebit.fdtd._legacy\n'
             "assert 'jax' not in sys.modules and 'torch' not in sys.modules\n"
             'print("ok")')
-    out = subprocess.run([PY, '-c', code], capture_output=True, text=True, check=True).stdout
+    out = subprocess.run([PY, '-c', code], capture_output=True, text=True, check=True, encoding='utf-8').stdout
     assert out.strip() == 'ok'
 
 
