@@ -344,6 +344,15 @@ metadata records the rule under `'reconstruction'` when it is not the default. T
   shapes. Loss keeps it finite but not small: at
   `eps = -20+0.1j`, order 3, the rule's peak is typically 3 times the default's and up to 4000
   times at the worst fill. Compare two truncations before trusting a peak on a metal line.
+  Measured on a metal square (`eps` -20+1.5j, side 200 nm in a 400 nm cell, 150 nm thick, normal
+  incidence at 900 nm, `factorization='li'`) against an FDTD reference (Meep, 5 nm cells, which is
+  0.8% from its own 6.7 nm run), off the walls by 15 nm: the default is 21 / 19 / 13 / 14% of the
+  plane's RMS field away at orders 8 / 12 / 16 / 20 and the rule 31 / 26 / 21 / 20%. Inside the
+  metal the rule is the closer one, 8 / 6 / 5 / 4% against 27 / 15 / 17 / 13%; outside it is not.
+  The solve itself is the limit: its `R` is 0.351 to 0.352 at those orders where the reference
+  has 0.342, and `'nvf'` on the same square is further off than `'li'`. The same square as a
+  dielectric (`eps` 12.25) reads 2.0 / 1.2 / 0.9% for the rule against 5.7 / 4.0 / 2.6% at orders
+  8 / 12 / 16.
 - **One order along an axis.** The lines still read the walls along that axis, though the solve
   cannot resolve them, so `E_x` differs between two samples the modes cannot tell apart. RETICOLO
   does the same, and on Li's factorization the two agree to 1e-11. On any other factorization the
@@ -398,7 +407,10 @@ default stays `'plain'`.
   | the same | 16 | 6.3% | 4.4% | 2.5% |
 
   The first row is a test (`tests/references/test_gyptis_cylinder_field_golden.py`); the
-  reference's own next mesh level is 0.11% from it. On 16 dielectric circle cells (radius 0.15 to
+  reference's own next mesh level is 0.11% from it. An independent FDTD solution of the first
+  cell (Meep, 5 and 6.7 nm cells) agrees with the reference to 0.2% of the plane's RMS field
+  20 nm or more from the wall, and to under 1% on the same cell with a metal cylinder; closer to
+  the wall an FDTD cell averages across the jump and cannot say. On 16 dielectric circle cells (radius 0.15 to
   0.47 of the period, `eps` 2.25 to 25, one with loss), `'splitw'` was 0.06 to 0.67 times the
   default's error at order 12 and at most 0.64 times at order 8, on every one. `'split'` was 0.08
   to 0.85 times at order 12; at order 8 it was further from the reference than the default on two
