@@ -174,16 +174,20 @@ def test_a_wave_as_a_source_answers_what_the_ordinary_solve_answers(result):
 
 
 def test_a_layer_merged_into_a_half_space_keeps_the_sum_and_the_circle_takes_the_rule():
-    layers = (rcwa.Layer(thickness=40.0, background=Material(2.25)),
+    """The uniform layers differ from their half-spaces by 1e-9, inside a tolerance that merges them."""
+    layers = (rcwa.Layer(thickness=40.0, background=Material(2.25 * (1 + 1e-9))),
               rcwa.Layer(thickness=150.0, background=Material(1.0), regions=_circle()),
-              rcwa.Layer(thickness=30.0, background=Material(1.0)))
-    result = rcwa.run(_problem(layers=layers), numerics=NUMERICS)
+              rcwa.Layer(thickness=30.0, background=Material(1.0 + 1e-9)))
+    numerics = rcwa.Numerics(orders=(3, 3), factorization='nvf', half_space_merge_tolerance=1e-6)
+    result = rcwa.run(_problem(layers=layers), numerics=numerics)
+    assert result._field_records[0].merged[:2] == (1, 1)
     lone = rcwa.run(_problem(), numerics=NUMERICS)
     z = np.array([10.0, 70.0, 115.0, 200.0])
     plain, rule = _read(result, 'plain', z=z), _read(result, z=z)
     np.testing.assert_array_equal(rule[:, [0, 3]], plain[:, [0, 3]])
     # The same scene with the uniform layers left to the half-spaces, up to the phase of 40 nm.
-    np.testing.assert_allclose(np.abs(rule[:, 1:3, ..., :2]), np.abs(_read(lone)[..., :2]), rtol=0, atol=1e-9)
+    np.testing.assert_allclose(np.abs(rule[:, 1:3, ..., :2]), np.abs(_read(lone)[..., :2]), rtol=0, atol=1e-7)
+    assert np.abs(rule[:, 1:3, ..., :2] - plain[:, 1:3, ..., :2]).max() > 1e-2
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
@@ -303,6 +307,60 @@ def test_two_metals_take_the_rule_on_both_sides():
     layers = (rcwa.Layer(thickness=150.0, background=Material(-8.0 + 1.0j), regions=_circle(epsilon=-20.0 + 1.5j)),)
     result = rcwa.run(_problem(layers=layers), numerics=NUMERICS)
     assert np.min(np.max(np.abs(_read(result) - _read(result, 'plain'))[..., :2], axis=-1)) > 1e-9
+
+
+#: One compile each: the windowed rule on the dielectric, the unwindowed one on the metal, whose
+#: samples outside it are the ones a refusal could lose to the sum.
+_TRACED = [('splitw', EPSILON), ('split', -20.0 + 1.5j)]
+
+
+def _solver(backend, radius=RADIUS, period=PERIOD, material=EPSILON):
+    return engine(backend=backend, top=1.0, bot=2.25, period=list(period), truncation_order=[2, 2],
+                  wavelength=900.0, thickness=[150.0], theta=0.2, phi=0.3, polarization=(0, 1),
+                  answers='field', factorization='nvf',
+                  structure=[dict(background=1.0, shapes=[dict(type='circle', cx=CENTRE[0], cy=CENTRE[1],
+                                                               lx=2 * radius, material=material)])])
+
+
+@pytest.mark.parametrize('rule, material', _TRACED, ids=['dielectric', 'metal'])
+def test_a_negative_side_under_a_trace_answers_nan_where_the_rule_reads(rule, material):
+    """A trace has no sign to refuse, and the operators are built for positive sides."""
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    frozen = _solver('numpy', material=material).freeze_geometry()
+
+    def field(px):
+        s = _solver('jax', period=(px, PERIOD[1]), material=material)
+        s.solve(geometry=frozen)
+        return s.reconstruct_field(X, Y, 3, reconstruction=rule)
+
+    traced = jax.jit(field)
+    negative = np.asarray(traced(-PERIOD[0]))
+    assert np.all(np.isnan(negative[..., :2])) and np.all(np.isfinite(negative[..., 2:]))
+    eager = _solver('numpy', material=material)
+    eager.solve()
+    np.testing.assert_allclose(np.asarray(traced(PERIOD[0])),
+                               np.asarray(eager.reconstruct_field(X, Y, 3, reconstruction=rule)), rtol=0, atol=1e-10)
+
+
+@pytest.mark.parametrize('rule, material', _TRACED, ids=['dielectric', 'metal'])
+def test_a_circle_a_trace_hides_the_fit_of_answers_nan_on_both_sides_of_its_wall(rule, material):
+    """Eagerly the solve refuses the circle. On a metal the samples outside it must not fall back to the sum."""
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    with pytest.raises(ValueError, match='larger than the period'):
+        _solver('numpy', radius=185.0, material=material).solve()
+    frozen = _solver('numpy', material=material).freeze_geometry()
+
+    def field(radius):
+        s = _solver('jax', radius=radius, material=material)
+        s.solve(geometry=frozen)
+        return s.reconstruct_field(X, Y, 3, reconstruction=rule)
+
+    traced = jax.jit(field)
+    wide = np.asarray(traced(185.0))
+    assert np.all(np.isnan(wide[..., :2])) and np.all(np.isfinite(wide[..., 2:]))
+    assert np.all(np.isfinite(np.asarray(traced(RADIUS))))
 
 
 def _ellipse():

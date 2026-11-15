@@ -847,8 +847,8 @@ def field_2d_first_order(wavelength, kx, ky, T1, layer_info_list, lattice,
     The second-order twin's ``H_z = muz_conv_i (Kx Ey - Ky Ex)`` is that line at
     ``muzx = muzy = 0``.
 
-    ``rule_rows`` selects the Lalanne reconstruction, as :func:`field_2d` describes. It reads the
-    transverse coefficients and the structure alone, so it is :func:`_lalanne_2d` here too.
+    ``rule_rows`` selects a wall rule, as :func:`field_2d` describes. It reads the transverse
+    coefficients and the structure alone, so it is :func:`_wall_rule_2d` here too.
 
     The returned components are ``(Ex, Ey, Ez, Hx, Hy, Hz)``, matching :func:`field_2d`. This
     path needs **no** parity at the output, and it is the only one that does not:
@@ -958,9 +958,10 @@ def field_2d(wavelength, kx, ky, T1, layer_info_list, lattice,
     """Field of a 2D stack. ``(n_selected, nz, sample_y, sample_x, 6)``.
 
     ``nz`` is ``sample_z * n_layers`` for a count, ``len(sample_z)`` for explicit coordinates.
-    ``rule_rows`` selects the Lalanne reconstruction of ``E_x``, ``E_y``, ``H_x`` and ``H_y``:
-    one entry per layer record, ``None`` or a :data:`~wavebit.rcwa._engine.lalanne.LayerRule`
-    of the engine's ``(ops_x, ops_y, eps_x, eps_y)`` (:func:`_lalanne_2d`).
+    ``rule_rows`` selects a wall rule for ``E_x``, ``E_y``, ``H_x`` and ``H_y``: one entry per
+    layer record, ``None`` or a :data:`~wavebit.rcwa._engine.lalanne.LayerRule`. Its halves are
+    the Lalanne rule's ``(ops_x, ops_y, eps_x, eps_y)`` (:func:`_lalanne_2d`) or, for the split
+    rules, a :data:`SplitHalf` (:func:`_split_2d`); :func:`_wall_rule_2d` tells them apart.
     """
     return _field_coupled(wavelength, kx, ky, T1, layer_info_list, lattice,
                           sample_x, sample_y, sample_z, incidences, conical=False,

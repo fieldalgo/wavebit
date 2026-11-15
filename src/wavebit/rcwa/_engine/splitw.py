@@ -50,7 +50,9 @@ from wavebit.rcwa._engine.lalanne import LayerRule
 from wavebit.rcwa._engine.lalanne import _device_of
 from wavebit.rcwa._engine.lalanne import _host
 from wavebit.rcwa._engine.lalanne import _kept
+from wavebit.rcwa._engine.lalanne import _masked
 from wavebit.rcwa._engine.lalanne import _negative_side
+from wavebit.rcwa._engine.lalanne import _positive_sides
 from wavebit.rcwa._engine.line_crossings import is_magnetic
 from wavebit.rcwa._engine.parametric import _grid
 from wavebit.rcwa._engine.parametric import _hypot_safe
@@ -213,14 +215,17 @@ def _applies(xp, layer, eps, C):
 
     All of them where both materials can be read as ``Re eps > 0``, the case that needs no
     array. Otherwise the samples on the negative side where ``Re eps`` changes sign across the
-    wall, and all of them where it does not; asked in ``xp``, so a trace answers it.
+    wall, and all of them where it does not; asked in ``xp``, so a trace answers it. A sample
+    whose ``eps`` is NaN, the refusal under a trace, takes the rule and so keeps the NaN: left
+    to the sum it would read as an answer.
     """
     values = [as_material(item).epsilon for item in (layer.get('background', 1.0), layer['shapes'][0]['material'])]
     host = [_host(value) for value in values]
     if all(value is not None and bool(np.all(np.real(value) > 0)) for value in host):
         return None
     background, material = (xp.real(value) < 0 for value in layer_epsilons(xp, values, C))
-    return xp.where(xp.logical_xor(background, material), xp.real(eps) < 0, xp.ones_like(xp.real(eps) < 0))
+    negative = ~(xp.real(eps) >= 0)
+    return xp.where(xp.logical_xor(background, material), negative, xp.ones_like(negative))
 
 
 def _uniform(layer):
@@ -244,6 +249,9 @@ def split_rows(xp, structure, lattice, kx, ky, real, C, sample_x, sample_y, held
     """
     half_u, half_v = (kx.shape[0] - 1) // 2, (ky.shape[0] - 1) // 2
     dev = _device_of(kx)
+    # A side whose sign a trace hides cannot be refused by name: the operators are built for
+    # positive sides, so a negative one answers NaN where the rule reads, as 'lalanne' does.
+    positive = _positive_sides(xp, lattice, dev)
     rows = []
     for index, layer in enumerate(structure):
         if not layer.get('shapes') or (held is not None and index not in held) or _uniform(layer):
@@ -256,6 +264,6 @@ def split_rows(xp, structure, lattice, kx, ky, real, C, sample_x, sample_y, held
                                   xp.concat([xy @ Q + Q @ xy, yy @ Q + Q @ yy], axis=1)], axis=0)
         projector = xp.concat([xp.concat([xx, xy], axis=1), xp.concat([xy, yy], axis=1)], axis=0)
         tangential = xp.eye(projector.shape[0], dtype=C, device=_device_of(projector)) - projector
-        eps = _eps_at(xp, circle, layer, sample_x, sample_y, C, dev)
+        eps = _masked(xp, _eps_at(xp, circle, layer, sample_x, sample_y, C, dev), positive)
         rows.append(LayerRule(SplitHalf(normal, tangential, eps, _applies(xp, layer, eps, C)), None))
     return rows
