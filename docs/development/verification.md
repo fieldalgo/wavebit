@@ -298,3 +298,14 @@ one successful run, review and commit the result:
 ```shell
 python tools/update_shard_timings.py artifacts/ci-timing-baseline --source-run https://github.com/fieldalgo/wavebit/actions/runs/RUN_ID --output tools/ci_shard_timings.json
 ```
+
+After adding `shard_unit` markers, the baseline still has what is needed: its durations are per
+case. Collect each partition on the marked tree with `--collect-only` and pass the two
+`shard.json` files as `--units`; the baseline's cases are then summed by the new units, so a
+file that was one row becomes one measured row per unit instead of its mean per case:
+
+```shell
+python tools/run_verification.py --profile full --slow exclude --shard 1/32 --shard-timings tools/ci_shard_timings.json --collect-only --output artifacts/units-exclude
+python tools/run_verification.py --profile full --slow only --shard 1/12 --shard-timings tools/ci_shard_timings.json --collect-only --output artifacts/units-only
+python tools/update_shard_timings.py artifacts/ci-timing-baseline --source-run https://github.com/fieldalgo/wavebit/actions/runs/RUN_ID --units artifacts/units-exclude/shard.json --units artifacts/units-only/shard.json --output tools/ci_shard_timings.json
+```

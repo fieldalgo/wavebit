@@ -265,6 +265,17 @@ python tools/run_distribution_smoke.py
 python tools/update_shard_timings.py artifacts/ci-timing-baseline --source-run https://github.com/fieldalgo/wavebit/actions/runs/RUN_ID --output tools/ci_shard_timings.json
 ```
 
+`shard_unit` 표시를 새로 붙인 뒤에도 기존 기준 실행을 그대로 쓸 수 있습니다. 기준 실행의 시간은
+사례별로 기록되어 있기 때문입니다. 표시를 붙인 소스에서 각 범위를 `--collect-only`로 수집하고
+두 `shard.json`을 `--units`로 넘기면, 기준 실행의 사례를 새 단위별로 합산합니다. 한 행이던 파일이
+사례당 평균이 아니라 단위마다 측정된 행을 갖게 됩니다.
+
+```shell
+python tools/run_verification.py --profile full --slow exclude --shard 1/32 --shard-timings tools/ci_shard_timings.json --collect-only --output artifacts/units-exclude
+python tools/run_verification.py --profile full --slow only --shard 1/12 --shard-timings tools/ci_shard_timings.json --collect-only --output artifacts/units-only
+python tools/update_shard_timings.py artifacts/ci-timing-baseline --source-run https://github.com/fieldalgo/wavebit/actions/runs/RUN_ID --units artifacts/units-exclude/shard.json --units artifacts/units-only/shard.json --output tools/ci_shard_timings.json
+```
+
 ## Runner diagnostics
 
 수동 workflow 입력 `slow_runner_diagnostics`로 실행하면 slow shard만 돌며, 각 shard에서

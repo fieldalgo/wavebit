@@ -607,6 +607,42 @@ def test_timing_import_requires_complete_successful_shards(tmp_path):
     assert output.read_bytes() == original
 
 
+def test_timing_import_rekeys_a_baseline_by_a_newer_collections_units(tmp_path):
+    """Markers added after the baseline ran: its per-node durations still give each new unit a row."""
+    nodes = ['tests/test_example.py::test_one', 'tests/test_example.py::test_two[a]',
+             'tests/test_example.py::test_two[b]', 'tests/test_other.py::test_kept']
+    for label in ('default', 'slow'):
+        directory = tmp_path/f'verification-{label}-1'
+        directory.mkdir()
+        # The baseline knew test_other.py's case as a unit and test_example.py as one file.
+        receipt = dict(shard=dict(index=1, count=1, units={nodes[3]: nodes[3]}), exit_code=0,
+                       integrity_errors=[], collect_only=False, inputs_unchanged=True,
+                       collected_nodeids=nodes, counts=dict(passed=4), outcomes={
+                           node: dict(complete=True, outcome='passed', duration=seconds)
+                           for node, seconds in zip(nodes, (2.5, 3.5, 9.0, 1.0))})
+        (directory/'receipt.json').write_text(json.dumps(receipt), encoding='utf-8')
+        (directory/'collected-nodeids-all.json').write_text(json.dumps(nodes), encoding='utf-8')
+    per_test = 'tests/test_example.py::test_two'
+    first, second = tmp_path/'shard-a.json', tmp_path/'shard-b.json'
+    first.write_text(json.dumps(dict(index=1, count=1, units={nodes[1]: per_test})), encoding='utf-8')
+    second.write_text(json.dumps(dict(shard=dict(units={nodes[2]: per_test}))), encoding='utf-8')
+    output = tmp_path/'timings.json'
+    command = [sys.executable, str(ROOT/'tools/update_shard_timings.py'), str(tmp_path),
+               '--source-run', 'https://example.test/run/1', '--output', str(output)]
+    result = subprocess.run(command + ['--units', str(first), '--units', str(second)], text=True,
+                            capture_output=True, timeout=60, encoding='utf-8')
+    assert result.returncode == 0, result.stdout + result.stderr
+    rows = json.loads(output.read_text(encoding='utf-8'))['partitions']['exclude']
+    # The newer units are the whole truth: test_other.py's case is back in its file's row.
+    assert rows == {'tests/test_example.py': dict(nodes=1, seconds=2.5), per_test: dict(nodes=2, seconds=12.5),
+                    'tests/test_other.py': dict(nodes=1, seconds=1)}
+    empty = tmp_path/'not-a-shard.json'
+    empty.write_text(json.dumps(dict(nodes=nodes)), encoding='utf-8')
+    result = subprocess.run(command + ['--units', str(empty)], text=True, capture_output=True,
+                            timeout=60, encoding='utf-8')
+    assert result.returncode != 0 and 'no shard units' in result.stderr
+
+
 @pytest.mark.parametrize('seconds', ['0', '-1', 'nan', 'inf'])
 def test_timeout_requires_positive_finite_seconds(checkout, seconds):
     suite(checkout, 'def test_pass(): pass\n')
