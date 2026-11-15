@@ -467,7 +467,13 @@ def test_jax_forward_mode_on_an_oblique_cell_under_jit(parameter, at):
     _, tangent = jax.jit(lambda p: jax.jvp(f, (p,), (jnp.ones_like(p),)))(x)
     jacobian = jax.jit(jax.jacfwd(f))(x)
     gradient = jax.jit(jax.grad(lambda p: jnp.sum(jnp.asarray(w) * f(p))))(x)
-    assert _close(jacobian, tangent, 1e-13)
+    # Two compilations of one tangent, so this reads XLA's rounding and nothing else. It depends
+    # on the host's instruction set: run 43702735297 failed it at 1e-13 on main 9f7908f, where the
+    # PR run passed it on identical source. Measured on an AVX-512 host at 99 to 101 deg, every
+    # 0.5: 3.8e-14 to 1.0e-13 before 9f7908f (at the bound already, at 101) and 3.8e-14 to
+    # 1.7e-13 after it, whose fold reads one image at the rhombus's 10 diagonal samples, tied at
+    # every angle. 1e-12 sits above that rounding, and reverse mode below holds to 6e-14.
+    assert _close(jacobian, tangent, 1e-12)
     assert float(w @ np.asarray(tangent)) == pytest.approx(float(gradient), rel=1e-11)
     if parameter == 'eps':
         h = 1e-4
