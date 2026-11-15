@@ -428,7 +428,8 @@ def exponential(xp, q, scale, coupled=False):
 
 
 def _chain_capacity(coupled):
-    """How many middle modes of Jordan chains a trace gathers (:func:`_chain_paths`), or ``None``.
+    """How many middle modes of Jordan chains a trace gathers (:func:`_chain_paths`, and the
+    tangent's :func:`_frechet_chain_terms`), or ``None``.
 
     An integer ``coupled`` is the caller's count of the coupled rows its layer can hold -- a 2D
     layer's pair cap, a first-order layer's slots and cluster lanes -- and a chain's middle mode
@@ -755,7 +756,7 @@ def _dd_from_subsets(points, subs, e0):
     return jnp.where(jnp.max(dist, axis=-1) > _DD_SERIES_DIAMETER, recurrence, series)
 
 
-def _coupled_frechet(q, scale, E, cap=None):
+def _coupled_frechet(q, scale, E, cap=None, chains=None):
     """``L(scale q, E)``: the Frechet derivative of ``exp`` at a coupled ``scale * q`` in direction
     ``E``, in closed form. JAX only; ``scale`` may carry leading (batch) axes, and ``E`` with it.
 
@@ -796,8 +797,20 @@ def _coupled_frechet(q, scale, E, cap=None):
 
     ``J`` and ``K`` are read off the value (``tau != 0``: exact, no threshold) and gathered to a
     static size, :data:`_COUPLED_CAP` each, so no shape depends on a value. More coupled rows or
-    columns than that, or a row that is also a column (the premise broken), multiply the result
-    by NaN -- loud, and still linear in ``E``, as a tangent rule must be.
+    columns than that multiply the result by NaN -- loud, and still linear in ``E``, as a
+    tangent rule must be.
+
+    A row that is also a column breaks the premise: a Jordan chain of length three rebuilt in
+    three levels (``solve_2d._chain_split``), whose middle mode both receives a coupling and
+    passes one on, so ``n**2 != 0`` (``n**3 = 0``: three levels) and a path on each side of
+    ``E`` takes up to two steps. With ``chains`` (:func:`_chain_capacity`, a 2D or first-order
+    layer's count) the five families with a two-step path are added
+    (:func:`_frechet_chain_terms`), their tables (:func:`_frechet_chain_tables`) behind a branch
+    on whether a middle is present, so a layer with none keeps these bits and forms no chain
+    table (under ``vmap``, where the branch is a selection, every lane forms them). Only values
+    enter the branch, ``E`` never; measured within 6.2e-16 of a 40-digit ``expm`` of the
+    doubled matrix across splits of 0 to 0.7 and complex scales. Without ``chains`` (a conical
+    layer, ``coupled=True``) such a row multiplies the result by NaN.
     """
     import jax.numpy as jnp
     m = q.shape[-1]
@@ -815,9 +828,12 @@ def _coupled_frechet(q, scale, E, cap=None):
     L = F1 * E
     rows = jnp.any(tau != 0, axis=1)
     cols = jnp.any(tau != 0, axis=0)
+    middle = rows & cols
     c = min(_COUPLED_CAP if cap is None else cap, m)
     nr, nc = jnp.sum(rows), jnp.sum(cols)
-    ok = (nr <= c) & (nc <= c) & ~jnp.any(rows & cols)
+    ok = (nr <= c) & (nc <= c)
+    if chains is None:
+        ok = ok & ~jnp.any(middle)
     J = jnp.nonzero(rows, size=c, fill_value=0)[0]
     K = jnp.nonzero(cols, size=c, fill_value=0)[0]
     vJ = jnp.arange(c) < nr
@@ -848,7 +864,175 @@ def _coupled_frechet(q, scale, E, cap=None):
     OJ = jnp.astype(vJ[:, None] & (idx[None, :] == J[:, None]), q.dtype)   # (c, m)
     OK = jnp.astype(vK[:, None] & (idx[None, :] == K[:, None]), q.dtype)
     L = L + OJ.T @ term2 + term3 @ OK + OJ.T @ term4 @ OK
+    if chains is not None:
+        import jax
+
+        def tables():
+            return _frechet_chain_tables(tau, a, ea, F1, scale, K, vK, middle, c, chains)
+
+        def none():
+            return (jnp.asarray(True),) + tuple(jnp.zeros(s.shape, s.dtype) for s in shapes[1:])
+        # A branch on whether a middle is present, so a layer with none forms no chain table
+        # (under `vmap`, where the branch becomes a selection, every lane forms them). Only values
+        # enter it: `vmap`'s selection passes a branch's operands through `stop_gradient`, which
+        # reverse mode cannot transpose on a tangent. The tangent is contracted outside, and where
+        # no middle is, a negative zero is added, which leaves every bit of `L` as it was. The
+        # contraction sits between optimization barriers: without them XLA rescheduled the one-step
+        # form's sums around it, and a first-order layer with no chain moved its `jit(grad)` by
+        # up to 9.2e-16 relative.
+        shapes = jax.eval_shape(tables)
+        middled = jnp.any(middle)
+        fits, *found = jax.lax.cond(middled, tables, none)
+        barrier = jax.lax.optimization_barrier
+        chain = barrier(_frechet_chain_terms(barrier(E), K, OK, *found))
+        L = L + jnp.where(middled, chain, -jnp.zeros((), L.dtype))
+        ok = ok & fits
     return L * jnp.where(ok, 1.0, float('nan'))
+
+
+def _frechet_chain_terms(E, K, OK, i2, s2, X, vT, vX, w, u, F20, F21, F22):
+    """The families of :func:`_coupled_frechet` with a two-step path, in direction ``E``, from
+    the paths and tables of :func:`_frechet_chain_tables`.
+
+    A two-step path ``i -> k -> s`` runs through a middle mode ``k``, both a coupled row and a
+    coupled column, with weight ``w = n_ik n_ks``. With ``F`` the divided difference of ``exp``
+    over the points named, ``P = (i, k, s)`` a path and ``n_xK`` a one-step coupling into a
+    coupled column::
+
+        (2, 0)   L_il  += w E_sl F[P, l]           (0, 2)   L_is' += E_ii' w' F[i, P']
+        (2, 1)   L_iK  += w E_sx n_xK F[P, x, K]   (1, 2)   L_xs' += n_xK E_Ki' w' F[x, K, P']
+        (2, 2)   L_is' += w E_si' w' F[P, P']
+
+    the paths of the doubled matrix ``[[A, E], [0, A]]`` with two coupling steps on a side.
+    ``F`` is symmetric in its points, so (0, 2) reads (2, 0)'s table and (1, 2) reads
+    (2, 1)'s. Linear in ``E``; ``E`` is read nowhere else.
+    """
+    import jax.numpy as jnp
+    m = E.shape[-1]
+    idx = jnp.arange(m)
+    T20 = (w[..., :, None] * E[..., s2, :]) * F20
+    T02 = (E[..., :, i2] * w[..., None, :]) * jnp.matrix_transpose(F20)
+    T21 = jnp.einsum('...g,...gsx,...sx,...gsx->...gs', w, E[..., s2[:, None, None], X[None]], u, F21)
+    T12 = jnp.einsum('...sx,...sh,...h,...hsx->...sxh', u, E[..., K[:, None], i2[None, :]], w, F21)
+    T22 = (w[..., :, None] * E[..., s2[:, None], i2[None, :]] * w[..., None, :]) * F22
+    OI = jnp.astype(vT[:, None] & (idx[None, :] == i2[:, None]), E.dtype)   # (c, m)
+    OS = jnp.astype(vT[:, None] & (idx[None, :] == s2[:, None]), E.dtype)
+    rows = jnp.reshape(X, (-1,))
+    OX = jnp.astype(jnp.reshape(vX, (-1,))[:, None] & (idx[None, :] == rows[:, None]), E.dtype)
+    T12 = jnp.reshape(T12, T12.shape[:-3] + (-1, T12.shape[-1]))
+    return OI.T @ (T20 + T21 @ OK + T22 @ OS) + (T02 + OX.T @ T12) @ OS
+
+
+def _frechet_chain_tables(tau, a, ea, F1, scale, K, vK, middle, c, chains):
+    """The two-step paths of :func:`_frechet_chain_terms` and their divided-difference tables,
+    from the value alone, and whether they fit: ``(fits, i2, s2, X, vT, vX, w, u, F20, F21,
+    F22)``.
+
+    The middles are gathered to ``chains`` (:func:`_chain_capacity`), each one's coupled rows
+    and columns to a cluster's lanes, as :func:`_chain_paths_traced` gathers them, and the
+    paths ``(i2, k2, s2)``, listed flat, to ``c``, the caller's count of coupled rows (a path
+    starts on one); ``vT`` marks the real ones, ``w`` their weights. The one-step couplings
+    ``x -> K`` are read by column: each of ``K``'s columns and its coupled rows ``X``, gathered
+    to a cluster's lanes (``vX``), since a coupling stays inside its cluster; ``u`` their
+    ``n_xK``. The three tables ``F[P, l]``, ``F[P, x, K]`` and ``F[P, P']`` are each built over
+    every subset of their points from ``F1`` up (:func:`_dd_lattice`). More middles, rows or
+    columns on one, or paths than the sizes hold, or a coupling between two middles (a path of
+    three steps), answer ``fits = False``.
+    """
+    import jax.numpy as jnp
+    from wavebit.rcwa._engine.solve_2d import _EP_CLUSTER_SIZE
+    m = tau.shape[-1]
+    nz = tau != 0
+    cm = max(1, min(int(chains), m))
+    cl = min(_EP_CLUSTER_SIZE, m)
+
+    def first(mask, size):
+        # The positions of the first `size` True entries along the last axis, and which are real.
+        pos = jnp.argsort(jnp.astype(~mask, jnp.int32), axis=-1, stable=True)[..., :size]
+        count = jnp.sum(jnp.astype(mask, jnp.int32), axis=-1)
+        return pos, jnp.arange(size) < count[..., None], count
+
+    M, vM, nm = first(middle, cm)                                       # (cm,)
+    P, vP, npre = first(jnp.take(nz, M, axis=1).T, cl)                  # (cm, cl): tau[i, k] != 0
+    S, vS, nsuc = first(jnp.take(nz, M, axis=0), cl)                    # (cm, cl): tau[k, s] != 0
+    paths = vM[:, None, None] & vP[:, :, None] & vS[:, None, :]
+    pick, vT, npaths = first(jnp.reshape(paths, (-1,)), c)              # (c,)
+    g = pick // (cl * cl)                                               # a path's middle
+    i2, k2, s2 = P[g, (pick // cl) % cl], M[g], S[g, pick % cl]
+    w = jnp.where(vT, (scale[..., None] * tau[i2, k2]) * (scale[..., None] * tau[k2, s2]), 0)
+    fits = ((nm <= cm) & ~jnp.any(vM & ((npre > cl) | (nsuc > cl))) & (npaths <= c)
+            & ~jnp.any(middle[:, None] & middle[None, :] & nz))
+    # The one-step couplings by column: each of K's columns and its coupled rows, gathered to a
+    # cluster's lanes (a coupling stays inside its cluster).
+    X, vX, nX = first(jnp.take(nz, K, axis=1).T, cl)                    # (c, cl): tau[x, K_s] != 0
+    vX = vX & vK[:, None]
+    u = jnp.where(vX, scale[..., None, None] * tau[X, K[:, None]], 0)   # (.., c, cl): n_{x, K_s}
+    fits = fits & ~jnp.any(vK & (nX > cl))
+    idx = jnp.arange(m)
+    F20 = _dd_lattice(a, ea, F1, [i2[:, None], k2[:, None], s2[:, None], idx[None, :]])  # (.., c, m)
+    F21 = _dd_lattice(a, ea, F1, [i2[:, None, None], k2[:, None, None], s2[:, None, None],
+                                  X[None, :, :], K[None, :, None]])                   # (.., c, c, cl)
+    F22 = _dd_lattice(a, ea, F1, [i2[:, None], k2[:, None], s2[:, None],
+                                  i2[None, :], k2[None, :], s2[None, :]])             # (.., c, c)
+    return fits, i2, s2, X, vT, vX, w, u, F20, F21, F22
+
+
+def _dd_lattice(a, ea, F1, idx):
+    """``exp[a_{i_0}, ..., a_{i_{r-1}}]`` for ``r >= 3`` index arrays ``idx`` (broadcast
+    together), over every subset of the points: the pairs gathered from ``F1``, then each size
+    from the one below, every subset of a size at once (:func:`_dd_level`)."""
+    import itertools
+    import numpy as np
+    import jax.numpy as jnp
+    r = len(idx)
+    idx = jnp.stack(jnp.broadcast_arrays(*idx), axis=-1)                # (..., r)
+    pts, e = a[..., idx], ea[..., idx]                                  # (..., S, r)
+    below = list(itertools.combinations(range(r), 2))
+    pair = np.array(below)
+    cur = F1[..., idx[..., pair[:, 0]], idx[..., pair[:, 1]]]           # (..., S, C(r, 2))
+    for size in range(3, r + 1):
+        sets = list(itertools.combinations(range(r), size))
+        at = {s: n for n, s in enumerate(below)}
+        members = np.array(sets)                                        # (C, size)
+        omit = np.array([[at[s[:t] + s[t + 1:]] for t in range(size)] for s in sets])
+        cur = _dd_level(pts[..., members], cur[..., omit], e[..., members[:, 0]])
+        below = sets
+    return cur[..., 0]
+
+
+def _dd_level(points, subs, e0):
+    """``exp[p_0, ..., p_k]`` for the sets in ``points`` (``..., k + 1``) from the divided
+    differences that omit one point (``subs[..., j]`` omits ``p_j``), with ``e0 = exp(p_0)``:
+    :func:`_dd_from_subsets`'s hybrid, its pairs and its series each formed as one array. The
+    series' ``h_j`` (:func:`_series_about_first`) are built degree by degree in a ``lax.scan``,
+    ``h_j^(r) = sum_{s <= r} y_s h_{j-1}^(s)`` a cumulative sum over the variables, so a set of
+    any size costs a fixed number of operations."""
+    import itertools
+    import math
+    import numpy as np
+    import jax
+    import jax.numpy as jnp
+    k = points.shape[-1] - 1
+    pair = np.array(list(itertools.combinations(range(k + 1), 2)))
+    diff = points[..., pair[:, 0]] - points[..., pair[:, 1]]
+    gap = jnp.abs(diff)
+    cand = (subs[..., pair[:, 1]] - subs[..., pair[:, 0]]) / jnp.where(gap > 0, diff,
+                                                                       jnp.ones_like(diff))
+    widest = jnp.argmax(gap, axis=-1)
+    recurrence = jnp.take_along_axis(cand, widest[..., None], axis=-1)[..., 0]
+    y = points[..., 1:] - points[..., :1]
+
+    def degree(h, _):
+        h = jnp.cumsum(y * h, axis=-1)
+        return h, h[..., -1]
+    _, hs = jax.lax.scan(degree, jnp.ones_like(y), None, length=_DD_SERIES_TERMS)
+    # In the points' precision: a float64 array would lift a complex64 table to complex128, and
+    # a custom JVP's tangent must keep its primal's dtype.
+    weight = np.array([1.0 / math.factorial(j + k) for j in range(1, _DD_SERIES_TERMS + 1)],
+                      dtype=jnp.finfo(hs.dtype).dtype)
+    total = jnp.tensordot(weight[::-1], hs[::-1], axes=1) + 1.0 / math.factorial(k)
+    series = e0 * total
+    return jnp.where(jnp.max(gap, axis=-1) > _DD_SERIES_DIAMETER, recurrence, series)
 
 
 _JAX_COUPLED_EXP = {}
@@ -859,7 +1043,8 @@ def _jax_coupled_exponential(cap=None, chains=None):
 
     The value is :func:`exponential`'s divided-difference formula, exact for a coupled value
     and all that a value-only trace forms -- with ``chains`` (:func:`_chain_capacity`) its
-    two-step paths too; the tangent is exact for any variation::
+    two-step paths too, and the tangent's chain families with them; the tangent is exact for
+    any variation::
 
         d exp(s q) = L(s q, s dq) + ds q exp(s q)
 
@@ -889,7 +1074,7 @@ def _jax_coupled_exponential(cap=None, chains=None):
             dq, d_scale = tangents
             out = coupled_exp(q, scale)
             tangent = (_coupled_frechet(_stop(q), scale, scale[..., None, None] * dq,
-                                        None if cap == _COUPLED_CAP else cap)
+                                        None if cap == _COUPLED_CAP else cap, chains)
                        + d_scale[..., None, None] * (q @ out))
             return out, tangent
 

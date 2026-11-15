@@ -1569,10 +1569,12 @@ def test_a_refused_coupling_gives_a_nan_traced_tangent(shape):
 
     The two halves of the closed form's ``ok``. Five coupled rows (the cap is four): the value
     is still exact. A row that is also a column (``_coupled_frechet``'s premise broken; the
-    joint rebuild forms one eagerly only, for a Jordan chain of length three): under a trace no
-    chain is read, so the value is the one-step divided-difference formula's, finite, and no
-    longer ``exp`` (a product of two couplings survives: 5.7e-2 off), so it is checked against
-    that formula. Eagerly the formula takes the chain's two-step paths and is ``exp``
+    joint rebuild forms one for a Jordan chain of length three, and a 2D or first-order layer
+    passes a chain capacity that takes it, but ``coupled=True``, a conical layer's word, holds
+    none): under a trace no chain is read, so the value is the one-step divided-difference
+    formula's, finite, and no longer ``exp`` (a product of two couplings survives: 5.7e-2 off),
+    so it is checked against that formula. Eagerly the formula takes the chain's two-step paths
+    and is ``exp``
     (``modal_gradient._chain_paths``). Nothing else in this file reaches either refusal: a
     refusal made silent, or the premise check dropped, fails here alone.
     """

@@ -39,8 +39,8 @@ quiet. Since 2026-11-14 a trace takes the chain too: the three-level split from 
 of candidates (``solve_2d._chain_split_traced``), every chain term formed and selected, the
 exponential's two-step paths gathered to static sizes. Traced values and fields are within
 3.8e-14 (``jax.jit``, ``jax.vmap``, ``torch.func.vmap``), and torch's backward pass through
-``torch.func.vmap`` within 6.8e-13; a traced JAX derivative still answers NaN (the exponential's
-closed-form tangent takes no chain).
+``torch.func.vmap`` within 6.8e-13. With the exponential's closed-form tangent taking the
+chain's two-step paths, traced JAX derivatives are within 5.9e-13, fields' too.
 
 What this file pins:
 
@@ -52,9 +52,10 @@ What this file pins:
    three-level split (eager and traced) and the exponential's two-step paths (eager and
    traced) on their own;
 5. eager derivatives there, amplitudes and fields, against Cauchy derivative oracles; each
-   derivative rule's chain term on its own, eagerly and under ``jax.jit``;
-6. under a trace, values and fields exact at the point, torch's backward pass through
-   ``torch.func.vmap`` exact, and ``jax.jit(jax.grad)`` NaN.
+   derivative rule's chain term on its own, eagerly and under ``jax.jit``, and the traced
+   exponential's tangent;
+6. under a trace, values, fields and their derivatives exact at the point (``jax.jit``,
+   ``jax.vmap``, ``torch.func.vmap``).
 """
 
 import functools
@@ -785,6 +786,152 @@ def test_two_face_takes_the_chains_onward_term(traced):
     assert err / np.max(np.abs(np.asarray(dve)[kept])) < 1e-12, err
 
 
+@functools.lru_cache(maxsize=None)
+def _jitted_frechet(chains):
+    """``modal_gradient._coupled_frechet(q, s, E, None, chains)`` under ``jax.jit``, compiled once
+    per capacity for an 8-mode ``q``."""
+    jax = pytest.importorskip('jax')
+    from wavebit.rcwa._engine import modal_gradient
+    from wavebit._common.backend import _enable_x64
+    _enable_x64()
+    return jax.jit(lambda q, s, E: modal_gradient._coupled_frechet(q, s, E, None, chains))
+
+
+@pytest.mark.parametrize('split', [0.0, 1e-8, 1e-3, 0.7])
+@pytest.mark.parametrize('scale', [-1.5, -12.0, 3.0j, -0.4 + 2.0j])
+def test_the_traced_frechet_takes_a_chain(split, scale):
+    """``modal_gradient._coupled_frechet``, the traced exponential's tangent, under ``jax.jit``
+    with a chain capacity: ``L(s q, s E)`` of a chain's coupled ``q`` beside a Jordan pair, and
+    with a second mode on the chain's first level, against the upper-right block of ``expm`` of
+    the doubled matrix ``B = [[s q, s E], [0, s q]]``, within 1e-13 of its largest entry
+    (measured within 6.2e-16 of a 40-digit ``expm``). The reference is SciPy's ``expm`` of
+    ``U^H B U`` for a unitary ``U`` (within 1.5e-14 of the 40-digit one): ``B`` itself is upper
+    triangular, and SciPy's triangular path was 1.4e-10 off at the 1e-8 split. With no chain
+    the result keeps the one-step form's bits; without a capacity a chain answers NaN, and so
+    does a coupling between two middles (a path of three steps); under ``jax.vmap``, a lane with
+    a chain and one without agree with their single solves. Catches a family dropped, a
+    symmetric family reading the other's table the wrong way round, or a path's weight or end
+    swapped."""
+    scipy_linalg = pytest.importorskip('scipy.linalg')
+
+    def frechet(q, E, chains):
+        return np.asarray(_jitted_frechet(chains)(q, scale + 0j, scale * E))
+    rng = np.random.default_rng(11)
+    E = rng.normal(size=(8, 8)) + 1j * rng.normal(size=(8, 8))
+    U, _ = np.linalg.qr(rng.normal(size=(16, 16)) + 1j * rng.normal(size=(16, 16)))
+    q, _, _, _ = _chain_q(split=split)
+    beside = q.copy()
+    beside[5, 1], beside[5, 2] = 0.07 - 0.02j, -0.03 + 0.05j
+    for x in (q, beside):
+        B = np.block([[scale * x, scale * E], [np.zeros_like(x), scale * x]])
+        ref = (U @ scipy_linalg.expm(U.conj().T @ B @ U) @ U.conj().T)[:8, 8:]
+        got = frechet(x, E, 4)
+        assert np.max(np.abs(got - ref)) < 1e-13 * np.max(np.abs(ref))
+    assert np.all(np.isnan(frechet(q, E, None)))
+    pairs = q.copy()
+    pairs[0, 1] = pairs[1, 2] = 0
+    one, chained = frechet(pairs, E, None), frechet(pairs, E, 4)
+    assert np.array_equal(one.view(np.uint8), chained.view(np.uint8))
+    three = q.copy()
+    three[2, 6] = 0.05
+    assert np.all(np.isnan(frechet(three, E, 4)))
+    # Under `vmap` the branch on a middle is a selection: a lane with a chain and one without.
+    import jax
+    lanes = np.asarray(jax.vmap(_jitted_frechet(4), in_axes=(0, None, None))(
+        np.stack([beside, pairs]), scale + 0j, scale * E))
+    assert np.max(np.abs(lanes[0] - got)) < 1e-14 * np.max(np.abs(got))
+    assert np.max(np.abs(lanes[1] - one)) < 1e-14 * np.max(np.abs(one))
+
+
+@pytest.mark.parametrize('scale', [-12.0, -0.4 + 2.0j])
+def test_the_traced_frechet_keeps_single_precision(scale):
+    """``modal_gradient._coupled_frechet`` under ``jax.jit`` with a chain capacity, at a
+    complex64 ``q``: the tangent stays complex64, for a chain and for a layer with none, and
+    agrees with the complex128 one within 2e-6 of its largest entry (measured within 2.0e-7,
+    splits of 0 to 0.7). The divided differences' series weights were a float64 array, which
+    lifted the tangent to complex128, and every float32 traced gradient raised: a custom JVP's
+    tangent must keep its primal's dtype. Catches the weights left in double precision."""
+    rng = np.random.default_rng(11)
+    E = scale * (rng.normal(size=(8, 8)) + 1j * rng.normal(size=(8, 8)))
+    for split in (0.0, 1e-3, 0.7):
+        q, _, _, _ = _chain_q(split=split)
+        pairs = q.copy()
+        pairs[0, 1] = pairs[1, 2] = 0
+        for x in (q, pairs):
+            single = _jitted_frechet(4)(x.astype(np.complex64), np.complex64(scale),
+                                        E.astype(np.complex64))
+            double = np.asarray(_jitted_frechet(4)(x, scale + 0j, E))
+            assert single.dtype == np.complex64, single.dtype
+            err = np.max(np.abs(np.asarray(single) - double))
+            assert err < 2e-6 * np.max(np.abs(double)), (split, err)
+
+
+def test_reverse_mode_through_vmap_takes_a_chain():
+    """``jax.jit(jax.grad)`` of a sum over ``jax.vmap`` of the traced exponential
+    (``modal_gradient._jax_coupled_exponential``), lanes with a chain, a chain beside a second
+    first-level mode, and none: the derivative of ``Re sum W o exp(s (q + t D))`` in ``t``
+    against the doubled matrix's ``expm`` (as :func:`test_the_traced_frechet_takes_a_chain`
+    forms it), within 1e-13. ``vmap`` makes the tangent's branch on a middle a selection that
+    passes its operands through ``stop_gradient``, which reverse mode cannot transpose on a
+    tangent: with the tangent inside the branch this raised (measured 1.1e-15 now). Catches the
+    tangent moved back into the branch."""
+    jax = pytest.importorskip('jax')
+    scipy_linalg = pytest.importorskip('scipy.linalg')
+    import jax.numpy as jnp
+    from wavebit.rcwa._engine import modal_gradient
+    from wavebit._common.backend import _enable_x64
+    _enable_x64()
+    rng = np.random.default_rng(3)
+    W = rng.normal(size=(8, 8)) + 1j * rng.normal(size=(8, 8))
+    D, scale = W.T, -1.5 + 0.3j
+    U, _ = np.linalg.qr(rng.normal(size=(16, 16)) + 1j * rng.normal(size=(16, 16)))
+    q, _, _, _ = _chain_q(split=1e-3)
+    beside, pairs = q.copy(), q.copy()
+    beside[5, 1], beside[5, 2] = 0.07 - 0.02j, -0.03 + 0.05j
+    pairs[0, 1] = pairs[1, 2] = 0
+    lanes = np.stack([q, beside, pairs])
+    expo = modal_gradient._jax_coupled_exponential(None, 4)
+
+    def f(x, t):
+        return jnp.real(jnp.sum(W * expo(x + t * jnp.asarray(D), jnp.asarray(scale))))
+    got = np.asarray(jax.jit(jax.grad(lambda t: jnp.sum(jax.vmap(f)(jnp.asarray(lanes), t))))(
+        jnp.zeros(3)))
+    ref = []
+    for x in lanes:
+        B = np.block([[scale * x, scale * D], [np.zeros_like(x), scale * x]])
+        ref.append(np.real(np.sum(W * (U @ scipy_linalg.expm(U.conj().T @ B @ U)
+                                       @ U.conj().T)[:8, 8:])))
+    assert np.max(np.abs(got - ref)) < 1e-13 * np.max(np.abs(ref)), (got, ref)
+
+
+@pytest.mark.parametrize('algo', ['ETM', 'SMM'])
+def test_a_layer_with_no_chain_keeps_its_derivative_bits(algo, monkeypatch):
+    """``jax.jit(jax.grad)`` of ``sum R`` on a first-order layer with no chain (the conical-cutoff
+    scenes' PD574): the same bits as with the chain capacity taken away
+    (``modal_gradient._chain_capacity`` answering ``None``, so neither the exponential nor its
+    tangent forms a chain). The tangent's chain contraction sits between optimization barriers;
+    without them XLA rescheduled the one-step form's sums around it, and this gradient moved by
+    7.4e-16 (ETM) and 9.2e-16 (SMM) relative. Catches the barriers dropped."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    from wavebit.rcwa._engine import modal_gradient
+    from wavebit._common.backend import _enable_x64
+    from tests.rcwa.test_conical_cutoff import PATTERNED, _solver as cutoff_solver
+    _enable_x64()
+    scene = PATTERNED['PD574']
+
+    def gradient():
+        s = cutoff_solver(scene, algo=algo, backend='jax', two_d=True)
+        s.formulation = 'first_order'
+        g = jax.jit(jax.grad(lambda w: jnp.sum(jnp.real(
+            s.solve(wavelength=w, auto_detune=False).R))))
+        return np.asarray(g(jnp.asarray(scene['wavelength'])))
+    chained = gradient()
+    monkeypatch.setattr(modal_gradient, '_chain_capacity', lambda coupled: None)
+    plain = gradient()
+    assert np.isfinite(chained) and chained.tobytes() == plain.tobytes(), (chained, plain)
+
+
 # ------------------------------------------------------------------ 6. under a trace
 
 _TRACED_RELS = (0.0, 1e-9, -1e-8)
@@ -834,13 +981,14 @@ def test_traced_values_at_a_third_order_point_are_exact(first_order):
 @pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
 def test_traced_fields_at_a_third_order_point_are_exact(first_order):
     """``jax.jit`` of the six field components at :data:`_FIELD_AT`, at the fy 0.5, 620.55 nm
-    point, ETM and SMM, against the eager fields' oracle (:func:`_derivative_oracle`'s values):
-    within 1e-12 relative. Measured 2.4e-14 (2D) and 3.8e-14 (first order); before, NaN."""
+    point, ETM and SMM, against :func:`_derivative_oracle`'s: the values within 1e-12 relative,
+    and ``jax.jit(jax.jacfwd)`` in the wavelength within 1e-11. Measured 2.4e-14 (2D) and
+    3.8e-14 (first order) in the values, 5.3e-13 and 5.7e-13 in the derivative; before, NaN."""
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     from wavebit._common.backend import _enable_x64
     _enable_x64()
-    _, _, _, F0, _ = _derivative_oracle(FIRST, 0.0)
+    _, _, _, F0, dF = _derivative_oracle(FIRST, 0.0)
     wl = EP3[FIRST][1]
     for algo in ('ETM', 'SMM'):
         s = _formulated(FIRST, 0.0, algo, 'jax', first_order)
@@ -850,6 +998,41 @@ def test_traced_fields_at_a_third_order_point_are_exact(first_order):
             return r.reconstruct_field(*(jnp.asarray(v) for v in _FIELD_AT))
         got = np.asarray(jax.jit(F)(jnp.asarray(wl)))
         assert _rel(got, F0) < 1e-12, (algo, _rel(got, F0))
+        d = np.asarray(jax.jit(jax.jacfwd(F))(jnp.asarray(wl)))
+        assert _rel(d, dF) < 1e-11, (algo, _rel(d, dF))
+
+
+@pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
+def test_vmapped_derivatives_at_a_third_order_point_match_cauchy_oracles(first_order):
+    """The gradient of ``sum |a|**2`` in the wavelength across the offsets 0, 1e-9 and -1e-8 of
+    the fy 0.5, 620.55 nm point, both ways round: ``jax.jit(jax.vmap(jax.grad))`` and
+    ``jax.jit(jax.grad)`` of a sum over ``jax.vmap``, ETM and SMM, against
+    :func:`_derivative_oracle`'s to 1e-11 relative. Under ``vmap`` the exponential's tangent
+    branches by selection; with reverse mode outside it, a tangent inside that branch raised
+    (``stop_gradient`` has no transpose). Measured within 6.4e-13, both ways round alike."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    from wavebit._common.backend import _enable_x64
+    _enable_x64()
+    wl = EP3[FIRST][1]
+    lanes = jnp.asarray([wl * (1 + r) for r in _TRACED_RELS])
+    refs = []
+    for rel in _TRACED_RELS:
+        a0, _, da_wl, _, _ = _derivative_oracle(FIRST, rel)
+        refs.append(2 * np.real(np.sum(np.conj(a0) * da_wl)))
+    refs = np.array(refs)
+    for algo in ('ETM', 'SMM'):
+        s = _formulated(FIRST, 0.0, algo, 'jax', first_order)
+
+        def total(w):
+            r = s.solve(wavelength=w, auto_detune=False)
+            return jnp.sum(jnp.abs(jnp.concatenate([r.r_xyz.ravel(), r.t_xyz.ravel()])) ** 2)
+        got = {'vmap(grad)': np.asarray(jax.jit(jax.vmap(jax.grad(total)))(lanes)),
+               'grad(sum vmap)': np.asarray(jax.jit(jax.grad(
+                   lambda ws: jnp.sum(jax.vmap(total)(ws))))(lanes))}
+        for how, g in got.items():
+            err = np.max(np.abs(g - refs) / np.abs(refs))
+            assert err < 1e-11, (algo, how, g, refs, err)
 
 
 @pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
@@ -877,20 +1060,36 @@ def test_torch_vmap_derivatives_at_a_third_order_point_match_a_cauchy_oracle(fir
         assert abs(g - g_ref) < 1e-11 * abs(g_ref), (algo, g, g_ref)
 
 
-def test_a_traced_derivative_at_a_third_order_point_answers_nan():
-    """``jax.jit(jax.grad)`` at the point: the values are exact under a trace, but the traced
-    exponential's tangent (``modal_gradient._coupled_frechet``) is the closed form for a coupling
-    on disjoint rows and columns, and a chain's middle mode is both, which it answers with NaN --
-    never a silent derivative. Catches that premise check dropped."""
+@pytest.mark.parametrize('name, rel', [(FIRST, 0.0)] + [
+    pytest.param(n, r, marks=pytest.mark.slow) for n, r in
+    (('fy 0.8, 664.35 nm', 0.0), ('fy 0.5, 645.23 nm', 0.0), (FIRST, 1e-9), (FIRST, -1e-8),
+     ('fy 0.8, 664.35 nm', -1e-8))])
+@pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
+def test_traced_derivatives_at_a_third_order_point_match_cauchy_oracles(name, rel, first_order):
+    """Under ``jax.jit`` at and beside a third-order point, against :func:`_derivative_oracle`, to
+    1e-11 relative: ``jax.jacfwd`` of every amplitude in theta and the wavelength and
+    ``jax.grad`` of ``sum |a|**2`` in the wavelength, ETM and SMM. A trace reads nothing, so the
+    exponential's tangent is the closed form (``modal_gradient._coupled_frechet``) with its
+    chain families, and the derivative rules select their chain forms. Measured within 5.9e-13
+    at the fy 0.5, 620.55 nm point, offsets 0, 1e-9 and -1e-8; before, NaN. Catches the chain
+    families dropped, or the closed form's premise check (no row that is also a column) left
+    in."""
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
     from wavebit._common.backend import _enable_x64
     _enable_x64()
-    wl = EP3[FIRST][1]
-    for first_order in (False, True):
-        s = _formulated(FIRST, 0.0, 'ETM', 'jax', first_order)
+    a0, da_th, da_wl, _, _ = _derivative_oracle(name, rel)
+    g_ref = 2 * np.real(np.sum(np.conj(a0) * da_wl))
+    wl = EP3[name][1] * (1 + rel)
+    for algo in ('ETM', 'SMM'):
+        s = _formulated(name, rel, algo, 'jax', first_order)
 
-        def total(w):
-            r = s.solve(wavelength=w, auto_detune=False)
-            return jnp.sum(jnp.abs(jnp.concatenate([r.r_xyz.ravel(), r.t_xyz.ravel()])) ** 2)
-        assert np.isnan(float(jax.jit(jax.grad(total))(jnp.asarray(wl)))), first_order
+        def A(x):
+            r = s.solve(theta=x[0], wavelength=x[1], auto_detune=False)
+            return jnp.concatenate([r.r_xyz.ravel(), r.t_xyz.ravel()])
+        jac = np.asarray(jax.jit(jax.jacfwd(A))(jnp.asarray([0.3, wl])))
+        assert _rel(jac[:, 0], da_th) < 1e-11, ('theta', algo, _rel(jac[:, 0], da_th))
+        assert _rel(jac[:, 1], da_wl) < 1e-11, ('wl', algo, _rel(jac[:, 1], da_wl))
+        g = float(jax.jit(jax.grad(lambda w: jnp.sum(jnp.abs(
+            A(jnp.stack([jnp.asarray(0.3), w]))) ** 2)))(jnp.asarray(wl)))
+        assert abs(g - g_ref) < 1e-11 * abs(g_ref), ('grad', algo, g, g_ref)
