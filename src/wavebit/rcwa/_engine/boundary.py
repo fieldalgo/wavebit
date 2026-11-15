@@ -145,9 +145,129 @@ def _seg_dist(xp, pts, A, E, L2):
     return _sum(xp, diff * diff), foot
 
 
-def _nearest(xp, pts, A, E, L2):
+def _tie_scale2(xp, lattice, transform, dtype):
+    """``|a1|^2 + |a2|^2`` of the reduced basis: the squared length a segment tie is bounded by."""
+    basis = reduced_basis(lattice, transform if transform is not None else reduction_transform(lattice))
+    a1x, a2x = basis[0][0], basis[0][1]
+    a1y, a2y = basis[1][0], basis[1][1]
+    return xp.asarray(a1x*a1x + a1y*a1y + a2x*a2x + a2y*a2y, dtype=dtype)
+
+
+def _tie_margin(xp, d2, scale2):
+    """``64 eps (S sqrt(d2) + d2)``, ``S = sqrt(scale2)``: how far apart rounding can put two
+    equal squared point-to-segment distances (see :func:`_nearest_index`)."""
+    eps = float(xp.finfo(d2.dtype).eps)
+    return 64.0 * eps * (xp.sqrt(scale2) * xp.sqrt(d2) + d2)
+
+
+def _nearest_index(xp, dist2, foot, scale2=None):
+    """The nearest segment per point, row by row of ``dist2``; ties go to the lowest foot.
+
+    A strict ``argmin`` keeps the first of *bitwise* equal squared distances, and a grid lands
+    exactly on the medial axis of a symmetric outline -- a square box turned 45 deg on a square
+    cell samples both of its diagonals on odd grids, a regular hexagon or triangle on the
+    hexagonal cell its mirrors -- where two segments with distinct feet are equally near and
+    their normals are each other's mirror images. Their squared distances then agree only to
+    rounding, and JAX's compiled `_seg_dist` (every field here runs in a `lax.scan` body,
+    eager or jitted) rounds them apart from NumPy and PyTorch: on that 45 deg box it read the
+    other foot at 4, 8 and 25 samples at grids 13, 21 and 65, the dyad's ``xy`` changed sign
+    there, and a tensor layer holding it solved ``sum(T)`` 1.0e-3 from NumPy at grid 13. The
+    rounding also moved with the shape: NumPy's own central difference of ``sum(T)`` by the
+    box's side read -88 where ``jax.grad`` and PyTorch read -0.254 (2026-11-15,
+    ``docs/validation/rcwa/normal-field-known-limits.md`` section 8f).
+
+    So every segment within ``64 eps (S d_min + d2_min)`` of the minimum counts as tied, with
+    ``S = sqrt(scale2)``: a squared distance ``|p - foot|^2`` rounds as twice its length times the
+    few ulps of ``S`` its coordinates carry. Tied squared distances measured within 2.2 eps of
+    ``S d + d2`` on NumPy, PyTorch and jitted JAX (square and hexagonal cells, periods 1 and 700,
+    grids 13 to 65), and the nearest untied gap was 1.1e-8 of ``scale2``. Not the
+    ``64 eps (scale2 + d2)`` of :func:`~.parametric._fold_to_nearest_image`, whose candidates
+    are all a cell away: a sample near an interface is much nearer than that, and on a 600 nm
+    cell ``64 eps scale2`` is 1e-8 nm^2, which took two adjacent facets of a 256-gon 74 nm off,
+    feet 6e-5 nm apart and genuinely 4.1e-9 nm^2 apart in ``d2``, for a tie. The pick there
+    then left the nearer facet at one angle of a central difference and not at the next, and
+    ``test_a_numpy_scalar_beside_a_traced_parameter_keeps_its_gradient`` read the 6.5e-13 step
+    as 4.6e-4 of the slope. That gap is 270 eps of ``S d + d2``.
+
+    Among the tied, the foot with the lowest ``x`` wins, then the lowest ``y``, each within
+    ``64 eps sqrt(scale2)``: a point of the geometry, not a place in the segment table. The
+    lowest *index* was backend-neutral too, but reversing a loop renumbers its edges, and
+    ``test_the_normal_field_does_not_care_which_way_a_hole_is_wound`` measured what that cost:
+    the pick flipped at every tie inside the margin, and the hole's coefficients moved by
+    1.6e-5. Tied feet on a medial axis are distinct points, a facet or more apart, so their
+    order is far outside rounding; a reversed edge has the same foot.
+
+    **Only a tie between distinct feet is a medial-axis tie**, and only there does the rule
+    above replace the plain ``argmin``. Feet that nearly coincide carry nearly one direction,
+    and there the nearer is the geometry's answer: beyond a box's corner, on the line of one of
+    its edges, the corner and the foot on the edge sit ``h`` apart when the box moves by ``h``,
+    and their squared distances only ``h^2`` -- inside any rounding margin. Taking the lowest
+    foot there picked the corner at ``x - h`` and the edge at ``x`` and ``x + h``, and
+    ``tests/rcwa/test_tensor_shape_integrated.py::test_painted_shape_and_cell_gradients`` read
+    that 5e-8 rad turn as 1.4e-3 of a central difference with ``h = 1e-5``. So a row takes the
+    foot rule only when some tied foot lies more than ``32 sqrt(margin)`` (and more than
+    ``64 eps S``, its rounding) from the ``argmin``'s: a pair of nearly coincident feet whose
+    squared distances tie within the margin are at most about ``sqrt(margin)`` apart, and a
+    medial axis's are a facet angle times ``d`` apart, three or more decades further. Where
+    the ``argmin`` stands and rounding decides it, the two feet are within ``sqrt`` of the
+    rounding and their dyads within ~1e-8. A shared corner's two edges, whose feet coincide,
+    give one direction off the interface whichever is taken. ``scale2=None`` is a strict
+    ``argmin``, for the raw probes that pass no cell.
+    """
+    if scale2 is None:
+        return xp.argmin(dist2, axis=1)
+    eps = float(xp.finfo(dist2.dtype).eps)
+    nearest = xp.argmin(dist2, axis=1)
+    least = xp.min(dist2, axis=1)
+    margin = _tie_margin(xp, least, scale2)
+    within = dist2 <= (least + margin)[:, None]
+    tol = 64.0 * eps * xp.sqrt(scale2)
+    # The `argmin`'s foot, gathered by a one-hot rather than an index array, so it lives
+    # wherever `dist2` does.
+    column = xp.cumsum(xp.ones_like(dist2), axis=1) - 1.0
+    chosen = xp.astype(column == xp.astype(nearest, dist2.dtype)[:, None], dist2.dtype)
+    nearest_foot = xp.sum(chosen[..., None] * foot, axis=1)
+    apart2 = xp.sum((foot - nearest_foot[:, None, :])**2, axis=-1)
+    medial = xp.any(within & (apart2 > (1024.0 * margin + tol * tol)[:, None]), axis=1)
+    far = xp.asarray(float('inf'), dtype=dist2.dtype)
+    for k in (0, 1):
+        coordinate = foot[..., k]
+        low = xp.min(xp.where(within, coordinate, far), axis=1)
+        within = within & (coordinate <= (low + tol)[:, None])
+    # `argmax` of a 0/1 array is its first 1 on NumPy, PyTorch and JAX alike.
+    lowest = xp.argmax(xp.astype(within, dist2.dtype), axis=1)
+    return xp.where(medial, lowest, nearest)
+
+
+def _nearest_first(xp, d2, scale2):
+    """The candidates of each row of ``d2`` ordered nearest first, ties in candidate order.
+
+    :func:`_nearest_projector_fields` hands each material pair's interface mass to its
+    candidates in this order (a prefix maximum), so two pairs equally near a sample -- two
+    mirror-image shapes of different materials, whose mirror the grid samples -- split it by
+    which comes first. A stable ``argsort`` of the squared distances let rounding decide that,
+    and JAX's compiled body rounds them apart from NumPy: on two boxes tilted +-0.3 rad either
+    side of a square cell's mid-line, one sample at grid 65 read a dyad 0.17 away. Candidate
+    ``j`` now precedes ``i`` when nearer by more than :func:`_nearest_index`'s margin, or tied
+    within it and listed first -- the candidates are listed by their sorted region-label pair,
+    which no winding or table order moves. They are the material pairs, a handful, so the
+    pairwise rank is cheap. ``inf`` distances (a pair with no live interval) follow every finite
+    one, as before.
+    """
+    di, dj = d2[:, :, None], d2[:, None, :]
+    margin = _tie_margin(xp, xp.minimum(di, dj), scale2)
+    gap = di - dj
+    # The candidate index, built from `d2` so it lives wherever `d2` does.
+    index = xp.cumsum(xp.ones_like(d2[:1, :]), axis=1)
+    earlier = index[:, None, :] < index[:, :, None]
+    before = (gap > margin) | ((xp.abs(gap) <= margin) & earlier)
+    rank = xp.sum(xp.astype(before, xp.int64), axis=2)
+    return xp.argsort(rank, axis=1, stable=True)
+
+
+def _nearest(xp, pts, A, E, L2, scale2=None):
     dist2, foot = _seg_dist(xp, pts, A, E, L2)
-    j = xp.argmin(dist2, axis=1)
+    j = _nearest_index(xp, dist2, foot, scale2)
     rows = xp.arange(pts.shape[0])
     return j, foot[rows, j]
 
@@ -164,8 +284,10 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     image pruning; the scan/checkpoint evaluation is shared with raw probes.
 
     The closest *edge* is not well defined -- beyond a corner both edges meeting there have the
-    corner as their closest point, at exactly equal distance, so `argmin`'s tie-break decides on
-    29-45% of the cell. The closest point is unique except on the medial axis (measure zero).
+    corner as their closest point, at exactly equal distance, so the tie-break decides on
+    29-45% of the cell. The closest point is unique except on the medial axis (measure zero),
+    which a symmetric outline puts on the grid; there the lowest segment index wins on every
+    backend (:func:`_nearest_index`).
 
     Sign flips inside/outside, which does not matter: NVF only uses ``normal_x**2``, ``normal_x*normal_y``,
     ``normal_y**2``.
@@ -319,15 +441,16 @@ def distance_gradient_normal_field(xp, polys, grid_shape, lattice, dtype, chunk=
     npix = Ny * Nx
     if chunk is None:
         chunk = max(1, min(npix, 4_000_000 // max(M, 1)))
+    scale2 = _tie_scale2(xp, lattice, transform, dtype)
 
     def _chunk_normals(p):
         """One chunk's unit normals, ``(len(p), 2)``. The loop body, named so JAX can reuse it."""
         if active is None:
-            j, foot_j = _nearest(xp, p, A, E, L2)
+            j, foot_j = _nearest(xp, p, A, E, L2, scale2)
         else:
             dist2, foot = _seg_dist(xp, p, A, E, L2)
             dist2 = xp.where(active[None, :], dist2, xp.asarray(float('inf'), dtype=dtype))
-            j = xp.argmin(dist2, axis=1)
+            j = _nearest_index(xp, dist2, foot, scale2)
             foot_j = foot[xp.arange(p.shape[0]), j]
 
         v = p - foot_j
@@ -927,7 +1050,9 @@ def _nearest_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
     extended = xp.asarray(ids, dtype=xp.int64)
     active, contrasts = active[extended], contrasts[extended]
     candidates = []
-    for key, indices in groups.items():
+    # In label order, not first appearance: the order breaks distance ties between pairs
+    # (`_nearest_first`), and reversing a loop changes which of its pairs appears first.
+    for key, indices in sorted(groups.items()):
         index = xp.asarray(indices, dtype=xp.int64)
         valid = xp.sum(E[index]*E[index], axis=1) > 0.
         field = None if candidate_fields is None else candidate_fields.get(key)
@@ -956,6 +1081,7 @@ def _nearest_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
     count = len(candidates)
     if chunk is None:
         chunk = max(1, min(pts.shape[0], 4_000_000 // max(len(A), 1)))
+    scale2 = _tie_scale2(xp, lattice, transform, dtype)
 
     def evaluate(p):
         rows = xp.arange(p.shape[0])
@@ -968,7 +1094,7 @@ def _nearest_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
                 continue
             dist2, foot = _seg_dist(xp, p, a, e, l2)
             dist2 = xp.where(valid[None, :], dist2, xp.asarray(float('inf'), dtype=dtype))
-            nearest = xp.argmin(dist2, axis=1)
+            nearest = _nearest_index(xp, dist2, foot, scale2)
             distance = dist2[rows, nearest]
             delta = p-foot[rows, nearest]
             edge = e[nearest]
@@ -997,7 +1123,7 @@ def _nearest_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
             (d2 > 0.) & ~on[:, None] & (strengths[None, :] > 0.), d2/unit2, xp.ones_like(d2))
         influence = strengths[None, :] * xp.where(on[:, None], xp.astype(d2 <= threshold2, dtype),
                                                    ratio**(_BLEND_EXPONENT/2))
-        order = xp.argsort(d2, axis=1, stable=True)
+        order = _nearest_first(xp, d2, scale2)
         sorted_influence = influence[rows[:, None], order]
         sorted_direction = direction[rows[:, None], order]
         # Parallel prefix maximum in log2(number of material pairs) Array-API steps.

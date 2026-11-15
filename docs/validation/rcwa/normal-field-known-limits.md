@@ -1264,13 +1264,79 @@ field is built at the cell centre. Pinned by
 (the ring and the tensor candidate at grids 21 and 65, against PyTorch, eager JAX, `jax.jit`,
 reversed `imgs` and one-ulp nudges). Both fail under a strict `<`.
 
+**Then audited and closed (2026-11-15): the segment candidates.** `boundary.py` chose the nearest
+segment with `argmin` in two fields. One is `_nearest_projector_fields`, the hard nearest field that
+tensor layers read (`average=False`). The other is `distance_gradient_normal_field`, which a solve
+reaches only when a layer's interface plan has no pieces. Inside `_nearest_projector_fields`, a
+stable `argsort` of the squared distances also ordered the material pairs, and that order decides
+which pair the blend gives its mass to first (a prefix maximum). The scalar painted route reads
+the boundary integral of §1c, which has no hard minimum, and is unaffected. Two edges that meet at
+a corner tie with one shared foot, so the pick does not matter off the interface. On a medial axis
+the feet are distinct and the normals are mirror images, and a symmetric outline puts its medial
+axis on the grid. Both fields run in a `lax.scan` body on JAX, compiled whether or not the caller
+jits, and that body rounds the two squared distances apart from NumPy and PyTorch. On a square of
+side 0.5 turned 45 deg on the unit square cell, JAX read the other edge at 4, 8 and 25 samples at
+grids 13, 21 and 65, and the dyad's `xy` changed sign there. A regular hexagon of radius 0.3 on
+`Lattice.hexagonal(1.)` differed at 1, 3 and 17 samples at grids 21, 64 and 65. PyTorch matched
+NumPy everywhere, and axis-aligned boxes never differed, since their ties stay exact. The
+material-pair order flipped as well: two 0.3 x 0.15 boxes of permittivity 4 and 9, tilted +-0.3 rad
+either side of the square cell's mid-line, read a dyad 0.17 away at one sample at grid 65. The
+end-to-end scene puts the turned square in a tensor material `[3.8, 4.2, 4.5]` beside a
+radius-0.08 circle (permittivity 2) at `(0.42, 0.42)`, in the slab of the scenes above (orders
+`(3, 3)`). There JAX's `sum(T)` sat -1.0e-3, -1.5e-3 and -1.5e-4 from NumPy at grids 13, 21 and
+65. The tie also moved with the shape: NumPy's central difference of `d sum(T) / d side` read -88,
++116 and +128, where `jax.grad` and PyTorch both read -0.254, -0.266 and -0.267. The two exact
+derivatives agreed with each other to 7e-13 throughout.
+
+`boundary.py::_nearest_index` now counts every segment within `64 eps (S d_min + d2_min)` of the
+minimum as tied, with `S = sqrt(|a1|^2 + |a2|^2)`. A squared distance `|p - foot|^2` rounds as
+twice its length times the few ulps of `S` its coordinates carry. The fold's
+`64 eps (|a1|^2 + |a2|^2 + d2)` is too wide here, because a sample near an interface is much nearer
+than a cell. On a 600 nm cell it called two adjacent facets of a 256-gon a tie, with feet 6e-5 nm
+apart and a genuine gap of 4.1e-9 nm^2 (270 eps of `S d + d2`). The pick then changed between two
+angles of a central difference, and
+`tests/rcwa/test_boundary.py::test_a_numpy_scalar_beside_a_traced_parameter_keeps_its_gradient`
+read the 6.5e-13 step as 4.6e-4 of the slope (2.2e-6 with this margin, 9.8e-6 before the change).
+Among the tied segments, the foot with the lowest `x` wins, then the lowest
+`y`, each compared within `64 eps S`. That rule applies only to a medial-axis tie, where some tied
+foot lies more than `32 sqrt(margin)` from the `argmin`'s. Elsewhere the plain `argmin` stands,
+because feet that nearly coincide carry nearly one direction and the nearer is the geometry's
+answer. Beyond a box's corner, on the line of one of its edges, the corner and the foot on the
+edge sit `h` apart when the box moves by `h`, and their squared distances only `h^2` apart. Taking
+the lowest foot there turned the direction by 5e-8 rad at `x - h` alone, and
+`tests/rcwa/test_tensor_shape_integrated.py::test_painted_shape_and_cell_gradients` read that as
+1.4e-3 of its central difference (1.6e-6 now, as before the change). Tied feet on a medial axis are distinct
+points, a facet or more apart, so their order is far outside rounding. The lowest *index* would
+also have been backend-neutral, but reversing a loop renumbers its edges, and
+`tests/rcwa/test_boundary.py::test_the_normal_field_does_not_care_which_way_a_hole_is_wound` read
+the cost: under that rule a hole's coefficients moved by 1.6e-5 between its two windings. A
+reversed edge has the same foot, so with the foot rule they move by 7e-18, and the field by
+1.1e-14. Until then that test had pinned 20 pixels moving by one facet angle at exact `argmin`
+ties, and it now pins that no pixel moves. `_nearest_first` orders the material pairs the same
+way: a pair precedes another when nearer by more than the margin, or when tied within it and
+first in label order, the candidates now being listed by their sorted region labels. On NumPy,
+PyTorch and jitted JAX, across the square and hexagonal cells at periods 1 and 700 and grids 13
+to 65, tied squared distances were within 2.2 eps of `S d + d2`. The nearest untied gap was 1.1e-8
+of `|a1|^2 + |a2|^2`. Afterwards no backend differs from NumPy at any sample of
+these scenes, in either field. JAX's `sum(T)` meets NumPy's to 2.8e-15, the central difference
+meets `jax.grad` to 2.1e-10, 1.0e-8 and 4.7e-9 at grids 13, 21 and 65, and the derivatives agree
+to 8.6e-13. NumPy's `sum(T)` for the tensor scene moved by -6.6e-4, -8.5e-4 and -4.3e-5 at those
+grids, because many of its diagonal samples are tied and NumPy's rounding had decided them. The
+diagonals of that square run through the cell's centre, so an even grid, including the default
+1024, does not sample them. Pinned by
+`tests/rcwa/test_boundary.py::test_a_medial_axis_sample_reads_one_segment_on_every_backend` (the
+turned square at grids 13 and 65, the hexagon at 21, the mirrored pair at 65; both fields against
+PyTorch, eager JAX and `jax.jit`) and
+`tests/api/test_eager_grad_parity.py::test_a_tensor_polygon_on_its_medial_axis_differentiates_alike_on_every_backend`
+(grids 13 and 21: `jax.grad`, torch backward, NumPy central difference, and JAX's `sum(T)`
+against NumPy's). All 6 cases fail under the strict `argmin` and `argsort`. The jaxpr marker of
+`test_the_jax_path_is_one_loop_and_not_one_copy_per_chunk` is now the one `argmax` that
+`_nearest_index` leaves per body, in place of the `argmin` it replaced.
+
 **Still outside this fix.** An odd grid also samples the shape's own centre, where the level set
 has no gradient. The normal there is whatever `_hypot_safe` leaves, and a one-ulp nudge turns it
 arbitrarily. Every backend reads the same value unnudged. This is a degeneracy of one instance,
-not a tie between two, and it is not changed here. The polygon and segment candidates in
-`boundary.py` choose their nearest foot with `argmin`, which keeps the first of equal squared
-distances, and their medial-axis samples were not audited for backend neutrality in this
-change.
+not a tie between two, and it is not changed here.
 
 ## 9. The cases, A to L, as of 2026-09-11
 

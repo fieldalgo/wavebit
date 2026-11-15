@@ -297,6 +297,42 @@ def test_a_hexagonal_ellipse_that_leaves_its_cell_differentiates_alike_on_every_
     assert through_jax == pytest.approx(finite_difference, rel=1e-7)     # measured 6.3e-9 at worst
 
 
+# ------------------------------------------------------------------ two segments of a polygon
+
+def tensor_diamond(side):
+    """A tensor square turned 45 deg on the unit square cell, beside a circle: a disjoint tensor
+    layer, whose hard nearest field samples the square's diagonals on every grid."""
+    regions = (rcwa.Region(geometry=rcwa.Rectangle(size=(side, side), angle=np.pi/4),
+                           material=Material([3.8, 4.2, 4.5])),
+               rcwa.Region(geometry=rcwa.Circle(radius=.08, center=(.42, .42)), material=Material(2.)))
+    return rcwa.Problem(
+        stack=rcwa.Stack(period=(1., 1.), bottom=Material(2.25),
+                         layers=(rcwa.Layer(thickness=.25, background=Material(1.5), regions=regions),)),
+        excitation=rcwa.Excitation(wavelength=1.3, sources=(rcwa.PlaneWave(theta=.2, phi=.3, polarization='s'),)))
+
+
+@pytest.mark.parametrize('grid', [13, 21])
+def test_a_tensor_polygon_on_its_medial_axis_differentiates_alike_on_every_backend(grid):
+    """The segment field reads one of two equidistant edges, whatever the rounding.
+
+    The nearest segment was a strict ``argmin``, and on the square's diagonals two edges are
+    equally near to rounding: JAX's compiled field read the other edge at 4 and 8 samples, so
+    its ``sum(T)`` sat 1.0e-3 and 1.5e-3 from NumPy's at grids 13 and 21, and the rounding moved
+    with the side, so NumPy's central difference read -88 and +116 where ``jax.grad`` and
+    PyTorch read -0.254 and -0.266 (2026-11-15). ``tests/rcwa/test_boundary.py`` pins the field.
+    """
+    numerics = rcwa.Numerics(orders=(3, 3), shape_nvf_grid_size=grid)
+    through_jax, through_torch, finite_difference = derivatives(
+        tensor_diamond, .5, .5, lambda result: result.T.sum(), numerics, step=1e-6)
+    assert abs(finite_difference) > 1e-1
+    assert through_jax == pytest.approx(through_torch, rel=1e-10)        # measured 1.5e-13, 1.2e-13
+    assert through_jax == pytest.approx(finite_difference, rel=1e-7)     # measured 2.1e-10, 1.0e-8
+    with jax.enable_x64(True):
+        on_jax = float(rcwa.run(tensor_diamond(.5), numerics=numerics, backend='jax').T.sum())
+    on_numpy = float(rcwa.run(tensor_diamond(.5), numerics=numerics).T.sum())
+    assert on_jax == pytest.approx(on_numpy, abs=1e-12)                  # measured 2.8e-15, 1.0e-15
+
+
 # ------------------------------------------------------------------ the eager doors
 
 def test_run_inside_eager_jax_grad_prepares_on_the_primal_as_pytorch_does():
