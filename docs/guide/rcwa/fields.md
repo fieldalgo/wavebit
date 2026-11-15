@@ -453,13 +453,17 @@ default stays `'plain'`.
   - Not measured: other shapes, several shapes in a layer, oblique incidence, and `H`. Oblique
     incidence, both formulations, a wave given as a source and a stack of several layers run the
     same operators and are tested for consistency, not against a reference.
+  - Other factorizations. Every number here is on an `'nvf'` solve. The rules also answer a
+    circle solved with `'li'` or `'laurent'`, and nothing was measured there.
 - **Derivatives.** With respect to the radius, the centre, a permittivity, a thickness or the
   period, the derivative agrees with a finite difference off the wall, on JAX and PyTorch. As
   with the line rule it holds each sample fixed and does not differentiate which side of the wall
   a sample is on. `'splitw'`'s reach `b` has a kink where the radius is a quarter of the cell's
   shorter side, and the two one-sided slopes differed there by 1.7 to 3.1% on the first cell
-  above. Under `jax.jit` a traced material or thickness works; a traced radius is refused by the
-  solve itself.
+  above. Under `jax.jit` a traced material or thickness works; a traced radius or period needs a
+  solve on frozen geometry (`freeze_geometry`). A trace has no value to refuse by name, so there
+  a period that turns out negative, or a radius that no longer fits the cell, answers NaN in
+  `E_x` and `E_y` of that layer.
 - **Cost.** Each call samples the normal on a 2048 by 2048 grid and builds two dense operators
   over twice the orders: about a second per call at order 8, and 76 MB for each operator at
   order 16, 2.8 GB at order 40. Sample all the points of a layer in one call.

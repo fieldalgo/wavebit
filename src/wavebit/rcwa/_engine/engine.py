@@ -5024,7 +5024,9 @@ class CoreFactorizationMixin:
         on a layer that holds one circle they split ``E_x`` and ``E_y`` along the circle's normal,
         sum the normal ``D`` and the tangential ``E`` and divide the first by ``eps``
         (:mod:`~wavebit.rcwa._engine.splitw`). ``'splitw'`` uses that normal near the wall only.
-        They rebuild ``E`` alone and refuse every other patterned layer by name.
+        They rebuild ``E`` alone and refuse every other patterned layer by name. Where ``Re eps``
+        changes sign across the wall they answer on its negative side only, and the other side
+        keeps the sum.
 
         ``incidences`` names which of the incidences the solve carries to reconstruct, one
         leading axis entry each, **in the order asked for**: ``'incident'`` is the incidence the

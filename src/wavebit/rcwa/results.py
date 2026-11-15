@@ -163,13 +163,15 @@ class Result:
         each sample (P. Lalanne and M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)). It changes
         ``E_x`` of a 1D TM or conical grating, and ``E_x`` and ``E_y`` of a 2D cell, in patterned
         layers only; a layer that names a permeability takes the same rule for ``H`` with ``B``
-        and ``mu``, and a diagonal tensor reads each axis's own entry. ``'split'`` and ``'splitw'`` are the rules for a
-        curved wall, which ``'lalanne'`` refuses: on a layer that holds one circle of a scalar
-        permittivity they split ``E_x`` and ``E_y`` along the circle's normal, sum the normal
-        ``D`` and the tangential ``E`` and divide the first by ``eps`` (M. Weismann, D. F. G.
-        Gallagher and N. C. Panoiu, J. Opt. 17, 125612 (2015)); ``'splitw'`` uses that normal
-        near the wall only. They rebuild ``E`` alone, are not ahead of ``'plain'`` on a metal,
-        and their field is not for a spatial derivative.
+        and ``mu``, and a diagonal tensor reads each axis's own entry. ``'split'`` and
+        ``'splitw'`` are the rules for a curved wall, which ``'lalanne'`` refuses: on a layer
+        that holds one circle of a scalar permittivity they split ``E_x`` and ``E_y`` along the
+        circle's normal, sum the normal ``D`` and the tangential ``E`` and divide the first by
+        ``eps`` (M. Weismann, D. F. G. Gallagher and N. C. Panoiu, J. Opt. 17, 125612 (2015));
+        ``'splitw'`` uses that normal near the wall only. They rebuild ``E`` alone, and their
+        field is not for a spatial derivative. Where ``Re eps`` changes sign across the wall, a
+        metal against a dielectric, they answer on the negative side only and the other side
+        keeps the plain sum.
         What a rule does not take is refused with ``field.reconstruction``, and a singular
         ``1/eps`` or ``1/mu`` matrix fails with ``rcwa.singular``.
         """
