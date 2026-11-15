@@ -170,9 +170,9 @@ the pairs merge into a defective cluster of three to eight modes, which both bui
 as a whole (`solve_2d.py::_rebuild_defective_clusters`; on the first-order split
 `solve_2d_first_order.py::_regular_clusters`, within each direction), eagerly and under every
 trace, with a check of its own; a Jordan chain of length three in three levels, eagerly
-(derivatives included, `solve_2d.py::_chain_split`) and under a trace (values, fields and a
-torch backward pass through `torch.func.vmap`, `solve_2d.py::_chain_split_traced`; a traced JAX
-derivative there returns NaN). Clusters no rebuild takes (more than
+(derivatives included, `solve_2d.py::_chain_split`) and under a trace (values, fields and
+their derivatives, `solve_2d.py::_chain_split_traced`, the exponential's tangent
+`modal_gradient.py::_frechet_chain_terms`). Clusters no rebuild takes (more than
 eight modes, chained ones), and
 a joint rebuild that fails its check, emit
 `ExceptionalPointWarning` eagerly, which does not trigger detuning. Under an abstract trace the

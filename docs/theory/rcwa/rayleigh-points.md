@@ -1219,10 +1219,50 @@ At the fy 0.5, 620.55 nm point (offsets 0, 1e-9 and -1e-8 against the Cauchy cir
 SMM; `jax.jit` fields within 3.8e-14 of the field's circle; torch's backward pass through
 `torch.func.vmap` within 6.8e-13 of the derivative circle. Before, each was NaN at the point.
 
-*Not yet.* A traced JAX derivative (`jax.jit(jax.grad)`, `jax.vmap` of a gradient) at the point
-still answers NaN: the traced exponential's closed-form tangent (`_coupled_frechet`) takes a
-coupling that reaches one level and refuses one that reaches two. It never gives a silent
-answer.
+*Its traced derivative* (2026-11-14). A traced JAX derivative (`jax.jit(jax.grad)`, `jax.vmap`
+of a gradient) takes the exponential's closed-form tangent (`modal_gradient._coupled_frechet`).
+It took a coupling that reaches one level and answered NaN for one that reaches two. A chain's
+middle mode is both a coupled row and a coupled column, so `n**2 != 0` (`n**3 = 0`: three
+levels), and a path on each side of the direction `E` takes up to two steps. The five families
+with a two-step path (two steps before `E` and none, one or two after it, and the mirror images)
+are now added (`_frechet_chain_terms`):
+
+- The two-step paths are listed flat. The middles are gathered as the exponential's value
+  gathers them; the paths, which start on a coupled row each, to the closed form's count of
+  coupled rows. The one-step couplings a path meets across `E` are read by column, each
+  column's coupled rows gathered to a cluster's lanes, since a coupling stays inside its
+  cluster.
+- Each family's divided differences are built over every subset of its points, from the
+  first-order table up (`_dd_lattice`), by §7's hybrid of recurrence and Taylor series. A
+  divided difference is symmetric in its points, so a family and its mirror image share a
+  table: three in all. Every subset of one size is one array, and the series is summed degree
+  by degree in a loop (`_dd_level`), so the program stays small: unrolled, the tables added 30%
+  to the compiled program (its HLO) of the cut pillar's 2D `jit(grad)`; formed this way, 10%.
+- The tables sit behind a branch on whether a middle is present (`lax.cond`,
+  `_frechet_chain_tables`), so a layer with none forms no table. Under `vmap` the branch becomes
+  a selection and every lane forms them. Only values enter the branch: the selection passes the
+  branch's operands through `stop_gradient`, which reverse mode cannot transpose on a tangent,
+  so with the direction `E` inside, `jax.grad` of a sum over `jax.vmap` raised
+  `NotImplementedError` (§5's *Why not a `lax.cond`* meets the same trap with a solve). `E` is
+  contracted outside, and where no middle is, a negative zero is added, which leaves every bit
+  of the one-step form. The contraction sits between optimization barriers
+  (`lax.optimization_barrier`): without them XLA rescheduled the one-step form's sums around it,
+  and a first-order layer with no chain moved its `jit(grad)` by up to 9.2e-16 relative. With
+  them the traced digests (`jit` values, `jit(grad)`, `torch.func.vmap`, both formulations) are
+  identical to before; a test compares that layer's `jit(grad)` with the same solve with the
+  chain capacity taken away, bit for bit.
+- More middles, more rows or columns on one, or more paths than the sizes hold answer NaN. So
+  does a coupling between two middles, a path of three steps.
+- `coupled=True` (a conical cutoff layer) holds no chain, and a row that is also a column there
+  still answers NaN.
+
+Against a 40-digit `expm` of the doubled matrix `[[A, E], [0, A]]`, the closed form is within
+6.2e-16 across splits of 0 to 0.7 and complex scales. At the fy 0.5, 620.55 nm point (offsets
+0, 1e-9 and -1e-8 against the Cauchy circles): `jax.jit(jax.grad)` of `sum |a|**2` and
+`jax.jit(jax.jacfwd)` of every amplitude in the wavelength within 5.9e-13, and the gradient
+across the three offsets under `jax.vmap`, inside `jax.grad` or outside it, within 6.4e-13,
+both formulations, ETM and SMM; the field's wavelength derivative within 5.7e-13. Before, each
+was NaN.
 
 *The screens under a trace* (2026-11-10). Nothing can warn under `jit`, `vmap` or
 `torch.func.vmap`, and the unresolved and backward-error screens used to be skipped there, so what
@@ -1300,9 +1340,9 @@ the Gram matrices of their columns, the defect measure on its slots, and on 2D o
   and only the narrow radius reads them: silent, as before the wide radius (not met on any layer
   measured).
 - A length-3 Jordan chain is exact and quiet eagerly, derivatives included (*A chain in three
-  levels*, above). Under a trace its values and fields are exact too, and so is torch's
-  backward pass through `torch.func.vmap`; a traced JAX derivative answers NaN, and so does a
-  slot holding the chain beside a pair (*Under a trace*, above). Off the point the gate takes
+  levels*, above). Under a trace its values, fields and derivatives are exact too (*Under a
+  trace* and *Its traced derivative*, above); a slot holding the chain beside a pair answers
+  NaN. Off the point the gate takes
   its three modes jointly (*Three modes, one eigenvector*, above).
 - Where `eig`'s start is poorer than the second step can absorb, the check warns; the answer is
   not exact. Two steps leave a remainder of third order in the start's error over the gap to
@@ -1553,8 +1593,8 @@ pair terms in the chord step, which no measured model reaches (as when the chord
 
 *Limits.* What the joint rebuild does not take keeps §8's limits: a cluster of more than eight
 modes, a chain, complex64 (the gate stays closed). A length-3 Jordan chain is taken in three
-levels, eagerly and under a trace (§8's *A chain in three levels* and *Under a trace*); a
-traced JAX derivative there answers NaN. A ball of three holding a pair is a cluster here, unlike on
+levels, eagerly and under a trace, derivatives included (§8's *A chain in three levels*, *Under
+a trace* and *Its traced derivative*). A ball of three holding a pair is a cluster here, unlike on
 2D, since the gate reads before the pair gate; the synthetic rows above cover it. Under a trace
 more clusters than slots answer NaN: a coincident cluster left over would be loud anyway (the
 screen reads it), but the C4v doublets would not: with the gate closed they were up to 3.1e-13
