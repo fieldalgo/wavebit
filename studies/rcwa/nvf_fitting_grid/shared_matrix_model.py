@@ -92,12 +92,14 @@ class SharedMatrixModel:
         self._prepare(key)
         if derivative and self.sequential_jvp:
             columns, flags = [], []
-            for tangent in np.eye(len(key)):
+            for axis, tangent in enumerate(np.eye(len(key))):
                 column, (y, valid) = self.compiled(jnp.asarray(p), jnp.asarray(tangent))
                 # Consume before dispatching another direction, bounding live
                 # normal-field and FFT tangent arrays to a single direction.
                 columns.append(np.asarray(column))
                 flags.append(np.asarray(valid))
+                print(f'grid {self.grid}: completed Jacobian column {axis + 1}/{len(key)}',
+                      flush=True)
             jac, valid = np.stack(columns, axis=1), np.stack(flags)
         elif derivative:
             jac, (y, valid) = self.compiled(jnp.asarray(p))
