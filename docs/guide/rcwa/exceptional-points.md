@@ -132,6 +132,35 @@ At an EP, $T$ generally contains an off-diagonal coupling. Discarding it would c
 
 In a large RCWA problem the regular vectors must span the appropriate invariant modal subspace. Arbitrary independent vectors cannot simply replace a selected pair while leaving every other mode untouched. The small examples below isolate the coordinate algebra from that subspace construction.
 
+### What the layer formulas see after the repair
+
+Away from an EP the modes of a layer are independent, so the propagation through a layer of dimensionless thickness $D=k_0d$ is diagonal,
+
+$$
+X=e^{-DQ}=\operatorname{diag}\left(e^{-Dq_1},\dots,e^{-Dq_N}\right),
+$$
+
+and the implementation uses that: multiplying by $X$ scales rows or columns, and $X^{-1}$ takes the reciprocal of each entry.
+
+$X=e^{-DQ}$ was always a matrix exponential; a diagonal $Q$ only made it entrywise. After the repair $Q$ is diagonal except for one small upper-triangular block per rebuilt pair (one $k\times k$ block per rebuilt cluster). The exponential of a block-diagonal matrix is the exponential of each block, so every other mode keeps its scalar $e^{-Dq_j}$, and a pair's block gives
+
+$$
+\exp\!\left(-D\begin{pmatrix}a&c\0&b\end{pmatrix}\right)
+=\begin{pmatrix}e^{-Da}&c\,\dfrac{e^{-Da}-e^{-Db}}{a-b}\0&e^{-Db}\end{pmatrix}
+\ \xrightarrow{\ b\to a\ }\ e^{-Da}\begin{pmatrix}1&-Dc\0&1\end{pmatrix}.
+$$
+
+The upper-right entry is the divided difference of §3, evaluated stably when $a$ and $b$ are close; at the EP itself it is the $u\,e^{-uq_0}$ term of Appendix E. Its inverse is the same block with $D\to-D$, at the EP $e^{+Da}\begin{pmatrix}1&Dc\0&1\end{pmatrix}$.
+
+What this changes downstream:
+
+- **Layer matching keeps its formulas.** The ETM recursion and the SMM interface and propagation blocks are matrix formulas in $X$ and $X^{-1}$. They stay as written; the block-diagonal $X$ enters where the diagonal one did. Only the shortcuts that assumed a diagonal $X$ change, and only on the block's rows and columns, where an entrywise product or reciprocal becomes a small matrix product or inverse.
+- **Stability carries over.** The block's exponential is the decaying factor $e^{-Da}$ times a polynomial in $D$, so ETM's arrangement, which lets only decaying factors appear, works unchanged.
+- **Fields.** Inside the layer the rebuilt coefficients evolve with the polynomial-times-exponential terms of Appendix E, and the field reconstruction reads the same block.
+- **Derivatives.** The derivative of an exponential with an off-diagonal entry is not the entrywise derivative; the solver uses the exact Fréchet derivative of the triangular block (see [Rayleigh points and patterned exceptional points](../../theory/rcwa/rayleigh-points.md), section 7).
+
+In the code each layer carries a `coupled` marker. `modal_gradient.exponential(..., coupled=...)` takes the entrywise path for a layer without a block and the block path otherwise, so layers away from an EP keep the diagonal shortcut.
+
 ## 6. A concrete patterned example and the scope of validation
 
 One regression scene, called PA616 in the numerical records, uses:
