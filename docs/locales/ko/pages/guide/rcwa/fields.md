@@ -48,8 +48,7 @@ boundary = result.boundary_fields(side='top', x=64, y=64, part='total')
 
 JAX에서는 변환 바깥에서 준비하고 실제 문제를 변환 안으로 넘깁니다. 예를 들면 `jax.jit(lambda p: prepared.run(p).field(x=..., y=..., z=...).values)`입니다. 이는 평면파 하나에 해당합니다. 다른 소스는 `jax.jit` 아래에서 추적된 입력을 거절합니다(eager `jax.grad`에서는 받습니다). 명시적 좌표 배열과 정수 개수 모두 변환 안에서 쓸 수 있고, 명시적 높이와 함께 쓰는 추적된 층 두께도 됩니다. `jax.jit` 아래에서 영역의 기하나 셀을 다루려면 Cartesian Li 장치 검사가 적용되거나, 허용되는 스칼라 영역에 `Numerics(topology_check='host')`를 명시해야 합니다. 위상이 유효하지 않으면 전력과 마찬가지로 보관한 필드도 가려집니다. 그 밖의 추적된 기하는 `prepared.host_topology`로 거절합니다. Eager `jax.grad`는 구체적인 primal 값을 검사합니다. [자동 미분](../common/autodiff.md)과 [검사하는 형상 JIT](guarded-shape-jit.md)를 참고합니다. 이전 인터페이스의 컴파일된 `solver.solve_field(..., geometry=g)`와 그 정적 표본 규칙은 그 인터페이스에만 해당합니다.
 
-(coordinates)=
-## 좌표
+## Coordinates
 
 표본 인자는 각각 양의 정수 개수, 또는 유한한 실수 좌표로 된 비어 있지 않은 1차원 배열을 받습니다. 두 메서드 모두 `x`와 `y`가 필요하고, `field`는 `z`도 필요합니다. 기본값은 없습니다. 셀 중심 `x=[0.]`, `y=[0.]`에서 평면파 하나의 위상 인자는 단위값입니다. 그래서 그곳의 `boundary_fields(side=..., x=[0.], y=[0.], part='incoming')`은 어떤 실수 각도에서도 입사 편광 자체에 소스 `amplitude`를 곱한 값입니다.
 
@@ -98,8 +97,7 @@ H = cell.values[..., 3:]  # A/m
 
 이전 인터페이스의 결합 계산은 순수 s/p 응답도 보관하며, 결과 메서드의 `incidence='s'` 또는 `'p'`로 고릅니다. 현재 `field`와 `boundary_fields`는 `incidence` 인자를 받지 않고 선언한 여기의 응답을 돌려줍니다. 순수 응답이 필요하면 `'s'`와 `'p'` 편광을 두 문제로 따로 계산합니다.
 
-(differentiating-internal-fields)=
-## 내부 필드 미분하기
+## Differentiating internal fields
 
 평면파 하나의 결과 필드는 `prepared.run`과 `field`를 거쳐 JAX와 PyTorch 미분을 지원합니다. z 개수는 두께가 바뀔 때 각 층 안의 상대 위치를 따라갑니다. 명시적 z 배열은 물리적 높이를 고정하며, 각 점이 같은 층에 머무는 동안 두께 미분을 지원합니다. 움직이는 경계면이 점을 지나가면 그 점의 재료와 법선 필드가 불연속으로 바뀔 수 있습니다. 표본점은 스택 안에 둡니다. `jit` 아래에서 값이 추상적일 때는 eager 검증을 건너뜁니다.
 
