@@ -199,7 +199,8 @@ def test_complex_inputs_are_not_silently_projected_to_real(field):
 
 
 @pytest.mark.slow
-def test_study_scalar_batches_match_independent_scalar_calls(monkeypatch):
+@pytest.mark.parametrize('execution', ['scalar_batches', 'shared_matrices', 'sequential_jvp'])
+def test_study_models_match_independent_scalar_calls(monkeypatch, execution):
     """Spectral batching preserves public scalar values and all four derivatives."""
     jax = pytest.importorskip('jax')
     import jax.numpy as jnp
@@ -211,7 +212,12 @@ def test_study_scalar_batches_match_independent_scalar_calls(monkeypatch):
     spec.loader.exec_module(study)
     monkeypatch.setattr(study, 'WAVELENGTHS', np.array([900., 1100.]))
     parameters = study.TRUE.copy()
-    model = study.Model(32, batch_size=2)
+    if execution != 'scalar_batches':
+        from studies.rcwa.nvf_fitting_grid.shared_matrix_model import SharedMatrixModel
+        model = SharedMatrixModel(32, wavelengths=study.WAVELENGTHS,
+                                  sequential_jvp=execution == 'sequential_jvp')
+    else:
+        model = study.Model(32, batch_size=2)
     values, jacobian = model(parameters)
     prepared = rcwa.prepare(study.problem(parameters, 900., (1., 0.)),
                             numerics=rcwa.Numerics(orders=(4, 4), shape_nvf_grid_size=32,
@@ -237,7 +243,8 @@ def test_study_scalar_batches_match_independent_scalar_calls(monkeypatch):
     np.testing.assert_allclose(values, expected_values, rtol=1e-10, atol=1e-12)
     np.testing.assert_allclose(jacobian, expected_jacobian, rtol=1e-8, atol=1e-11)
     changed = parameters.copy()
-    changed[3] += .01
+    # Rebuild matrices for changed geometry as well as the propagation phase.
+    changed += np.array([.01, .0001, -.01, .01])
     expected_values, expected_jacobian = expected(changed)
     value_only = model(changed, derivative=False)
     values, jacobian = model(changed)

@@ -121,19 +121,36 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--batch-size', type=int, default=5,
                         help='maximum simultaneous spectral lanes (default: 5)')
+    parser.add_argument('--shared-matrices', action='store_true',
+                        help='share nondispersive N5 matrices across wavelengths inside AD')
+    parser.add_argument('--sequential-jvp', action='store_true',
+                        help='compute shared-matrix Jacobian columns sequentially to bound memory')
+    parser.add_argument('--jacobian-relative-tolerance', type=float,
+                        help='also require each Jacobian column to stabilize across grids')
     args = parser.parse_args()
     if args.batch_size < 1:
         parser.error('batch-size must be positive')
+    if args.sequential_jvp and not args.shared_matrices:
+        parser.error('sequential-jvp requires shared-matrices')
+    if (args.jacobian_relative_tolerance is not None
+            and (not np.isfinite(args.jacobian_relative_tolerance)
+                 or args.jacobian_relative_tolerance <= 0)):
+        parser.error('jacobian-relative-tolerance must be finite and positive')
     if args.output.exists():
         parser.error('output already exists; preserve the earlier measurement')
-    target_model = Model(128, batch_size=args.batch_size)
+    if args.shared_matrices:
+        from studies.rcwa.nvf_fitting_grid.shared_matrix_model import SharedMatrixModel
+        make_model = lambda grid: SharedMatrixModel(grid, sequential_jvp=args.sequential_jvp)
+    else:
+        make_model = lambda grid: Model(grid, batch_size=args.batch_size)
+    target_model = make_model(128)
     data, target_jac = target_model(TRUE)
     models = {128: target_model}
     del target_model
 
     def factory(grid):
         if grid not in models:
-            models[grid] = Model(grid, batch_size=args.batch_size)
+            models[grid] = make_model(grid)
         # Only adjacent grids are needed by the convergence check.
         for old in list(models):
             if old < grid and old != max(g for g in models if g < grid):
@@ -148,9 +165,15 @@ def main():
             row = asdict(stage)
             if not np.isfinite(stage.noise_std).all():
                 row['noise_std'] = None
+            if stage.jacobian_change is not None and not np.isfinite(stage.jacobian_change):
+                row['jacobian_change'] = None
+                row['jacobian_change_nonfinite'] = True
             stages.append(row)
         record = dict(completed=completed, converged=converged, reason=reason,
-                      data_grid=128, lane_batch_size=args.batch_size, execution='bounded_scalar_calls',
+                      data_grid=128, lane_batch_size=None if args.shared_matrices else args.batch_size,
+                      execution='shared_nondispersive_matrices' if args.shared_matrices else 'bounded_scalar_calls',
+                      jacobian_relative_tolerance=args.jacobian_relative_tolerance,
+                      sequential_jvp=args.sequential_jvp,
                       orders=[4, 4],
                       precision='double', data=data.tolist(), target_parameters=TRUE.tolist(),
                       target_jacobian=target_jac.tolist(), stages=stages,
@@ -172,7 +195,8 @@ def main():
 
     report = fit_grid_ladder(factory, TRUE, data, grids=args.grids,
                             noise_sigma=1e-4, parameter_tolerance=[.02, 4e-5, .015, .004],
-                            spectrum_tolerance=1e-5, on_stage=checkpoint)
+                            spectrum_tolerance=1e-5, on_stage=checkpoint,
+                            jacobian_relative_tolerance=args.jacobian_relative_tolerance)
     write_record(report.converged, report.reason, True)
     print(f'grid converged={report.converged}: {report.reason}')
     if not report.converged:

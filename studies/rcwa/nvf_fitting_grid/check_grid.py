@@ -39,9 +39,15 @@ def main():
     parser.add_argument('--previous', type=Path)
     parser.add_argument('--fd', action='store_true')
     parser.add_argument('--batch-size', type=int, default=5)
+    parser.add_argument('--shared-matrices', action='store_true',
+                        help='share nondispersive N5 matrices across wavelengths inside AD')
+    parser.add_argument('--sequential-jvp', action='store_true',
+                        help='compute shared-matrix Jacobian columns sequentially to bound memory')
     args = parser.parse_args()
     if args.grid <= 0 or args.batch_size <= 0:
         parser.error('grid and batch-size must be positive')
+    if args.sequential_jvp and not args.shared_matrices:
+        parser.error('sequential-jvp requires shared-matrices')
     if args.output.exists():
         parser.error('output already exists; preserve the earlier measurement')
     previous = None
@@ -51,10 +57,22 @@ def main():
                 or previous['solver_revision'] != args.solver_revision
                 or previous['parameters'] != TRUE.tolist() or previous['orders'] != [4, 4]):
             parser.error('previous must be a completed lower grid of the same solver and case')
+    if args.shared_matrices:
+        from studies.rcwa.nvf_fitting_grid.shared_matrix_model import SharedMatrixModel
+        model = SharedMatrixModel(args.grid, sequential_jvp=args.sequential_jvp)
+    else:
+        model = Model(args.grid, batch_size=args.batch_size)
+    sources = [Path(__file__), Path(__file__).with_name('nvf_fitting_grid.py')]
+    if args.shared_matrices:
+        sources.append(Path(__file__).with_name('shared_matrix_model.py'))
     record = dict(completed=False, solver_revision=args.solver_revision,
                   instrument_sha256=hashlib.sha256(Path(__file__).read_bytes().replace(b'\r\n', b'\n')).hexdigest(),
+                  source_sha256={p.name: hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+                                 for p in sources},
                   grid=args.grid, parameters=TRUE.tolist(), orders=[4, 4],
-                  batch_size=args.batch_size, execution='bounded_scalar_calls',
+                  batch_size=None if args.shared_matrices else args.batch_size,
+                  execution='shared_nondispersive_matrices' if args.shared_matrices else 'bounded_scalar_calls',
+                  sequential_jvp=args.sequential_jvp,
                   versions=dict(jax=jax.__version__, numpy=np.__version__, scipy=scipy.__version__),
                   spectrum_tolerance=1e-5, jacobian_relative_tolerance=1e-3,
                   fd_criterion=1e-3, columns=[], checks={})
@@ -72,7 +90,6 @@ def main():
             temporary.unlink(missing_ok=True)
 
     start = time.monotonic()
-    model = Model(args.grid, batch_size=args.batch_size)
     values, jacobian = model(TRUE)
     record.update(values=values.tolist(), jacobian=jacobian.tolist(),
                   ad_seconds=time.monotonic() - start)

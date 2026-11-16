@@ -203,6 +203,18 @@ same-family target does not establish independent optical accuracy.
 
 ## Controls and scope
 
+For the fixed nondispersive N5 case, the study's `--shared-matrices` execution
+path builds the layer convolution matrices once within the differentiated
+spectral evaluation. All geometry derivatives pass through that build; only
+the optical solves are batched across wavelengths and polarizations. This reuse
+depends on the declared constant scalar, nonmagnetic materials and is not a
+general dispersive cache. `--sequential-jvp` computes the four columns in turn
+to bound live tangent arrays, repeating primal work. The independent scalar
+`Prepared.run` controls compare both paths at two wavelengths and polarizations,
+including a change in all four parameters and a value-only evaluation. They use
+unchanged tolerances: values `rtol=1e-10, atol=1e-12`, derivatives
+`rtol=1e-8, atol=1e-11`.
+
 `tests/rcwa/test_spectral_fit_grid_example.py` uses exact linear inverse problems
 to check bias reduction and noise covariance, and negative controls where every
 optimizer succeeds while grid convergence fails. It checks an accidental
@@ -211,6 +223,10 @@ values/Jacobians and exhausted optimizer/grid budgets. Reused-buffer controls
 check that the observed target and accepted evaluations stay fixed after a
 rejected trial; reporting does not repeat that accepted solve. These controls qualify
 the stopping logic; the optical example exercises the actual public solver.
+Additional analytic controls hold the optimum and spectrum fixed while changing
+the model slope. They verify that the optional Jacobian criterion prevents a
+false convergence report, compares at the same finer-grid fit and scales columns
+separately. This criterion is a refinement test, not an AD/FD consistency test.
 
 The default normal grid remains 1024 (or the Fourier bandwidth minimum if
 larger). Its value alone supplies no error estimate. No solver tolerance or
