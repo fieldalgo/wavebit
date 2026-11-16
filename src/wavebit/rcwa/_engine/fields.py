@@ -987,6 +987,41 @@ def check_reconstruction(reconstruction):
         raise ValueError(f"reconstruction must be 'plain', 'lalanne', 'split' or 'splitw', not {reconstruction!r}.")
 
 
+#: The rules that warn: no independent implementation to compare with, finite-element fields only.
+EXPERIMENTAL_RECONSTRUCTIONS = ('split', 'splitw')
+
+_EXPERIMENTAL = (
+    'reconstruction={rule!r} is experimental. It is checked against finite-element fields on a '
+    'limited set of cells (circles and one ellipse, one wavelength each, normal incidence) and against no '
+    'independent implementation, and where the permittivity changes sign across the wall it answers '
+    "on the negative side only, a choice fitted to those cells. Its values, the layers it accepts "
+    "and its name may change between releases. Compare with reconstruction='plain' and another "
+    'truncation before relying on a value; the fields guide, "A curved wall", has the measurements. '
+    'Silence with warnings.simplefilter("ignore", wavebit.rcwa.diagnostics.ExperimentalWarning).')
+
+
+def warn_experimental(reconstruction):
+    """Say that ``reconstruction`` is an experimental rule, on the caller's line.
+
+    Called by each door once its rule has accepted the layers, so a refusal raises without a
+    warning and ``'plain'`` and ``'lalanne'`` say nothing.
+    """
+    if reconstruction not in EXPERIMENTAL_RECONSTRUCTIONS:
+        return
+    import os
+    import sys
+    import warnings
+    from wavebit._common.backend import ExperimentalWarning
+    # Attributed to the caller's line, past this package and torch.compile's wrapper frames.
+    package = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    skip = [package]
+    dynamo = sys.modules.get('torch._dynamo')
+    if dynamo is not None:
+        skip.append(os.path.dirname(os.path.abspath(dynamo.__file__)))
+    warnings.warn(_EXPERIMENTAL.format(rule=reconstruction), ExperimentalWarning,
+                  skip_file_prefixes=tuple(skip))
+
+
 def _wall_rule_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, half):
     """The in-plane pair of a patterned 2D layer by the rule ``half`` was read for."""
     rule = _split_2d if isinstance(half, SplitHalf) else _lalanne_2d

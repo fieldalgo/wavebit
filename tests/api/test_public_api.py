@@ -73,7 +73,7 @@ PUBLIC = {
                   'Polygon', 'Prepared', 'Problem', 'Rectangle', 'Region', 'Result', 'Stack',
                   'check', 'compile', 'prepare', 'run', 'sample_structure'),
  'wavebit.rcwa.diagnostics': ('AutoDetuneWarning', 'ComplexIncidenceWarning',
-                              'ExceptionalPointWarning', 'GainCutoffWarning',
+                              'ExceptionalPointWarning', 'ExperimentalWarning', 'GainCutoffWarning',
                               'RayleighPointWarning', 'ShapeGridWarning', 'SvdConvergenceWarning'),
  'wavebit.rcwa.experimental': ('AffineProfileNVF', 'CartesianPairOpeningPlan',
                                'CartesianPairTransmissionGalerkinGapCell', 'CartesianRectangleNVF',

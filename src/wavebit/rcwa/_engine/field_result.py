@@ -15,6 +15,7 @@ from wavebit.lattice import periods_of
 from wavebit.rcwa._engine.fields import LayerSamples
 from wavebit.rcwa._engine.fields import _wall_rule_2d
 from wavebit.rcwa._engine.fields import check_reconstruction
+from wavebit.rcwa._engine.fields import warn_experimental
 from wavebit.rcwa._engine.fields import is_count
 from wavebit.rcwa._engine.fields import field_1d
 from wavebit.rcwa._engine.fields import field_1d_conical
@@ -276,6 +277,7 @@ class FieldState:
         message = split_refusal(*asked, rule=reconstruction) if split else lalanne_refusal(*asked)
         if message is not None:
             raise NotImplementedError(message)
+        warn_experimental(reconstruction)
         if self.kind == 'te' and self.mu is None:
             return None
         two_d = self.kind in ('second_order', 'first_order', 'source')

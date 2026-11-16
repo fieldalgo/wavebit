@@ -1,7 +1,8 @@
 """Warnings an RCWA run can emit about its answer.
 
-A warning here says the run produced numbers that may be worse than expected, or that it
-answered a nearby point; it never says the input was refused (a refusal raises). Each warning
+A warning here says the run produced numbers that may be worse than expected, that it
+answered a nearby point, or that it took a rule still marked experimental; it never says the
+input was refused (a refusal raises). Each warning
 has its own category, so a sweep can silence or escalate one without touching the others::
 
     import warnings
@@ -10,9 +11,10 @@ has its own category, so a sweep can silence or escalate one without touching th
     warnings.simplefilter('error', diagnostics.RayleighPointWarning)
 """
 from .._common.backend import (AutoDetuneWarning, ComplexIncidenceWarning, ExceptionalPointWarning,
-                               GainCutoffWarning, RayleighPointWarning, ShapeGridWarning,
-                               SvdConvergenceWarning)
+                               ExperimentalWarning, GainCutoffWarning, RayleighPointWarning,
+                               ShapeGridWarning, SvdConvergenceWarning)
 
 __all__ = ['AutoDetuneWarning', 'ComplexIncidenceWarning', 'ExceptionalPointWarning',
-           'GainCutoffWarning', 'RayleighPointWarning', 'ShapeGridWarning', 'SvdConvergenceWarning']
+           'ExperimentalWarning', 'GainCutoffWarning', 'RayleighPointWarning', 'ShapeGridWarning',
+           'SvdConvergenceWarning']
 

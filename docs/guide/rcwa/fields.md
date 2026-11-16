@@ -196,8 +196,8 @@ M. P. Jurek, J. Mod. Opt. 45, 1357 (1998)), and the same for `B` and `mu`. The v
 that paper, which treats a 1D TM grating; the 2D, conical and magnetic cases follow RETICOLO's `res3`
 (J. P. Hugonin and P. Lalanne). The default, `'plain'`, sums each component's own series. The samples'
 metadata records the rule under `'reconstruction'` when it is not the default. Two more values,
-`'split'` and `'splitw'`, are the rules for the curved walls of circles and of an ellipse and have their own section,
-*A curved wall*, below.
+`'split'` and `'splitw'`, are the rules for the curved walls of circles and of an ellipse. They are experimental and have
+their own section, *A curved wall*, below.
 
 - **What it changes.** `E_x` in the patterned layers of a 1D grating, on the pure TM and the
   conical paths; `E_x` and `E_y` in the patterned layers of a 2D cell. A layer that names a
@@ -383,6 +383,43 @@ and N. C. Panoiu, J. Opt. 17, 125612 (2015)): the normal part is read from `D`, 
 wall from `E`, each is summed where it is continuous, and the first sum is divided by `eps` at the
 sample. `'split'` is the same rule without the window described below. Both are opt-in, and the
 default stays `'plain'`.
+
+:::{admonition} Experimental
+:class: warning
+
+`'split'` and `'splitw'` are experimental, and every field read with one of them emits
+`wavebit.rcwa.diagnostics.ExperimentalWarning` on the calling line.
+
+- **What sets them apart.** `'plain'` and `'lalanne'` are checked two ways: at the same
+  truncation against RETICOLO, an independent implementation of the same method, which says the
+  code does what the method says, and against finite-element fields, which says how accurate
+  the method is. These two rules have the second check only. No other solver implements them.
+- **What is this package's own.** The window of `'splitw'`, and the side of a metal's wall both
+  rules answer on (*Metals* below). Both were fitted to the measurements in this section, not
+  derived.
+- **What the measurements cover.** One circle on 22 cells and on seventeen pairs of materials;
+  one ellipse and one pair of circles, each as a dielectric and as a metal. One wavelength per
+  cell, normal incidence, the `'nvf'` solve.
+- **What may change.** Their values, the layers they accept and their names, between releases
+  and without the deprecation period the rest of the interface gets.
+- **How to use them.** Read the same samples with `'plain'` and at a second truncation. Away
+  from the wall the rule and the sum should agree, and a value that still moves between the
+  two truncations has not converged under either. On the cells measured the rules are closer
+  to the reference than the default; the warning is about how far that has been checked, not
+  a sign that a number is wrong.
+
+A script that has taken this in can silence the one category:
+
+```python
+import warnings
+from wavebit.rcwa import diagnostics
+
+warnings.simplefilter('ignore', diagnostics.ExperimentalWarning)
+```
+
+A call the rules refuse raises and does not warn, and under `jax.jit` the warning comes when the
+function is traced, not each time the compiled function runs.
+:::
 
 - **Where they apply.** A layer of a scalar permittivity in a scalar background, in a
   rectangular cell, that holds one of these, anywhere in the cell:

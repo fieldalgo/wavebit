@@ -8,8 +8,14 @@ difference's, and that everything they were not measured on is refused by name. 
 the windowed rule and the one most tests read; ``'split'`` runs the same operators with the
 window at 1, and the tests that could tell the two apart take both. One circle is the layer most
 tests read. An ellipse and several circles are built another way (the solve's analytic normal
-field, a window on the distance to the nearest wall) and have their own tests at the end.
+field, a window on the distance to the nearest wall) and have their own tests.
+
+Both rules are experimental and say so with ``rcwa.diagnostics.ExperimentalWarning`` each time
+they answer. The tests at the end of this file pin that warning; the module silences it for
+the others.
 """
+import warnings
+
 import numpy as np
 import pytest
 
@@ -28,10 +34,12 @@ X = np.array([-150.0, -80.0, -45.0, 33.0, 60.0, 170.0])
 Y = np.array([-130.0, -65.0, 25.0, 70.0])
 Z = np.array([30.0, 75.0])
 NUMERICS = rcwa.Numerics(orders=(3, 3), factorization='nvf')
+EXPERIMENTAL = rcwa.diagnostics.ExperimentalWarning
 
 # One CI shard unit per test function (tests.yml, --shard): the file is about 15 worker-minutes,
 # and no test reads what another left behind (the module fixtures are solves each shard repeats).
-pytestmark = pytest.mark.shard_unit(per='test')
+pytestmark = [pytest.mark.shard_unit(per='test'),
+              pytest.mark.filterwarnings('ignore::wavebit.rcwa.diagnostics.ExperimentalWarning')]
 
 
 def _circle(radius=RADIUS, centre=CENTRE, epsilon=EPSILON):
@@ -585,3 +593,103 @@ def test_jax_grad_on_other_shapes_matches_a_finite_difference():
         difference = (numeric(at + 1e-4) - numeric(at - 1e-4)) / 2e-4
         assert float(jax.grad(objective)(at)) == pytest.approx(difference, rel=1e-5), name
 
+def _numpy_solver(shape):
+    solver = engine(backend='numpy', top=1.0, bot=2.25, period=list(PERIOD), truncation_order=[2, 2],
+                    wavelength=900.0, thickness=[150.0], theta=0.2, phi=0.3, polarization=(0, 1),
+                    answers='field', factorization='nvf', structure=[dict(background=1.0, shapes=[shape])])
+    solver.solve()
+    return solver
+
+
+@pytest.mark.parametrize('rule', ['split', 'splitw'])
+def test_a_split_rule_says_it_is_experimental_once_on_the_calling_line(result, rule):
+    with pytest.warns(EXPERIMENTAL, match=f"reconstruction='{rule}' is experimental") as caught:
+        result.field(x=X, y=Y, z=Z, reconstruction=rule)
+    assert [str(w.filename) for w in caught] == [__file__]
+    assert 'wavebit.rcwa.diagnostics.ExperimentalWarning' in str(caught[0].message)
+
+
+@pytest.mark.parametrize('rule', ['split', 'splitw'])
+def test_the_solvers_door_says_so_once_too(rule):
+    solver = _numpy_solver(dict(type='circle', cx=CENTRE[0], cy=CENTRE[1], lx=2 * RADIUS, material=EPSILON))
+    with pytest.warns(EXPERIMENTAL, match=f"reconstruction='{rule}' is experimental") as caught:
+        solver.reconstruct_field(X, Y, Z, reconstruction=rule)
+    assert [str(w.filename) for w in caught] == [__file__]
+
+
+def test_a_stack_with_merged_layers_says_so_once_at_either_door():
+    layers = (rcwa.Layer(thickness=40.0, background=Material(2.25 * (1 + 1e-9))),
+              rcwa.Layer(thickness=150.0, background=Material(1.0), regions=_circle()),
+              rcwa.Layer(thickness=30.0, background=Material(1.0 + 1e-9)))
+    numerics = rcwa.Numerics(orders=(3, 3), factorization='nvf', half_space_merge_tolerance=1e-6)
+    result = rcwa.run(_problem(layers=layers), numerics=numerics)
+    assert result._field_records[0].merged[:2] == (1, 1)
+    with pytest.warns(EXPERIMENTAL) as caught:
+        result.field(x=X, y=Y, z=np.array([10.0, 70.0, 200.0]), reconstruction='splitw')
+    assert len(caught) == 1
+    solver = engine(backend='numpy', top=1.0, bot=2.25, period=list(PERIOD), truncation_order=[3, 3],
+                    wavelength=900.0, thickness=[40.0, 150.0, 30.0], theta=0.2, phi=0.3, polarization=(0, 1),
+                    answers='field', factorization='nvf', half_space_merge_tolerance=1e-6,
+                    structure=[dict(background=2.25 * (1 + 1e-9), shapes=[]),
+                               dict(background=1.0, shapes=[dict(type='circle', cx=CENTRE[0], cy=CENTRE[1],
+                                                                 lx=2 * RADIUS, material=EPSILON)]),
+                               dict(background=1.0 + 1e-9, shapes=[])])
+    solver.solve()
+    assert solver._merged_field_state is not None
+    with pytest.warns(EXPERIMENTAL) as caught:
+        solver.reconstruct_field(X, Y, np.array([10.0, 70.0, 200.0]), reconstruction='splitw')
+    assert len(caught) == 1
+
+
+@pytest.mark.parametrize('regions', [_ellipse, _two_circles], ids=['ellipse', 'two circles'])
+def test_an_ellipse_and_several_circles_say_so_as_one_circle_does(regions):
+    result = rcwa.run(_problem(regions()), numerics=NUMERICS)
+    with pytest.warns(EXPERIMENTAL, match="reconstruction='splitw' is experimental") as caught:
+        result.field(x=X, y=Y, z=Z, reconstruction='splitw')
+    assert [str(w.filename) for w in caught] == [__file__]
+
+
+def test_the_sum_and_the_line_rule_say_nothing():
+    result = rcwa.run(_problem(_rectangle()), numerics=rcwa.Numerics(orders=(3, 3), factorization='li'))
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', EXPERIMENTAL)
+        result.field(x=X, y=Y, z=Z)
+        result.field(x=X, y=Y, z=Z, reconstruction='lalanne')
+
+
+def test_a_refusal_raises_without_the_warning():
+    result = rcwa.run(_problem(_rectangle()), numerics=NUMERICS)
+    solver = _numpy_solver(dict(type='rectangle', cx=0.0, cy=0.0, lx=150.0, ly=90.0, material=EPSILON))
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', EXPERIMENTAL)
+        with pytest.raises(UnsupportedFeatureError, match='layer 0 holds 1 rectangle'):
+            result.field(x=X, y=Y, z=Z, reconstruction='splitw')
+        with pytest.raises(NotImplementedError, match='layer 0 holds 1 rectangle'):
+            solver.reconstruct_field(X, Y, Z, reconstruction='split')
+
+
+def test_the_warning_is_its_own_category_so_a_script_can_raise_or_silence_it(result):
+    assert issubclass(EXPERIMENTAL, UserWarning) and EXPERIMENTAL.__module__ == 'wavebit._common.backend'
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', EXPERIMENTAL)
+        with pytest.raises(EXPERIMENTAL, match='is experimental'):
+            result.field(x=X, y=Y, z=Z, reconstruction='splitw')
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        warnings.simplefilter('ignore', EXPERIMENTAL)
+        values = result.field(x=X, y=Y, z=Z, reconstruction='splitw').values
+    assert not caught and np.all(np.isfinite(np.asarray(values)))
+
+
+def test_a_jit_says_so_when_it_traces_and_not_when_it_replays():
+    jax = pytest.importorskip('jax')
+    jax.config.update('jax_enable_x64', True)
+    prepared = rcwa.prepare(_problem(), numerics=NUMERICS, backend='jax')
+    traced = jax.jit(lambda eps: prepared.run(_problem(_circle(epsilon=eps))).field(
+        reconstruction='splitw', **OFF).values)
+    with pytest.warns(EXPERIMENTAL) as caught:
+        traced(EPSILON)
+    assert [str(w.filename) for w in caught] == [__file__]
+    with warnings.catch_warnings():          # the compiled call runs no Python, so it has nothing to say
+        warnings.simplefilter('error', EXPERIMENTAL)
+        traced(EPSILON + 0.5)

@@ -325,7 +325,8 @@ The constructors refuse the old keywords the same way (`TimeSeries(times=...)` n
 
 The RCWA warnings a solve can raise have one public home, `wavebit.rcwa.diagnostics`:
 `RayleighPointWarning`, `AutoDetuneWarning`, `ExceptionalPointWarning`,
-`ComplexIncidenceWarning`, `GainCutoffWarning` and `SvdConvergenceWarning`.
+`ComplexIncidenceWarning`, `GainCutoffWarning`, `ShapeGridWarning` and `SvdConvergenceWarning`.
+A field read with an experimental rule warns from the same module, with `ExperimentalWarning`.
 
 `Port` is a named tuple, so only its attributes can name their replacement: `port.kx` fails
 saying `kx_over_k0`, but `Port(kx=...)` raises Python's own `TypeError` and

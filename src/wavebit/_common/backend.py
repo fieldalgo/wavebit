@@ -1351,6 +1351,35 @@ class SvdConvergenceWarning(UserWarning):
     """
 
 
+class ExperimentalWarning(UserWarning):
+    """A field call took a rule that is experimental: ``reconstruction='split'`` or ``'splitw'``.
+
+    Public path: ``wavebit.rcwa.diagnostics.ExperimentalWarning``.
+
+    The default field, ``reconstruction='plain'``, and ``'lalanne'`` are checked two ways: at
+    the same truncation against an independent implementation of the same method (RETICOLO),
+    which says the code does what the method says, and against finite-element fields, which
+    says how accurate the method is. The rules for a curved wall, ``'split'`` and ``'splitw'``,
+    have the second check only. No other solver implements them to compare with, the window of
+    ``'splitw'`` and the side of a metal's wall the two answer on are this package's own
+    choices, fitted to measurements on a limited set of cells (circles and one ellipse), and those
+    measurements are at one wavelength per cell and normal incidence. So their values, the layers they accept and their names
+    may change between releases without a deprecation period, which the rest of the public
+    interface does not do.
+
+    The warning is emitted once the rule has accepted the layers, each time a field is read with
+    it, and is attributed to the calling line; a call the rule refuses raises instead and does
+    not warn. It does not say the numbers are wrong: on the cells measured the rules are closer
+    to the reference than the default (see the fields guide, *A curved wall*). Its own category,
+    so a script that has read that section can silence it and nothing else::
+
+        import warnings
+        from wavebit.rcwa import diagnostics
+
+        warnings.simplefilter('ignore', diagnostics.ExperimentalWarning)
+    """
+
+
 # Where the 2D mode-cutoff warning fires: below this ratio of min|eigenvalue|/max|eigenvalue|
 # the measured efficiency error exceeds ~1e-5, and it keeps growing as ~eps/ratio down to
 # order-1 at the exact point. Measured on four exact-graze 2D stacks over a detune ladder

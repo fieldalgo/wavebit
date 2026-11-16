@@ -21,6 +21,8 @@ import pytest
 from wavebit import Material, Units, rcwa
 
 GOLDEN = Path(__file__).with_name('golden_gyptis_shapes_field.npz')
+# The split rules are experimental and warn each time they answer; tests/rcwa/test_field_splitw.py pins that.
+pytestmark = pytest.mark.filterwarnings('ignore::wavebit.rcwa.diagnostics.ExperimentalWarning')
 PERIOD, THICKNESS, WAVELENGTH, EPSILON = 400.0, 150.0, 900.0, 12.25
 SHAPES = {
     'E_ellipse': lambda material: [rcwa.Region(geometry=rcwa.Ellipse(radii=(130.0, 80.0)), material=material)],
