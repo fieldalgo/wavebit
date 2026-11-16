@@ -58,6 +58,7 @@ overlays. Currently these are:
 - guides: [run records](../guide/run-records.md),
   [backends, devices and precision](../guide/common/backends.md),
   [exceptional points](../guide/rcwa/exceptional-points.md),
+  [fields and diffraction observations](../guide/rcwa/fields.md),
   [how the FDTD solver models a problem](../guide/fdtd/model.md),
   [physical native Yee grids](../guide/fdtd/native-grids.md),
   [automatic stopping and graded absorbing padding](../guide/fdtd/stopping-and-absorbers.md),
