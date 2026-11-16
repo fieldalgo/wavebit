@@ -458,7 +458,8 @@ default stays `'plain'`.
     Over the whole plane the gain is small, 26 to 56% against 23 to 50%, because the air side keeps
     the sum. The solve's `R` is 1 to 7% from the references' on these two cells and moves with the
     order, and the two metal circles at order 12 are the worst of the six rows for the sum and
-    the rules alike. See *Metals* below before reading a value beside a metal.
+    the rules alike. See *Metals: which side of the wall* below before reading a value beside a
+    metal.
   - Not measured on these shapes: a dielectric hole in a metal, circles of different radii, more
     than two circles, an ellipse of another aspect, oblique incidence.
 - **Choosing between the two.** `'splitw'`, unless the circle nearly fills the cell. It was the
@@ -466,27 +467,75 @@ default stays `'plain'`.
   and 0.47 of the period, where the window is narrower than the orders resolve: 2.3%, 2.9% and
   6.2% for `'split'` against 3.5%, 3.8% and 9.6%. A fourth cell at 0.47 went the other way, 3.8%
   against 3.0%, so compare the two there rather than assume.
-- **Metals.** Where the permittivity changes sign across the wall, both rules answer on its
-  negative side only: inside a metal disk, or outside a dielectric hole in a metal. The other
-  side keeps the sum, to rounding.
-  - Against the reference of six metal circles (`eps` -20+1.5j at four sizes, -100+5j, -5+1j;
-    orders 8, 12 and 16) the rules were 2.4 to 3.9 times closer than the sum inside the metal, and
-    closer over the plane on every cell at every order. At order 12 the plane error falls from 17
-    to 28% for the sum to 13 to 27%.
-  - Applied outside the metal as well, the rules were further from the reference than the sum
-    on five of the six, near the wall and far from it: 22 to 33% over the plane against 20 to
-    28%. The sixth, `eps` -5+1j, was closer that way, 10.4% against 12.5% as shipped and 17.3% for
-    the sum.
-  - The cause is the solve, not the rule. On a metal the solve's high orders carry an error the
-    inverse rule amplifies; divided by the metal's `eps` it is small, and on the air side it is
-    not. At order 12 the solve's `R` is 2% and 4% off the reference on the two cells above with
-    a metal circle, where the dielectric's is 0.03% and 0.4% off. A finer projector grid,
-    `nvf_projector='circular'` and `formulation='first_order'` moved these errors by 5% of
-    themselves or less, in either direction.
+- **Metals: which side of the wall.** Where the real part of the permittivity changes sign across
+  the wall, both rules answer on its negative side only: inside a metal disk, or outside a
+  dielectric hole in a metal. The other side keeps the sum, to rounding. Where it does not change
+  sign, two dielectrics or two metals, they answer on both sides.
+  - **This is an empirical rule, not a derived one.** It was fitted to the six metal circles
+    below and then checked on seventeen pairs of materials. It has not been found applying the
+    rule to a side that loses by it, and it leaves a gain unused at low contrast.
+  - Six metal circles (`eps` -20+1.5j at four sizes, -100+5j, -5+1j; orders 8, 12 and 16):
+    the rules were 2.4 to 3.9 times closer than the sum inside the metal, and closer over the
+    plane on every cell at every order. At order 12 the plane error falls from 17 to 28% for the
+    sum to 13 to 27%.
+  - Seventeen pairs on one circle (radius 100 nm, period 400 nm, 150 nm thick, 900 nm at normal
+    incidence), each against a finite-element field of its own. Here `'splitw'` was read on both
+    sides, and each entry is its error over the samples of one side as a multiple of the sum's
+    there, at orders 8 / 12 / 16. Below 1 the rule is the closer. The contrast is
+    `|eps_negative| / |eps_positive|`.
+
+    | Circle / around it | Contrast | Negative side | Positive side |
+    | --- | --- | --- | --- |
+    | 12.25 / -20+1.5j | 1.6 | 0.75 / 0.37 / 0.44 | 0.87 / 0.58 / 0.62 |
+    | -20+1.5j / 12.25 | 1.6 | 0.70 / 0.56 / 0.35 | 0.86 / 0.74 / 0.53 |
+    | -2+0.5j / air | 2.1 | 0.28 / 0.28 / 0.33 | 0.50 / 0.56 / 0.63 |
+    | -50+3j / 12.25 | 4.1 | 0.25 / 0.37 / 0.23 | 0.83 / 0.92 / 0.70 |
+    | -20+1.5j / 4 | 5.0 | 0.39 / 0.33 / 0.30 | 0.98 / 0.91 / 0.82 |
+    | -5+1j / air | 5.1 | 0.30 / 0.26 / 0.27 | 0.83 / 0.83 / 0.82 |
+    | -7+1j / air | 7.1 | 0.19 / 0.23 / 0.26 | 0.56 / 0.82 / 0.86 |
+    | -20+1.5j / 2.25 | 8.9 | 0.21 / 0.48 / 0.21 | 0.76 / 1.17 / 0.81 |
+    | -10+1j / air | 10 | 0.14 / 0.34 / 0.19 | 0.63 / 1.06 / 0.80 |
+    | -15+1.2j / air | 15 | 0.19 / 0.25 / 0.32 | 1.08 / 1.33 / 1.21 |
+    | -20+1.5j / air | 20 | 0.29 / 0.37 / 0.38 | 1.40 / 1.20 / 1.23 |
+    | air, a round hole / -20+1.5j | 20 | 0.47 / 0.51 / 0.56 | 1.46 / 1.49 / 1.50 |
+    | -100+5j / 4 | 25 | 0.28 / 0.46 / 0.29 | 1.41 / 1.32 / 1.03 |
+    | -50+3j / air | 50 | 0.67 / 0.40 / 0.28 | 2.20 / 1.36 / 1.32 |
+    | -100+5j / air | 100 | 0.32 / 0.36 / 0.38 | 1.56 / 1.21 / 1.48 |
+
+    Two metals, where the rules answer on both sides (inside the circle, then outside it):
+    -20+1.5j in -5+1j, 0.08 / 0.06 / 0.05 and 0.14 / 0.12 / 0.11; -5+1j in -20+1.5j,
+    0.16 / 0.13 / 0.11 and 0.08 / 0.07 / 0.07.
+  - **The negative side gains on every pair** (0.14 to 0.75), and so do both sides of a wall
+    between two metals. That part of the rule held everywhere it was measured.
+  - **The positive side gains only at low contrast.** Up to 7.1 it gained at every order on this
+    circle (0.50 to 0.98, little at 5.0). At 8.9 and 10 it gained at two orders and lost at the
+    third. From 15 up it lost at every order (1.03 to 2.20). The rules do not read the contrast:
+    they leave the positive side to the sum at any contrast, which is right from 15 up and gives
+    up the gain below. On the metal circle in `eps` 12.25 at order 12, the plane error is 39% for
+    the sum, 33% as the rules answer, and would be 26% with both sides.
+  - Why not open the positive side at low contrast: the edge is not a property of the materials
+    alone. The ellipse above with `eps` -5+1j in air, contrast 5.1, did not gain on the positive
+    side (0.97 / 0.96 / 1.09), where the circle gains at every order. At lower contrast the other
+    shapes agree with the circle: 0.52 / 0.61 / 0.57 for the ellipse with -2+0.5j, and
+    0.95 / 0.76 / 0.67 for the two circles of -20+1.5j in `eps` 12.25. A threshold fitted to one
+    circle would be one more choice of this package's own, so the rule stays the one that has not
+    been seen to lose.
+  - What the solve's `R` says about it: nothing reliable. The metal circle in `eps` 12.25 has
+    `R` 21%, 10% and 2% from the reference at the three orders and gains on both sides; -100+5j
+    in air has `R` within 0.1% at order 16 and loses 1.48 times on the positive side. The inverse
+    rule amplifies an error in the solve's high orders, and dividing by the permittivity at the
+    sample shrinks it where that is large; that fits the contrast above, and it was not tested
+    beyond fitting. A finer projector grid, `nvf_projector='circular'` and
+    `formulation='first_order'` moved the errors of the six metal circles by 5% of themselves or
+    less, in either direction.
   - So beside a metal on the air side, where a plasmonic field peaks, no rule here is better
     than the default, whose error within 0.1 period of the wall is 26 to 53% of the plane's RMS
-    field at order 12. Compare two orders before reading a value there. A hole in a metal and two metals in
-    one layer run the same operators and have no reference.
+    field at order 12 on the six metal circles. Compare two orders before reading a value there.
+  - The finite-element fields of the seventeen pairs, and of the three on other shapes, are one
+    mesh level each. Three of them repeat cells that have a finer reference and are 0.2 to 0.6%
+    of the plane's RMS field from it, so an entry within a few hundredths of 1 is not a ranking.
+    They are not stored in this repository, and no test reads them. One radius, one wavelength,
+    normal incidence, one loss per permittivity.
 - **Where they are not better, or not known.**
   - Right at the wall. On the second cell at order 16, `E_n` 0.3 nm either side of the wall is
     still 18 to 59% off the reference with `'splitw'`. The plane error is a mean; do not read a
