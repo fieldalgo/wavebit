@@ -165,6 +165,16 @@ Use `"lalanne"` for values beside a wall normal to the component: `D`, `eps*E_n`
 
 A layer of circles, or of one ellipse along the cell's axes, takes two more rules, `reconstruction="splitw"` and `"split"`. Both are experimental: they are checked against finite-element fields on a limited set of cells and against no independent implementation, their values and the layers they accept may change between releases, and each call that takes one emits `wavebit.rcwa.diagnostics.ExperimentalWarning`. They split the in-plane field along the wall's normal and read the normal part from `D` (M. Weismann, D. F. G. Gallagher and N. C. Panoiu, J. Opt. 17, 125612 (2015)); `"splitw"` uses that normal near the wall only and is the one to start with. Against a finite-element reference it cut the error of the in-plane field over a plane from 9.6% to 1.3% on one dielectric cylinder at order 16. On a metal against a dielectric the rules answer on the metal's side of the wall only, where they are closer than the default, and leave the default on the other side; that choice is fitted to measurements, not derived. They change `E` only, and their field is not for a spatial derivative. The guide's *A curved wall* section says where they apply.
 
+Which value takes which layer:
+
+| The layer holds | `"plain"` (default) | `"lalanne"` | `"split"`, `"splitw"` |
+| --- | --- | --- | --- |
+| a 1D grating, rectangles at a right angle, polygons with every edge along x or y, a raster | answers | answers | refused |
+| one circle, several circles of one material that do not touch, one ellipse along the cell's axes | answers | refused | answers, experimental |
+| any other shape, or a skewed lattice | answers | refused | refused |
+
+A refusal is an error with code `field.reconstruction`, not a silent fall back, and a rule has to take every patterned layer of the stack. The guide's table under *Normal components inside a patterned layer* has the remaining cases (permeability, tensors) and how an edge is judged to be along an axis.
+
 (illumination-fields)=
 (fields-detail-id23)=
 ## Incoming, outgoing, and total fields at boundaries
