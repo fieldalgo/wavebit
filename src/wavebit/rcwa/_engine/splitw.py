@@ -18,11 +18,18 @@ stays in the plain sum, in one material. ``b`` is the smaller of the radius and 
 the nearest image's wall, and ``a = b / 4``.
 
 **Where the permittivity changes sign across the wall the rules answer on its negative side
-only**, and the other side keeps the plain sum (:func:`_applies`). There the solve's high
-orders carry an error the inverse rule amplifies; divided by a metal's ``eps`` it is small, and
-on the dielectric side it is not. Against the finite-element reference of six metal circles the
-rules were 2.4 to 3.9 times closer than the sum inside the metal and further than it outside,
-at every distance from the wall.
+only**, and the other side keeps the plain sum (:func:`_applies`). That is an empirical choice,
+not a derived one. Against the finite-element reference of six metal circles the rules were
+2.4 to 3.9 times closer than the sum inside the metal and further than it outside, at every
+distance from the wall. On seventeen pairs of materials on one circle the negative side gained
+on every pair and both sides gained between two metals; the positive side gained where
+``|eps_negative| / |eps_positive|`` was 7 or less and lost where it was 15 or more, which this
+choice does not use (the fields guide, *A curved wall*, has the table).
+
+**Both rules are experimental.** They are checked against finite-element fields and against no
+independent implementation, so each door warns with
+:class:`~wavebit.rcwa.diagnostics.ExperimentalWarning` once a rule has accepted the layers
+(:func:`~wavebit.rcwa._engine.fields.warn_experimental`).
 
 Both answer what they were measured on, in a rectangular cell: a layer holding one circle, one
 ellipse along the cell's axes, or several circles of one material that do not touch, of a scalar

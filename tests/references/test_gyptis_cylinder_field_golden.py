@@ -24,6 +24,8 @@ import pytest
 from wavebit import Material, Units, rcwa
 
 GOLDEN = Path(__file__).with_name('golden_gyptis_cylinder_field.npz')
+# The split rules are experimental and warn each time they answer; tests/rcwa/test_field_splitw.py pins that.
+pytestmark = pytest.mark.filterwarnings('ignore::wavebit.rcwa.diagnostics.ExperimentalWarning')
 PERIOD, RADIUS, THICKNESS, WAVELENGTH, EPSILON, METAL = 400.0, 100.0, 150.0, 900.0, 12.25, -20 + 1.5j
 
 

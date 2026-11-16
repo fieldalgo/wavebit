@@ -93,6 +93,7 @@ from wavebit.rcwa._engine.enums import formulation_of
 from wavebit.rcwa._engine.enums import resolve_fourier_options
 from wavebit.rcwa._engine.fields import _require_solved
 from wavebit.rcwa._engine.fields import check_reconstruction
+from wavebit.rcwa._engine.fields import warn_experimental
 from wavebit.rcwa._engine.fields import field_1d
 from wavebit.rcwa._engine.fields import field_1d_conical
 from wavebit.rcwa._engine.fields import field_2d
@@ -5027,7 +5028,8 @@ class CoreFactorizationMixin:
         (:mod:`~wavebit.rcwa._engine.splitw`). ``'splitw'`` uses that normal near the wall only.
         They rebuild ``E`` alone and refuse every other patterned layer by name. Where ``Re eps``
         changes sign across the wall they answer on its negative side only, and the other side
-        keeps the sum.
+        keeps the sum. Both are experimental and emit
+        :class:`~wavebit.rcwa.diagnostics.ExperimentalWarning` when they answer.
 
         ``incidences`` names which of the incidences the solve carries to reconstruct, one
         leading axis entry each, **in the order asked for**: ``'incident'`` is the incidence the
@@ -5071,6 +5073,7 @@ class CoreFactorizationMixin:
             self._refuse_rule(reconstruction)
         if self._merged_field_state is not None:
             return self._merged_field_cell(sample_x, sample_y, sample_z, incidences, reconstruction)
+        warn_experimental(reconstruction)      # the merged path's state warns for itself
         # Top illumination walks downward, so restate public heights in that propagation
         # frame before assigning samples to layers. `backside` is the kernels' word -- their
         # 'bottom' port -- and since 2026-09-21 it means public TOP incidence; public bottom

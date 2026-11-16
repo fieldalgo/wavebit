@@ -172,7 +172,10 @@ class Result:
         ``'splitw'`` uses that normal near the wall only. They rebuild ``E`` alone, and their
         field is not for a spatial derivative. Where ``Re eps`` changes sign across the wall, a
         metal against a dielectric, they answer on the negative side only and the other side
-        keeps the plain sum.
+        keeps the plain sum. Both are experimental: checked against finite-element fields on
+        a limited set of cells and against no independent implementation, they may change
+        between releases, and a call that takes one emits
+        :class:`~wavebit.rcwa.diagnostics.ExperimentalWarning`.
         What a rule does not take is refused with ``field.reconstruction``, and a singular
         ``1/eps`` or ``1/mu`` matrix fails with ``rcwa.singular``.
         """

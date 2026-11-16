@@ -79,6 +79,8 @@ See the [runnable first calculation](../../getting-started/rcwa.md) and [common 
 
 .. autoclass:: wavebit.rcwa.diagnostics.ExceptionalPointWarning
 
+.. autoclass:: wavebit.rcwa.diagnostics.ExperimentalWarning
+
 .. autoclass:: wavebit.rcwa.diagnostics.ComplexIncidenceWarning
 
 .. autoclass:: wavebit.rcwa.diagnostics.GainCutoffWarning
