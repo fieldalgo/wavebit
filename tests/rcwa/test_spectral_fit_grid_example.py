@@ -43,6 +43,53 @@ def test_optimizer_success_does_not_mean_grid_convergence():
     assert 'budget exhausted' in report.reason
 
 
+def test_stable_fit_and_spectrum_do_not_hide_changing_derivatives():
+    # All grids fit exactly p=1 with identical spectra. Their analytic slopes
+    # change: a successful optimizer and stable optimum cannot detect this.
+    def factory(grid):
+        slopes = np.array([1., 2.]) * (1 + 1 / grid)
+        return lambda p: (np.array([1., 2.]) + slopes * (p[0] - 1), slopes[:, None])
+    assert fit(factory, grids=(1, 2, 4)).converged
+    report = fit(factory, jacobian_relative_tolerance=.1)
+    assert report.converged
+    assert [s.grid for s in report.stages] == [1, 2, 4, 8, 16, 32]
+    assert report.stages[0].jacobian_change is None
+    np.testing.assert_allclose([s.jacobian_change for s in report.stages[1:]],
+                               [10/3, 2., 10/9, 10/17, 10/33])
+    assert not fit(factory, grids=(1, 2, 4, 8, 16),
+                   jacobian_relative_tolerance=.1).converged
+
+
+def test_jacobian_comparison_uses_same_finer_fit_and_per_column_scales():
+    # The quadratic column must be compared at the finer optimum, not at each
+    # grid's own optimum. The small second column must not hide behind it.
+    def factory(grid):
+        slope = 1e-4 * (1 + 1 / grid)
+        return lambda p: (np.array([p[0]**2 + 1/grid, slope * p[1]]),
+                          np.diag([2*p[0], slope]))
+    report = example.fit_grid_ladder(factory, [1., 0.], [4., 0.],
+        grids=(1, 2, 4), noise_sigma=1., parameter_tolerance=1., spectrum_tolerance=1.,
+        jacobian_relative_tolerance=[1e-8, .1])
+    assert not report.converged
+    np.testing.assert_allclose([s.jacobian_change for s in report.stages[1:]], [10/3, 2.])
+
+
+@pytest.mark.parametrize('value', [0., -1., np.nan, np.inf, 1j])
+def test_invalid_jacobian_tolerances_are_rejected(value):
+    with pytest.raises(ValueError):
+        fit(biased, jacobian_relative_tolerance=value)
+
+
+def test_zero_reference_column_never_counts_as_converged():
+    def factory(grid):
+        slope = 1. if grid == 1 else 0.
+        return lambda p: (np.ones(2) + slope*p[0], np.full((2, 1), slope))
+    report = fit(factory, grids=(1, 2, 4), jacobian_relative_tolerance=.1)
+    assert not report.converged
+    assert np.isinf(report.stages[1].jacobian_change)
+    assert report.stages[2].jacobian_change == 0
+
+
 def test_an_accidental_pairwise_plateau_does_not_pass():
     biases = {1: 0., 2: 0., 4: .2, 8: .2}
     def factory(grid):

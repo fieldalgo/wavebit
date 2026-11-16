@@ -38,6 +38,7 @@ Pass these explicit controls to `fit_grid_ladder`:
 | `noise_sigma` | Known independent noise standard deviation per observation, scalar or vector. |
 | `parameter_tolerance` | Maximum acceptable change per fitted parameter, in that parameter's units. |
 | `spectrum_tolerance` | Maximum acceptable forward-model change per observation. |
+| `jacobian_relative_tolerance` | Optional positive scalar or per-parameter relative tolerance for Jacobian columns. Default `None` checks fitted parameters and spectra only. |
 | `max_nfev` | Optimizer evaluation budget at each grid. |
 | `on_stage` | Optional callback receiving each completed stage, for progress records. |
 
@@ -53,12 +54,23 @@ final trial does not trigger another solve at the already evaluated optimum.
 Observed data is copied on entry so a model's reused output buffer cannot move
 the target during fitting.
 
+For stable sensitivities as well as stable fitted dimensions, also pass
+`jacobian_relative_tolerance=1e-3`, for example. At the same finer-grid fit, each
+column's maximum absolute change is divided by its maximum absolute entry on
+the finer grid. Every column must pass this third check on the same two
+consecutive refinements. Scaling columns separately avoids hiding a small
+derivative behind a larger one with different units. An unchanged zero column
+has zero change; a changed zero reference column fails. The independent rank
+check still prevents zero-sensitivity fits from passing.
+
 The returned `GridFit` has `parameters`, `stages`, `converged` and `reason`.
 Each stage records optimizer success, the noise-only standard deviations, the
 noise-weighted residual norm and both maximum change/tolerance ratios. A ratio
 of 1 is the limit. Exhausting the grid list returns `converged=False`; the example
 raises on that outcome. Retain the report and extend the grid budget, rather than
 presenting the last optimizer success as resolution convergence.
+When the derivative criterion is enabled, `jacobian_change` records its maximum
+relative change/tolerance ratio; it is `None` on the first grid or when disabled.
 
 Two consecutive passes protect against one accidental plateau. They are evidence
 on the tested ladder, **not a bound on the remaining error**, global-optimum
