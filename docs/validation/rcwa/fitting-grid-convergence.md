@@ -201,6 +201,38 @@ which still fails the `1e-3` grid-stability criterion. Noise-only standard
 deviations in the record exclude discretization bias. This fixed-order,
 same-family target does not establish independent optical accuracy.
 
+## Finer grids for sensitivity stability
+
+The derivative refinement uses solver `98353d8e`, the same N5 generating
+parameters, all thirty observations, Fourier orders `(4, 4)` and CPU double
+precision. Its scalar grid-128 values and all 120 Jacobian entries are bitwise
+equal to the retained `2056a39e` record, and all four original Richardson checks
+pass. This is a fixed-point sensitivity study; the fitted-parameter ladder above
+remains its own measurement.
+The [reviewed continuation record](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_fitting_grid/jacobian-refinement.json)
+preserves all values, derivatives, controls and execution sources.
+
+| Grid change | Maximum spectrum difference | Width Jacobian | Angle Jacobian | Center-x Jacobian | Thickness Jacobian |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1024 → 2048 | 4.980e-7 | 7.594e-5 | 1.859e-3 | 1.493e-4 | 1.195e-6 |
+| 2048 → 4096 | 1.996e-7 | 6.253e-5 | 5.903e-4 | 7.989e-5 | 4.967e-7 |
+| 4096 → 6144 | 6.010e-8 | 2.109e-5 | 7.447e-5 | 1.933e-5 | 1.639e-7 |
+
+The angle column still fails at 1024→2048. Every column and the spectrum pass
+the next two transitions. The angle changes are 0.0590% and 0.00745%, against
+0.1% allowed, satisfying the two-consecutive-refinement criterion on this ladder.
+Grid 6144 was selected before execution for the memory budget and uses sequential
+JVP; the last refinement ratio is 1.5. This is evidence on the tested ladder,
+not an 8192 measurement or a bound on the remaining derivative error.
+
+At grid 4096, the original Richardson steps give relative AD/FD errors
+`(9.36e-9, 1.98e-6, 2.81e-7, 2.03e-11)` for width, angle, center x and thickness.
+All four pass `1e-3`. A same-grid execution control also compares the sequential
+angle JVP with the full forward Jacobian: all thirty values are bitwise equal
+and the angle column's relative difference is `5.68e-14`, within the original
+execution-control tolerances. Agreement on one grid and stability between grids
+remain separate tests.
+
 ## Controls and scope
 
 For the fixed nondispersive N5 case, the study's `--shared-matrices` execution

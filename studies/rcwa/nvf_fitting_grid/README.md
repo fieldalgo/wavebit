@@ -8,6 +8,7 @@
 | `measurement.json` | Did the historical solver `18bbcbfd` meet both refinement tolerances through grid 1024? |
 | `integral-fixed-point.json` | How did fixed-point spectra, Jacobians and finite differences compare after the integral normal field landed? |
 | `integral-fitting.json` | Does refitting the integral construction meet the unchanged parameter and spectral refinement criteria? |
+| `jacobian-refinement.json` | Do finer normal-field grids stabilize all four sensitivity columns, with independent derivative and execution controls? |
 
 The runnable workflow is documented in
 [the fitting guide](../../../docs/guide/rcwa/fitting-grid-convergence.md).
@@ -80,3 +81,23 @@ This is a measured limit, not a reason to relax the criterion.
 `2056a39e`, with a new grid-128 target held fixed and the original tolerances.
 Its fit-stability decision is separate from the fixed-point Jacobian criterion.
 The provenance identifies the actual solver and committed study source.
+
+`jacobian-refinement.json` continues the fixed-point derivative check on solver
+`98353d8e`. It retains the scalar/shared baseline controls, all four columns on
+each measured grid, the grid-4096 Richardson checks and a same-grid angle
+comparison between sequential JVP and full forward differentiation. Exact source
+snapshots of the original instruments are archival provenance; the maintained
+entry point is `check_grid.py`. The record names the public reproducer revision
+and preserves the failed 1024→2048 comparison.
+
+Use `--shared-matrices` for the fixed-point commands and add `--sequential-jvp`
+for grid 6144. Supply the preceding completed grid with `--previous`, and use
+`--fd` at 4096 for the original four steps and their halves. The last refinement
+ratio is 1.5: grid 6144 was selected before execution to fit the memory budget.
+The criterion remains `1e-3` for every column and `1e-5` for the spectrum on two
+consecutive transitions; this is not an 8192 measurement or a remaining-error
+bound. Timings include different compilation-cache and host-load conditions.
+
+The stored `integral-fitting.json` used the original parameter/spectrum criteria.
+The derivative continuation is at fixed generating parameters; it does not
+reclassify that historical fit or measure a new derivative-gated refitting ladder.
