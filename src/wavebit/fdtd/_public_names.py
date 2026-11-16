@@ -44,6 +44,28 @@ def public_name(declaration):
     return _renamed(cls) or cls.__name__
 
 
+#: ``id`` of an engine shape the public lowering extended -> the shape before the extension.
+#: An entry lives exactly as long as the extended shape (:func:`remember_given`).
+_GIVEN = {}
+
+
+def remember_given(extended, given):
+    """Let :func:`public_description` describe ``extended`` as ``given``.
+
+    A ``Box`` whose ``Structure`` declares ``continuation`` is lowered with its continued faces
+    moved through the padding (``_lower_public._continue_box``), so its own ``describe()``
+    prints a size and centre the caller never wrote. The table is keyed by identity and the
+    entry is dropped when ``extended`` is collected, so it neither touches the shape -- its
+    fields and ``describe()`` are plan data -- nor answers for an equal shape the caller gave.
+    """
+    if extended is given:
+        return
+    import weakref
+    key = id(extended)
+    _GIVEN[key] = given
+    weakref.finalize(extended, _GIVEN.pop, key, None)
+
+
 def public_description(shape):
     """``shape.describe()`` with the public class name, for a message a public caller reads.
 
@@ -52,7 +74,9 @@ def public_description(shape):
     (``Region(size=...)`` reads ``SnappedBox(size=...)``); a slab's ``z=(...)`` names no class.
     A turned Box or Prism holds its ``angle`` in the engine's degrees; inside a public call it
     reads in the radians the caller gave (``_spelling.angle``), as a PlaneWave's angles do.
+    A continued substrate reads at the size and centre the caller gave (:func:`remember_given`).
     """
+    shape = _GIVEN.get(id(shape), shape)
     text = shape.describe()
     turned = getattr(shape, 'angle', None)
     if turned and type(shape).__module__ == 'wavebit.fdtd._legacy_geometry':

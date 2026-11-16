@@ -408,7 +408,9 @@ class PML(Absorbing):
         (``eps = 2.25``) returns 5.3e-4 under a vacuum-matched face against 2.0e-4 under a
         glass-matched one, and ``eps = 6.25`` 4.9e-3 against 1.3e-3. A layer across this
         face's axis that runs into it gets ``AbsorberProximityWarning`` naming the index this
-        is matched to, unless this is its own material -- a substrate's usual spelling.
+        is matched to, unless this is its own material -- a substrate's usual spelling. So
+        does any other body running through the layer, unless it fills the cross-section and
+        this is its own material (the public module's continued substrate ``Box``).
     ``reflection``
         The nominal normal-incidence round-trip amplitude the conductivity grading is aimed
         at (default 1e-8). It is a grading parameter, not a bound: the discrete reflection is
