@@ -21,6 +21,7 @@ class FitStage:
     parameter_change: float | None
     spectrum_change: float | None
     optimizer_success: bool
+    jacobian_change: float | None = None
 
 
 @dataclass
@@ -44,7 +45,8 @@ def _positive_vector(value, shape, name):
 
 
 def fit_grid_ladder(model_factory, initial, data, *, grids, noise_sigma,
-                    parameter_tolerance, spectrum_tolerance, max_nfev=40, on_stage=None):
+                    parameter_tolerance, spectrum_tolerance, max_nfev=40, on_stage=None,
+                    jacobian_relative_tolerance=None):
     """Warm-start least-squares fits; require two consecutive refinement checks.
 
     ``model_factory(grid)(parameters)`` returns (spectrum, Jacobian), with a
@@ -59,6 +61,11 @@ def fit_grid_ladder(model_factory, initial, data, *, grids, noise_sigma,
     retained; it cannot count toward a pass. Two passes are evidence on this
     ladder, not an error bound. ``on_stage``, when given, receives each completed
     FitStage for progress reporting or checkpointing.
+    Optional ``jacobian_relative_tolerance`` also requires stability of every
+    Jacobian column at the same finer-grid fit: maximum absolute difference /
+    maximum absolute finer-grid entry. It accepts a positive scalar or one
+    tolerance per parameter. An unchanged zero column has zero change; a
+    changed zero reference column fails. Rank checks still apply independently.
     """
     if np.iscomplexobj(initial) or np.iscomplexobj(data):
         raise ValueError('initial and data must be real')
@@ -77,6 +84,9 @@ def fit_grid_ladder(model_factory, initial, data, *, grids, noise_sigma,
     sigma = _positive_vector(noise_sigma, data.shape, 'noise_sigma')
     ptol = _positive_vector(parameter_tolerance, x.shape, 'parameter_tolerance')
     ytol = _positive_vector(spectrum_tolerance, data.shape, 'spectrum_tolerance')
+    jtol = (None if jacobian_relative_tolerance is None else
+            _positive_vector(jacobian_relative_tolerance, x.shape,
+                             'jacobian_relative_tolerance'))
     stages, previous_model, consecutive = [], None, 0
     previous_fit_ok = False
     last_failure = None
@@ -119,25 +129,33 @@ def fit_grid_ladder(model_factory, initial, data, *, grids, noise_sigma,
         full_rank = singular[-1] > (np.finfo(float).eps * max(jac.shape) * singular[0])
         noise_std = (np.sqrt(np.sum((vh.T / singular)**2, axis=1)) if full_rank
                      else np.full(x.shape, np.inf))
-        dp = dy = None
+        dp = dy = dj = None
         if previous_model is not None:
             dp = float(np.max(np.abs(fit.x - x) / ptol))
             # Refitting can hide model error in shifted parameters. Check the
             # old and new forward models at the finer fit as a separate test.
-            old_y, _ = checked(previous_model, fit.x)
+            old_y, old_jac = checked(previous_model, fit.x)
             dy = float(np.max(np.abs(y - old_y) / ytol))
+            if jtol is not None:
+                differences = np.max(np.abs(jac - old_jac), axis=0)
+                scales = np.max(np.abs(jac), axis=0)
+                relative = np.divide(differences, scales,
+                    out=np.where(differences == 0, 0., np.inf), where=scales > 0)
+                dj = float(np.max(relative / jtol))
         stages.append(FitStage(grid, fit.x.copy(), noise_std,
                                float(np.linalg.norm((y - data) / sigma)),
-                               dp, dy, bool(fit.success)))
+                               dp, dy, bool(fit.success), dj))
         if on_stage is not None:
             on_stage(stages[-1])
         fit_ok = bool(fit.success and full_rank)
         last_failure = (f'optimizer failed at grid {grid}: {fit.message}' if not fit.success
                         else f'Jacobian is rank deficient at grid {grid}' if not full_rank else None)
-        passes = fit_ok and previous_fit_ok and dp <= 1 and dy <= 1
+        passes = (fit_ok and previous_fit_ok and dp <= 1 and dy <= 1
+                  and (jtol is None or dj <= 1))
         consecutive = consecutive + 1 if passes else 0
         if consecutive >= 2:
-            return GridFit(stages, True, 'two consecutive grid refinements meet both tolerances')
+            return GridFit(stages, True, 'two consecutive grid refinements meet '
+                           + ('both tolerances' if jtol is None else 'all three tolerances'))
         previous_model, x = model, fit.x.copy()
         previous_fit_ok = fit_ok
     return GridFit(stages, False, last_failure or 'grid budget exhausted before two consecutive passes')
