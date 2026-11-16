@@ -569,7 +569,7 @@ def sp_modes_1d_general(xp, F_c, F_s, E, U):
 
 
 def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C,
-                           mu=None, k0_d=None, dng=None, env=None):
+                           mu=None, k0_d=None, dng=None, env=None, ep_rebuild=True):
     """Raw (unrotated) eigenmodes of one conical 1D layer.
 
     Returns ``(W1, W2, q1, q2, V_11, V_12, V_21, V_22)`` — the two decoupled mode families and
@@ -696,7 +696,9 @@ def layer_modes_1d_conical(xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv
     # such mode, `ky == 0`, or a refused cluster, all decided on concrete values -- keeps every
     # statement below as it was. An abstract value always gets masks (possibly empty), so every
     # traced layer is rebuilt.
-    cluster = _cutoff_cluster(xp, wA, wB, q1, q2, ky)
+    # `ep_rebuild=False` (the `exceptional_points='off'` numerics): no gate and no rebuild,
+    # eagerly or traced -- the family construction below at every point, x-cutoffs included.
+    cluster = _cutoff_cluster(xp, wA, wB, q1, q2, ky) if ep_rebuild else None
     if cluster is not None:
         if q1.ndim == 2 or q2.ndim == 2:
             return _regular_conical_modes_ad(xp, Kx, ky, epx_conv, epz_conv_i, A, B, mux_conv,
@@ -1197,7 +1199,8 @@ def solve_1d(tetm_index, wavelength, kx, n_top, n_bot, theta, thickness,
 def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                      epx_conv_all, epy_conv_all, epz_conv_i_all,
                      *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
-                     mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, dng=None):
+                     mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, dng=None,
+                     ep_rebuild=True):
     """Solve a general 1D grating (arbitrary azimuth/polarization) for the given ``psi``.
 
     The conical case couples the s and p polarizations, so the per-layer modes and the boundary
@@ -1301,7 +1304,8 @@ def solve_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickne
         # The ETM's labels, on its run's thickness, for the reason :func:`solve_1d` gives.
         modes = layer_modes_1d_conical(
             xp, Kx, Ky, Kx2, Ky2, I, epx_conv, epy_conv, epz_conv_i, C, mu=layer_mu,
-            k0_d=run_k0_ds[layer_index], dng=None if dng is None else dng[layer_index], env=env)
+            k0_d=run_k0_ds[layer_index], dng=None if dng is None else dng[layer_index], env=env,
+            ep_rebuild=ep_rebuild)
         flips_below = None if env is None else env.flips
 
         from wavebit.rcwa._engine.modal_gradient import exponential

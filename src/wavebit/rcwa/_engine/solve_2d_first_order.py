@@ -446,7 +446,7 @@ def _grazes(xp, lam):
     return bool(_concrete(xp.min(size) <= _GRAZING_REL * scale))
 
 
-def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1):
+def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1, ep_rebuild=True):
     """``(lam_f, psi_f, lam_b, psi_b, coupled)``: split modes into propagation towards +z and -z.
 
     For decay-dominated eigenvalues (|Im(lambda)| > |Re(lambda)|), attenuation
@@ -474,6 +474,11 @@ def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1):
     sources' cascade (``illumination._cascade``, since 2026-10-10). With it the labels are capped
     by :func:`_cap_round_trips`; without it (``None``) the split is the uncapped one above, to
     the bit. Only the unstabilised transfer (:func:`_solve_naive`) passes none.
+
+    ``ep_rebuild=False`` skips the exceptional-point machinery above -- the cluster and pair
+    gates, both rebuilds and the unresolved screen -- eagerly and under a trace: the split is the
+    eigenvector one at every point, ``coupled`` is ``False``, and nothing warns or answers NaN
+    for an exceptional point. The grazing refusal stays.
     """
     lam, psi = eig(_stop(M))
     flux = mode_flux_z(xp, psi, n_orders) / xp.sum(xp.abs(psi) ** 2, axis=0)
@@ -534,15 +539,18 @@ def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1):
     from wavebit._common.backend import _concrete
     from wavebit.rcwa._engine.solve_2d import _JOINT_IMPRECISE_2D, _defective_clusters
     dev = getattr(lam, 'device', None)
-    clusters = _defective_clusters(xp, lam, psi, lam, None, lambda: _stop(M), slots,
-                                   group=forward)
+    # `ep_rebuild=False` (the `exceptional_points='off'` numerics): no gate, no rebuild, no
+    # screen -- the eigenvector split as `eig` left it, exceptional points included.
+    clusters = (_defective_clusters(xp, lam, psi, lam, None, lambda: _stop(M), slots,
+                                    group=forward) if ep_rebuild else None)
     exclude = None
     if clusters is not None:
         members, cvalid, _, c_over = clusters
         exclude = xp.any((xp.arange(lam.shape[0], device=dev)[:, None]
                           == xp.reshape(members, (-1,))[None, :])
                          & xp.reshape(cvalid, (-1,))[None, :], axis=1)
-    pairs, refused, overflow = _pair_gate(xp, lam, psi, forward, slots=slots, exclude=exclude)
+    pairs, refused, overflow = (_pair_gate(xp, lam, psi, forward, slots=slots, exclude=exclude)
+                                if ep_rebuild else ([], None, None))
     coupled = bool(pairs) or clusters is not None
     eig_lam = lam
     if coupled:
@@ -590,8 +598,9 @@ def _layer_split(xp, M, n_orders, k0_d=None, *, slots=1):
     if exclude is not None:
         ii = xp.arange(lam.shape[0], device=dev)
         group = xp.where(exclude, ii + 2, xp.astype(forward, ii.dtype))
-    unresolved = _unresolved_defective_cluster(xp, _stop(eig_lam), _stop(psi), lambda: _stop(M),
-                                               _PARALLEL_SIN, group=group)
+    unresolved = (_unresolved_defective_cluster(xp, _stop(eig_lam), _stop(psi), lambda: _stop(M),
+                                                _PARALLEL_SIN, group=group)
+                  if ep_rebuild else False)
     if unresolved is None:
         loud = _unresolved_cluster_traced(
             xp, _stop(eig_lam), _stop(psi), lambda: _stop(M), _PARALLEL_SIN, group,
@@ -964,7 +973,7 @@ def _solve_smm(xp, k0, Kx, Ky, layers, n_orders, psi_vf, psi_vb, *, slots=1):
 
 
 def _smm_cascade(xp, k0, Kx, Ky, layers, n_orders,
-                 entry_f, entry_b, exit_f, exit_b, keep_field=False, *, slots=1):
+                 entry_f, entry_b, exit_f, exit_b, keep_field=False, *, slots=1, ep_rebuild=True):
     """Cascade distinct forward/backward modes, optionally retaining field maps.
 
     Each backward amplitude is referenced at its layer's exit face. A suffix
@@ -982,7 +991,7 @@ def _smm_cascade(xp, k0, Kx, Ky, layers, n_orders,
     for (eps_blocks, d), k0_d in zip(layers, _run_k0_ds(xp, k0, layers)[0]):
         lam_f, psi_f, lam_b, psi_b, coupled = _layer_split(
             xp, layer_matrix_first_order(xp, Kx, Ky, **eps_blocks), n_orders, k0_d,
-            slots=slots)
+            slots=slots, ep_rebuild=ep_rebuild)
         interface = _interface_s(xp, prev_f, prev_b, psi_f, psi_b)
         propagation = _propagate_s(xp, lam_f, lam_b, k0, d, n_orders, coupled)
         for part in (interface, propagation):
@@ -1052,7 +1061,8 @@ def _solve_etm(xp, k0, Kx, Ky, layers, n_orders, incident, psi_vf, psi_vb, *, sl
     return psi_vb @ sol[:2 * n_orders], psi_vf @ (T_acc @ sol[2 * n_orders:])
 
 
-def _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, G, keep_field=True, *, slots=1):
+def _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, G, keep_field=True, *, slots=1,
+                   ep_rebuild=True):
     """Sweep the ETM recursion up the stack: ``(G_above, T_acc, layer_info_list)``.
 
     Split out of :func:`_solve_etm` because the recursion is the part
@@ -1090,7 +1100,7 @@ def _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, G, keep_field=True, *, slot
         eps_blocks, d = layers[index]
         lam_f, psi_f, lam_b, psi_b, coupled = _layer_split(
             xp, layer_matrix_first_order(xp, Kx, Ky, **eps_blocks), n_orders, run[index],
-            slots=slots)
+            slots=slots, ep_rebuild=ep_rebuild)
         X_f = exponential(xp, lam_f, 1j*k0*d, coupled=coupled)
         X_b = exponential(xp, lam_b, -1j*k0*d, coupled=coupled)
 
@@ -1206,7 +1216,7 @@ def solve_2d_first_order(wavelength, kx, ky, n_top, n_bot, theta, incidence, thi
                          epzx_conv_all=None, epzy_conv_all=None,
                          *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
                          layer_algorithm='ETM', mu=None, mu_top=1.0, mu_bot=1.0,
-                         eps_top=None, eps_bot=None):
+                         eps_top=None, eps_bot=None, ep_rebuild=True):
     """Solve a 2D stack on the first-order formulation — the public route to it.
 
     Twin of :func:`wavebit.rcwa._engine.solve_2d.solve_2d`: same arguments, same returns, four more
@@ -1334,7 +1344,8 @@ def solve_2d_first_order(wavelength, kx, ky, n_top, n_bot, theta, incidence, thi
 
         S, layer_info_list, entry_map = _smm_cascade(
             xp, k0, Kx, Ky, layers, n_orders,
-            entry_f, backward(entry_f), seed, backward(seed), keep_field, slots=slots)
+            entry_f, backward(entry_f), seed, backward(seed), keep_field, slots=slots,
+            ep_rebuild=ep_rebuild)
         # The scene was already mirrored above when needed, including both
         # material tensors. Its ports are now incidence-relative.
         out, c_inc = _sp_scattering_result(
@@ -1346,7 +1357,8 @@ def solve_2d_first_order(wavelength, kx, ky, n_top, n_bot, theta, incidence, thi
         return out
 
     G, big_T, layer_info_list = _etm_recursion(xp, k0, Kx, Ky, layers, n_orders, seed,
-                                               keep_field=keep_field, slots=slots)
+                                               keep_field=keep_field, slots=slots,
+                                               ep_rebuild=ep_rebuild)
     big_F, big_G = sp_modes_2d(xp, G[:2 * n_orders], 1j * G[2 * n_orders:], F_c, F_s, n_orders)
 
     out = final_matching(xp, C, big_F, big_G, big_T, kz_top, kz_bot, incidence, theta,

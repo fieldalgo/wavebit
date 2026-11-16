@@ -13,6 +13,11 @@ class Numerics:
     ``topology_check='device'`` uses available array guards and refuses other
     traced geometry. ``'host'`` explicitly permits a CPU callback for admitted
     scalar region geometry under JAX transforms; vmap checks run sequentially.
+
+    ``exceptional_points='rebuild'`` (the default) rebuilds layers at and near an exceptional
+    point, or warns (eager) / answers NaN (traced) where it cannot. ``'off'`` is for advanced
+    use: it skips that work on every path for speed, mostly under ``jax.jit``, and near an
+    exceptional point the answer can then be wrong with no warning.
     """
     orders: tuple = (0, 0)
     algorithm: str = 'smm'
@@ -26,9 +31,10 @@ class Numerics:
     detuning: object = None
     topology_check: str = 'device'
     half_space_merge_tolerance: float = 0.0
+    exceptional_points: str = 'rebuild'
     #: Written to a job only off their default (``jobs._encode``), so a job that does not use
     #: them keeps its key.
-    _FIELDS_OMITTED_AT_DEFAULT = ('half_space_merge_tolerance',)
+    _FIELDS_OMITTED_AT_DEFAULT = ('half_space_merge_tolerance', 'exceptional_points')
 
     def __post_init__(self):
         object.__setattr__(self, 'orders', order_pair('Numerics', self.orders,
@@ -40,7 +46,8 @@ class Numerics:
                    'raster_normal_method': (None, 'distance', 'contour', 'spectral', 'smooth'),
                    'nvf_projector': (None, 'linear', 'circular'),
                    'li_nesting': (None, 'fixed', 'symmetric'),
-                   'topology_check': ('device', 'host')}
+                   'topology_check': ('device', 'host'),
+                   'exceptional_points': ('rebuild', 'off')}
         for name, allowed in choices.items():
             if getattr(self, name) not in allowed:
                 raise ValidationError(f'{name} must be one of {allowed}.',
@@ -69,4 +76,6 @@ class Numerics:
                 out[name] = getattr(self, name)
         if self.half_space_merge_tolerance:
             out['half_space_merge_tolerance'] = float(self.half_space_merge_tolerance)
+        if self.exceptional_points != 'rebuild':
+            out['exceptional_points'] = self.exceptional_points
         return out

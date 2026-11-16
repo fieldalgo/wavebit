@@ -1132,7 +1132,8 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
 def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    epx_conv_all, epy_conv_all, epz_conv_i_all,
                    *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
-                   mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, dng=None):
+                   mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, dng=None,
+                   ep_rebuild=True):
     """Solve a conical 1D grating by scattering matrices — SMM twin of :func:`solve_1d_conical`.
 
     Same arguments and returns as :func:`smm_1d`; ``polarization`` is the complex amplitude
@@ -1167,7 +1168,8 @@ def smm_1d_conical(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
         modes = layer_modes_1d_conical(
             xp, Kx, Ky, Kx2, Ky2, I, epx_conv_all[layer_index],
             epy_conv_all[layer_index], epz_conv_i_all[layer_index], C,
-            mu=_layer_mu(I, mu_all, layer_index), dng=None if dng is None else dng[layer_index])
+            mu=_layer_mu(I, mu_all, layer_index), dng=None if dng is None else dng[layer_index],
+            ep_rebuild=ep_rebuild)
         if len(modes) == 3:
             # An x-cutoff layer, in the general layout (`solve_1d._regular_conical_modes`).
             E, U, q = modes
@@ -1190,7 +1192,8 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
            epx_conv_all, epy_conv_all, epz_conv_i_all,
            epxy_conv_all=None, epyx_conv_all=None,
            *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
-           mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, dng=None):
+           mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, dng=None,
+           ep_rebuild=True):
     """Solve a 2D grating stack by scattering matrices — SMM twin of :func:`solve_2d`.
 
     Same arguments and returns as :func:`smm_1d`; ``incidence`` is the resolved complex
@@ -1239,7 +1242,8 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                                           epxy_conv, epyx_conv, C, mu=layer_mu,
                                           dng=None if dng is None else dng[layer_index],
                                           pair_cap=pair_cap, with_coupling=True,
-                                          screen_k0_d=screen_k0_ds[layer_index])
+                                          screen_k0_d=screen_k0_ds[layer_index],
+                                          ep_rebuild=ep_rebuild)
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)
         # A layer with rebuilt pairs or clusters (`solve_2d._rebuild_defective_pairs`): `'pairs'`
         # asks the coupled exponential for the cap and the field state to read every coupled

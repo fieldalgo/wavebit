@@ -144,7 +144,8 @@ def _affine_star(xp, I, a, b):
                                         g[1] + B[2] @ middle)
 
 
-def _cascade(xp, k0, kx, ky, layers, bottom, top, keep_field, jumps=None, *, slots=None):
+def _cascade(xp, k0, kx, ky, layers, bottom, top, keep_field, jumps=None, *, slots=None,
+             ep_rebuild=True):
     """Stable two-port cascade with optional prescribed tangential-field jumps.
 
     ``slots`` is the order grid's traced pair capacity. A direct caller without
@@ -171,7 +172,8 @@ def _cascade(xp, k0, kx, ky, layers, bottom, top, keep_field, jumps=None, *, slo
     for j, (material, d) in enumerate(layers):
         if id(material) not in cache:
             cache[id(material)] = _layer_split(
-                xp, layer_matrix_first_order(xp, Kx, Ky, **material), n, k0_ds[j], slots=slots)
+                xp, layer_matrix_first_order(xp, Kx, Ky, **material), n, k0_ds[j], slots=slots,
+                ep_rebuild=ep_rebuild)
         lf, pf, lb, pb, coupled = cache[id(material)]
         emitted = (zero, zero)
         if j in jumps:
@@ -688,7 +690,8 @@ class CoherentSolver:
             S, emission, state = _cascade(xp, k0, kx, ky, layers,
                                 tuple(_tangential(xp, ports['bottom', d]) for d in (1, -1)),
                                 tuple(_tangential(xp, ports['top', d]) for d in (1, -1)), keep, jumps,
-                                slots=slots)
+                                slots=slots,
+                                ep_rebuild=scene._exceptional_points == 'rebuild')
             out = dict(bottom=S[0]@a['bottom'] + S[1]@a['top'] + emission[0],
                        top=S[2]@a['bottom'] + S[3]@a['top'] + emission[1])
             check_finite(xp, outgoing_top=out['top'], outgoing_bottom=out['bottom'])

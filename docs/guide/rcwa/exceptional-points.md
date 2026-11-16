@@ -180,6 +180,15 @@ The implemented work includes the 1D conical path, the 2D path, and the first-or
 
 For the measured cases, algorithms and remaining limits, see [Rayleigh points and patterned exceptional points](../../theory/rcwa/rayleigh-points.md), especially sections 7–9. For the surrounding grazing workflow, see [the Rayleigh handling walkthrough](rayleigh-handling-walkthrough.md). Current implementation entry points are `src/wavebit/rcwa/_engine/solve_1d.py`, `src/wavebit/rcwa/_engine/solve_2d.py` and `src/wavebit/rcwa/_engine/solve_2d_first_order.py`.
 
+(ep-handling-off)=
+## 7. Switching the handling off
+
+The handling above is on by default. `rcwa.Numerics(exceptional_points='off')` -- `exceptional_points='off'` on the solver -- is an advanced choice that skips it on every path that has it: the second-order and first-order formulations of a 2D grating, the 1D conical x-cutoff and the coherent-source cascade, eagerly and under `jax.jit`, `jax.vmap` or `torch.func.vmap`. Every layer then keeps the eigenvectors the eigensolver returned, and nothing is detected, rebuilt or screened.
+
+What it saves: eagerly, little -- a layer without an exceptional point leaves the gates after one look at the distances between its eigenvalues. Under a trace nothing can be skipped by value, so every layer carries the gates, the rebuilds and the screens as data; switching them off removes that work from each compiled call and from compilation.
+
+What it costs: at and near an exceptional point the answer can be wrong **with no warning and no NaN**. Away from one it agrees with the default to rounding -- to the bit, unless the default was rebuilding a degenerate pair, which a symmetric layer at normal incidence holds. Use it where the scenes stay away from exceptional points, or to time a run against the default; keep the default for a design that approaches or targets one. The grazing (Rayleigh point) handling is separate and stays on. `rcwa.check(...).resolved['exceptional_points']` reports the setting.
+
 ## Appendix A. Basis vectors, coefficients and the field
 
 Take two fixed independent basis vectors $b_1,b_2$ within a layer. The field changes with depth through its coefficients:

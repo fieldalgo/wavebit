@@ -2097,7 +2097,7 @@ def _did_not_converge(exc):
 
 def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epyx_conv, C,
                    mu=None, k0_d=None, dng=None, pair_cap=None, with_coupling=False, env=None,
-                   screen_k0_d=None):
+                   screen_k0_d=None, ep_rebuild=True):
     """Raw (unrotated) eigenmodes ``(W, V, q)`` of one 2D layer.
 
     ``W`` is the ``[Ex; Ey]`` mode matrix and ``q`` the modal decay constants; without ``k0_d``
@@ -2133,7 +2133,10 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     eligible pair and cluster is rebuilt. ``screen_k0_d`` is the
     optical thickness the eager screen of nearly coincident pairs reads
     (:func:`_crowded_pairs_imprecise`) and nothing else; it defaults to ``k0_d``, so SMM, which
-    takes no labels from a thickness, passes it on its own. ``with_coupling``
+    takes no labels from a thickness, passes it on its own. ``ep_rebuild=False`` (the
+    ``exceptional_points='off'`` numerics) skips the exceptional-point gates, rebuilds and
+    screens, eagerly and under a trace: the modes are ``eig``'s at every point and nothing warns
+    or answers NaN for an exceptional point; the grazing rebuild stays. ``with_coupling``
     requests a fourth return value describing that layout for propagation and field
     consumers. Without it the three-value interface is retained, but ``q`` at an
     exceptional point is a matrix generator, not a vector of independent roots.
@@ -2283,7 +2286,7 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
     if pair_cap is None:
         import math
         pair_cap = math.isqrt(W.shape[0] // 2) + 1
-    pairs = _defective_pairs(xp, w, W, q, pair_cap)
+    pairs = _defective_pairs(xp, w, W, q, pair_cap) if ep_rebuild else None
     built = []
 
     def _operator():
@@ -2298,8 +2301,8 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
 
     # Defective clusters of three to eight modes, rebuilt jointly (`_rebuild_defective_clusters`);
     # a trace holds `pair_cap // 2` of them, with their masks as data.
-    clusters = _defective_clusters(xp, _stop(w), _stop(W), _stop(q), pairs, _operator,
-                                   max(1, pair_cap // 2))
+    clusters = (_defective_clusters(xp, _stop(w), _stop(W), _stop(q), pairs, _operator,
+                                    max(1, pair_cap // 2)) if ep_rebuild else None)
 
     def _screen(W_final, operator=_operator, rebuilt=None, joint=None):
         # Eagerly loud: defective clusters no rebuild took, and nearly coincident pairs one
@@ -2334,8 +2337,9 @@ def layer_modes_2d(xp, Kx, Ky, I, epx_conv, epy_conv, epz_conv_i, epxy_conv, epy
             warnings.warn(_IMPRECISE_2D, ExceptionalPointWarning, stacklevel=4)
         return None
     if pairs is None and clusters is None:
-        # Eager only: under an abstract trace both gates return their slots.
-        _screen(W)
+        # Eager only: under an abstract trace both gates return their slots. Off, no screen.
+        if ep_rebuild:
+            _screen(W)
         built.clear()
     else:
         A = _operator()
@@ -2411,7 +2415,8 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
              epx_conv_all, epy_conv_all, epz_conv_i_all,
              epxy_conv_all=None, epyx_conv_all=None,
              *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
-             mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, dng=None):
+             mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, dng=None,
+             ep_rebuild=True):
     """Solve a 2D grating stack for the given incidence.
 
     ``incidence`` is the resolved incident amplitude pair ``(a_s, a_p)`` at unit flux — whatever
@@ -2557,7 +2562,8 @@ def solve_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                                           epxy_conv, epyx_conv, C, mu=layer_mu,
                                           k0_d=run_k0_ds[layer_index],
                                           dng=None if dng is None else dng[layer_index],
-                                          pair_cap=pair_cap, with_coupling=True, env=env)
+                                          pair_cap=pair_cap, with_coupling=True, env=env,
+                                          ep_rebuild=ep_rebuild)
         flips_below = None if env is None else env.flips
 
         big_W, big_V = sp_modes_2d(xp, W, V, F_c, F_s, n_orders)

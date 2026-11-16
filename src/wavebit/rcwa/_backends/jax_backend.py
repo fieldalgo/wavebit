@@ -760,6 +760,8 @@ class SolverJax(RCWAJax, OptimizerJax):
             # Static for the same reason: which layers merge into a half-space is decided from
             # it before any kernel runs, and it fixes the number of layers solved.
             'half_space_merge_tolerance': self._half_space_merge_tolerance,
+            # Static too: the layer-mode kernels branch on it (gates, rebuilds, screens).
+            'exceptional_points': self._exceptional_points,
             # Whether the `Lattice.drawn` declaration (a child, above) was compared against the
             # cell here, while both were concrete. Inside the rebuilt copy both are traced
             # children and cannot be compared, so the copy trusts this answer for as long as it
