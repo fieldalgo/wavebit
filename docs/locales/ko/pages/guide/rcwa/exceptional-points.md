@@ -153,6 +153,15 @@ $$
 
 측정 사례, 알고리즘과 남은 제한은 [Rayleigh 지점과 패턴 예외점](../../theory/rcwa/rayleigh-points.md)의 7–9절을 참고하세요. 주변의 스침 처리 흐름은 [Rayleigh 처리 해설](rayleigh-handling-walkthrough.md)에 있습니다. 현재 구현의 진입점은 `src/wavebit/rcwa/_engine/solve_1d.py`, `src/wavebit/rcwa/_engine/solve_2d.py`, `src/wavebit/rcwa/_engine/solve_2d_first_order.py`입니다.
 
+(ep-handling-off)=
+## 7. 예외점 처리를 끄기
+
+위의 처리는 기본으로 켜져 있습니다. `rcwa.Numerics(exceptional_points='off')`(솔버에서는 `exceptional_points='off'`)는 이 처리를 쓰는 모든 경로에서 끄는 고급 설정입니다. 해당 경로는 2D 격자의 2차(second-order)·1차(first-order) 정식화, 1D 코니컬의 x 차단점, 결맞는 광원(coherent source) 연결 계산이며, 즉시 실행과 `jax.jit`, `jax.vmap`, `torch.func.vmap` 추적 실행 모두에 적용됩니다. 끄면 모든 층이 고유값 계산이 돌려준 고유벡터를 그대로 쓰고, 예외점을 찾지도, 다시 세우지도, 검사하지도 않습니다.
+
+아끼는 것: 즉시 실행에서는 적습니다. 예외점이 없는 층은 고유값 사이 거리를 한 번 훑어본 뒤 바로 관문을 빠져나가기 때문입니다. 추적 실행에서는 값을 보고 건너뛸 수가 없어서, 모든 층이 관문, 재구성, 검사를 데이터로 끝까지 계산합니다. 끄면 그 계산이 컴파일된 호출과 컴파일 자체에서 빠집니다.
+
+대가: 예외점과 그 근처에서는 답이 **경고도 NaN도 없이** 틀릴 수 있습니다. 예외점에서 먼 곳에서는 기본 설정과 반올림 수준으로 같습니다. 기본 설정이 축퇴된 모드 쌍(대칭 층에 수직 입사할 때 생김)을 다시 세우던 경우가 아니면 비트까지 같습니다. 다루는 장면이 예외점에서 멀리 떨어져 있을 때, 또는 기본 설정과 실행 시간을 비교할 때 쓰세요. 예외점에 다가가거나 예외점을 노리는 설계에는 기본 설정을 유지하세요. 스침(Rayleigh 지점) 처리는 별개이며 계속 켜져 있습니다. 설정 값은 `rcwa.check(...).resolved['exceptional_points']`에서 확인할 수 있습니다.
+
 ## 부록 A. 기저 벡터, 계수, 필드를 구분하기
 
 한 층 안에서 고정된 독립 기저 벡터 $b_1,b_2$를 고릅니다. 깊이에 따라 달라지는 것은 이 벡터들에 곱해지는 계수입니다.

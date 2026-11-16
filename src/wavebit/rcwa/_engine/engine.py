@@ -3296,7 +3296,8 @@ class CoreSolveMixin:
             answers=self._kernel_answers(), lit=self._kernel_lit(), mu=self._mu_1d(mu),
             mu_top=1.0 if mu_bot is None else mu_bot,
             mu_bot=1.0 if mu_top is None else mu_top,
-            eps_top=eps_bot, eps_bot=eps_top, dng=dng))
+            eps_top=eps_bot, eps_bot=eps_top, dng=dng,
+            ep_rebuild=self._exceptional_points == 'rebuild'))
 
     def _solve_2d(self, epx_conv_all, epy_conv_all, epz_conv_i_all,
                  epxy_conv_all=None, epyx_conv_all=None,
@@ -3321,7 +3322,8 @@ class CoreSolveMixin:
                 lit=self._kernel_lit(), mu=mu,
                 mu_top=1.0 if mu_bot is None else mu_bot,
                 mu_bot=1.0 if mu_top is None else mu_top,
-                eps_top=eps_bot, eps_bot=eps_top))
+                eps_top=eps_bot, eps_bot=eps_top,
+                ep_rebuild=self._exceptional_points == 'rebuild'))
         solve = self._solve_fn('2d')
         return self._finish(solve(
             wavelength, kx, ky, self.n_bot, self.n_top, self.theta, self._incidence_pair(),
@@ -3332,7 +3334,8 @@ class CoreSolveMixin:
             answers=self._kernel_answers(), lit=self._kernel_lit(), mu=mu,
             mu_top=1.0 if mu_bot is None else mu_bot,
             mu_bot=1.0 if mu_top is None else mu_top,
-            eps_top=eps_bot, eps_bot=eps_top, dng=dng))
+            eps_top=eps_bot, eps_bot=eps_top, dng=dng,
+            ep_rebuild=self._exceptional_points == 'rebuild'))
 
 
 # The rules a modeling path builds on every structure it accepts, its default first.
@@ -3500,6 +3503,10 @@ class CoreFactorizationMixin:
                  # merges only at a complex k_par and moves no other answer; a positive value
                  # takes a material within it to BE the half-space's, at every angle. Relative,
                  # on one scale per layer and medium. See half_space_merge.py.
+                 exceptional_points='rebuild',  # 'rebuild' (default): layers at and near an
+                 # exceptional point are rebuilt, or warn (eager) / answer NaN (traced). 'off'
+                 # skips that machinery on every path for speed -- near an exceptional point the
+                 # answer can then be wrong with no warning. See the exceptional_points property.
                  **unknown,                  # collected rather than left to Python, so the
                  # refusal comes from `_refuse_unknown_keywords` and a typo cannot be
                  # swallowed by the catch-all itself.
@@ -3545,6 +3552,7 @@ class CoreFactorizationMixin:
         self.nvf_projector = nvf_projector
         self.li_nesting = li_nesting
         self.half_space_merge_tolerance = half_space_merge_tolerance
+        self.exceptional_points = exceptional_points
         self._normal_grid = shape_nvf_grid_size
         self.lattice = lattice      # after period: assigning a basis overwrites period
 
@@ -3585,6 +3593,8 @@ class CoreFactorizationMixin:
     _nesting = None
     #: :attr:`half_space_merge_tolerance` as a Python float; 0 merges only bit-identical layers.
     _half_space_merge_tolerance = 0.
+    #: :attr:`exceptional_points`: ``'rebuild'`` or ``'off'``.
+    _exceptional_points = 'rebuild'
     #: The last solve's :class:`~wavebit.rcwa._engine.half_space_merge.MergePlan`, or ``None``.
     _half_space_merged = None
 
@@ -5532,6 +5542,39 @@ class CoreFactorizationMixin:
                 'needed -- 0 merges only a layer bit-identical to its half-space, and a value of '
                 '1 or more would take a material twice the half-space\'s to be it.')
         self._half_space_merge_tolerance = value
+
+    @property
+    def exceptional_points(self):
+        """``'rebuild'`` (the default) or ``'off'``: whether layers at exceptional points are handled.
+
+        At an exceptional point two or more layer modes share one eigenvector, and the
+        eigenvector basis ``eig`` returns there loses digits. With ``'rebuild'`` every path that
+        meets one -- the 2D second-order and first-order formulations, the 1D conical x-cutoff
+        and the coherent-source cascade -- finds such modes, rebuilds them in a regular basis,
+        and screens what it cannot rebuild: eagerly it warns
+        (:class:`~wavebit.rcwa.diagnostics.ExceptionalPointWarning`), under ``jax.jit`` /
+        ``vmap`` the layer answers NaN (``docs/theory/rcwa/rayleigh-points.md``, sections 7-9).
+
+        ``'off'`` skips the gates, the rebuilds and the screens on every path, eagerly and
+        traced. Away from an exceptional point the answer agrees to rounding -- to the bit where
+        no gate engages; a degenerate pair, which a symmetric layer at normal incidence holds, is
+        rebuilt by an exact change of basis that moves the last bits. A solve then costs what a
+        plain eigenvector solve costs: eagerly the gates are a small share of a
+        solve, but under a trace every layer carries them as data, which makes compiled calls
+        and compilation noticeably slower. The price: at and near an exceptional point the answer
+        can be wrong **with no warning and no NaN**. Use it where the scenes are known to stay
+        away from exceptional points, or to time a run against the default. The grazing
+        (Rayleigh point) handling is not part of it and stays on.
+        """
+        return self._exceptional_points
+
+    @exceptional_points.setter
+    def exceptional_points(self, value):
+        if not isinstance(value, str) or value not in ('rebuild', 'off'):
+            raise ValueError(
+                f"rcwa(exceptional_points={value!r}): 'rebuild' (the default) or 'off' is "
+                'needed.')
+        self._exceptional_points = value
 
     #: What `shape_nvf_grid_size=None` means, before `4*truncation_order+1` lifts it at high orders.
     #:
