@@ -199,6 +199,38 @@ metadata records the rule under `'reconstruction'` when it is not the default. T
 `'split'` and `'splitw'`, are the rules for the curved walls of circles and of an ellipse. They are experimental and have
 their own section, *A curved wall*, below.
 
+**The four values at a glance.** What each one does with a layer, by what the layer holds. "Refused"
+is an error with code `field.reconstruction`, never a silent fall back to the sum.
+
+| The layer holds | `'plain'` (default) | `'lalanne'` | `'split'`, `'splitw'` |
+| --- | --- | --- | --- |
+| nothing patterned | the sum | the sum, bit for bit | the sum, bit for bit |
+| a 1D grating | the sum | the rule | refused |
+| rectangles at a right angle, or polygons with every edge along x or y | the sum | the rule | refused |
+| a raster | the sum | the rule, on the raster's staircase | refused |
+| one circle, several circles of one material that do not touch, or one ellipse along the cell's axes | the sum | refused | the rule, experimental |
+| a turned rectangle or ellipse, a slanted polygon, an ellipse beside another shape, circles of several materials, circles that touch | the sum | refused | refused |
+
+| Anywhere in the stack | `'plain'` (default) | `'lalanne'` | `'split'`, `'splitw'` |
+| --- | --- | --- | --- |
+| a skewed lattice, or a diagonal one with a negative side | the sum | refused | refused |
+| a patterned permeability | the sum | the rule, for `H` as well | refused |
+| a tensor given by its principal values | the sum | the rule, each axis by its own entry | refused |
+| a patterned tensor with off-diagonal entries | the sum | refused | refused |
+
+- A rule has to take every patterned layer of the stack. One layer it refuses refuses the call,
+  whichever heights are sampled: a stack with a rectangle layer and a circle layer is refused by
+  all three rules and read with the sum.
+- What a rule changes: `'lalanne'`, `E_x` on a 1D grating and `E_x` and `E_y` on a 2D cell, and the
+  same components of `H` where the layer names a permeability; `'split'` and `'splitw'`, `E_x` and
+  `E_y` only. Every other component is the sum's, bit for bit.
+- How each is checked: `'plain'` and `'lalanne'` against RETICOLO at the same truncation and
+  against finite-element fields; `'split'` and `'splitw'` against finite-element fields only,
+  which is why they warn (`wavebit.rcwa.diagnostics.ExperimentalWarning`).
+- Being taken is not the same as being the better choice. The rest of this section says where
+  `'lalanne'` is closer than the sum and where it is not (a layer that holds a metal, a spatial
+  derivative), and *A curved wall* does the same for the split rules.
+
 - **What it changes.** `E_x` in the patterned layers of a 1D grating, on the pure TM and the
   conical paths; `E_x` and `E_y` in the patterned layers of a 2D cell. A layer that names a
   permeability takes the same rule for `H`: `H_x` on the pure TE and conical paths, `H_x` and `H_y`
@@ -290,6 +322,13 @@ their own section, *A curved wall*, below.
   (151 MB) for a tensor raster, and as much again when the stack names a raster `mu`.
 - **Which shapes.** Walls along x and y: rectangles at a right angle and polygons with only such
   edges.
+  - How "along x or y" is decided: from the numbers given, to rounding. An edge of a polygon is
+    along an axis when the smaller of its `|dx|` and `|dy|` is at most 1e-12 of the largest
+    coordinate step between two neighbouring vertices of that polygon. A rectangle is at a right
+    angle when `|sin(2*angle)|` is at most 1e-12. One edge that fails refuses the layer. This
+    allows for rounding and nothing more. An outline turned by a quarter turn with a computed
+    sine and cosine passes; an edge that rises 1e-9 nm across a 200 nm outline does not, and
+    neither does a rectangle at an angle of 1e-11.
   - Circles, ellipses, rotated rectangles and slanted polygons are refused. So is a differentiated
     or traced angle, which turns every wall, and under `jax.jit` or `jax.vmap` a traced vertex, whose
     wall direction cannot be read. Across a slanted wall it is `D_n` that is continuous, not `D_x`,
