@@ -1874,7 +1874,9 @@ def _public_layer_remedy(name):
     layer. It also lets less run through the layer than the engine does: a fixed, unturned
     ``Box`` that reaches the face and whose ``Structure`` declares ``continuation``
     (``_continue_box``), and a ``SnappedSlab`` along the
-    face's axis with no ``Open()`` face on another axis. A ``SnappedBox`` cannot continue.
+    face's axis with no ``Open()`` face on another axis, and a cell-snapped waveguide core: a
+    ``SnappedBox`` that declares ``continuation`` along its own axis (``_continue_snapped``) or
+    a ``SnappedSlab`` naming the faces it runs through.
     """
     return (f'The body ends before the Open face; what reaches the layer is its smoothed edge, '
             f'the cells over which its surface is averaged. Move its end farther from the face, '
@@ -2962,13 +2964,20 @@ def _proximity_notes(scene, plan):
                 # ``Scene(background=)``; stage 1 printed the note for it and C0 moves no
                 # number, so it still does -- unless the PML is matched to it, below.
                 continue
-            if (name in pml and structure.shape.layer_axis() == fa
-                    and (k0 < cells if side == '-' else k1 > grid.n[fa] - cells)
+            if (name in pml
+                    and ((structure.shape.layer_axis() == fa
+                          and (k0 < cells if side == '-' else k1 > grid.n[fa] - cells))
+                         or ((k0 <= 0 if side == '-' else k1 >= grid.n[fa])
+                             and all(structure.shape.uniform_along(b, (0, grid.n[b]), grid)
+                                     for b in range(3) if b != fa)))
                     and _same_medium(structure.material, _matched_medium(scene, name))):
                 # A layer across this axis running into a PML whose stretch is matched to
                 # its own material: the half-space the public module continues through the
-                # padding. The note's premise -- a layer matched to something other than
-                # this structure -- is false there, and its gap would be negative.
+                # padding. So is a body that fills the cross-section and runs through the
+                # whole layer to the box's edge -- a substrate Box the public module continues
+                # through a face its Structure names. The note's premise -- a layer matched to
+                # something other than this structure -- is false there, and its gap would be
+                # negative. A narrower body still warns: the layer beside it is not its medium.
                 continue
             lo = grid.low[fa] + k0 * grid.dx
             hi = grid.low[fa] + k1 * grid.dx

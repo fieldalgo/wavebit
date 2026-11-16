@@ -17,6 +17,7 @@ from . import _monitors as monitors
 from ._problem import Problem
 from ._numerics import Numerics, UniformGrid, Duration, PML, ConductiveAbsorber, DecayStop
 from ._kernel.grid import cell_count
+from ._public_names import remember_given
 
 
 def _number(value, path):
@@ -64,6 +65,25 @@ def _geometry(shape, reserved=None):
     return engine(**fields)
 
 
+def _touching_remedy(face):
+    """The ways out for a finite body that touches the Open face ``face``.
+
+    Either the body stops short of the face, or its ``Structure`` declares that it runs on
+    through it -- which only a uniform medium can: a fixed, unturned ``Box`` filling the
+    cross-section (:func:`_continue_box`) or a cell-snapped core along the face's axis
+    (:func:`_continue_snapped`). The same set ``_prepare.checks._public_layer_remedy`` names.
+    """
+    return (f' (face {face!r}). Move the body off the face, far enough that fdtd.check no '
+            f'longer refuses its smoothed edge in the absorbing layer; or, if it is meant to run '
+            f'on through the face, declare that on its fdtd.Structure with '
+            f'continuation=({face!r},). That is accepted for a fixed, unturned fdtd.Box that '
+            f'reaches more than one cell past both transverse faces, which must not be Open (a '
+            f'substrate), and for a cell-snapped waveguide core -- an fdtd.SnappedBox along '
+            f'{face[0]}. A turned fdtd.Box, an fdtd.Cylinder, fdtd.Prism or fdtd.Sphere, or a '
+            f'smoothed body narrower than the cross-section, cannot run into an absorbing layer: that is '
+            f'not supported yet, and no date is set.')
+
+
 def _continue_box(item, shape, pad, physical_low, physical_high,
                   allocated_low, allocated_high, dx):
     """Extend only the explicitly declared homogeneous, fixed substrate faces."""
@@ -97,8 +117,11 @@ def _continue_box(item, shape, pad, physical_low, physical_high,
             high[axis] = max(high[axis], allocated_high[axis]+2*dx)
     if tuple(low) == tuple(shape.low) and tuple(high) == tuple(shape.high):
         return shape
-    return shape.replace(size=tuple(b-a for a,b in zip(low,high)),
-                         center=tuple((a+b)/2 for a,b in zip(low,high)))
+    extended = shape.replace(size=tuple(b-a for a,b in zip(low,high)),
+                             center=tuple((a+b)/2 for a,b in zip(low,high)))
+    # A message names the Box the caller wrote, not the one moved through the padding.
+    remember_given(extended, shape)
+    return extended
 
 
 def _continue_snapped(item, shape, pad, physical_low, physical_high, allocated_high, allocated_low,
@@ -463,11 +486,17 @@ def lower_problem(problem, numerics, *, plan=None):
             else:
                 lo, hi = shape.low, shape.high
             for a, axis in enumerate('xyz'):
-                if ((pad[axis+'-'] and axis+'-' not in item.continuation
-                     and _number(lo[a], 'scene.structures.'+item.name) <= physical_low[a]) or
-                    (pad[axis+'+'] and axis+'+' not in item.continuation
-                     and _number(hi[a], 'scene.structures.'+item.name) >= physical_high[a])):
-                    raise UnsupportedFeatureError('a finite body touches an Open face; its continuation into padding is unspecified', code='fdtd.padding_continuation', path='scene.structures.'+item.name)
+                # Evaluated in this order and no further, as one ``or`` would be.
+                touched = (axis+'-' if (pad[axis+'-'] and axis+'-' not in item.continuation
+                           and _number(lo[a], 'scene.structures.'+item.name) <= physical_low[a])
+                           else axis+'+' if (pad[axis+'+'] and axis+'+' not in item.continuation
+                           and _number(hi[a], 'scene.structures.'+item.name) >= physical_high[a])
+                           else None)
+                if touched:
+                    raise UnsupportedFeatureError(
+                        'a finite body touches an Open face; its continuation into padding is '
+                        'unspecified' + _touching_remedy(touched),
+                        code='fdtd.padding_continuation', path='scene.structures.'+item.name)
         structures.append(old_geometry.Structure(shape, material,
                           discretisation=rule if type(shape) is old_geometry.Sphere else 'voxel'))
     if numerics.memory_bound is not None:

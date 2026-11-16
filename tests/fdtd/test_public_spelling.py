@@ -253,6 +253,73 @@ def test_a_smoothed_edge_in_an_open_face_layer_is_offered_only_what_the_public_r
     assert 'The body ends before the Open face' not in str(engine.value)
 
 
+def _substrate(bottom):
+    """A glass substrate filling the column from ``bottom`` up to the z+ face, continued there."""
+    return near_the_open_face(fdtd.Box(size=(1., 1., .5 - bottom), center=(0., 0., (bottom + .5) / 2)),
+                              continuation=('z+',))
+
+
+def test_a_continued_substrate_is_named_at_the_size_it_was_given():
+    """The lowering moves a continued face through the padding; a message names the caller's Box.
+
+    A substrate continued through ``z+`` whose bottom ends half a cell before the ``z-`` face is
+    refused there. The refusal described the lowered Box -- size 1.675, centre 0.3625 -- which
+    the caller never wrote. The engine's own description of the lowered shape is plan data and
+    keeps the lowered numbers.
+    """
+    (issue,) = fdtd.check(_substrate(-.475), numerics=LAYER).issues
+    assert "ends inside the PML on 'z-'" in issue.message
+    assert 'Box(size=(1.0, 1.0, 0.975), center=(0.0, 0.0, 0.0125' in issue.message, issue.message
+    assert '1.675' not in issue.message
+    scene, _ = lower_problem(_substrate(-.475), LAYER)
+    assert scene.structures[0].shape.describe().startswith('Box(size=(1.0, 1.0, 1.675')
+
+
+def test_a_continued_substrate_is_not_warned_about_the_face_it_runs_through():
+    """A substrate runs through its continued face's layer, matched to it: there is no gap.
+
+    The proximity note printed "-0.6 from the inner face of the absorber on 'z+'" for it. Its
+    far end, 0.1 above the ``z-`` layer, is still warned about -- and a body narrower than the
+    cross-section running through a matched layer still is (``test_fd_materials_doors``).
+    """
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        assert fdtd.check(_substrate(-.4), numerics=LAYER).ok
+    notes = [str(w.message) for w in caught if type(w.message).__name__ == 'AbsorberProximityWarning']
+    assert len(notes) == 1 and "on 'z-'" in notes[0], notes
+    assert not any(' is -' in note for note in notes), notes
+
+
+def test_a_body_touching_an_open_face_is_told_which_bodies_may_continue():
+    """The refusal of a finite body on an Open face names the face and the ways out.
+
+    It said only that the continuation was unspecified. Each way out it names passes, and each
+    body it says cannot run into the layer is refused.
+    """
+    touching = fdtd.Box(size=(.2, .2, .5), center=(0., 0., .25))
+    (issue,) = fdtd.check(near_the_open_face(touching), numerics=LAYER).issues
+    message = issue.message
+    assert issue.code == 'fdtd.padding_continuation'
+    assert message.startswith('a finite body touches an Open face; its continuation into '
+                              "padding is unspecified (face 'z+'). Move the body off the face")
+    assert "continuation=('z+',)" in message and 'fdtd.SnappedBox along z' in message
+    assert 'not supported yet, and no date is set' in message
+    assert not COMPAT.search(message), message
+    # The ways out it names.
+    for way_out, continuation in (
+            (fdtd.Box(size=(.2, .2, .35), center=(0., 0., .175)), ()),
+            (fdtd.Box(size=(1., 1., .3), center=(0., 0., .35)), ('z+',)),
+            (fdtd.SnappedBox(size=(.2, .2, .5), center=(0., 0., .25)), ('z+',))):
+        assert fdtd.check(near_the_open_face(way_out, continuation), numerics=LAYER).ok, way_out
+    # What it rules out, declared to continue anyway.
+    for ruled_out in (fdtd.Box(size=(1., 1., .3), center=(0., 0., .35), angle=.5),
+                      fdtd.Cylinder(radius=.1, height=.3, center=(0., 0., .35)),
+                      fdtd.Box(size=(.2, .2, .3), center=(0., 0., .35))):
+        codes = {i.code for i in fdtd.check(near_the_open_face(ruled_out, ('z+',)),
+                                            numerics=LAYER).issues}
+        assert codes == {'fdtd.padding_continuation'}, (ruled_out, codes)
+
+
 def test_a_planning_warning_is_spelled_for_the_public_caller():
     """A Region past a PEC wall warns; the remedy is an Open face, not a compat absorber.
 
