@@ -4,6 +4,7 @@
 | --- | --- |
 | `nvf_fitting_grid.py` | How far do four fitted dimensions move when the normal-field grid changes, with the target and Fourier order held fixed? |
 | `check_grid.py` | Are fixed-geometry values and derivatives stable under grid refinement, and does AD agree with finite differences? |
+| `shared_matrix_model.py` | Can this nondispersive case share its geometry matrix build across wavelengths without changing values or derivatives? |
 | `measurement.json` | Did the historical solver `18bbcbfd` meet both refinement tolerances through grid 1024? |
 | `integral-fixed-point.json` | How did fixed-point spectra, Jacobians and finite differences compare after the integral normal field landed? |
 | `integral-fitting.json` | Does refitting the integral construction meet the unchanged parameter and spectral refinement criteria? |
@@ -24,6 +25,24 @@ avoids tracing the entire spectrum as one large program. Larger batches can cost
 substantially more compilation memory; start with the default. Batching does not
 change the observations or numerical tolerances. `Model(...)(p, derivative=False)`
 uses a separate value-only function for finite-difference checks.
+
+Both commands accept `--shared-matrices` for this fixed N5 case. Its materials
+are wavelength-independent, scalar and nonmagnetic, so the layer convolution
+matrices are built once per parameter vector, inside the differentiated graph,
+and shared across optical solves. Geometry tangents are retained. Host validation
+and re-preparation remain active. This study-specific path uses repository
+lifecycle internals; it is not a cache for dispersive materials or a new installed
+solver API. The scalar model remains the independent execution-path control.
+`--batch-size` applies only to the scalar path.
+Add `--sequential-jvp` with `--shared-matrices` to compute the four Jacobian
+columns one at a time. This bounds live tangent arrays on large grids at the
+cost of repeated primal computation; it retains all observations and columns.
+
+The fitting command also accepts `--jacobian-relative-tolerance 1e-3` to require
+same-fit Jacobian stability as well as parameter and spectral stability on two
+consecutive refinements. The default retains the original two-criterion fit
+decision. Fixed-point checks and fit-point checks answer different questions;
+a fixed-point pass alone does not certify a refitting ladder.
 
 `measurement.json` is a reviewed CPU double-precision observation on solver
 `18bbcbfd`, not a golden
