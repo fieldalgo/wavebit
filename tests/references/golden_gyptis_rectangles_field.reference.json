@@ -1,0 +1,119 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_gyptis_rectangles_field",
+  "physics": "rcwa",
+  "comparison": "different-discretization",
+  "role": "external oracle for the electric near field inside a layer of axis-aligned rectangular walls: 3D finite-element fields of a metal block, a square hole in a metal film, a dielectric square and a metal rectangle, which the solve in stretched coordinates (Numerics.wall_resolution) and the unstretched solve are measured against",
+  "references": [
+    {
+      "tool": "gyptis",
+      "version": "1.2.0",
+      "build": "FEniCS (dolfin) 2019.1.0 underneath, gmsh 4.15.2 for the geometry and the mesh, MUMPS direct solve out of core; Python 3.14.10, from conda-forge",
+      "modified": {
+        "value": false,
+        "description": "used through its public Python API; the package itself was not changed"
+      },
+      "spdx": "MIT",
+      "source": "https://anaconda.org/conda-forge/gyptis",
+      "install": {
+        "kind": "conda",
+        "command": "micromamba create -n gyptis -c conda-forge gyptis=1.2.0"
+      },
+      "settings": "Maxwell3DPeriodic on one eighth of the cell, using the exact mirror symmetries of normal incidence with E along x (the x mirror a perfect electric wall, the y mirror a perfect magnetic wall, and an even/odd split in z, two solves); second-order edge (Nedelec) elements; a perfectly matched layer above. Two scripts of the same construction. E_metal_block and E_hole: the block model, direct solves with block low-rank compression at 1e-9, relative residuals 1.1e-5 and 1.1e-5 (block), 4.0e-6 and 2.6e-6 (hole); R = 0.356150 and T = 0.611546 (block), R = 0.892808 and T = 0.046589 (hole). E_dielectric_square and E_metal_rectangle: the model of golden_gyptis_shapes_field with the shape replaced by a rectangle, exact direct solves, residuals 1.5e-12 and 2.2e-12 (square), 1.4e-12 and 6.1e-13 (rectangle); R = 0.036622 and T = 0.962998 (square), R = 0.640434 and T = 0.303694 (rectangle). The stored phasors are in gyptis's time convention, the conjugate of Wavebit's; the consumer maps them as -exp(2 pi i h / wavelength) * conj(E), with h the layer thickness",
+      "discretization": "tetrahedral meshes graded toward the walls and their edges: 44075 cells for the block and for the hole (smallest edge 0.79 nm), 21544 cells for the dielectric square (4.78 nm) and 21453 for the metal rectangle (4.84 nm); the product side is a Fourier truncation of the same cell",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "private research repository",
+    "sha256": "96e8f98f623c5927c186537bd50787786e71d58f537a50bb5fbdddcad7ed39db",
+    "command": "python fem_shape.py sq_T1 sq T1 12.25 1 for E_dielectric_square and python fem_shape.py rtmetal_T1 rt T1 -20-1.5j 1 for E_metal_rectangle (the script whose digest is given); the block model, another script of the same repository (sha256 45b1006cc1b578e1228beae7c5cac3a1e81203749b6c7bd1fa974129836d1b21), at its level T2 for E_metal_block and, with the two permittivities exchanged, for E_hole; then the plane samples laid out on the 48 x 48 grid",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-11-15T15:00:00Z",
+  "environment": {
+    "python": "3.14.10",
+    "numpy": "2.5.4",
+    "threads": 4
+  },
+  "cost": {
+    "wall_seconds": null,
+    "max_rss_gb": null,
+    "note": "four runs of two solves each, factorization out of core; the block and the hole took about 20 to 30 minutes each, the square and the rectangle about 5"
+  },
+  "inputs": {
+    "cell": {
+      "period_nm": [
+        400.0,
+        400.0
+      ],
+      "layer_thickness_nm": 150.0,
+      "shapes": {
+        "E_metal_block": "a 200 nm square of permittivity -20+1.5j (Wavebit convention) at the cell centre, in air",
+        "E_hole": "a 200 nm square hole of air at the cell centre in a film of permittivity -20+1.5j",
+        "E_dielectric_square": "a 200 nm square of permittivity 12.25 at the cell centre, in air",
+        "E_metal_rectangle": "a rectangle 250 nm along x and 150 nm along y, permittivity -20+1.5j, at the cell centre, in air"
+      },
+      "half_spaces_epsilon": 1.0
+    },
+    "incidence": {
+      "wavelength_nm": 900.0,
+      "direction": "normal",
+      "polarization": "E along x"
+    },
+    "samples": {
+      "plane": "mid-height of the layer, z = 75 nm above its lower face",
+      "x_nm": "48 points, ((i + 0.37)/48 - 1/2) * 400",
+      "y_nm": "48 points, ((j + 0.41)/48 - 1/2) * 400",
+      "layout": "each field as E[j, i, component] at (x[i], y[j]), components (Ex, Ey, Ez)"
+    },
+    "mesh_level": "the block model's T2 for E_metal_block and E_hole (its T1 is the self-check); the shape model's T1 for the other two, which have no second level"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "not_run": null,
+    "reference_self_check": "over the same 2304 samples the block model's coarser level (22727 cells) differs from the stored one by 0.37% of the plane RMS of the in-plane field for the block (R 0.355677 against 0.356150) and by 0.20% for the hole (R 0.892590 against 0.892808). The dielectric square and the metal rectangle have one mesh level; the same script on the dielectric square reproduces the block model of that square in R (0.03662 against 0.03667). With the solve in stretched coordinates the square and the rectangle stop improving at 0.4% and 3.4% of the plane RMS from order 12 on, with the solve's R settled to five digits and 0.3% from the reference's, which is taken as these two references' own accuracy",
+    "failed_or_discarded": null
+  },
+  "payload": {
+    "file": "golden_gyptis_rectangles_field.npz",
+    "format": "npz",
+    "file_sha256": "9f406f4bd13c91fd76b652f9327f1a735f4dcdca91bde23f03e81730803ab964",
+    "arrays": [
+      "E_dielectric_square",
+      "E_hole",
+      "E_metal_block",
+      "E_metal_rectangle",
+      "x",
+      "y",
+      "z"
+    ]
+  },
+  "values_sha256": "19c328d0c9f8df5a1110af68a7ae4d4438b319d94951530441742f1cb08f4623",
+  "content_sha256": "e97fcfdd25bd26724642ca5b1f6693e86ff4fec54affc1f3f9b4b1a0c696f49e",
+  "consumers": [
+    "tests/references/test_gyptis_rectangles_field_golden.py"
+  ],
+  "provenance_status": "complete",
+  "sources": {},
+  "regeneration": [],
+  "not_recorded": {
+    "generator.product_commit": "the generator does not load the product and records no commit",
+    "generator.clean_tree": "the generator does not load the product and records no commit",
+    "cost.wall_seconds": "the four runs were timed separately and on a machine that ran other work; the note gives their order of magnitude",
+    "cost.max_rss_gb": "the run script reports the peak in the wrong unit on Linux",
+    "outcomes.matched": "what the comparison found is in the consumer test",
+    "outcomes.not_matched": "what the comparison found is in the consumer test",
+    "outcomes.not_run": "what the comparison found is in the consumer test",
+    "outcomes.failed_or_discarded": "no run of these four was discarded"
+  }
+}

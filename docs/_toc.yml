@@ -98,6 +98,7 @@ subtrees:
           - file: guide/rcwa/guarded-shape-jit
           - file: guide/rcwa/rayleigh-handling-walkthrough
           - file: guide/rcwa/scene
+          - file: guide/rcwa/wall-resolution
           - file: guide/rcwa/tensor-shape-integration
       - file: guide/fdtd/index
         subtrees:
@@ -229,6 +230,7 @@ subtrees:
               - file: validation/rcwa/fitting-grid-convergence
               - file: validation/rcwa/nvf-upsampling
               - file: validation/rcwa/time-convention-audit
+              - file: validation/rcwa/wall-resolution
           - file: validation/fdtd/index
             subtrees:
             - entries:

@@ -198,8 +198,12 @@ class FieldState:
     """
 
     def __init__(self, data, kind, mirrored=False, names=('incident',), window=None,
-                 merged=None, bare_interface=False, structure=None, mu=None):
+                 merged=None, bare_interface=False, structure=None, mu=None, stretch=None):
         self.data, self.kind, self.mirrored, self.names = data, kind, mirrored, tuple(names)
+        #: The two :class:`~wavebit.rcwa._engine.stretch.Axis` of a solve in stretched
+        #: coordinates (``wall_resolution``), else ``None``. Static: the kernels' records are
+        #: then the stretched components on the computational cell.
+        self.stretch = stretch
         self.window = window
         #: The stack declared no layers: the engine solved the bare interface through one
         #: zero-thickness layer of the top medium, which is not a layer to sample. Static.
@@ -219,12 +223,14 @@ class FieldState:
         spec = _pack(self.structure, leaves)
         mu = _pack(self.mu, leaves)
         return (self.data, tuple(leaves)), (self.kind, self.mirrored, self.names, self.window,
-                                            self.merged, self.bare_interface, spec, mu)
+                                            self.merged, self.bare_interface, spec, mu,
+                                            self.stretch)
 
     @classmethod
     def tree_unflatten(cls, meta, children):
-        *static, spec, mu = meta
-        return cls(children[0], *static, _plain(_unpack(spec, children[1])), _plain(_unpack(mu, children[1])))
+        *static, spec, mu, stretch = meta
+        return cls(children[0], *static, _plain(_unpack(spec, children[1])),
+                   _plain(_unpack(mu, children[1])), stretch=stretch)
 
     def _incidence(self, name):
         if name not in self.names:
@@ -238,6 +244,13 @@ class FieldState:
         spectra = self.data['boundary']
         if spectra is None:
             raise RuntimeError("Boundary fields require solve(answers='amplitude') or answers='field'.")
+        if self.stretch is not None:
+            raise NotImplementedError(
+                'boundary fields are not available under wall_resolution: the half-spaces are '
+                'solved in the stretched coordinates, where only the propagating orders are '
+                'plane waves, so a face has no per-order spectrum to expand. Sample a layer '
+                'instead -- a uniform spacer layer of the half-space\'s medium gives the field '
+                'above or below the structure.')
         xp = array_namespace(self.data['lattice'])
         grid = xy_grid(xp, self.data['lattice'], sample_x, sample_y)
         incoming, outgoing = spectra[incidence][side]
@@ -263,6 +276,11 @@ class FieldState:
         check_reconstruction(reconstruction)
         if reconstruction == 'plain' or (self.merged is not None and not self.data['groups']):
             return None      # A stack that merged whole has no patterned layer left to read.
+        if self.stretch is not None:
+            raise NotImplementedError(
+                f'reconstruction={reconstruction!r} is not available under wall_resolution, '
+                "whose field is read with reconstruction='plain': the solve's coordinates "
+                'already resolve the walls the rule is for.')
         from wavebit.rcwa._engine.lalanne import lalanne_rows
         from wavebit.rcwa._engine.lalanne import layers_holding
         from wavebit.rcwa._engine.lalanne import refusal as lalanne_refusal
@@ -374,6 +392,9 @@ class FieldState:
         self._require_internal_fields()
         xp = array_namespace(data['lattice'])
         z, owner, edges = self._heights(xp, sample_z)
+        slopes = None
+        if self.stretch is not None:
+            grid, slopes = self._stretched_points(xp, grid)
         result = None
         for g in data['groups']:
             if self.kind == 'source':
@@ -390,7 +411,34 @@ class FieldState:
                                             self.names[index], edges.shape[0]-1)
             field = expand_spectrum(xp, data['boundary_kxy'], coefficient, grid)
             result = field if result is None else result + field
+        if slopes is not None:
+            result = result / slopes
         return result
+
+    def _stretched_points(self, xp, grid):
+        """The computational points of the Cartesian ``grid``, and each component's slope.
+
+        The kernels' records of a stretched solve hold ``E~_x = f E_x``, ``E~_y = g E_y`` and
+        ``E~_z = E_z`` (``H`` alike) as series in the computational coordinates. A sample at
+        ``(x, y)`` is read at ``u = F^-1(x)``, ``v = G^-1(y)`` and divided by the slopes there.
+        The public origin is the cell centre and the coordinate functions' is its corner.
+        """
+        x, y = grid
+        hosts = _host_value(x), _host_value(y)
+        if any(h is None for h in hosts):
+            raise NotImplementedError(
+                'a field under wall_resolution reads its sample points as numbers, so traced '
+                'coordinates (jax.jit, jax.vmap, jax.grad over x or y) are not sampled yet')
+        mapped, slope = [], []
+        for host, axis, like in zip(hosts, self.stretch, (x, y)):
+            half = 0.5 * axis.period
+            u = axis.inverse(np.real(np.asarray(host, dtype=complex)) + half)
+            mapped.append(_array(xp, u - half, like))
+            slope.append(axis.dF(u))
+        f, g = np.broadcast_arrays(*slope)
+        one = np.ones_like(f)
+        slopes = _array(xp, np.stack([f, g, one, f, g, one], axis=-1), x)
+        return tuple(mapped), slopes
 
     def _apply_lalanne(self, xp, g, rule, coefficient, field, owner):
         """``field`` with the rule's ``E`` and ``H`` in the samples of the layers the rule reads.
@@ -689,11 +737,13 @@ def ordinary_state(solver, spectra, merged=None):
                 groups=groups, cell=solved_structure(solver.lattice))
     if merged is not None:
         data['merge'] = merged['data']
+    scope = solver.__dict__.get('_stretch_scope')
     return FieldState(_copy(data), spectra['kind'], solver._kernel_incidence_side == 'bottom',
                       spectra['names'], solver.order_window,
                       None if merged is None else merged['plan'],
                       structure=solver._solved_structure if groups else None,
-                      mu=solver._solved_mu if groups else None)
+                      mu=solver._solved_mu if groups else None,
+                      stretch=None if scope is None else scope['axes'])
 
 
 def source_state(spectra, groups, lattice, wavelength, thickness, scene=None):

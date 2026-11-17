@@ -994,9 +994,111 @@ def _sp_scattering_result(xp, C, S, kx, ky, kz_top, kz_bot, n_top, n_bot,
             'scattering': scattering}, c_inc
 
 
+class _StretchedPorts:
+    """Half-spaces of a stack solved in stretched coordinates (``Numerics.wall_resolution``).
+
+    In those coordinates a uniform half-space is a layer like any other: its modes come from the
+    same eigenproblem as a patterned layer's, on the stretched uniform medium, and they are a
+    full-rank set in the retained basis. Only the propagating orders are replaced, by the exact
+    plane waves written in that basis, which is how the incident wave enters and how reflected
+    and transmitted amplitudes keep their meaning: the amplitude on a replaced column is the
+    physical order's. The other columns are the half-space's own evanescent modes; their
+    amplitudes are not orders.
+
+    Carrying every physical plane wave into the layers' basis instead, evanescent ones
+    included, is what a stretch cannot afford: where the coordinate runs fast the high orders
+    oscillate beyond the retained harmonics and their columns become nearly dependent (condition
+    1e9 at slope 0.02 and order 16), and beside a metal that ruins the field while the
+    reflectance still looks right.
+    """
+
+    def __init__(self, xp, modes, to_computational):
+        self.xp, self._modes, self._to_computational = xp, modes, to_computational
+        #: Which orders propagate in each half-space, in the order `half_space` was asked.
+        self.propagating = []
+
+    def only_propagating(self, out, backside, shape):
+        """``out`` with every evanescent order's amplitude zero, and no scattering matrix.
+
+        Those amplitudes belong to the half-space's own modes, not to orders, and zero is what
+        an evanescent order contributes to any power. The scattering matrix has a port per
+        order and so is not formed.
+        """
+        xp = self.xp
+        top, bottom = (xp.reshape(xp.asarray(m), shape) for m in self.propagating)
+        reflected, transmitted = (bottom, top) if backside else (top, bottom)
+        cleaned = {}
+        for key, sub in out.items():
+            if key == 'scattering' or sub is None or sub.get('r_s') is None:
+                cleaned[key] = None if key == 'scattering' else sub
+                continue
+            zero = xp.zeros_like(sub['r_s'])
+            cleaned[key] = dict(sub, r_s=xp.where(reflected, sub['r_s'], zero),
+                                r_p=xp.where(reflected, sub['r_p'], zero),
+                                t_s=xp.where(transmitted, sub['t_s'], zero),
+                                t_p=xp.where(transmitted, sub['t_p'], zero))
+        return cleaned
+
+    def half_space(self, W, V, eps, kz):
+        """``(W, V)`` of a half-space of permittivity ``eps`` whose plane waves are ``W``, ``V``."""
+        import numpy as np
+        xp = self.xp
+        modes_W, modes_V, q = self._modes(eps)
+        waves_W, waves_V = self._to_computational(W, V)
+        try:
+            kz_host = np.asarray(_host(kz), dtype=complex)
+            q_host = np.asarray(_host(q), dtype=complex)
+        except Exception as exc:
+            raise NotImplementedError(
+                'wall_resolution reads which orders propagate from their values, so it does '
+                'not run under jax.jit, jax.vmap or jax.grad yet') from exc
+        if q_host.ndim == 2:
+            q_host = np.diagonal(q_host)
+        propagating = np.abs(kz_host.imag) < 1e-9 * np.abs(kz_host)
+        self.propagating.append(propagating)
+        propagating = np.concatenate([propagating, propagating])
+        count = int(propagating.sum())
+        size = propagating.shape[0]
+        # The computed modes the exact waves are made of: the heaviest `count` of them, taken
+        # together, so orders that share a kz are replaced as the subspace they span.
+        weights = xp.abs(xp.linalg.solve(modes_W, waves_W)) ** 2
+        heavy = np.asarray(_host(xp.sum(weights[:, np.flatnonzero(propagating)], axis=1)),
+                           dtype=float)
+        ranked = np.argsort(-heavy, kind='stable')
+        picked, kept = ranked[:count], np.sort(ranked[count:])
+        share = float(heavy[picked].sum() / max(heavy.sum(), 1e-300))
+        if count and share < 0.99:
+            raise ValueError(
+                'wall_resolution: the stretched half-space does not hold its propagating '
+                f'plane waves as {count} modes (they carry {share:.3f} of the waves), which '
+                'the retained orders are too few for; raise the orders or the wall_resolution')
+        leftover = q_host[kept]
+        if leftover.size and np.any(np.abs(leftover.real) < 1e-7 * np.abs(leftover)):
+            raise ValueError(
+                'wall_resolution: the stretched half-space keeps a propagating mode beside its '
+                'plane waves, whose direction is not determined; raise the orders')
+        # Order j's wave sits at column j; the evanescent modes fill the columns left over.
+        source = np.empty(size, dtype=int)
+        source[np.flatnonzero(~propagating)] = kept
+        source[np.flatnonzero(propagating)] = picked
+        mask = xp.asarray(propagating)[None, :]
+        index = xp.asarray(source)
+        return (xp.where(mask, waves_W, xp.take(modes_W, index, axis=1)),
+                xp.where(mask, waves_V, xp.take(modes_V, index, axis=1)))
+
+
+def _host(array):
+    """A backend array of concrete numbers as something NumPy reads."""
+    if hasattr(array, 'detach'):
+        array = array.detach()
+    if hasattr(array, 'cpu'):
+        array = array.cpu()
+    return array
+
+
 def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
             layer_modes, epz_conv_i_all, backside, answers, mu_top=1.0, mu_bot=1.0,
-            eps_top=None, eps_bot=None, muz_conv_i_all=None, lit=None):
+            eps_top=None, eps_bot=None, muz_conv_i_all=None, lit=None, stretched=None):
     """Shared SMM cascade + matching for the coupled s/p paths (conical and 2D).
 
     ``layer_modes(layer_index)`` returns that layer's ``(big_W, big_V, q, W, V, coupled)``: the
@@ -1075,6 +1177,11 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     V_bot = _block(xp, [[-1j * Kz_bot / mu_bot, O], [O, I]])
     W_gap = _block(xp, [[I, O], [O, -1j * _diag(xp, z_p)]])
     V_gap = _block(xp, [[-1j * _diag(xp, y_s), O], [O, I]])
+    if stretched is not None:
+        # `stretched` is a `_StretchedPorts`: the half-spaces' own modes in the stretched
+        # coordinates, their propagating orders the exact plane waves just written.
+        W_top, V_top = stretched.half_space(W_top, V_top, eps_top, kz_top)
+        W_bot, V_bot = stretched.half_space(W_bot, V_bot, eps_bot, kz_bot)
 
     S_ref = _s_reflection(xp, W_top, V_top, W_gap, V_gap)
     S_trn = _s_transmission(xp, W_bot, V_bot, W_gap, V_gap)
@@ -1102,6 +1209,8 @@ def _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness
     out, c_inc = _sp_scattering_result(
         xp, C, S, kx, ky, kz_top, kz_bot, n_top, n_bot, incidence, backside,
         answers, mu_top, mu_bot, eps_top, eps_bot, lit)
+    if stretched is not None and isinstance(out, dict):
+        out = stretched.only_propagating(out, backside, (n_orders_v, n_orders_u))
     if not keep_field:
         return out
     n_inc = c_inc.shape[1]
@@ -1193,7 +1302,7 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
            epxy_conv_all=None, epyx_conv_all=None,
            *, phi, incidence_side='top', answers=Answers.EFFICIENCY, lit=None,
            mu=None, mu_top=1.0, mu_bot=1.0, eps_top=None, eps_bot=None, dng=None,
-           ep_rebuild=True):
+           ep_rebuild=True, stretch=None):
     """Solve a 2D grating stack by scattering matrices — SMM twin of :func:`solve_2d`.
 
     Same arguments and returns as :func:`smm_1d`; ``incidence`` is the resolved complex
@@ -1250,7 +1359,68 @@ def smm_2d(wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
         # row and column off the bottom face (`modal_gradient.two_face`).
         return big_W, big_V, q, W, V, (('pairs', pair_cap) if coupled else False)
 
+    stretched = None
+    if stretch is not None:
+        stretched = _stretched_ports(xp, C, stretch, wavelength, kx, ky, Kx, Ky, I, O, F_c, F_s,
+                                     n_orders_u, n_orders_v, pair_cap, ep_rebuild)
+
     return _smm_sp(xp, C, wavelength, kx, ky, n_top, n_bot, theta, incidence, thickness,
                    layer_modes, epz_conv_i_all, backside, answers,
                    mu_top=mu_top, mu_bot=mu_bot, eps_top=eps_top, eps_bot=eps_bot,
-                   muz_conv_i_all=mu_all[2], lit=lit)
+                   muz_conv_i_all=mu_all[2], lit=lit, stretched=stretched)
+
+
+def _stretched_ports(xp, C, stretch, wavelength, kx, ky, Kx, Ky, I, O, F_c, F_s,
+                     n_orders_u, n_orders_v, pair_cap, ep_rebuild):
+    """The :class:`_StretchedPorts` of a 2D solve.
+
+    ``stretch`` is what the engine built for this solve: ``axes`` (the two
+    :class:`~wavebit.rcwa._engine.stretch.Axis`), ``unit`` (the stretched vacuum's permittivity
+    slots ``(epx, epy, epz_i)``) and ``mu`` (its permeability slots). A uniform medium of
+    permittivity ``eps`` is ``eps`` times the first two and the third over ``eps``.
+    """
+    from wavebit.rcwa._engine.stretch import plane_wave_matrix
+    n_orders = n_orders_u * n_orders_v
+    unit_x, unit_y, unit_z_i = stretch['unit']
+    mu_x, mu_y, mu_z_i = stretch['mu']
+    axis_u, axis_v = stretch['axes']
+    half_u, half_v = (n_orders_u - 1) // 2, (n_orders_v - 1) // 2
+    k0 = 2 * _PI / wavelength
+    c = xp.reshape(F_c, (-1,))[:, None]
+    s = xp.reshape(F_s, (-1,))[:, None]
+
+    def modes(eps):
+        eps = as_array(xp, eps, dtype=C)
+        W, V, q, _ = layer_modes_2d(xp, Kx, Ky, I, eps * unit_x, eps * unit_y, unit_z_i / eps,
+                                    O, O, C, mu=(mu_x, mu_y, mu_z_i, None, None),
+                                    pair_cap=pair_cap, with_coupling=True, ep_rebuild=ep_rebuild)
+        return (*sp_modes_2d(xp, W, V, F_c, F_s, n_orders), q)
+
+    # One factor per axis and weight: E_x (and H_x) carries the slope along u, E_y along v.
+    centre_u, centre_v = k0 * kx[half_u], k0 * ky[half_v]
+    nodes_u, nodes_v = axis_u.wave_nodes(half_u), axis_v.wave_nodes(half_v)
+
+    def factor(nodes, axis, k_incident, half, weighted):
+        return plane_wave_matrix(xp, nodes, axis.period, k_incident, half, weighted, C)
+
+    def kron(along_v, along_u):
+        # Rows and columns run as the orders do, `n * n_orders_u + m`.
+        return xp.reshape(along_v[:, None, :, None] * along_u[None, :, None, :],
+                          (n_orders, n_orders))
+
+    T_x = kron(factor(nodes_v, axis_v, centre_v, half_v, False),
+               factor(nodes_u, axis_u, centre_u, half_u, True))
+    T_y = kron(factor(nodes_v, axis_v, centre_v, half_v, True),
+               factor(nodes_u, axis_u, centre_u, half_u, False))
+
+    def to_computational(W, V):
+        # s/p boundary rows -> Cartesian -> the stretched components -> s/p rows again; the
+        # rotations are `sp_modes_2d`'s and its inverse, which is its transpose.
+        E_s, F_p = W[:n_orders, :], W[n_orders:, :]
+        H_s, H_p = V[:n_orders, :], V[n_orders:, :]
+        E_x, E_y = T_x @ (c * F_p - s * E_s), T_y @ (s * F_p + c * E_s)
+        H_x, H_y = T_x @ (c * H_s - s * H_p), T_y @ (s * H_s + c * H_p)
+        return (xp.concat([c * E_y - s * E_x, c * E_x + s * E_y], axis=0),
+                xp.concat([c * H_x + s * H_y, c * H_y - s * H_x], axis=0))
+
+    return _StretchedPorts(xp, modes, to_computational)

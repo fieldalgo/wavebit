@@ -14,6 +14,7 @@ from wavebit._common.validation import _refuse_shaped_half_space
 from wavebit._common.validation import _unknown_attribute
 import contextlib as _contextlib
 import functools as _functools
+import math as _math
 
 import numpy as _np
 
@@ -2903,6 +2904,11 @@ class CoreSolveMixin:
         """
         if self._scattering is not None:
             return self._scattering
+        if self._wall_resolution is not None:
+            raise RuntimeError(
+                'no scattering matrix under wall_resolution: it has a port per order, and in '
+                'the stretched coordinates only the propagating orders of a half-space are '
+                'plane waves')
         if self.layer_algorithm != 'SMM':
             raise RuntimeError(
                 _SCATTERING_WRONG_ALGORITHM.format(got=self.layer_algorithm))
@@ -3325,6 +3331,8 @@ class CoreSolveMixin:
                 eps_top=eps_bot, eps_bot=eps_top,
                 ep_rebuild=self._exceptional_points == 'rebuild'))
         solve = self._solve_fn('2d')
+        # Present only inside `_solve_stretched`, whose refusals leave the SMM to take it.
+        stretch = self.__dict__.get('_stretch_scope')
         return self._finish(solve(
             wavelength, kx, ky, self.n_bot, self.n_top, self.theta, self._incidence_pair(),
             self._kernel_thickness(),
@@ -3335,8 +3343,20 @@ class CoreSolveMixin:
             mu_top=1.0 if mu_bot is None else mu_bot,
             mu_bot=1.0 if mu_top is None else mu_top,
             eps_top=eps_bot, eps_bot=eps_top, dng=dng,
-            ep_rebuild=self._exceptional_points == 'rebuild'))
+            ep_rebuild=self._exceptional_points == 'rebuild',
+            **({} if stretch is None else {'stretch': stretch})))
 
+
+#: What a solve under ``wall_resolution`` warns with: finite-element fields only, no independent
+#: implementation of the stretched solve to compare with at the same truncation.
+_WALL_RESOLUTION_EXPERIMENTAL = (
+    'wall_resolution is experimental. The solve in stretched coordinates is checked against '
+    'finite-element fields on seven layers of axis-aligned rectangles (one wavelength each, normal '
+    'incidence) and against no independent implementation; at oblique incidence and with several '
+    'propagating orders it is checked for energy conservation and convergence only. Its values, '
+    'what it accepts and its name may change between releases. Compare two orders before relying '
+    'on a value; the guide "Resolving walls with stretched coordinates" has the measurements. '
+    'Silence with warnings.simplefilter("ignore", wavebit.rcwa.diagnostics.ExperimentalWarning).')
 
 # The rules a modeling path builds on every structure it accepts, its default first.
 # `ModelingPath.RASTER` is absent because it implements all of them and so takes the option
@@ -3507,6 +3527,11 @@ class CoreFactorizationMixin:
                  # exceptional point are rebuilt, or warn (eager) / answer NaN (traced). 'off'
                  # skips that machinery on every path for speed -- near an exceptional point the
                  # answer can then be wrong with no warning. See the exceptional_points property.
+                 wall_resolution=None,  # None (default): the cell's own coordinates. A slope in
+                 # (0, 1]: solve in coordinates whose lines crowd at the rectangles' walls, where
+                 # they advance at this slope (0.02 is fifty times finer there). Axis-aligned
+                 # rectangles with factorization='li' on the SMM only. See the wall_resolution
+                 # property and `stretch.py`.
                  **unknown,                  # collected rather than left to Python, so the
                  # refusal comes from `_refuse_unknown_keywords` and a typo cannot be
                  # swallowed by the catch-all itself.
@@ -3553,6 +3578,7 @@ class CoreFactorizationMixin:
         self.li_nesting = li_nesting
         self.half_space_merge_tolerance = half_space_merge_tolerance
         self.exceptional_points = exceptional_points
+        self.wall_resolution = wall_resolution
         self._normal_grid = shape_nvf_grid_size
         self.lattice = lattice      # after period: assigning a basis overwrites period
 
@@ -3595,6 +3621,8 @@ class CoreFactorizationMixin:
     _half_space_merge_tolerance = 0.
     #: :attr:`exceptional_points`: ``'rebuild'`` or ``'off'``.
     _exceptional_points = 'rebuild'
+    #: :attr:`wall_resolution`: ``None`` or the slope at the walls, a Python float.
+    _wall_resolution = None
     #: The last solve's :class:`~wavebit.rcwa._engine.half_space_merge.MergePlan`, or ``None``.
     _half_space_merged = None
 
@@ -5078,6 +5106,11 @@ class CoreFactorizationMixin:
         self._require_field_declaration()
         self._reject_stale_field_scene()
         check_reconstruction(reconstruction)
+        if self._wall_resolution is not None:
+            raise NotImplementedError(
+                'reconstruct_field does not sample a solve in stretched coordinates '
+                '(wall_resolution): read the field from the result, `result.field(...)`, which '
+                'maps the sample points')
         ruled = reconstruction != 'plain'
         if ruled:
             self._refuse_rule(reconstruction)
@@ -5542,6 +5575,45 @@ class CoreFactorizationMixin:
                 'needed -- 0 merges only a layer bit-identical to its half-space, and a value of '
                 '1 or more would take a material twice the half-space\'s to be it.')
         self._half_space_merge_tolerance = value
+
+    @property
+    def wall_resolution(self):
+        """``None`` (the default), or the slope of the solve's coordinates at material walls.
+
+        With a value ``G`` in ``(0, 1]`` the stack is solved in coordinates ``x = F(u)``,
+        ``y = G(v)`` whose lines crowd at the rectangles' walls: there ``F' = G``, so ``0.02``
+        resolves a wall fifty times more finely than the retained orders do on their own. This
+        is adaptive spatial resolution (Granet 1999; the linear-plus-sine function of Vallius
+        and Honkanen 2002), and it is what brings the near field beside a metal to the
+        reference at an order where the unstretched solve is still tens of percent off
+        (:mod:`wavebit.rcwa._engine.stretch`).
+
+        The whole stack is solved in those coordinates, the half-spaces included: their modes
+        are computed like a layer's and only the propagating orders are replaced by the exact
+        plane waves. So efficiencies and the amplitudes of propagating orders mean what they
+        always do. An evanescent order has no amplitude in these coordinates -- what decays
+        beside the stack is the half-space's own modes -- and its entry is 0, which is also
+        what it contributes to every power; the scattering matrix, which has a port per
+        order, and the boundary fields are not available.
+
+        Implemented for axis-aligned rectangles with ``factorization='li'`` in a rectangular
+        cell, isotropic non-magnetic materials, lossless half-spaces, one incident plane wave,
+        the SMM and the second-order formulation; everything else is refused by name. ``None``
+        leaves every solve bit for bit as it is.
+        """
+        return self._wall_resolution
+
+    @wall_resolution.setter
+    def wall_resolution(self, value):
+        if value is not None:
+            if (isinstance(value, bool) or not isinstance(value, (int, float))
+                    or not _math.isfinite(value) or not 0 < value <= 1):
+                raise ValueError(
+                    f'rcwa(wall_resolution={value!r}): None (the default) or the slope of the '
+                    'coordinates at the walls, a number in (0, 1], is needed -- 0.02 resolves '
+                    'a wall fifty times more finely.')
+            value = float(value)
+        self._wall_resolution = value
 
     @property
     def exceptional_points(self):
@@ -6570,6 +6642,8 @@ class CoreFactorizationMixin:
         self._reject_unread_normal_grid()
         self._reject_unread_merge_tolerance()
         self._reject_layer_count_mismatch()
+        if self._wall_resolution is not None:
+            self._refuse_what_the_stretch_does_not_solve(None)
 
     def _reject_layer_count_mismatch(self):
         """The stack has to be one stack: as many thicknesses as the structure has layers.
@@ -7264,6 +7338,110 @@ class CoreFactorizationMixin:
         layers = [placed(layer) for layer in structure]
         return layers if any(a is not b for a, b in zip(layers, structure)) else structure
 
+    def _solve_stretched(self, geometry=None):
+        """:meth:`_solve_built` in coordinates that crowd at the walls (:attr:`wall_resolution`).
+
+        Every layer, uniform ones included, becomes a layer of ``eps~ = eps diag(g/f, f/g, f g)``
+        and ``mu~ = diag(g/f, f/g, f g)`` in the computational cell, with one pair of coordinate
+        functions for the stack, built from every rectangle's edges. No layer is merged into a
+        half-space and none takes the uniform shortcut: in these coordinates a uniform medium's
+        modes are not plane waves. The half-spaces are solved the same way inside the kernel
+        (:class:`~wavebit.rcwa._engine.scattering._StretchedPorts`), which is why the kernel is
+        handed the stretched vacuum's slots beside the axes.
+        """
+        stretch = self._refuse_what_the_stretch_does_not_solve(geometry)
+        # After the refusals, so a scene that is not solved raises without a warning.
+        from wavebit.rcwa._engine.fields import warn_experimental_feature
+        warn_experimental_feature(_WALL_RESOLUTION_EXPERIMENTAL)
+        xp, C = self.xp, self.complex_dtype
+        (_, half_width_u), (_, half_width_v) = self.order_window
+        plans = None if geometry is None else geometry.rectilinear_plans
+        lattice = self.lattice
+        eps = _rectilinear.layer_stack(
+            xp, self.structure, half_width_u, half_width_v, lattice, C, plans=plans,
+            nesting=self.li_nesting, stretch=stretch)
+        unit = _rectilinear.stretched_layer_matrices(
+            xp, [], 1.0, half_width_u, half_width_v, lattice, C, stretch,
+            nesting=self.li_nesting)
+        vacuum = _rectilinear.stretched_mu(xp, half_width_u, half_width_v, C, stretch)
+        n_layers = int(eps.epx.shape[0])
+        mu = _fac.ConvMatrices(*(xp.stack([m] * n_layers) for m in vacuum), None, None)
+        self._stretch_scope = {'axes': (stretch.x, stretch.y), 'unit': unit, 'mu': vacuum}
+        self._stretch = stretch
+        try:
+            return self._solve_conv(*eps, mu=mu)
+        finally:
+            self.__dict__.pop('_stretch_scope', None)
+
+    #: The last stretched solve's :class:`~wavebit.rcwa._engine.stretch.Stretch`, or ``None``.
+    _stretch = None
+
+    def _refuse_what_the_stretch_does_not_solve(self, geometry):
+        """Refuse, by name, every scene :attr:`wall_resolution` is not implemented for.
+
+        Returns the stack's :class:`~wavebit.rcwa._engine.stretch.Stretch`, which is the last
+        thing that can refuse: it is built from the rectangles' edges, read as numbers.
+        """
+        from wavebit.rcwa._engine.stretch import Stretch
+        def refuse(what, instead):
+            raise NotImplementedError(
+                f'wall_resolution={self._wall_resolution!r} solves in coordinates that crowd '
+                f'at rectangle walls, and {what}. {instead}')
+
+        if self._modeling_path != ModelingPath.PARAMETRIC:
+            refuse('this structure is a raster',
+                   'Describe the layers as rectangles, or leave wall_resolution unset.')
+        if self.factorization != Factorization.LI:
+            refuse(f"factorization is {self.factorization.value!r}",
+                   "It is implemented for factorization='li' on axis-aligned rectangles.")
+        if not self.lattice_is_axis_aligned:
+            refuse('the cell is not a rectangle along x and y',
+                   'It is implemented for a rectangular, axis-aligned cell.')
+        if self.layer_algorithm != 'SMM':
+            refuse(f'the layer algorithm is {self.layer_algorithm!r}',
+                   "It is implemented for the scattering-matrix algorithm ('smm').")
+        if self._formulation == Formulation.FIRST_ORDER:
+            refuse("formulation='first_order' was asked for",
+                   'It is implemented for the second-order formulation.')
+        if self._has_tensor_materials() or self._is_magnetic():
+            refuse('a material is a tensor or names a permeability',
+                   'It is implemented for isotropic, non-magnetic materials.')
+        if self._excitation is not None:
+            refuse('the illumination is not one plane wave on the specular order',
+                   'It is implemented for a single incident plane wave.')
+        for where, material in (('top', self._top), ('bottom', self._bot)):
+            value = _readable_complex(material.epsilon)
+            if value is None:
+                refuse(f'the {where} half-space\'s permittivity is traced',
+                       'It reads which orders propagate from concrete half-spaces.')
+            if abs(value.imag) > 0 or value.real <= 0:
+                refuse(f'the {where} half-space is not a lossless dielectric '
+                       f'(epsilon = {value})',
+                       'Its reflected and transmitted orders are read on exact plane waves, '
+                       'which this version takes for the propagating orders of a lossless '
+                       'half-space only.')
+        (_, half_width_u), (_, half_width_v) = self.order_window
+        plans = None if geometry is None else geometry.rectilinear_plans
+        lattice = self.lattice
+        try:
+            walls = _rectilinear.wall_positions(self.structure, lattice, plans)
+            periods = [float(_fac._to_numpy(lattice[i][i])) for i in (0, 1)]
+        except (TypeError, ValueError) as exc:
+            raise NotImplementedError(
+                'wall_resolution reads the rectangles\' edges and the cell as numbers, so a '
+                'traced size, position or period (jax.jit, jax.vmap, jax.grad over geometry) '
+                'is not solved in stretched coordinates yet') from exc
+        try:
+            stretch = Stretch(walls[0], walls[1], periods[0], periods[1], self._wall_resolution)
+        except ValueError as exc:
+            raise NotImplementedError(f'wall_resolution={self._wall_resolution!r}: {exc}') from exc
+        for axis, half_width, name in ((stretch.x, half_width_u, 'x'), (stretch.y, half_width_v, 'y')):
+            if not axis.identity and half_width == 0:
+                refuse(f'the {name} axis has walls while the orders retain a single harmonic '
+                       'along it, which cannot hold the stretched coordinate',
+                       'Retain orders along that axis.')
+        return stretch
+
     def _solve_built(self, geometry=None):
         """Build this structure's convolution matrices and hand them to the solve.
 
@@ -7296,6 +7474,8 @@ class CoreFactorizationMixin:
         permeability pass replays the boundary plans the permittivity pass has just recorded,
         so the order is what puts the two quantities on one grid.
         """
+        if self._wall_resolution is not None:
+            return self._solve_stretched(geometry)
         eps = self._eps_conv_matrices(geometry)
         merge = self._half_space_merge_plan()
         if not self._is_magnetic():

@@ -59,6 +59,7 @@ overlays. Currently these are:
   [backends, devices and precision](../guide/common/backends.md),
   [exceptional points](../guide/rcwa/exceptional-points.md),
   [fields and diffraction observations](../guide/rcwa/fields.md),
+  [resolving walls with stretched coordinates](../guide/rcwa/wall-resolution.md),
   [how the FDTD solver models a problem](../guide/fdtd/model.md),
   [physical native Yee grids](../guide/fdtd/native-grids.md),
   [automatic stopping and graded absorbing padding](../guide/fdtd/stopping-and-absorbers.md),
@@ -66,6 +67,8 @@ overlays. Currently these are:
   [Gaussian beams](../guide/fdtd/gaussian-beam.md) and
   [waveguide modes](../guide/fdtd/waveguide-modes.md);
 - migration: [public names and result keys](../migration/public-names.md);
+- RCWA validation: [normal-field resolution and a spectral fit](../validation/rcwa/fitting-grid-convergence.md) and
+  [the solve in stretched coordinates against finite-element fields](../validation/rcwa/wall-resolution.md);
 - FDTD validation: [memory-bounded reverse mode](../validation/fdtd/checkpointing.md),
   [a focused Gaussian beam](../validation/fdtd/fd-gaussian-beam.md),
   [a one-way waveguide mode source](../validation/fdtd/fd-mode-source.md),

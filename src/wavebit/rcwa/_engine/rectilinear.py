@@ -17,6 +17,8 @@ from wavebit.materials.response import as_material
 from wavebit.rcwa._engine.factorization import ConvMatrices
 from wavebit.rcwa._engine.factorization import StaleGeometryError
 from wavebit.rcwa._engine.factorization import fourier2d_integrated
+from wavebit.rcwa._engine.factorization import _conv_matrix
+from wavebit.rcwa._engine.factorization import _li_slot
 from wavebit.lattice import is_axis_aligned
 import wavebit.rcwa._engine.parametric as P
 
@@ -137,6 +139,96 @@ def layer_partition(xp, shapes, lattice, dtype, plan=None, device=None):
     return edges, plan.owners
 
 
+def _table_series(xp, table, dtype):
+    """``series(a)`` of a weighted coefficient table (:meth:`stretch.Axis.segment_table`).
+
+    ``a[..., j]`` holds segment ``j``'s value; the result is ``[..., k]`` like
+    :func:`~wavebit.rcwa._engine.factorization._segment_series`, with the stretch's slope as the
+    weight of every segment's integral.
+    """
+    table = xp.matrix_transpose(xp.asarray(table, dtype=dtype))            # [j, k]
+
+    def series(a):
+        return xp.astype(a, dtype) @ table
+
+    return series
+
+
+def wall_positions(layers, lattice, plans=None):
+    """Every rectangle edge of a stack, per axis, in cell coordinates (the corner at 0).
+
+    A rectangle as long as the period along an axis has no wall across it: its two edges are
+    one line of the lattice with the same material on both sides, and they are left out.
+    """
+    walls = ([], [])
+    for index, layer in enumerate(layers):
+        shapes = layer.get('shapes', [])
+        plan = plan_layer(shapes, lattice) if plans is None else plans[index]
+        for a, (axis, nodes) in enumerate(zip(('x', 'y'), (plan.x, plan.y))):
+            period = checked_float(lattice[a][a])
+            spans = {i for i, shape in enumerate(shapes)
+                     if checked_float(shape['l' + axis]) >= period * (1 - 1e-12)}
+            walls[a].extend(checked_float(_coordinate(shapes, axis, n, period, plan.folds))
+                            for n in nodes if n[0] != -1 and n[0] not in spans)
+    return walls
+
+
+def stretched_layer_matrices(xp, shapes, background, hu, hv, lattice, dtype, stretch, plan=None,
+                             nesting=None):
+    """:func:`layer_matrices` in the stretched coordinates: ``eps~ = eps diag(g/f, f/g, f g)``.
+
+    The layer is still constant on the rectangles its edges cut, now of the computational
+    cell, and every slot is that constant times the slope along ``u`` and the slope along
+    ``v`` (``'u'``: ``[[eps g/f]]`` with the inverse rule along ``u`` -- the reciprocal the rule
+    takes turns ``1/f`` into ``f``; ``'v'`` alike; the direct rule holds ``eps f g``). So Li's
+    nested operators are the unstretched ones with each segment's Fourier integral weighted by
+    the slope, which is all :func:`_table_series` changes. A uniform layer is one segment per
+    axis and comes out as the stretched uniform medium.
+    """
+    import numpy as _np
+    edges, owners = layer_partition(xp, shapes, lattice, dtype, plan)
+    materials = [as_array(xp, as_material(s.get('material', 1.)).epsilon, dtype=dtype) for s in shapes]
+    materials.append(as_array(xp, as_material(background).epsilon, dtype=dtype))
+    cell = xp.stack([xp.stack([materials[i] for i in row]) for row in owners])
+    host = [_np.asarray(_to_host(e), dtype=float).reshape(-1) for e in edges]
+    series_u = _table_series(xp, stretch.x.segment_table(host[0], hu), dtype)
+    series_v = _table_series(xp, stretch.y.segment_table(host[1], hv), dtype)
+    ex = _li_slot(xp, cell, hu, hv, series_u, series_v, 'u', nesting)
+    ey = _li_slot(xp, cell, hu, hv, series_u, series_v, 'v', nesting)
+    ez = xp.linalg.inv(_li_slot(xp, cell, hu, hv, series_u, series_v, None, nesting))
+    return ex, ey, ez
+
+
+def _to_host(array):
+    """A backend array of concrete numbers as NumPy (edges are geometry, never traced here)."""
+    for name in ('detach',):
+        if hasattr(array, name):
+            array = getattr(array, name)()
+    if hasattr(array, 'cpu'):
+        array = array.cpu()
+    import numpy as _np
+    return _np.asarray(array)
+
+
+def stretched_mu(xp, hu, hv, dtype, stretch):
+    """The stretched vacuum's permeability slots ``(mux, muy, muz_i)``: ``diag(g/f, f/g, f g)``.
+
+    Smooth in both coordinates, so the direct rule: each slot is the Kronecker product of two
+    one-axis Toeplitz matrices, of the slope or of its reciprocal.
+    """
+    one = xp.ones((1, 1), dtype=dtype)
+
+    def series(axis, half_width, weight):
+        return _table_series(xp, axis.period_table(half_width, weight)[:, None], dtype)
+
+    def slot(weight_u, weight_v):
+        return _conv_matrix(xp, one, hu, hv, series(stretch.x, hu, weight_u),
+                            series(stretch.y, hv, weight_v))
+
+    return (slot('reciprocal', 'slope'), slot('slope', 'reciprocal'),
+            xp.linalg.inv(slot('slope', 'slope')))
+
+
 def layer_matrices(xp, shapes, background, hu, hv, lattice, dtype, plan=None, nesting=None):
     edges, owners = layer_partition(xp, shapes, lattice, dtype, plan)
     materials = [as_array(xp, as_material(s.get('material', 1.)).epsilon, dtype=dtype) for s in shapes]
@@ -148,10 +240,16 @@ def layer_matrices(xp, shapes, background, hu, hv, lattice, dtype, plan=None, ne
     return ex, ey, ez
 
 
-def layer_stack(xp, layers, hu, hv, lattice, dtype, plans=None, nesting=None):
+def layer_stack(xp, layers, hu, hv, lattice, dtype, plans=None, nesting=None, stretch=None):
     validate(layers, lattice)
     if plans is not None and len(plans) != len(layers):
         raise StaleGeometryError('Cartesian Li layer count changed; freeze_geometry() again')
+    if stretch is not None:
+        matrices = [stretched_layer_matrices(
+            xp, layer.get('shapes', []), layer.get('background', 1.), hu, hv, lattice, dtype,
+            stretch, None if plans is None else plans[i], nesting)
+            for i, layer in enumerate(layers)]
+        return ConvMatrices(*(xp.stack([m[i] for m in matrices]) for i in range(3)), None, None)
     matrices = [layer_matrices(xp, layer.get('shapes', []), layer.get('background', 1.),
                                hu, hv, lattice, dtype, None if plans is None else plans[i],
                                nesting)

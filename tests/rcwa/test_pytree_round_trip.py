@@ -42,7 +42,7 @@ P, WL, H = 400.0, 900.0, 150.0
 CARRIED = (
     'backend', 'tetm', 'truncation_order', 'layer_algorithm', 'complex_dtype',
     'fourier_coefficients', 'factorization', 'raster_normal_method', 'nvf_projector', 'li_nesting',
-    'half_space_merge_tolerance', 'exceptional_points', 'incidence_side',
+    'half_space_merge_tolerance', 'exceptional_points', 'wall_resolution', 'incidence_side',
     'answers',
     'shape_nvf_grid_size', 'theta', 'phi', 'psi', 'chi', 'polarization', 'period', 'wavelength',
     'thickness', 'structure', 'mu', 'top', 'bot', 'lattice', 'excitation', 'formulation',
@@ -80,6 +80,7 @@ def _scene(**over):
               theta=0.31, phi=0.47, psi=0.29, chi=np.pi / 9,
               factorization='nvf', raster_normal_method='contour', nvf_projector='circular',
               shape_nvf_grid_size=512, half_space_merge_tolerance=1e-9, exceptional_points='off',
+              wall_resolution=0.05,
               incidence_side='bottom', layer_algorithm='SMM', answers='field',
               complex_dtype=1, fourier_coefficients='integrated',
               excitation={(0, 0): 1.0, (1, 0): 0.5j})

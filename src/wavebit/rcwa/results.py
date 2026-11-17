@@ -237,6 +237,14 @@ class Result:
                     code=f'field.{name}', path=name)
         for name, value in (('x', x), ('y', y)):
             _coordinates(name, value)
+        if any(getattr(state, 'stretch', None) is not None for state in records):
+            raise UnsupportedFeatureError(
+                'Boundary fields are not available under Numerics(wall_resolution=...): the '
+                'half-spaces are solved in the stretched coordinates, where only the propagating '
+                'orders are plane waves, so a face has no per-order spectrum to expand. Sample '
+                "a layer with field() instead; a uniform spacer layer of the half-space's "
+                'medium gives the field above or below the structure.',
+                code='rcwa.unsupported', path='numerics.wall_resolution')
         values = []
         for state, amplitude in zip(records, self._field_amplitudes):
             with _public_sampling():

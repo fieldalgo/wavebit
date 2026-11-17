@@ -1008,6 +1008,11 @@ def warn_experimental(reconstruction):
     """
     if reconstruction not in EXPERIMENTAL_RECONSTRUCTIONS:
         return
+    warn_experimental_feature(_EXPERIMENTAL.format(rule=reconstruction))
+
+
+def warn_experimental_feature(message):
+    """Emit :class:`~wavebit.rcwa.diagnostics.ExperimentalWarning` on the caller's line."""
     import os
     import sys
     import warnings
@@ -1018,8 +1023,7 @@ def warn_experimental(reconstruction):
     dynamo = sys.modules.get('torch._dynamo')
     if dynamo is not None:
         skip.append(os.path.dirname(os.path.abspath(dynamo.__file__)))
-    warnings.warn(_EXPERIMENTAL.format(rule=reconstruction), ExperimentalWarning,
-                  skip_file_prefixes=tuple(skip))
+    warnings.warn(message, ExperimentalWarning, skip_file_prefixes=tuple(skip))
 
 
 def _wall_rule_2d(xp, kx, ky, lattice, sample_x, sample_y, k0, C, Sx, Sy, half):

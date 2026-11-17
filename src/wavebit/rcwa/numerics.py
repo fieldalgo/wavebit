@@ -32,9 +32,11 @@ class Numerics:
     topology_check: str = 'device'
     half_space_merge_tolerance: float = 0.0
     exceptional_points: str = 'rebuild'
+    wall_resolution: float | None = None
     #: Written to a job only off their default (``jobs._encode``), so a job that does not use
     #: them keeps its key.
-    _FIELDS_OMITTED_AT_DEFAULT = ('half_space_merge_tolerance', 'exceptional_points')
+    _FIELDS_OMITTED_AT_DEFAULT = ('half_space_merge_tolerance', 'exceptional_points',
+                                  'wall_resolution')
 
     def __post_init__(self):
         object.__setattr__(self, 'orders', order_pair('Numerics', self.orders,
@@ -61,6 +63,15 @@ class Numerics:
                 raise ValidationError('detuning is None (exact requested problem) or a positive relative step.',
                                       code='numerics.detuning', path='numerics.detuning')
         import math
+        resolution = self.wall_resolution
+        if resolution is not None and (type(resolution) not in (float, int)
+                                       or not math.isfinite(resolution)
+                                       or not 0 < resolution <= 1):
+            raise ValidationError('wall_resolution is None (the cell\'s own coordinates) or the '
+                                  'slope of the solve\'s coordinates at material walls, in '
+                                  '(0, 1]; 0.02 resolves a wall fifty times more finely.',
+                                  code='numerics.wall_resolution',
+                                  path='numerics.wall_resolution')
         tolerance = self.half_space_merge_tolerance
         if type(tolerance) not in (float, int) or not math.isfinite(tolerance) or not 0 <= tolerance < 1:
             raise ValidationError('half_space_merge_tolerance is a relative tolerance in [0, 1); '
@@ -78,4 +89,6 @@ class Numerics:
             out['half_space_merge_tolerance'] = float(self.half_space_merge_tolerance)
         if self.exceptional_points != 'rebuild':
             out['exceptional_points'] = self.exceptional_points
+        if self.wall_resolution is not None:
+            out['wall_resolution'] = float(self.wall_resolution)
         return out
