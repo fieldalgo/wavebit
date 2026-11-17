@@ -169,11 +169,14 @@ def test_profiles_include_slow_only_when_requested(checkout):
 
 def test_collection_changes_and_duplicates_are_not_silently_reused(checkout):
     suite(checkout, 'def test_pass(): pass\n')
+    # The renamed node is built through pytest's public constructor: writing the private
+    # ``_nodeid`` stopped changing ``nodeid`` in pytest 9.2.0, which keeps a structured id.
     (checkout/'conftest.py').write_text(textwrap.dedent('''
         from pathlib import Path
         def pytest_collection_modifyitems(items):
             if Path('artifacts/change').exists():
-                items[0]._nodeid = 'tests/test_tiny.py::new_dynamic_name'
+                item = items[0]
+                items[0] = type(item).from_parent(item.parent, name='new_dynamic_name', callobj=item.obj)
     '''), encoding='utf-8')
     first = checkout/'artifacts/first'
     run(checkout, first)
