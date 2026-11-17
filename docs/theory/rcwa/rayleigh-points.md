@@ -1196,7 +1196,8 @@ eigenvectors, on lanes `p` (level 1) and `q` (level 2). That is `k (k - 1)` cand
 lanes (56 for eight), selected per slot by the check's own reading, as `_cluster_split` selects
 its splits. For a slot of three members the family is exactly the eager splits; a larger slot
 holds the eager ones for one chain beside independent modes, but not for a chain beside a pair
-(whose level 1 holds two lanes), where the check answers NaN. Every chain term after it is
+or for two chains (whose level 1 holds two lanes): those take a wider family (*Two lanes a
+level*, below). Every chain term after it is
 formed for every slot and selected where a mode is both a coupled row and a coupled column, so a
 layer with no chain keeps its bits:
 
@@ -1228,8 +1229,8 @@ with a two-step path (two steps before `E` and none, one or two after it, and th
 are now added (`_frechet_chain_terms`):
 
 - The two-step paths are listed flat. The middles are gathered as the exponential's value
-  gathers them; the paths, which start on a coupled row each, to the closed form's count of
-  coupled rows. The one-step couplings a path meets across `E` are read by column, each
+  gathers them; the paths, which start on a coupled row each, to four times the closed form's
+  count of coupled rows (until 2026-11-17 once that count; *Two lanes a level*, below). The one-step couplings a path meets across `E` are read by column, each
   column's coupled rows gathered to a cluster's lanes, since a coupling stays inside its
   cluster.
 - Each family's divided differences are built over every subset of its points, from the
@@ -1263,6 +1264,58 @@ Against a 40-digit `expm` of the doubled matrix `[[A, E], [0, A]]`, the closed f
 across the three offsets under `jax.vmap`, inside `jax.grad` or outside it, within 6.4e-13,
 both formulations, ETM and SMM; the field's wavelength derivative within 5.7e-13. Before, each
 was NaN.
+
+*Two lanes a level* (2026-11-17). A square pillar at normal incidence holds two Jordan chains
+of length three at one point (a wavelength and a pillar permittivity tuned together): the two
+mirror-symmetry blocks of its two-dimensional irreducible representation each hold one, six
+modes at one eigenvalue. Their slot needs two lanes in levels 1 and 2, and a chain beside a
+pair at its eigenvalue needs two in level 1; the one-lane family cannot split either, and under
+a trace the answer was NaN (eagerly, which enumerates every split, it was exact). Where the
+one-lane family's best still fails the check, a trace now forms a second family
+(`_chain_split_traced_wide`) with the layouts `(2, 1)` and `(2, 2)` lanes in levels 1 and 2,
+and keeps it where the check reads less of it. Enumerating which `r` lanes leave level 0 as
+well would be 588 candidates for eight lanes, all formed for every slot of every traced layer,
+with or without an exceptional point. Instead the
+eigenvectors kept on level 0 are picked by greedy column pivoting (`_pivoted_lanes`; Golub and
+Van Loan, section 5.4.2), the most independent first: at a chain one Jordan block's
+eigenvectors are nearly parallel, so the pivoting keeps one of each block and leaves the rest
+to the upper levels. Only the choice of the quotient's level-1 eigenvectors is enumerated, nine
+candidates in all. On synthetic slots (a chain beside a pair, with and without an independent
+mode, two chains, two chains beside a mode; ten random bases each; eigenvalues split by 0, 1e-9
+and 1e-6) the pivoted choice read within a factor of ten of the full enumeration's best every
+time. A slot that one lane a level represents never takes the wide family, so it keeps its
+bits.
+
+At the two-chain point (wavelength 745.9149148229458 nm, permittivity 4.9546179826310786,
+truncation `(4, 4)`), against Cauchy circles in the wavelength with the rebuilds closed:
+`jax.jit` and `jax.vmap` values within 8.7e-15 at relative offsets 0 and either sign of
+1e-12, 1e-10, 1e-9, 1e-8, 1e-7 and 1e-6, both formulations, ETM and SMM; `torch.func.vmap` within 9.1e-15;
+`jax.jit(jax.jacfwd)`, `jax.jit(jax.grad)`, `jax.jit(jax.vmap(jax.grad))` and torch's backward
+pass through `torch.func.vmap` within 1.2e-12 relative at offsets 0, 1e-9, -1e-7 and 1e-6 (the
+derivative circle's own spread, 0.5 against 0.8 nm, is up to 8.2e-13). Before, each was NaN.
+
+At a second point, two chains beside a seventh mode in one cluster (wavelength
+655.4249838325006 nm, permittivity 3.987475803226465), the values were as exact: within 1.7e-14
+at the same offsets. The traced JAX derivative on 2D was NaN there at offsets 0, 1e-9 and -1e-7:
+the closed-form tangent (`modal_gradient._coupled_frechet`) gathered the two-step paths to its
+count of coupled rows, on the premise that a path starts on one and a row starts one path. With
+two lanes in each upper level a level-0 row reaches both middles and each middle both of its
+successors: the third mode's level-0 lane and the two chain heads start 12 paths on 5 rows,
+past the 2D count of 9 at truncation `(4, 4)` (the first-order count is larger and held them).
+The paths are now gathered to four times the count, since a traced split puts at most two
+lanes in each upper level. Then `jax.jit(jax.jacfwd)`, `jax.jit(jax.grad)`,
+`jax.jit(jax.vmap(jax.grad))` and torch's backward pass through `torch.func.vmap` are within
+1.9e-12 relative at offsets 0, 1e-9, -1e-7 and 1e-6 (the circle's spread there, up to 7.8e-13), both
+formulations, ETM and SMM; before, the 2D JAX derivatives were NaN at the first three.
+
+The traced digests on layers with no chain (the scenes of *Its traced derivative*: `jit`
+values, `jit(grad)`, `torch.func.vmap`, both formulations) are those of the previous version but
+for 7 of the 22 second-order `jit(grad)`, which moved by up to 11 units in the last place
+(1.4e-15 relative). The wide family does not move them: with its layouts emptied the digests are
+the same. The larger path list does: with the paths gathered to the old count they are the
+previous version's again. The closed form itself, compiled on its own, is bit for bit the
+same forward and transposed; what moved is how XLA compiled the program around it, and four
+placements of optimization barriers did not move it back.
 
 *The screens under a trace* (2026-11-10). Nothing can warn under `jit`, `vmap` or
 `torch.func.vmap`, and the unresolved and backward-error screens used to be skipped there, so what
@@ -1341,8 +1394,9 @@ the Gram matrices of their columns, the defect measure on its slots, and on 2D o
   measured).
 - A length-3 Jordan chain is exact and quiet eagerly, derivatives included (*A chain in three
   levels*, above). Under a trace its values, fields and derivatives are exact too (*Under a
-  trace* and *Its traced derivative*, above); a slot holding the chain beside a pair answers
-  NaN. Off the point the gate takes
+  trace* and *Its traced derivative*, above), beside a pair or a second chain too (*Two lanes
+  a level*, above); a traced slot where a chain shares its eigenvalue with two or more other
+  defective blocks (two pairs, say) answers NaN. Off the point the gate takes
   its three modes jointly (*Three modes, one eigenvector*, above).
 - Where `eig`'s start is poorer than the second step can absorb, the check warns; the answer is
   not exact. Two steps leave a remainder of third order in the start's error over the gap to
