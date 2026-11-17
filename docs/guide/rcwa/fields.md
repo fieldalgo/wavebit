@@ -437,15 +437,19 @@ default stays `'plain'`.
   rules answer on (*Metals* below). Both were fitted to the measurements in this section, not
   derived.
 - **What the measurements cover.** One circle on 22 cells and on seventeen pairs of materials;
-  one ellipse and one pair of circles, each as a dielectric and as a metal. One wavelength per
+  one ellipse and one pair of circles, each as a dielectric and as a metal; and four more
+  layers (two circles of different radii, four circles, two more ellipses), each as a
+  dielectric and as a metal, against references that are not stored here. One wavelength per
   cell, normal incidence, the `'nvf'` solve.
 - **What may change.** Their values, the layers they accept and their names, between releases
   and without the deprecation period the rest of the interface gets.
 - **How to use them.** Read the same samples with `'plain'` and at a second truncation. Away
   from the wall the rule and the sum should agree, and a value that still moves between the
-  two truncations has not converged under either. On the cells measured the rules are closer
-  to the reference than the default; the warning is about how far that has been checked, not
-  a sign that a number is wrong.
+  two truncations has not converged under either. How far the difference between two
+  truncations goes as an estimate of the error is measured under *Estimating the error
+  without a reference* below. On the cells measured the rules are closer to the reference
+  than the default; the warning is about how far that has been checked, not a sign that a
+  number is wrong.
 
 A script that has taken this in can silence the one category:
 
@@ -536,8 +540,44 @@ function is traced, not each time the compiled function runs.
     order, and the two metal circles at order 12 are the worst of the six rows for the sum and
     the rules alike. See *Metals: which side of the wall* below before reading a value beside a
     metal.
-  - Not measured on these shapes: a dielectric hole in a metal, circles of different radii, more
-    than two circles, an ellipse of another aspect, oblique incidence.
+- **Circles of different radii, four circles, other ellipses.** Four more layers in the same cell,
+  at the same wavelength and with the same solve, each against a finite-element field of its own
+  that is not stored here (one mesh level each; no test reads them). Plane error at orders
+  8 / 12 / 16, as a dielectric (`eps` 12.25 in air):
+
+  | Layer (nm) | `'plain'` | `'split'` | `'splitw'` |
+  | --- | --- | --- | --- |
+  | two circles, radius 70 and 50 | 13.5 / 11.3 / 9.6% | 3.2 / 2.5 / 2.3% | 3.2 / 2.3 / 1.7% |
+  | four circles, radius 60, 40, 30 and 30 | 15.6 / 12.5 / 11.2% | 5.7 / 4.1 / 3.7% | 6.9 / 4.0 / 3.6% |
+  | one ellipse, semi-axes 150 and 50 | 15.6 / 12.5 / 10.7% | 12.7 / 6.8 / 4.9% | 8.7 / 4.1 / 2.5% |
+  | one ellipse, semi-axes 110 and 90 | 13.9 / 11.3 / 9.8% | 3.2 / 2.1 / 1.5% | 2.3 / 1.7 / 1.4% |
+
+  - One circle of each layer is at the cell's centre; the others are at its corner and at the
+    middle of two of its sides, straddle the cell's edge and are read with their images.
+  - Both rules were closer than the sum on all four at every order, over the plane and within
+    10 nm of a wall.
+  - The four circles at order 8: `'splitw'` was behind `'split'`, 6.9% against 5.7%. The window's
+    reach is the smallest inradius, 30 nm here, narrower than order 8 resolves; this is what a
+    circle that nearly fills the cell showed above. Inside the circles the error falls least on
+    this layer and hardly moves with the order (7.1 to 8.9% for `'split'`).
+  - The 3:1 ellipse: more than 0.1 period from the wall `'split'` was further from the reference
+    than the sum at all three orders (9.7 / 5.4 / 3.9% against 4.5 / 2.9 / 2.2%), though closer
+    over the plane; `'splitw'` was further there at order 8 only. On a slender shape the rule
+    without a window blurs the field far from the wall.
+  - The same four as a metal (`eps` -20+1.5j), over the samples inside the metal, where the
+    rules answer: the sum was 24 to 73% of the plane's RMS field off, `'split'` 7 to 30% (2.3 to
+    5.1 times closer) and `'splitw'` 8 to 32% (2.1 to 4.4 times). `'splitw'` was not the closer of
+    the two inside a metal: further than `'split'` by 1 to 26% in eleven of the twelve cases and
+    level in the twelfth.
+    Each plane holds one to four samples within 0.1 nm of a wall, whose side a faceted reference
+    does not settle; without the samples within 0.5 nm of a wall these figures move by at most
+    four points.
+  - **The metal 3:1 ellipse is not converged by the solve itself.** Its `R` is 17%, 12% and 3.3%
+    below the reference's at the three orders and the sum's plane error is 58%, 39% and 23%. The
+    rules still bring the inside of the metal 2.3 to 2.7 times closer, to 30%, 26% and 14%. On the
+    other three metal layers `R` is within 2.3% from order 12 on.
+  - Not measured on these shapes: a dielectric hole in a metal, more than four circles, circles
+    that nearly touch, oblique incidence.
 - **Choosing between the two.** `'splitw'`, unless the circle nearly fills the cell. It was the
   closer of the two on 13 of the 16 cells at order 12. The other three have a radius of 0.40, 0.41
   and 0.47 of the period, where the window is narrower than the orders resolve: 2.3%, 2.9% and
@@ -606,12 +646,31 @@ function is traced, not each time the compiled function runs.
     less, in either direction.
   - So beside a metal on the air side, where a plasmonic field peaks, no rule here is better
     than the default, whose error within 0.1 period of the wall is 26 to 53% of the plane's RMS
-    field at order 12 on the six metal circles. Compare two orders before reading a value there.
+    field at order 12 on the six metal circles. Compare two orders before reading a value there
+    (*Estimating the error without a reference* below).
   - The finite-element fields of the seventeen pairs, and of the three on other shapes, are one
     mesh level each. Three of them repeat cells that have a finer reference and are 0.2 to 0.6%
     of the plane's RMS field from it, so an entry within a few hundredths of 1 is not a ranking.
     They are not stored in this repository, and no test reads them. One radius, one wavelength,
     normal incidence, one loss per permittivity.
+- **Estimating the error without a reference.** Read the field at two truncations and take the
+  RMS of the difference over the samples, divided by the RMS of the field.
+  - On eighteen cells (one circle of radius 100 nm in the 400 nm cell: the dielectric, the
+    fifteen pairs of the table above and the two pairs of metals), that figure between orders
+    `N` and `N - 4` was 0.5 to 2 times the true error of the field at order `N`, taken against
+    the finite-element field, in 34 of 36 cases for `'plain'` (order 12 against 8, and 16 against
+    12) and in 33 of 36 for `'splitw'`. The ratio ran from 0.59 to 2.24 and from 0.64 to 2.50.
+  - Every case outside that range overestimated: metal cells whose order 12 was unusually far
+    and whose error more than halved by order 16. The lowest ratios, near 0.6, are the dielectric,
+    the weakest metal (-2+0.5j) and the two pairs of metals with `'plain'`, where the error is
+    the sum's ringing and falls slowly with the order.
+  - The difference between the two readings, `'splitw'` minus `'plain'`, is not such an
+    estimate. It equals the default's error on the dielectric and between two metals (0.99 to
+    1.02 times), and it is 0.27 to 0.74 times that error where the permittivity changes sign,
+    because outside a metal both readings are off by the same amount.
+  - This is a figure over the plane and says nothing about one point at a wall. One radius, one
+    wavelength, normal incidence, the `'nvf'` solve, a step of four orders, one mesh level of
+    the references, which are not stored here.
 - **Where they are not better, or not known.**
   - Right at the wall. On the second cell at order 16, `E_n` 0.3 nm either side of the wall is
     still 18 to 59% off the reference with `'splitw'`. The plane error is a mean; do not read a
@@ -621,7 +680,7 @@ function is traced, not each time the compiled function runs.
   - Spatial derivatives. The curl of the rule's `E` does not match the solve's `H_z` even 3 to
     20 nm from the wall, where the default's does, being one series with `H`. For a curl, a
     gradient of `|E|^2` or an optical force, read `'plain'`.
-  - Not measured: other shapes, several shapes in a layer, oblique incidence, and `H`. Oblique
+  - Not measured: shapes and arrangements beyond those above, oblique incidence, and `H`. Oblique
     incidence, both formulations, a wave given as a source and a stack of several layers run the
     same operators and are tested for consistency, not against a reference.
   - Other factorizations. Every number here is on an `'nvf'` solve. The rules also answer a
