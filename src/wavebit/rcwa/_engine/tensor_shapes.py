@@ -108,12 +108,13 @@ def _isotropic(layer):
     return isotropic_layer(layer) if layer.get('shapes') else None
 
 
-def _scalar_plan(solver, view):
+def _scalar_plan(solver, view, index):
     """The scalar shape freeze's two records for one isotropic layer (``_freeze_geometry``)."""
     cell = solver._geometry_lattice_for(None)
     basis = solver._geometry_lattice_for(None, freezing=True)
     shapes = view['shapes']
-    boundary_plan = boundary.plan_layer(shapes,cell) if P.layer_needs_resolving(view,cell) else None
+    with boundary.naming_the_layer(index):
+        boundary_plan = boundary.plan_layer(shapes,cell) if P.layer_needs_resolving(view,cell) else None
     gamma = P.plan_gamma(shapes,basis)
     if gamma is None:
         raise ValueError('freeze_geometry() with concrete shape geometry before tracing')
@@ -130,7 +131,8 @@ def _check_scalar_plan(solver, view, plan, index):
         P.check_no_plan_still_fits(view,lattice,index)
         P.check_gamma_plan_still_fits(view,lattice,gamma,index)
     else:
-        boundary.check_plan_still_fits(view['shapes'],lattice,boundary_plan)
+        with boundary.naming_the_layer(index):
+            boundary.check_plan_still_fits(view['shapes'],lattice,boundary_plan)
 
 
 def _scalar_slots(solver, layer, plan, quantity):
@@ -150,7 +152,7 @@ def _scalar_slots(solver, layer, plan, quantity):
 
 
 def freeze(solver):
-    plans = tuple(_scalar_plan(solver,_isotropic(layer)) if _isotropic(layer) is not None
+    plans = tuple(_scalar_plan(solver,_isotropic(layer),i) if _isotropic(layer) is not None
                   else _plan(_shifted(layer)[0],solver.lattice,i)
                   for i,layer in enumerate(solver.structure))
     return StaticGeometry(tensor_geometry={'mode':'integrated', 'plans':plans,
@@ -567,7 +569,7 @@ def build(solver, geometry=None, quantity='epsilon'):
     (_,hu),(_,hv) = solver.order_window
     count = (2*hu+1)*(2*hv+1)
     output = []
-    for layer, shift, plan in checked_layers(solver, geometry):
+    for index, (layer, shift, plan) in enumerate(checked_layers(solver, geometry)):
         if not layer.get('shapes', []):
             m = as_material(layer.get('background',1.))
             raw = m.epsilon if quantity=='epsilon' else m.mu_value
@@ -575,7 +577,10 @@ def build(solver, geometry=None, quantity='epsilon'):
             full = tensor_shape(raw)==(3,3) and full_tensor(xp,e)
             output.append(_uniform_slots(xp,e,count,full));continue
         if plan[0] == 'scalar':
-            output.append(_scalar_slots(solver,layer,plan,quantity));continue
+            # Unfrozen, the scalar builder plans the painting itself and sees one layer.
+            with boundary.naming_the_layer(index):
+                output.append(_scalar_slots(solver,layer,plan,quantity))
+            continue
         A,B,zz = _layer(solver,layer,plan,quantity)
         ky = xp.arange(-2*hv,2*hv+1,dtype=solver.float_dtype,device=dev)[:,None]
         kx = xp.arange(-2*hu,2*hu+1,dtype=solver.float_dtype,device=dev)[None,:]
