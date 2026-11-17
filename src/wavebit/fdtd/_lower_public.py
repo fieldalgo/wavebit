@@ -17,7 +17,7 @@ from . import _monitors as monitors
 from ._problem import Problem
 from ._numerics import Numerics, UniformGrid, Duration, PML, ConductiveAbsorber, DecayStop
 from ._kernel.grid import cell_count
-from ._public_names import remember_given
+from ._public_names import remember_continued, remember_given
 
 
 def _number(value, path):
@@ -497,6 +497,9 @@ def lower_problem(problem, numerics, *, plan=None):
                         'a finite body touches an Open face; its continuation into padding is '
                         'unspecified' + _touching_remedy(touched),
                         code='fdtd.padding_continuation', path='scene.structures.'+item.name)
+        if item.continuation:
+            # The faces the caller declared it runs through, for the proximity note.
+            remember_continued(shape, item.continuation)
         structures.append(old_geometry.Structure(shape, material,
                           discretisation=rule if type(shape) is old_geometry.Sphere else 'voxel'))
     if numerics.memory_bound is not None:

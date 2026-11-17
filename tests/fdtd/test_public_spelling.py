@@ -290,6 +290,27 @@ def test_a_continued_substrate_is_not_warned_about_the_face_it_runs_through():
     assert not any(' is -' in note for note in notes), notes
 
 
+def test_a_continued_core_is_not_warned_about_the_faces_it_runs_through():
+    """A cell-snapped core declared to continue has no gap to keep from that face's layer.
+
+    The layer stays matched to the background, so the proximity note said "-0.6 from the inner
+    face of the absorber on 'z+'" and asked for half a wavelength of clearance the caller cannot
+    give. The same core stopping short of the face, with nothing declared, is still warned.
+    """
+    def notes(problem):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            assert fdtd.check(problem, numerics=LAYER).ok
+        return [str(w.message) for w in caught
+                if type(w.message).__name__ == 'AbsorberProximityWarning']
+
+    core = fdtd.SnappedBox(size=(.2, .2, .5), center=(0., 0., .25))
+    assert notes(near_the_open_face(core, continuation=('z+',))) == []
+    short = fdtd.SnappedBox(size=(.2, .2, .35), center=(0., 0., .175))
+    (note,) = notes(near_the_open_face(short))
+    assert note.startswith("structures[0] is 0.15 from the inner face of the absorber on 'z+'")
+
+
 def test_a_body_touching_an_open_face_is_told_which_bodies_may_continue():
     """The refusal of a finite body on an Open face names the face and the ways out.
 

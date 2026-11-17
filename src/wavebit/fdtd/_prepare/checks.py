@@ -2936,6 +2936,7 @@ def _proximity_notes(scene, plan):
     from wavebit.fdtd._prepare.oscillator_stack import descriptor as oscillator_stack_descriptor
     from wavebit.fdtd._prepare.oscillator_stack import index_at as oscillator_stack_index_at
     resonant_stack = oscillator_stack_descriptor(scene, plan.grid)
+    from wavebit.fdtd._public_names import declared_continuation
     out, grid, pml = [], plan.grid, dict(plan.pml_cells)
     for index, structure in enumerate(getattr(scene, 'structures', ()) or ()):
         if resonant_stack is not None:
@@ -2978,6 +2979,12 @@ def _proximity_notes(scene, plan):
                 # through a face its Structure names. The note's premise -- a layer matched to
                 # something other than this structure -- is false there, and its gap would be
                 # negative. A narrower body still warns: the layer beside it is not its medium.
+                continue
+            if name in declared_continuation(structure.shape):
+                # A public Structure declared it runs on through this face -- a cell-snapped
+                # waveguide core, say, whose layer stays matched to the background. It has no
+                # gap to keep and cannot move off the face; the reflection that costs is
+                # measured in docs/validation/fdtd/fd-waveguide-through-pml.md.
                 continue
             lo = grid.low[fa] + k0 * grid.dx
             hi = grid.low[fa] + k1 * grid.dx
