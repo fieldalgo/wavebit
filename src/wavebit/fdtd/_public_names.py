@@ -66,6 +66,29 @@ def remember_given(extended, given):
     weakref.finalize(extended, _GIVEN.pop, key, None)
 
 
+#: ``id`` of an engine shape the public lowering continued -> the faces its Structure named.
+_CONTINUED = {}
+
+
+def remember_continued(shape, faces):
+    """Record that a public ``Structure`` declared ``shape`` to run on through ``faces``.
+
+    The declaration is the caller's, and the lowering checked it (``_lower_public``): a
+    substrate ``Box``, a cell-snapped core or a ``SnappedSlab`` running through those faces'
+    absorbing layers. A note that measures the gap between the body and such a face's layer
+    reads :func:`declared_continuation`. Keyed and dropped as :func:`remember_given` is.
+    """
+    import weakref
+    key = id(shape)
+    _CONTINUED[key] = tuple(faces)
+    weakref.finalize(shape, _CONTINUED.pop, key, None)
+
+
+def declared_continuation(shape):
+    """The faces a public ``Structure`` declared ``shape`` runs through, or ``()``."""
+    return _CONTINUED.get(id(shape), ())
+
+
 def public_description(shape):
     """``shape.describe()`` with the public class name, for a message a public caller reads.
 

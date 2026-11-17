@@ -570,7 +570,7 @@ emits them as Python warnings from `wavebit.fdtd.diagnostics`.
 | --- | --- |
 | `CoarseMeshWarning` | 8 to 12 cells per wavelength in a medium, or a smoothed body 4 to 8 cells across |
 | `SubpixelAccuracyWarning` | the scene has a smoothed body; the default rule's accuracy gate is incomplete |
-| `AbsorberProximityWarning` | a structure lies within half a wavelength (in its own medium) of an absorbing face, whose PML is matched to the medium that reaches the face rather than to the structure's near field. A `SnappedSlab` that continues into the absorber, or a `Box` whose `Structure` declares `continuation` through that face (a substrate), does not warn there: its PML is matched to it. |
+| `AbsorberProximityWarning` | a structure lies within half a wavelength (in its own medium) of an absorbing face, whose PML is matched to the medium that reaches the face rather than to the structure's near field. A `SnappedSlab` that continues into the absorber, or a `Box` whose `Structure` declares `continuation` through that face (a substrate), does not warn there: its PML is matched to it. Nor does a `SnappedBox` core declared to continue through the face: its layer stays matched to the background, and the reflection that costs is measured in [the waveguide-through-PML record](../../validation/fdtd/fd-waveguide-through-pml.md). |
 | `GeometryClippedWarning` | a structure reaches past a `PEC` or `PMC` wall and loses that part |
 | `UnsettledFieldWarning` | a monitored region still held field at the end; its spectrum includes the truncation — run longer |
 | `GrowingFieldWarning` | the field still grows after every source ended; a longer run makes it worse. Usually a bound mode next to a PML: set `PML(stabilizing_loss=...)` to the value the message quotes |
