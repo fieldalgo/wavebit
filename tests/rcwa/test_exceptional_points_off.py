@@ -200,7 +200,6 @@ def test_jit_keeps_the_setting_and_skips_the_gates(gate_calls):
     del gate_calls[:]
     traced = np.asarray(jax.jit(amplitudes)(jnp.asarray(C4V_EP[0])))
     assert not gate_calls
-    # The default answers NaN here under a trace (two chains overflow one lane); off does not.
     assert np.all(np.isfinite(traced))
     eager, _ = _solve(_c4v_solver(*C4V_EP), 'off')
     assert np.max(np.abs(traced - eager)) < 1e-6

@@ -147,8 +147,8 @@ _PAIR_SEPARATION = 1e-4
 _REFUSED_PAIR = (
     'a first-order layer holds three or more same-direction modes in a defective eigenvalue '
     'cluster that neither a regular pair rebuild nor the joint rebuild of a cluster of up to '
-    'eight modes spans (a larger cluster, a chain of nearby roots, or a Jordan chain of length '
-    'three): the eigenvector basis was kept for them, and the answer can be inaccurate. Move '
+    'eight modes spans (a larger cluster, a chain of nearby roots, or a Jordan chain longer '
+    'than three): the eigenvector basis was kept for them, and the answer can be inaccurate. Move '
     'the wavelength or angle by more than a relative 1e-4 to check it.')
 
 def _pair_gate(xp, lam, psi, forward, *, slots=1, exclude=None):

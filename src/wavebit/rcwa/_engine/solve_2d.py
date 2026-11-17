@@ -423,7 +423,7 @@ def _unresolved_cluster_traced(xp, w, W, operator, sine, group=None, slots=1):
 _UNRESOLVED_2D = (
     'a 2D layer holds three or more modes of one defective eigenvalue cluster (exceptional '
     'points that coincide) that no rebuild takes exactly -- more than eight modes, a chain of '
-    'nearly equal eigenvalues, or a Jordan chain of length three: the eigenvector basis was '
+    'nearly equal eigenvalues, or a Jordan chain longer than three: the eigenvector basis was '
     'kept, and the answer can be inaccurate. Move the angle or wavelength by more than a '
     'relative 1e-4 to check it.')
 
@@ -1242,7 +1242,8 @@ def _chain_split_traced(xp, T, valid, pad):
     ``q`` (level 2): ``k (k - 1)`` candidates for ``k`` lanes (56 for eight). For a slot of three
     members they are exactly the eager splits (``3**3 - 3 * 2**3 + 3 = 6``); a larger slot also
     holds the eager ones for one chain of length three beside independent modes, but not for a
-    chain beside a pair, whose level 1 holds two lanes -- there the check answers NaN.
+    chain beside a pair or for two chains, whose level 1 holds two lanes: those
+    :func:`_chain_split_traced_wide` forms.
 
     ``eig``'s padded eigenvectors are put last (:func:`_dead_last`) and replaced by the
     identity's columns before anything is formed, so a padded lane is level 0 with the identity's
@@ -1316,6 +1317,148 @@ def _chain_split_traced(xp, T, valid, pad):
     cb = xp.take(xp.reshape(cond, (-1,)), pick)
     cb = xp.where(has, cb, xp.full_like(cb, float('inf')))
     level = xp.take(xp.asarray(lvl, device=dev), pick_c, axis=0)
+    level = xp.where(has[:, None], level, xp.zeros_like(level))
+    return Xb, level, cb
+
+
+#: The level layouts :func:`_chain_split_traced_wide` adds to :func:`_chain_split_traced`'s one
+#: lane in each upper level: ``(n1, n2)`` lanes in levels 1 and 2. ``(2, 1)`` is a Jordan chain of
+#: length three beside a pair (the pair's second mode shares level 1 with the chain's middle
+#: one); ``(2, 2)`` is two chains of length three, which a square pillar's two-dimensional
+#: irreducible representation holds at one point (the x- and y-mirror blocks each hold one).
+_WIDE_LEVELS = ((2, 1), (2, 2))
+
+
+def _pivoted_lanes(xp, E, valid, keep):
+    """The ``keep`` lanes of each slot's columns ``E`` chosen by greedy column pivoting: each
+    step takes the column with the largest part outside the span of those taken (modified
+    Gram-Schmidt with column pivoting; Golub and Van Loan, section 5.4.2). A padded lane is taken
+    before any member. Returns a boolean ``(S, k)`` mask; nothing in it is differentiated.
+    """
+    S, k, _ = E.shape
+    dev = getattr(E, 'device', None)
+    lane = xp.arange(k, device=dev)
+    rdt = xp.real(E).dtype
+    bonus = xp.astype(~valid, rdt) * 2.0
+    taken = xp.zeros((S, k), dtype=xp.bool, device=dev)
+    V = E
+    for _ in range(keep):
+        nrm = xp.linalg.vector_norm(V, axis=-2)
+        score = xp.where(taken, xp.full_like(nrm, -1.0), nrm + bonus)
+        hot = lane[None, :] == xp.argmax(score, axis=1)[:, None]
+        taken = taken | hot
+        u = xp.sum(xp.where(hot[:, None, :], V, xp.zeros_like(V)), axis=-1)
+        un = xp.linalg.vector_norm(u, axis=-1)
+        u = u / xp.where(un > 0, un, xp.ones_like(un))[:, None]
+        V = V - u[:, :, None] * (xp.conj(u)[:, None, :] @ V)
+    return taken
+
+
+def _chain_split_traced_wide(xp, T, valid, pad):
+    """:func:`_chain_split` under an abstract trace for the layouts of :data:`_WIDE_LEVELS`.
+
+    The construction of :func:`_chain_split_traced` with more lanes in the upper levels:
+    ``E_0`` the ``k - r`` of ``eig(T)``'s unit eigenvectors that greedy column pivoting picks as
+    the most independent (:func:`_pivoted_lanes`), ``r = n1 + n2``; ``C_0`` the
+    ``r``-dimensional orthonormal complement of their span, ``Y_1`` ``n1`` of the unit
+    eigenvectors of the quotient ``T_1 = C_0^H T C_0``, ``C_1`` the orthonormal complement of
+    their span in it and ``Y_2`` the unit eigenvectors of ``C_1^H T_1 C_1`` (Golub and Van Loan,
+    sections 7.1.4 and 7.6, applied twice, as :func:`_chain_split` does). ``X`` holds ``E_0`` on
+    the picked lanes and ``C_0 Y_1``, then ``C_0 C_1 Y_2``, on the others in lane order (levels
+    1 and 2). At a chain the eigenvectors of one Jordan block are nearly parallel, so the
+    pivoting keeps one of each block and leaves the rest to the upper levels -- the choice the
+    eager enumeration's best makes, at one candidate a choice of ``Y_1`` instead of one for every
+    ``r`` lanes (``C(r, n1)`` a layout: 9 in all, where enumerating the lanes too would be 588
+    for eight lanes, all formed for every slot under a trace). A slot needs ``r + 1`` members
+    for a layout; its padded lanes are picked first and stay level 0 with the identity's row and
+    column, as in :func:`_chain_split_traced`.
+
+    The caller tries these only where :func:`_chain_split_traced`'s best still fails the check,
+    so a slot that one lane a level represents keeps its bits. Returns ``(X, level, cond)``; a
+    slot with no admissible candidate keeps ``X = I`` and ``cond = inf``.
+    """
+    import itertools
+
+    S, k, _ = T.shape
+    C = T.dtype
+    dev = getattr(T, 'device', None)
+    lane = xp.arange(k, device=dev)
+    eye = xp.astype(lane[:, None] == lane[None, :], C)
+    ndead = k - xp.sum(xp.astype(valid, xp.int32), axis=1)
+    vv = valid[:, :, None] & valid[:, None, :]
+    mu = pad * xp.ones(S, dtype=C, device=dev)
+    lam, E = _eig_raw(T)
+    E = E / xp.linalg.vector_norm(E, axis=-2)[..., None, :]
+    lam, E = _dead_last(xp, lam, E, mu, ndead)
+    E = xp.where(vv, E, xp.broadcast_to(eye, E.shape))
+
+    def unit(V):
+        return V / xp.linalg.vector_norm(V, axis=-2)[..., None, :]
+
+    before = lane[None, :] < lane[:, None]                                       # [p, q]: q < p
+    Xs, lvls, oks = [], [], []
+    for n1, n2 in _WIDE_LEVELS:
+        r = n1 + n2
+        if r + 1 > k:
+            continue
+        kept = _pivoted_lanes(xp, E, valid, k - r)                               # (S, k)
+        # dest[p]: the column lane p takes in [E_0 | level 1 | level 2], each part in lane order.
+        ahead_k = xp.sum(xp.astype(before[None] & kept[:, None, :], xp.int32), axis=-1)
+        ahead_r = xp.sum(xp.astype(before[None] & ~kept[:, None, :], xp.int32), axis=-1)
+        dest = xp.where(kept, ahead_k, (k - r) + ahead_r)
+        P = xp.astype(dest[:, :, None] == lane[None, None, :], C)               # P[p, l]: l is p's
+        E0 = (E @ P)[..., :k - r]
+        Qc, _ = xp.linalg.qr(E0, mode='complete')
+        C0 = Qc[..., k - r:]                                                     # (S, k, r)
+        T1 = _conj_t(xp, C0) @ T @ C0
+        Y = unit(_eig_raw(T1)[1])                                                # (S, r, r)
+        lvl = xp.where(kept, xp.zeros_like(dest),
+                       xp.where(ahead_r < n1, xp.ones_like(dest), 2 * xp.ones_like(dest)))
+        ok = ndead <= k - r - 1
+        for J1 in itertools.combinations(range(r), n1):
+            Y1 = xp.take(Y, xp.asarray(list(J1), device=dev), axis=-1)          # (S, r, n1)
+            Q1, _ = xp.linalg.qr(Y1, mode='complete')
+            C1 = Q1[..., n1:]                                                    # (S, r, n2)
+            if n2 == 1:
+                L2 = C1
+            else:
+                L2 = C1 @ unit(_eig_raw(_conj_t(xp, C1) @ T1 @ C1)[1])
+            X = xp.concat([E0, C0 @ Y1, C0 @ L2], axis=-1) @ _conj_t(xp, P)
+            X = X / xp.linalg.vector_norm(X, axis=-2)[..., None, :]
+            Xs.append(xp.where(vv, X, xp.broadcast_to(eye, X.shape)))
+            lvls.append(lvl)
+            oks.append(ok)
+    if not Xs:
+        inf = xp.full((S,), float('inf'), dtype=xp.real(T).dtype, device=dev)
+        return xp.broadcast_to(eye, (S, k, k)), xp.zeros((S, k), dtype=xp.int32, device=dev), inf
+    X = xp.stack(Xs, axis=1)                                                     # (S, nc, k, k)
+    lvl = xp.stack(lvls, axis=1)                                                 # (S, nc, k)
+    ok = xp.stack(oks, axis=1)                                                   # (S, nc)
+    nc = len(Xs)
+    sv = xp.linalg.svdvals(X)
+    nonsingular = sv[..., -1] > 0
+    cond = xp.where(nonsingular, sv[..., 0] / xp.where(nonsingular, sv[..., -1],
+                                                       xp.ones_like(sv[..., -1])),
+                    xp.full_like(sv[..., 0], float('inf')))
+    # As in _chain_split_traced: an inadmissible or singular candidate reads the identity and is
+    # never selected.
+    ok = ok & nonsingular
+    X = xp.where(ok[..., None, None], X, xp.broadcast_to(eye, X.shape))
+    Mx = linear_solve(xp, X, T[:, None] @ X)
+    up = lvl[..., :, None] < lvl[..., None, :]
+    off = ~up & ~(lane[:, None] == lane[None, :])                                # (S, nc, k, k)
+    dropped = xp.linalg.matrix_norm(xp.where(vv[:, None] & off, Mx, xp.zeros_like(Mx)))
+    ok = ok & xp.isfinite(cond) & xp.isfinite(dropped)
+    miss = xp.where(ok, xp.where(ok, cond, xp.zeros_like(cond)) * dropped,
+                    xp.full_like(cond, float('inf')))
+    pick_c = xp.argmin(miss, axis=1)
+    has = xp.any(ok, axis=1)
+    pick = xp.arange(S, device=dev) * nc + pick_c
+    Xb = xp.take(xp.reshape(X, (S * nc, k, k)), pick, axis=0)
+    Xb = xp.where(has[:, None, None], Xb, xp.broadcast_to(eye, Xb.shape))
+    cb = xp.take(xp.reshape(cond, (-1,)), pick)
+    cb = xp.where(has, cb, xp.full_like(cb, float('inf')))
+    level = xp.take(xp.reshape(lvl, (S * nc, k)), pick, axis=0)
     level = xp.where(has[:, None], level, xp.zeros_like(level))
     return Xb, level, cb
 
@@ -1621,6 +1764,22 @@ def _joint_cluster_bases(xp, A, W0, Q0, Mc, Gc, members, cvalid, lam, is_a, m01_
             JK = xp.where(take[:, None, None], CK, JK)
             cond = xp.where(take, cond3, cond)
             dropped = xp.where(take, dropped3, dropped)
+            if fails is None:
+                # Under a trace, where one lane a level still fails: two lanes in level 1 (a
+                # chain beside a pair) or in both upper levels (two chains), the layouts the
+                # eager split finds among all of its candidates (_chain_split_traced_wide).
+                X4, lvl4, cond4 = _chain_split_traced_wide(xp, T, cvalid, F)
+                Mx4 = linear_solve(xp, X4, T @ X4)
+                CK4 = vv & (lvl4[:, :, None] < lvl4[:, None, :])
+                dropped4 = xp.linalg.matrix_norm(xp.where(vv & ~(CK4 | (eyek != 0)), Mx4,
+                                                          xp.zeros_like(Mx4)))
+                take = ((split_miss(cond, dropped) > 1)
+                        & (split_miss(cond4, dropped4) < split_miss(cond, dropped)))
+                X = xp.where(take[:, None, None], X4, X)
+                Mx = xp.where(take[:, None, None], Mx4, Mx)
+                JK = xp.where(take[:, None, None], CK4, JK)
+                cond = xp.where(take, cond4, cond)
+                dropped = xp.where(take, dropped4, dropped)
             dg = xp.linalg.diagonal(Mx)
         finite = xp.isfinite(cond)
         miss = xp.maximum(res1 / tau_res, xp.where(finite, cond, xp.zeros_like(cond)) * dropped / tau)

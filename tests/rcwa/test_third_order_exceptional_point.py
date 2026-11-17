@@ -40,7 +40,10 @@ of candidates (``solve_2d._chain_split_traced``), every chain term formed and se
 exponential's two-step paths gathered to static sizes. Traced values and fields are within
 3.8e-14 (``jax.jit``, ``jax.vmap``, ``torch.func.vmap``), and torch's backward pass through
 ``torch.func.vmap`` within 6.8e-13. With the exponential's closed-form tangent taking the
-chain's two-step paths, traced JAX derivatives are within 5.9e-13, fields' too.
+chain's two-step paths, traced JAX derivatives are within 5.9e-13, fields' too. Since
+2026-11-17 a trace also takes two lanes in a level, where a chain shares its eigenvalue with a
+pair or with a second chain (``solve_2d._chain_split_traced_wide``): a square pillar at normal
+incidence holds two chains at one point, and its traced answers there, NaN before, are exact.
 
 What this file pins:
 
@@ -56,6 +59,8 @@ What this file pins:
    exponential's tangent;
 6. under a trace, values, fields and their derivatives exact at the point (``jax.jit``,
    ``jax.vmap``, ``torch.func.vmap``).
+7. two chains at one point: the wide traced split on its own, and the traced values and
+   derivatives there.
 """
 
 import functools
@@ -440,6 +445,77 @@ def test_the_traced_chain_split_takes_a_chain_beside_independent_modes(kind):
     assert np.array_equal(np.asarray(X[0])[5:, 5:], np.eye(3))
     assert np.isinf(float(cond[1])) and np.array_equal(np.asarray(X[1]), np.eye(8))
     assert not lv[1].any()
+
+
+def _jordan_blocks(sizes, seed=7, lanes=8, extra=()):
+    """Jordan blocks of ``sizes`` at one eigenvalue 0.3 (couplings 0.05, 0.04, ...) in a random
+    unitary basis, with ``extra`` independent eigenvalues beside them, padded to ``lanes`` lanes
+    at the stand-in 40: ``(T, valid)`` for one slot."""
+    rng = np.random.default_rng(seed)
+    m = sum(sizes) + len(extra)
+    U, _ = np.linalg.qr(rng.normal(size=(m, m)) + 1j * rng.normal(size=(m, m)))
+    J = np.diag(np.array([0.3] * sum(sizes) + list(extra), complex))
+    at = 0
+    for n in sizes:
+        for i in range(n - 1):
+            J[at + i, at + i + 1] = 0.05 - 0.01 * i
+        at += n
+    T = np.zeros((1, lanes, lanes), complex)
+    T[0, :m, :m] = U @ J @ U.conj().T
+    T[0, m:, m:] = 40.0 * np.eye(lanes - m)
+    return T, np.arange(lanes)[None, :] < m
+
+
+#: Slots one lane a level cannot split: Jordan block sizes at one eigenvalue, and the extra
+#: independent eigenvalues beside them.
+WIDE_SLOTS = {
+    'a chain beside a pair': ((3, 2), ()),
+    'a chain beside a pair and a mode': ((3, 2), (1.6,)),
+    'two chains': ((3, 3), ()),
+    'two chains beside a mode': ((3, 3), (1.6,)),
+}
+
+
+@pytest.mark.parametrize('name', list(WIDE_SLOTS))
+@pytest.mark.parametrize('jit', [False, True], ids=['as it is', 'under jax.jit'])
+def test_the_wide_traced_split_takes_two_lanes_a_level(name, jit):
+    """A length-3 chain beside a Jordan pair at its eigenvalue, or two such chains (a square
+    pillar's two mirror blocks at one point), padded to eight lanes. One lane in each upper level
+    (``_chain_split_traced``) reads ``cond(X)`` times the coupling ``X^-1 T X`` keeps against the
+    levels at 1e-6 of the slot's scale or more, far past what the check passes; the wide family
+    (``_chain_split_traced_wide``), two lanes in level 1, reads rounding (the check passes 3e-12),
+    as the eager split does, and leaves the padded lanes alone. Catches a level layout missing
+    from the family, a level placed off its lane, or a padded lane taken as a member."""
+    sizes, extra = WIDE_SLOTS[name]
+    T, valid = _jordan_blocks(sizes, extra=extra)
+    m = int(valid.sum())
+    scale = np.max(np.abs(T[0, :m, :m]))
+
+    def miss(X, lv, cond):
+        Mx = np.linalg.solve(X[0], T[0] @ X[0])
+        up = (lv[:, None] < lv[None, :]) | np.eye(8, dtype=bool)
+        return float(cond[0]) * np.linalg.norm(np.where(up, 0, Mx)) / scale
+
+    X, lv, cond = solve_2d._chain_split_traced(np, T, valid, 40.0)
+    assert miss(X, np.asarray(lv)[0], cond) > 1e-6
+    X, lv, cond = solve_2d._chain_split(np, T, valid, 40.0)
+    assert miss(X, np.asarray(lv)[0], cond) < 1e-13
+    if jit:
+        jax = pytest.importorskip('jax')
+        import jax.numpy as jnp
+        from wavebit._common.backend import _enable_x64
+        _enable_x64()
+        X, lv, cond = (np.asarray(x) for x in jax.jit(
+            lambda t, v: solve_2d._chain_split_traced_wide(jnp, t, v, 40.0))(
+                jnp.asarray(T), jnp.asarray(valid)))
+    else:
+        X, lv, cond = solve_2d._chain_split_traced_wide(np, T, valid, 40.0)
+    lv = np.asarray(lv)[0]
+    assert np.sum(lv == 1) == 2 and np.sum(lv == 2) in (1, 2) and not lv[m:].any()
+    assert float(cond[0]) < 10.0
+    assert miss(X, lv, cond) < 1e-13
+    assert np.array_equal(np.asarray(X[0])[m:, m:], np.eye(8 - m))
+    assert np.all(np.asarray(X[0])[m:, :m] == 0) and np.all(np.asarray(X[0])[:m, m:] == 0)
 
 
 def _taylor_expm(A, terms=40):
@@ -843,6 +919,38 @@ def test_the_traced_frechet_takes_a_chain(split, scale):
     assert np.max(np.abs(lanes[1] - one)) < 1e-14 * np.max(np.abs(one))
 
 
+@pytest.mark.parametrize('split', [0.0, 1e-8, 1e-3])
+@pytest.mark.parametrize('scale', [-1.5, -0.4 + 2.0j])
+def test_the_traced_frechet_takes_two_lanes_a_level(split, scale):
+    """``modal_gradient._coupled_frechet`` under ``jax.jit`` for the layout of two chains beside
+    a third mode (``solve_2d._chain_split_traced_wide``): lanes 0 .. 2 on level 0, 3 and 4 on
+    level 1, 5 and 6 on level 2, each coupled to every lane of a higher level, and a plain lane.
+    Its five coupled rows start 12 two-step paths (each level-0 row through both middles to both
+    successors), more than its rows: against the doubled matrix's ``expm`` (as
+    :func:`test_the_traced_frechet_takes_a_chain`) within 1e-13 of its largest entry with a
+    count of five coupled rows. Catches the paths gathered to the count of rows, which answered
+    NaN here (the 2D derivative at a square pillar's two-chain point beside a seventh mode)."""
+    scipy_linalg = pytest.importorskip('scipy.linalg')
+    jax = pytest.importorskip('jax')
+    from wavebit.rcwa._engine import modal_gradient
+    from wavebit._common.backend import _enable_x64
+    _enable_x64()
+    rng = np.random.default_rng(13)
+    level = [0, 0, 0, 1, 1, 2, 2]
+    q = np.diag(np.array([0.6 + 0.1j + split * rng.normal() for _ in level] + [1.9 + 0.3j]))
+    for i, li in enumerate(level):
+        for j, lj in enumerate(level):
+            if li < lj:
+                q[i, j] = (rng.normal() + 1j * rng.normal()) * 0.1
+    E = rng.normal(size=(8, 8)) + 1j * rng.normal(size=(8, 8))
+    U, _ = np.linalg.qr(rng.normal(size=(16, 16)) + 1j * rng.normal(size=(16, 16)))
+    B = np.block([[scale * q, scale * E], [np.zeros_like(q), scale * q]])
+    ref = (U @ scipy_linalg.expm(U.conj().T @ B @ U) @ U.conj().T)[:8, 8:]
+    got = np.asarray(jax.jit(lambda q, s, E: modal_gradient._coupled_frechet(q, s, E, 5, 2))(
+        q, scale + 0j, scale * E))
+    assert np.max(np.abs(got - ref)) < 1e-13 * np.max(np.abs(ref))
+
+
 @pytest.mark.parametrize('scale', [-12.0, -0.4 + 2.0j])
 def test_the_traced_frechet_keeps_single_precision(scale):
     """``modal_gradient._coupled_frechet`` under ``jax.jit`` with a chain capacity, at a
@@ -1093,3 +1201,88 @@ def test_traced_derivatives_at_a_third_order_point_match_cauchy_oracles(name, re
         g = float(jax.jit(jax.grad(lambda w: jnp.sum(jnp.abs(
             A(jnp.stack([jnp.asarray(0.3), w]))) ** 2)))(jnp.asarray(wl)))
         assert abs(g - g_ref) < 1e-11 * abs(g_ref), ('grad', algo, g, g_ref)
+
+
+# ------------------------------------------------ 7. two chains at one point, under a trace
+
+#: A square pillar at normal incidence (``test_exceptional_point_clusters._c4v_solver``,
+#: truncation ``(4, 4)``) where the two mirror-symmetry blocks of its two-dimensional irreducible
+#: representation each hold a Jordan chain of length three: six modes at one eigenvalue,
+#: ``(wavelength, pillar permittivity)`` found by Newton on the centred power sums of each block's
+#: three nearest eigenvalues. At the second a seventh mode shares the cluster.
+C4V_CHAINS = {
+    'six modes': (745.9149148229458, 4.9546179826310786),
+    'beside a seventh': (655.4249838325006, 3.987475803226465),
+}
+_C4V_RELS = (0.0, 1e-9, -1e-7)
+
+
+@functools.lru_cache(maxsize=None)
+def _c4v_oracle(point, first_order, rel):
+    """``(a, da/dwl)`` at the two-chain point: NumPy values on circles in the wavelength with the
+    rebuild gates closed, as :func:`_derivative_oracle` reads them -- a 1e-2 nm circle of 16
+    points for the values, 0.5 nm of 32 for the derivative."""
+    from wavebit.rcwa._engine import solve_2d_first_order as fo
+    from tests.rcwa.test_exceptional_point_clusters import _c4v_solver
+    wl0, eps = C4V_CHAINS[point]
+
+    def amps(w):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            r = _c4v_solver(w, eps, first_order=first_order).solve(auto_detune=False)
+        return np.concatenate([_np(r.r_xyz).ravel(), _np(r.t_xyz).ravel()])
+    wl = wl0 * (1 + rel)
+    with pytest.MonkeyPatch.context() as m:
+        m.setattr(solve_2d, '_EP_SINE', 0.0)
+        m.setattr(fo, '_PARALLEL_SIN', 0.0)
+        return (_circle(amps, wl, 1e-2, 16), _circle(amps, wl, 0.5, 32, derivative=True))
+
+
+@pytest.mark.parametrize('point', ['six modes', pytest.param('beside a seventh',
+                                                              marks=pytest.mark.slow)])
+@pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
+def test_traced_answers_at_two_coincident_chains_are_exact(point, first_order):
+    """At and beside :data:`C4V_CHAINS`, ETM and SMM: ``jax.jit`` and ``jax.vmap`` of one
+    wavelength and ``torch.func.vmap`` within 1e-12 of the Cauchy oracle, and ``jax.jit`` of
+    ``jax.grad`` of ``sum |a|**2`` within 1e-11 relative of its derivative circle. The slot holds
+    the six modes of two chains, whose level 1 holds two lanes, so one lane a level
+    (``solve_2d._chain_split_traced``) cannot split it and the trace takes the wide family
+    (``solve_2d._chain_split_traced_wide``). Before, every traced answer here was NaN; eagerly,
+    which enumerates every split, the answers were already exact. Catches the wide family not
+    tried, or its level layout lost on the way to the chain terms; beside a seventh mode, the
+    derivative's two-step paths gathered to its count of coupled rows (2D ``jax.grad`` NaN)."""
+    jax = pytest.importorskip('jax')
+    torch = pytest.importorskip('torch')
+    import jax.numpy as jnp
+    from wavebit._common.backend import _enable_x64
+    from tests.rcwa.test_exceptional_point_clusters import _c4v_solver
+    _enable_x64()
+    wl0, eps = C4V_CHAINS[point]
+    lanes = [wl0 * (1 + r) for r in _C4V_RELS]
+    for algo in ('ETM', 'SMM'):
+        s = _c4v_solver(wl0, eps, algo=algo, backend='jax', first_order=first_order)
+        st = _c4v_solver(wl0, eps, algo=algo, backend='torch', first_order=first_order)
+
+        def one(w):
+            r = s.solve(wavelength=w, auto_detune=False)
+            return jnp.concatenate([r.r_xyz.ravel(), r.t_xyz.ravel()])
+
+        def tone(w):
+            r = st.solve(wavelength=w, auto_detune=False)
+            return torch.cat([r.r_xyz.ravel(), r.t_xyz.ravel()])
+        jitted = jax.jit(one)
+        got = {'jit': [np.asarray(jitted(jnp.asarray(w))) for w in lanes],
+               'jax.vmap': np.asarray(jax.vmap(one)(jnp.asarray(lanes))),
+               'torch.func.vmap': torch.func.vmap(tone)(
+                   torch.tensor(lanes, dtype=torch.float64)).numpy()}
+        for how, rows in got.items():
+            for row, rel in zip(rows, _C4V_RELS):
+                assert np.all(np.isfinite(row)), (algo, how, rel)
+                err = np.max(np.abs(row - _c4v_oracle(point, first_order, rel)[0]))
+                assert err < 1e-12, (algo, how, rel, err)
+        grad = jax.jit(jax.grad(lambda w: jnp.sum(jnp.abs(one(w)) ** 2)))
+        for w, rel in zip(lanes, _C4V_RELS):
+            a0, da = _c4v_oracle(point, first_order, rel)
+            g_ref = 2 * np.real(np.sum(np.conj(a0) * da))
+            g = float(grad(jnp.asarray(w)))
+            assert abs(g - g_ref) < 1e-11 * abs(g_ref), ('grad', algo, rel, g, g_ref)
