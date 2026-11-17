@@ -1061,7 +1061,7 @@ class _StretchedPorts:
         size = propagating.shape[0]
         # The computed modes the exact waves are made of: the heaviest `count` of them, taken
         # together, so orders that share a kz are replaced as the subspace they span.
-        weights = xp.abs(xp.linalg.solve(modes_W, waves_W)) ** 2
+        weights = xp.abs(linear_solve(xp, modes_W, waves_W)) ** 2
         heavy = np.asarray(_host(xp.sum(weights[:, np.flatnonzero(propagating)], axis=1)),
                            dtype=float)
         ranked = np.argsort(-heavy, kind='stable')
