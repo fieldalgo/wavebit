@@ -1394,6 +1394,53 @@ few nm away there, and the oracles use radii whose results converge. Tests:
 family at truncation (5, 2), each a single regular pair per direction; they say nothing about
 coincident, multi-pair, NVF, anisotropic or grazing EPs.
 
+**Ties in the gates' choices (audited 2026-11-17).** The gates and the joint rebuild choose by
+`argmin` or `argsort` in nine places in `solve_2d.py`:
+- each mode's nearest eigenvalue (`_defective_pairs`);
+- a ball's members, nearest first (`_closed_balls`, and `_traced_balls` under a trace);
+- the split of a cluster with the smallest condition number, or condition times dropped part
+  (`_cluster_split`, `_chain_split_traced`);
+- the order in which the traced screens and gates take their candidates
+  (`_unresolved_cluster_traced`, `_crowded_pairs_traced`, `_defective_pairs`,
+  `_defective_clusters`).
+
+At coincident exceptional points and in uniform layers, eigenvalues are degenerate to rounding,
+so ties are frequent. The audit ran on NumPy over 14 scenes on both formulations:
+- DC612 at theta offsets 0 to 1e-4;
+- PA616 and PL952 at their Littrow coincidence;
+- the uniform near-degenerate layer above and its normal-incidence twin;
+- three uniform spacers of the conical suite.
+
+In these scenes the two smallest keys came within 1e-9 relative in 467 rows of the
+nearest-eigenvalue choice, 1291 of the ball order and 5 of the split, the split's down to
+1.8e-16.
+
+Unlike the normal fields' nearest-interface ties
+([normal-field-known-limits.md](../../validation/rcwa/normal-field-known-limits.md), §8f), none
+of these ties changes an answer. There, a tie decides which structure is solved. Here, each
+choice is between representations of one layer operator:
+- a permutation of a ball's members, whose rebuild and screens do not depend on their order;
+- a mutual-nearest pair, which the separation test refuses whenever a third eigenvalue ties;
+- one of two equally conditioned bases.
+
+Breaking every such tie the other way, taking the last tied candidate instead of the first,
+moved no answer by more than 9.6e-16. It raised no warning and returned no NaN. The same held
+eagerly and on the traced branches run on NumPy, where the ball order, the chain split and the
+four candidate orders also flipped: at most 5.6e-16. NumPy, PyTorch, eager JAX and `jax.jit`
+agreed to 7.2e-14 on every scene, and to 1.5e-14 on the first-order formulation (the three
+DC612 scenes run there). So no tie rule
+was added, and no test pins the property: the scenes' exactness and their cross-backend and
+`jit` agreement are already pinned in `tests/rcwa/test_exceptional_point_clusters.py`. A tie
+that changed an answer would most likely surface there first.
+
+Not covered:
+- flipped ties on the first-order formulation's traced branches, which were exercised only
+  through `jax.jit`;
+- scenes beyond these.
+
+A new choice here that decides an outcome rather than a representation, such as a refusal,
+needs its own test.
+
 **Limits and unchanged behavior.**
 
 - Eagerly a layer with no gated pair and no cluster keeps the product construction's
