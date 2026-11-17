@@ -67,7 +67,7 @@ Apache-2.0이고, 파생 원본 코드의 MIT 고지는
 | `jax`, `jaxlib`, `optax`, `absl-py`, `ml-dtypes` | `jax` | Apache-2.0 | |
 | `opt-einsum` | `jax` | MIT | |
 | `tqdm` | `jax`, `pytorch` | MPL-2.0 AND MIT | 진행 표시줄 전용. pip이 따로 설치하며 수정·번들하지 않음 |
-| `torch` | `pytorch` | Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT | CI는 CPU 휠 |
+| `torch` | `pytorch` | Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND ISC AND MIT AND Zlib | CI는 CPU 휠. 2.15.0에서 ISC(libuv 안)와 Zlib(asmjit)이 표현에 더해짐 |
 | `sympy`, `mpmath`, `networkx`, `fsspec` | torch | BSD-3-Clause | |
 | `filelock` | torch | MIT | |
 | `jinja2`, `markupsafe` | torch, sphinx | BSD-3-Clause | |
@@ -76,10 +76,11 @@ Apache-2.0이고, 파생 원본 코드의 MIT 고지는
 | `contourpy` | `contour`, matplotlib | BSD-3-Clause | |
 | `matplotlib` | `plot` | LicenseRef-Matplotlib | PSF 기반 허용형 라이선스 |
 | `cycler`, `kiwisolver` | matplotlib | BSD-3-Clause | |
-| `fonttools`, `pyparsing`, `six` | matplotlib | MIT | |
+| `fonttools`, `pyparsing` | matplotlib | MIT | |
+| `six` | 4.0 이전의 python-dateutil | MIT | CI는 더 설치하지 않음: python-dateutil 4.0.0이 의존성에서 뺌 |
 | `pillow` | matplotlib | MIT-CMU | |
 | `packaging` | matplotlib 외 | Apache-2.0 OR BSD-2-Clause | |
-| `python-dateutil` | matplotlib | Apache-2.0 AND BSD-3-Clause | |
+| `python-dateutil` | matplotlib | BSD-3-Clause | 4.0.0은 BSD-3-Clause로 선언하며, 라이선스 파일은 이를 모든 코드에 적용함. 2017-12-01 이후 기여는 Apache-2.0도 적용 |
 | `tzdata` | CI에 설치되는 시간대 데이터 | Apache-2.0 | 공식 2026.5 wheel의 metadata·license 파일 확인. 동봉 공유 라이브러리·새 Wavebit 의존성 없음. |
 | `sphinx`, `sphinxcontrib-mermaid`, `sphinxcontrib-applehelp`, `sphinxcontrib-devhelp`, `sphinxcontrib-htmlhelp`, `sphinxcontrib-jsmath`, `sphinxcontrib-qthelp`, `sphinxcontrib-serializinghtml` | `docs` | BSD-2-Clause | |
 | `pydata-sphinx-theme`, `accessible-pygments`, `babel`, `snowballstemmer`, `alabaster`, `click` | `docs` | BSD-3-Clause | |
@@ -121,13 +122,14 @@ GPL 라이브러리를 담을 수 있는데, 위 정책은 그런 것을 Wavebit
 | `pillow` | 이미지·글꼴·압축 라이브러리 18개, 모두 허용형. FreeType은 FTL로 사용 | 같은 것을 `.dylib`로 | 없음(확장 모듈에 링크됨) |
 | `jaxlib` | jaxlib 자체 컴파일 모듈(Apache-2.0) | 확인 안 함 | jaxlib 자체 `jax_common.dll`(Apache-2.0) |
 | `ml-dtypes` | 없음 | 확인 안 함 | numpy와 같은 msvcp140 |
-| `torch` | torch 자체 라이브러리와 GNU libgomp(GPL-3.0-or-later WITH GCC-exception-3.1) | 확인 안 함 | torch 자체 DLL, libuv(MIT), Intel OpenMP 런타임(Intel 독점 라이선스, 검토함) |
+| `torch` | torch 자체 라이브러리, GNU libgomp, 그리고 2.15.0부터 GNU libgfortran(둘 다 GPL-3.0-or-later WITH GCC-exception-3.1. 휠 안에서 libgfortran에 링크하는 것은 없음) | 확인 안 함 | torch 자체 DLL, libuv(MIT), Intel OpenMP 런타임(Intel 독점 라이선스, 검토함) |
 
 확인하는 곳: Linux의 full backends CI 환경(위 모든 배포 패키지), 그리고 Linux·macOS·
 Windows의 `distribution` CI 작업. 이 작업은 빌드한 휠에서 `wavebit[plot]`(numpy, scipy,
 matplotlib, pillow와 그 의존성)을 설치합니다. macOS나 Windows에 `jax`·`torch`를 설치하는
 CI 작업은 없습니다. Windows 기록은 한 기계에서 손으로 검토했습니다(jaxlib 0.11.0,
-ml-dtypes 0.6.0, torch 2.14.1+cpu). macOS 파일은 확인하지 않았으므로 그곳에서 검사를
+ml-dtypes 0.6.0, torch 2.14.1+cpu. torch 2.15.0+cpu는 Windows 휠의 파일 목록과 메타데이터를
+설치하지 않고 읽었고 같은 DLL들입니다). macOS 파일은 확인하지 않았으므로 그곳에서 검사를
 돌리면 누군가 검토해 기록할 때까지 실패하며, Windows에서도 라이브러리를 새로 더한 이후
 휠은 마찬가지입니다. 라이브러리나 확장
 모듈에 정적으로 링크된 코드는 이 방법으로 보이지 않으며, 목록의 `bundled` 메모가 알려진

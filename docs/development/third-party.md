@@ -74,7 +74,7 @@ Version floors are in `pyproject.toml`; the table names what CI installs, and `.
 | `jax`, `jaxlib`, `optax`, `absl-py`, `ml-dtypes` | `jax` | Apache-2.0 | |
 | `opt-einsum` | `jax` | MIT | |
 | `tqdm` | `jax`, `pytorch` | MPL-2.0 AND MIT | Progress bars only. Installed separately by pip, unmodified, never bundled |
-| `torch` | `pytorch` | Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT | CPU wheel in CI |
+| `torch` | `pytorch` | Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND ISC AND MIT AND Zlib | CPU wheel in CI. ISC (in libuv) and Zlib (asmjit) joined the expression in 2.15.0 |
 | `sympy`, `mpmath`, `networkx`, `fsspec` | torch | BSD-3-Clause | |
 | `filelock` | torch | MIT | |
 | `jinja2`, `markupsafe` | torch, sphinx | BSD-3-Clause | |
@@ -83,10 +83,11 @@ Version floors are in `pyproject.toml`; the table names what CI installs, and `.
 | `contourpy` | `contour`, matplotlib | BSD-3-Clause | |
 | `matplotlib` | `plot` | LicenseRef-Matplotlib | PSF-based permissive license agreement |
 | `cycler`, `kiwisolver` | matplotlib | BSD-3-Clause | |
-| `fonttools`, `pyparsing`, `six` | matplotlib | MIT | |
+| `fonttools`, `pyparsing` | matplotlib | MIT | |
+| `six` | python-dateutil before 4.0 | MIT | No longer installed by CI: python-dateutil 4.0.0 dropped it |
 | `pillow` | matplotlib | MIT-CMU | |
 | `packaging` | matplotlib, others | Apache-2.0 OR BSD-2-Clause | |
-| `python-dateutil` | matplotlib | Apache-2.0 AND BSD-3-Clause | |
+| `python-dateutil` | matplotlib | BSD-3-Clause | 4.0.0 declares BSD-3-Clause, which its license file applies to all code; contributions after 2017-12-01 are under Apache-2.0 as well |
 | `tzdata` | installed CI time-zone data | Apache-2.0 | Reviewed official 2026.5 wheel metadata and license files; no bundled shared libraries or new Wavebit requirement. |
 | `sphinx`, `sphinxcontrib-mermaid`, `sphinxcontrib-applehelp`, `sphinxcontrib-devhelp`, `sphinxcontrib-htmlhelp`, `sphinxcontrib-jsmath`, `sphinxcontrib-qthelp`, `sphinxcontrib-serializinghtml` | `docs` | BSD-2-Clause | |
 | `pydata-sphinx-theme`, `accessible-pygments`, `babel`, `snowballstemmer`, `alabaster`, `click` | `docs` | BSD-3-Clause | |
@@ -131,14 +132,15 @@ they never reach a user's installation.
 | `pillow` | 18 image, font and compression libraries, all permissive; FreeType used under FTL | the same as `.dylib` | none (linked into the extension modules) |
 | `jaxlib` | jaxlib's own compiled modules (Apache-2.0) | not checked | jaxlib's own `jax_common.dll` (Apache-2.0) |
 | `ml-dtypes` | none | not checked | msvcp140, as numpy |
-| `torch` | torch's own libraries, and GNU libgomp (GPL-3.0-or-later WITH GCC-exception-3.1) | not checked | torch's own DLLs, libuv (MIT), and Intel's OpenMP runtime (proprietary Intel license, reviewed) |
+| `torch` | torch's own libraries, GNU libgomp and, from 2.15.0, GNU libgfortran (both GPL-3.0-or-later WITH GCC-exception-3.1; nothing in the wheel links to libgfortran) | not checked | torch's own DLLs, libuv (MIT), and Intel's OpenMP runtime (proprietary Intel license, reviewed) |
 
 Where they are checked: the full backends CI environment on Linux (every
 distribution above), and the `distribution` CI job on Linux, macOS and Windows,
 which installs `wavebit[plot]` from the built wheel (numpy, scipy, matplotlib,
 pillow and their dependencies). No CI job installs `jax` or `torch` on macOS or
 Windows. Their Windows records were reviewed by hand on one machine (jaxlib 0.11.0,
-ml-dtypes 0.6.0, torch 2.14.1+cpu); their macOS files have not been checked, and
+ml-dtypes 0.6.0, torch 2.14.1+cpu; for torch 2.15.0+cpu the Windows wheel's file list and
+metadata were read without installing it, and list the same DLLs); their macOS files have not been checked, and
 running the check there fails until someone reviews and records them, as it does on
 Windows for a later wheel that adds a library. Code linked statically into a library or extension
 module is not visible this way; the inventory's `bundled` notes describe what

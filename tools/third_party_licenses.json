@@ -1049,8 +1049,9 @@
       "url": "https://github.com/pytest-dev/pytest-xdist"
     },
     "python-dateutil": {
-      "spdx": "Apache-2.0 AND BSD-3-Clause",
-      "url": "https://github.com/dateutil/dateutil/blob/master/LICENSE"
+      "spdx": "BSD-3-Clause",
+      "url": "https://github.com/dateutil/dateutil/blob/master/LICENSE",
+      "review": "Reviewed the python-dateutil 4.0.0 official PyPI wheel (SHA256 a5e246f79eb80475e691bf93862cead98decd8a498cf53ba0516fcdc0f50dc1c): its metadata declares License-Expression BSD-3-Clause, where 3.0.0 declared 'Dual License' with both classifiers. Its licenses/LICENSE is unchanged in substance: contributions after 2017-12-01 and re-licensed ones are also under Apache-2.0, and 'the above BSD License applies to all code, even that also covered by Apache 2.0'. So the whole is available under BSD-3-Clause, part of it under Apache-2.0 as well; both are permissive. 4.0.0 no longer requires six. Pure Python, no bundled shared libraries."
     },
     "pyyaml": {
       "spdx": "MIT",
@@ -1230,9 +1231,9 @@
       "url": "https://github.com/sympy/sympy"
     },
     "torch": {
-      "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT",
+      "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND ISC AND MIT AND Zlib",
       "url": "https://pytorch.org",
-      "bundled": "Linux CPU wheel: torch's own libraries in torch/lib/ (libtorch*, libc10, libshm and two test libraries) statically contain the third-party code whose licenses the wheel's dist-info/licenses/third_party/ reproduces, plus GNU libgomp (GCC's OpenMP runtime) as a separate shared library. Checked on Linux, torch 2.14.1+cpu. Windows CPU wheel: torch's own c10.dll, shm.dll and torch*.dll in torch/lib/, plus two separate third-party runtimes: libuv (uv.dll) and Intel's OpenMP runtime (libiomp5md.dll and its stub library libiompstubs5md.dll), Intel's own build rather than the LLVM OpenMP whose license the wheel reproduces. Checked on Windows, torch 2.14.1+cpu.",
+      "bundled": "Linux CPU wheel: torch's own libraries in torch/lib/ (libtorch*, libc10, libshm, and the test and example libraries libaoti_custom_ops, libbackend_with_compiler and libjitbackend_test) statically contain the third-party code whose licenses the wheel's dist-info/licenses/third_party/ reproduces, plus two GCC runtimes as separate shared libraries: GNU libgomp (GCC's OpenMP runtime) and, from 2.15.0, GNU libgfortran (libgfortran.so.5). No library or extension module in the wheel names libgfortran as a dependency, and it in turn needs libquadmath.so.0, which the wheel does not carry. Checked on Linux, torch 2.15.0+cpu. The license expression gained ISC and Zlib in 2.15.0: the wheel's license files carry ISC terms in third_party/tensorpipe/third_party/libuv/LICENSE-extra and the Zlib license in third_party/fbgemm/external/asmjit/LICENSE.md. Windows CPU wheel: torch's own c10.dll, shm.dll and torch*.dll in torch/lib/, plus two separate third-party runtimes: libuv (uv.dll) and Intel's OpenMP runtime (libiomp5md.dll and its stub library libiompstubs5md.dll), Intel's own build rather than the LLVM OpenMP whose license the wheel reproduces. Checked on Windows, torch 2.14.1+cpu; for 2.15.0+cpu the cp312 win_amd64 wheel's file list and metadata were read without installing it (SHA256 5af9fb357790db09e62484b12032304f046c22c4b1895ca88c4cf5987ea369ca): the same nine DLLs and the same license expression as the Linux wheel.",
       "bundled_files": [
         {
           "glob": "torch/lib/libgomp*.so*",
@@ -1244,8 +1245,17 @@
           "review": "GNU libgomp (its symbol versions include GOACC/OACC, which only GCC's runtime provides), under the GCC Runtime Library Exception 3.1; loaded by torch's own libraries, not by Wavebit package code. Not redistributed."
         },
         {
+          "glob": "torch/lib/libgfortran*.so*",
+          "spdx": "GPL-3.0-or-later WITH GCC-exception-3.1",
+          "linkage": "dynamic",
+          "platforms": [
+            "linux"
+          ],
+          "review": "GNU libgfortran (soname libgfortran.so.5; its symbol versions are GFORTRAN_8, GFORTRAN_C99_8 and GFORTRAN_F2C_8), under the GCC Runtime Library Exception 3.1. New in the 2.15.0+cpu wheel (file SHA256 ff9d1f7776e59d49ccf46a606ecbca9caadaeae247d3b8496952f38e4c18e771). No library or extension module of the wheel lists it as a dependency; it lists libquadmath.so.0 (LGPL-2.1-or-later), which the wheel does not carry. Not loaded by Wavebit package code. Not redistributed."
+        },
+        {
           "glob": "torch/lib/lib*.so",
-          "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT",
+          "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND ISC AND MIT AND Zlib",
           "linkage": "dynamic",
           "platforms": [
             "linux"
@@ -1259,7 +1269,7 @@
           "platforms": [
             "windows"
           ],
-          "review": "Intel's OpenMP runtime (libiomp5md.dll) and its stub library (libiompstubs5md.dll): their version resources and strings name Intel Corporation and 'Intel(R) OMP version 5.0.20260213', built with Intel's oneAPI compiler, so this is Intel's own build, not the LLVM OpenMP whose license the wheel reproduces. The wheel carries no license text for it; Intel distributes this runtime as the intel-openmp package under the Intel End User License Agreement for Developer Tools (its PyPI metadata: 'Other/Proprietary License'). Loaded by torch's own libraries, not by Wavebit package code. Wavebit does not modify, relink or redistribute it."
+          "review": "Intel's OpenMP runtime (libiomp5md.dll) and its stub library (libiompstubs5md.dll): their version resources and strings name Intel Corporation and 'Intel(R) OMP version 5.0.20260213' (2.14.1+cpu; 5.0.20260828 in the 2.15.0+cpu wheel), built with Intel's oneAPI compiler, so this is Intel's own build, not the LLVM OpenMP whose license the wheel reproduces. The wheel carries no license text for it; Intel distributes this runtime as the intel-openmp package under the Intel End User License Agreement for Developer Tools (its PyPI metadata: 'Other/Proprietary License'). Loaded by torch's own libraries, not by Wavebit package code. Wavebit does not modify, relink or redistribute it."
         },
         {
           "glob": "torch/lib/uv.dll",
@@ -1272,7 +1282,7 @@
         },
         {
           "glob": "torch/lib/torch*.dll",
-          "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT",
+          "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND ISC AND MIT AND Zlib",
           "linkage": "dynamic",
           "platforms": [
             "windows"
@@ -1281,7 +1291,7 @@
         },
         {
           "glob": "torch/lib/c10.dll",
-          "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT",
+          "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND ISC AND MIT AND Zlib",
           "linkage": "dynamic",
           "platforms": [
             "windows"
@@ -1290,7 +1300,7 @@
         },
         {
           "glob": "torch/lib/shm.dll",
-          "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND MIT",
+          "spdx": "Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND ISC AND MIT AND Zlib",
           "linkage": "dynamic",
           "platforms": [
             "windows"
