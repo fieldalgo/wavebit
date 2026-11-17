@@ -1,6 +1,6 @@
 # 설치
 
-현재 버전은 alpha인 **0.0.4**이며 PyPI에서 설치할 수 있습니다.
+현재 버전은 alpha인 **0.0.5**이며 PyPI에서 설치할 수 있습니다.
 
 ```shell
 pip install wavebit
