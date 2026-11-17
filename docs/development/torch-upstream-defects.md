@@ -9,7 +9,7 @@ Targets:
 - `src/wavebit/_common/backend.py::eager_under_torch_compile` — the doors that keep wavebit out of a compiled graph
 - `src/wavebit/rcwa/_engine/factorization.py::_svd` — the NVF floor's SVD, retried with `?gesvd` (defect 6)
 - `pyproject.toml` — the torch floor (`torch>=2.14`), which decides which of these defects a user can meet
-- `tests/common/test_linear_solve_derivatives.py` — `test_pytorchs_own_rule_is_still_wrong`, the canary for defect 2
+- `tests/common/test_linear_solve_derivatives.py` — `test_pytorchs_own_rule_is_still_wrong`, the canary for defects 2 and 4: it asserts which routes are wrong natively on each side of the 2.15 fix
 - `tests/api/test_torch_compile.py` — `test_canary_inductor_compiles_the_eye_write_in_order`, the canary for defect 1
 
 ---
@@ -94,6 +94,16 @@ Through wavebit on 2.13.0:
 The full list is in [`docs/migration/autodiff-v1.md`](../migration/autodiff-v1.md#forward-mode). A related reverse-over-forward
 route (`torch.func.jvp`, then `backward()` to a parameter captured with `requires_grad`) has the
 same before-and-after: wrong on 2.13.0 and 2.14.1, right on 2.15.0 and the nightly.
+
+On the released 2.15.0+cpu wheel (measured 2026-11-17, Linux x86-64, on the closed form of
+`tests/common/test_linear_solve_derivatives.py`): of the 35 routes `linear_solve` rewrites,
+`torch.linalg.solve` itself is now exact on 25, to 4e-15. These are every route with a forward
+level inside another, `vmap(jacfwd)`, `vmap(hessian)`, and a `forward_ad` dual made inside a grad
+level; three of the 25 were exact before. It is still wrong on ten, 0.34 to 94 relative off:
+`forward_ad` over a backward pass without `create_graph` (defect 4), and the routes under
+`torch.no_grad()`, `set_grad_enabled(False)` or `inference_mode` whose backward reuses the
+factors, `vmap(jacrev)` among them. `linear_solve` is exact on all 35 on 2.14.1 and on 2.15.0, and
+keeps every route while the floor is 2.14.
 
 ## 3. CPU `lu_solve` with a re-strided batch axis — #200599
 
