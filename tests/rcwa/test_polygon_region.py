@@ -523,6 +523,42 @@ def test_a_painting_the_planner_cannot_resolve_is_refused_with_a_code(length, sc
         assert isinstance(caught.value.__cause__, DegenerateClipError)
 
 
+def test_an_isotropic_layer_of_a_tensor_stack_names_its_layer_in_the_refusal(monkeypatch):
+    """A tensor material anywhere sends the stack through the tensor builder, whose isotropic
+    layers are planned by the scalar rule at three places of their own: the freeze, the replay
+    check of a frozen record, and the unfrozen build. Each sees one layer, so each has to name it.
+    The planner is made to fail here: a stack of rectangles, circles and ellipses reaches the
+    refusal only when written about 1e14 periods from the cell.
+    """
+    from wavebit._common.geometry import clipper
+
+    def fails(vertices):
+        raise clipper.DegenerateClipError('region 1 cannot be painted over region 0')
+
+    tensor = Material(np.diag([2.1, 2.5, 3.]).astype(complex))
+    overlapping = (region(rcwa.Rectangle(size=(.4, .4)), 4.),
+                   region(rcwa.Rectangle(size=(.4, .4), center=(.2, .1)), 9.))
+    p = rcwa.Problem(units=Units(length='um'),
+                     stack=rcwa.Stack(period=(1., 1.),
+                                      layers=(rcwa.Layer(thickness=.2, background=tensor),
+                                              rcwa.Layer(thickness=.3, regions=overlapping))),
+                     excitation=rcwa.Excitation(wavelength=1.3,
+                                                sources=(rcwa.PlaneWave(polarization='s'),)))
+    numerics = rcwa.Numerics(orders=(1, 1))
+    prepared = rcwa.prepare(p, numerics=numerics)
+    monkeypatch.setattr(clipper, 'resolve_painting', fails)
+    for door in (rcwa.prepare, rcwa.run):
+        with pytest.raises(UnsupportedFeatureError) as caught:
+            door(p, numerics=numerics)
+        assert caught.value.code == 'rcwa.unsupported'
+        assert 'Layer 1: region 1 cannot be painted over region 0' in caught.value.message
+    # The replay check of the frozen record re-plans: its refusal names the layer too.
+    with pytest.raises(IncompatibleProblemError) as caught:
+        prepared.run(p)
+    assert caught.value.code == 'prepared.topology'
+    assert 'Layer 1: region 1 cannot be painted over region 0' in caught.value.message
+
+
 # ------------------------------------------------------------- frozen geometry and staleness
 
 def _engine_structure(vertices, cx=.3):
