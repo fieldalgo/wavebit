@@ -70,3 +70,4 @@ Records written before 2026-10-13 use the solver interface of their day, kept fr
 - [A conforming forward formulation for the vanishing gap](nvf-thin-gap-energy.md)
 - [The NVF normal field and the grid it is taken on — measurements](nvf-upsampling.md)
 - [The time convention, audited — which root, which direction, and what the flip left behind](time-convention-audit.md)
+- [The solve in stretched coordinates against finite-element fields — measurements](wall-resolution.md)

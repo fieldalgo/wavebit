@@ -100,6 +100,16 @@ def _resolve(problem, numerics, execution):
     if problem.outputs.scattering and numerics.algorithm != 'smm':
         raise UnsupportedFeatureError('Scattering matrices require algorithm="smm".',
                                       code='rcwa.scattering_algorithm', path='outputs.scattering')
+    if numerics.wall_resolution is not None:
+        if problem.outputs.scattering:
+            raise UnsupportedFeatureError(
+                'A scattering matrix is not available under wall_resolution: it has a port per '
+                'order, and in the stretched coordinates only the propagating orders of a '
+                'half-space are plane waves.', code='rcwa.unsupported', path='outputs.scattering')
+        if not _adapt.single_plane(problem):
+            raise UnsupportedFeatureError(
+                'wall_resolution is implemented for one incident plane wave.',
+                code='rcwa.unsupported', path='numerics.wall_resolution')
     if not _adapt.single_plane(problem):
         if problem.outputs.diffraction:
             raise UnsupportedFeatureError('Coherent beams and internal sources currently expose boundary power and requested fields. Use Outputs(diffraction=False); no unique single-incident-port R/T is invented.',
@@ -332,10 +342,15 @@ def _report(problem, numerics, execution, solvers):
         # or vmap that takes a material as its argument, any material gradient -- refuses it.
         # Materials written as constants inside a jitted function stay concrete and are read,
         # but a preparation cannot know which a later jit will do, so jit is not claimed.
+        # wall_resolution reads which orders propagate, and the sample points of a field, as
+        # numbers: eager only, and no gradients through it yet.
         capabilities={'eager': True, 'material_gradients': (execution.backend != 'numpy' and single
-                                                            and not numerics.half_space_merge_tolerance),
-                      'jit': execution.backend == 'jax' and single and not numerics.half_space_merge_tolerance,
-                      'vmap': execution.backend == 'jax' and single,
+                                                            and not numerics.half_space_merge_tolerance
+                                                            and numerics.wall_resolution is None),
+                      'jit': (execution.backend == 'jax' and single
+                              and not numerics.half_space_merge_tolerance
+                              and numerics.wall_resolution is None),
+                      'vmap': execution.backend == 'jax' and single and numerics.wall_resolution is None,
                       'geometry_reuse': 'concrete topology validation, including eager JAX gradients; Cartesian Li edge-order device guard or explicitly selected scalar-shape host callback under JIT/vmap',
                       'topology_check': numerics.topology_check,
                       'diffraction': single, 'coherent_boundary_power': not single,
@@ -352,6 +367,8 @@ def _report(problem, numerics, execution, solvers):
                   'solve_path': solvers[0]._solve_path(planned=True),
                   'half_space_merge_tolerance': numerics.half_space_merge_tolerance,
                   'exceptional_points': numerics.exceptional_points,
+                  # None, or the slope of the solve's coordinates at the rectangles' walls.
+                  'wall_resolution': numerics.wall_resolution,
                   # None under 'li'/'laurent', and on a raster, whose normal field is built at
                   # the raster's own resolution (an explicit grid there is refused,
                   # rcwa.unsupported). A stack of region-free layers resolves to 'nvf' and

@@ -762,6 +762,8 @@ class SolverJax(RCWAJax, OptimizerJax):
             'half_space_merge_tolerance': self._half_space_merge_tolerance,
             # Static too: the layer-mode kernels branch on it (gates, rebuilds, screens).
             'exceptional_points': self._exceptional_points,
+            # Static: it selects the stretched solve and fixes the coordinates it is built in.
+            'wall_resolution': self._wall_resolution,
             # Whether the `Lattice.drawn` declaration (a child, above) was compared against the
             # cell here, while both were concrete. Inside the rebuilt copy both are traced
             # children and cannot be compared, so the copy trusts this answer for as long as it
