@@ -628,18 +628,47 @@ def test_a_vjp_fn_in_another_grad_mode_is_exact_or_refused(route, dtype):
         assert _relative(run(), want) < 1e-10, route
 
 
+#: The PyTorch release whose forward rule re-solves (pytorch#192667): from it on ``jvp(jvp)`` and
+#: the routes built on it are right natively. Measured on 2.15.0+cpu (2026-11-17, Linux): of the
+#: 35 routes ``linear_solve`` rewrites, 25 are right with ``torch.linalg.solve`` itself (three of
+#: them were right before) and ten are still wrong, 0.34 to 94 relative off -- the backward's
+#: factor reuse with grad mode off (pytorch#200600) and ``lu_solve`` under two ``vmap`` levels
+#: where that backward calls it (pytorch#200599).
+FORWARD_RULE_FIXED = (2, 15)
+
+
+def _torch_release():
+    return tuple(int(part) for part in torch.__version__.split('+')[0].split('.')[:2])
+
+
 def test_pytorchs_own_rule_is_still_wrong():
-    """Canary: torch.linalg.solve's ``jvp(jvp)`` and ``vmap(jacfwd)`` on this PyTorch. When this
-    fails PyTorch has fixed one of them (pytorch#192667 fixes the first, from 2.15; nothing
-    upstream names the second): measure every route of ``test_every_route_matches_the_closed_form``
-    on the new version before narrowing ``linear_solve`` -- the backward's factor reuse with grad
-    mode off is not part of that fix."""
+    """Canary: which of ``torch.linalg.solve``'s own rules are wrong on this PyTorch.
+
+    Before :data:`FORWARD_RULE_FIXED` its forward rule, differentiated again, loses a term:
+    ``jvp(jvp)`` and ``vmap(jacfwd)`` are wrong. From that release they are right, and what
+    stays wrong is the backward with grad mode off -- a ``forward_ad`` dual over a backward pass
+    without ``create_graph``, ``hessian`` under ``torch.no_grad()``, and ``vmap(jacrev)`` there.
+
+    When this fails on a newer PyTorch it has fixed (or broken) one of them: measure every route
+    of ``test_every_route_matches_the_closed_form`` on that version and record it here and in
+    docs/development/torch-upstream-defects.md. ``linear_solve`` can be narrowed only when the
+    torch floor in pyproject.toml includes the fix; while the floor is 2.14 it keeps every
+    route, and is exact on each on both sides of the fix."""
     P = _problem(torch.complex128)
     native = _readout(P, torch.linalg.solve)
-    second = torch.tensor([_exact(P, x, 2) for x in XS])
-    first = torch.tensor([_exact(P, x, 1) for x in XS])
-    assert _relative(ROUTES['jvp(jvp)'][1](native)(), second) > 1e-3
-    assert _relative(ROUTES['vmap(jacfwd)'][1](native)(), first) > 1e-3
+
+    def off(route):
+        order, build, _ = ROUTES[route]
+        return _relative(build(native)(), torch.tensor([_exact(P, x, order) for x in XS]))
+
+    if _torch_release() < FORWARD_RULE_FIXED:
+        assert off('jvp(jvp)') > 1e-3
+        assert off('vmap(jacfwd)') > 1e-3
+    else:
+        assert off('jvp(jvp)') < 1e-10
+        assert off('vmap(jacfwd)') < 1e-10
+    for route in ('forward_ad over backward', 'no_grad: hessian', 'no_grad: vmap(jacrev)'):
+        assert off(route) > 1e-3, route
 
 
 # ------------------------------------------------------------------------------- the scenes
