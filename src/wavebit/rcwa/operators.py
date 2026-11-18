@@ -79,6 +79,11 @@ def assemble(problem, *, numerics, backend='numpy', device='cpu', precision='dou
     replace the returned operator arrays and pass them to ``solve``; a traced
     physical stack itself must use the ordinary Prepared.run lifecycle.
     """
+    from ._profile import holds_profile
+    if holds_profile(problem):
+        raise UnsupportedFeatureError('Explicit operators are assembled per layer, and a ProfiledLayer is sliced '
+                                      'inside the preparation. Use rcwa.prepare and Prepared.run for it.',
+                                      code='operators.profiled_layer', path='problem.stack')
     if not _adapt.single_plane(problem):
         raise UnsupportedFeatureError('Operator assembly requires one plane-wave declaration; coherent groups have different order windows.',
                                       code='operators.source_groups', path='excitation.sources')
