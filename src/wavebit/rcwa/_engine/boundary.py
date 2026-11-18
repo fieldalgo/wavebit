@@ -41,6 +41,7 @@ import wavebit._common.geometry.clipper as _clipper
 from wavebit._common.geometry.interfaces import plan_interfaces
 from wavebit._common.geometry.interfaces import replay_interfaces
 from wavebit._common.geometry.interfaces import interface_contrasts
+from wavebit._common.geometry.interfaces import facing_contrasts
 from wavebit.rcwa._engine.parametric import nvf_from_coeffs
 from wavebit._common.geometry.recipes import shape_geometry
 from wavebit.rcwa._engine.parametric import _sampled_coeffs
@@ -937,7 +938,7 @@ def _continued_in_pair(xp, a, e, l2, valid, tol2, rows=None):
 
 def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, contrasts,
                                interface_plan, transform=None, chunk=None,
-                               candidate_fields=None, average=True):
+                               candidate_fields=None, average=True, facing_contrasts=None):
     """Positive normal-dyad boundary integral for scalar painted layers.
 
     Straight subdivision leaves the integral unchanged; a vanishing interval carries
@@ -948,13 +949,18 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
     Tensor shape fields and their analytic curve candidates retain the nearest
     extension through ``average=False``. No analytic curves replace the scalar
     painting's actual polygon interfaces.
+
+    ``facing_contrasts`` (:func:`~wavebit._common.geometry.interfaces.facing_contrasts`)
+    blends the two intervals of each planned facing pair toward the one their sliver's
+    closing leaves, so contact is continuous. Without it the pair keeps its own weights.
+    The nearest extension ignores it.
     """
     if not average or candidate_fields:
         return _nearest_projector_fields(xp, grid_shape, lattice, dtype, segment_data, contrasts,
                                          interface_plan, transform, chunk, candidate_fields)
     from .integrated_normal import projector_fields
     return projector_fields(xp, grid_shape, lattice, dtype, segment_data, contrasts,
-                            interface_plan, transform, chunk)
+                            interface_plan, transform, chunk, facing_contrasts)
 
 
 def _chunked(xp, evaluate, pts, chunk, width, *live):
@@ -1160,7 +1166,8 @@ def _nearest_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
 
 def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_width_v,
                             dtype, cdtype, transform=None, segment_data=None, images=None,
-                            image_groups=None, anchor=None, contrasts=None, interface_plan=None):
+                            image_groups=None, anchor=None, contrasts=None, interface_plan=None,
+                            facing_contrasts=None):
     """Coefficient grids of ``n_u**2``, ``n_u*n_v``, ``n_v**2``, built with the layer CENTRED.
 
     The resolved route supplies the area centroid of the unwrapped painted
@@ -1204,7 +1211,8 @@ def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_w
 
     if contrasts is not None and segment_data is not None:
         fields = material_projector_fields(xp, grid_shape, lattice, dtype, segment_data,
-                                            contrasts, interface_plan, transform)
+                                            contrasts, interface_plan, transform,
+                                            facing_contrasts=facing_contrasts)
     else:
         normal_x, normal_y = distance_gradient_normal_field(xp, built, grid_shape, lattice, dtype,
                                                             transform=transform,
@@ -1311,6 +1319,8 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, shap
         images=interface_plan.images, image_groups=interface_plan.groups,
         contrasts=interface_contrasts(xp, regions, background, interface_plan, dtype),
         interface_plan=interface_plan,
+        facing_contrasts=(facing_contrasts(xp, regions, background, interface_plan, dtype)
+                          if getattr(interface_plan, 'facing', ()) else None),
         anchor=(_paint_centroid(xp, segment_data, interface_plan, all_loops, lattice, transform)
                 if segment_data is not None else None))
     return nvf_from_coeffs(xp, eps_c, inv_c, *coeffs[:3], half_width_u, half_width_v,
@@ -1526,6 +1536,10 @@ def _what_moved(fresh_key, plan_key):
         return ('the cell basis reduces by a different transform than the one the record '
                 'enumerated its periodic images on')
     if fresh_key[:2] == plan_key[:2] and fresh_key[3] != plan_key[3]:
+        if fresh_key[3]._replace(facing=()) == plan_key[3]._replace(facing=()):
+            return ('a sliver between two facing interface intervals crossed the width below '
+                    'which they are blended toward contact (2**-10 of the longest reduced '
+                    'basis vector)')
         return 'the polygon interface intervals or their periodic image bounds changed'
     fresh, held = fresh_key[1], plan_key[1]
     if len(fresh) != len(held):
