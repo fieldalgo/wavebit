@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 134 160" width="134" height="160" role="img" aria-label="Wavebit">
+  <title>Wavebit mark</title>
+<!-- Wavebit product logo: five spectrum bars under a wave envelope
+     (white light dispersed by a grating - what the solver computes).
+     Bars work on light and dark unchanged. Wordmark: Space Grotesk Medium outlined,
+     light #1e293b / dark #f1f5f9; subline "by FieldAlgo" light #64748b / dark #8b95a5. -->
+<rect x="8" y="60.0" width="14" height="40" rx="7" fill="#e11d48"/><rect x="34" y="40.0" width="14" height="80" rx="7" fill="#f59e0b"/><rect x="60" y="25.0" width="14" height="110" rx="7" fill="#22c55e"/><rect x="86" y="40.0" width="14" height="80" rx="7" fill="#0ea5e9"/><rect x="112" y="60.0" width="14" height="40" rx="7" fill="#7c3aed"/></svg>
