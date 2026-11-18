@@ -4,6 +4,63 @@ from ..errors import ValidationError
 
 
 @spec
+class Slicing:
+    """How a :class:`~wavebit.rcwa.ProfiledLayer` is cut into slices along ``z``.
+
+    ``count`` is the number of slices per profiled layer, or ``'auto'`` (the default): the
+    preparation solves the stack with ``min_count`` slices and doubles the count until the
+    Richardson estimate of the remaining staircase error in the efficiencies falls to
+    ``tolerance`` or ``max_count`` is reached, and fixes that count for every run. Each slice
+    takes the cross-section at its midpoint height, the midpoint rule, whose error falls as
+    ``count**-2`` for a smooth profile.
+
+    ``rule='arclength'`` (the default) places the slice boundaries at equal steps of the
+    sidewall's arc length in the ``x``-``z`` plane, so slices crowd where the outline moves
+    fastest -- a rounded corner -- and spread where it moves slowly; ``rule='uniform'`` cuts
+    equal thicknesses. Boundaries are fractions of the layer's thickness, fixed when the
+    problem is prepared, so a run moves only the widths and the thickness, smoothly.
+
+    ``estimate`` says when the staircase error is estimated: ``'prepare'`` (the default) once,
+    from the counts the preparation solved; ``'run'`` on every run as well, by also solving
+    with half the slices (about 1.5 times the cost); ``None`` not at all. The estimate is
+    reported in ``result.diagnostics['z_slicing']``.
+
+    Richardson's deferred approach to the limit: L. F. Richardson, Phil. Trans. R. Soc. A 210,
+    307 (1911).
+    """
+    count: object = 'auto'
+    rule: str = 'arclength'
+    tolerance: float = 1e-4
+    min_count: int = 4
+    max_count: int = 64
+    estimate: str | None = 'prepare'
+
+    def __post_init__(self):
+        import math
+        count = self.count
+        if not (count == 'auto' or (type(count) is int and count >= 1)):
+            raise ValidationError("Slicing count is 'auto' or a positive integer.",
+                                  code='numerics.slicing', path='numerics.slicing.count')
+        if self.rule not in ('arclength', 'uniform'):
+            raise ValidationError("Slicing rule is 'arclength' or 'uniform'.",
+                                  code='numerics.slicing', path='numerics.slicing.rule')
+        if self.estimate not in ('prepare', 'run', None):
+            raise ValidationError("Slicing estimate is 'prepare', 'run' or None.",
+                                  code='numerics.slicing', path='numerics.slicing.estimate')
+        if type(self.tolerance) not in (float, int) or not math.isfinite(self.tolerance) or self.tolerance <= 0:
+            raise ValidationError('Slicing tolerance is a positive absolute efficiency change.',
+                                  code='numerics.slicing', path='numerics.slicing.tolerance')
+        for name in ('min_count', 'max_count'):
+            value = getattr(self, name)
+            if type(value) is not int or value < 1:
+                raise ValidationError(f'Slicing {name} is a positive integer.',
+                                      code='numerics.slicing', path=f'numerics.slicing.{name}')
+        if self.max_count < self.min_count:
+            raise ValidationError('Slicing max_count must be at least min_count.',
+                                  code='numerics.slicing', path='numerics.slicing.max_count')
+
+
+@spec
 class Numerics:
     """RCWA approximation and topology-check policy.
 
@@ -18,6 +75,9 @@ class Numerics:
     point, or warns (eager) / answers NaN (traced) where it cannot. ``'off'`` is for advanced
     use: it skips that work on every path for speed, mostly under ``jax.jit``, and near an
     exceptional point the answer can then be wrong with no warning.
+
+    ``slicing`` is a :class:`Slicing`, read only by a stack holding a
+    :class:`~wavebit.rcwa.ProfiledLayer`; ``None`` means ``Slicing()``.
 
     ``shape_normal_method='interfaces'`` is experimental: under shape NVF it builds every shape
     layer's normal field from the interfaces of the resolved structure, overlapping or not,
@@ -38,10 +98,11 @@ class Numerics:
     exceptional_points: str = 'rebuild'
     wall_resolution: float | None = None
     shape_normal_method: str | None = None
+    slicing: object = None
     #: Written to a job only off their default (``jobs._encode``), so a job that does not use
     #: them keeps its key.
     _FIELDS_OMITTED_AT_DEFAULT = ('half_space_merge_tolerance', 'exceptional_points',
-                                  'wall_resolution', 'shape_normal_method')
+                                  'wall_resolution', 'shape_normal_method', 'slicing')
 
     def __post_init__(self):
         object.__setattr__(self, 'orders', order_pair('Numerics', self.orders,
@@ -69,6 +130,9 @@ class Numerics:
                 raise ValidationError('detuning is None (exact requested problem) or a positive relative step.',
                                       code='numerics.detuning', path='numerics.detuning')
         import math
+        if self.slicing is not None and not isinstance(self.slicing, Slicing):
+            raise ValidationError('slicing must be rcwa.Slicing or None.',
+                                  code='numerics.slicing', path='numerics.slicing')
         resolution = self.wall_resolution
         if resolution is not None and (type(resolution) not in (float, int)
                                        or not math.isfinite(resolution)

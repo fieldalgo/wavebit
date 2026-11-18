@@ -404,6 +404,19 @@ def check(problem, *, numerics, backend='numpy', device='cpu', precision='double
             raise UnsupportedFeatureError('check requires concrete inputs; call it outside jax.jit or jax.vmap.',
                                           code='check.concrete', path='problem')
         problem = _adapt.primal_problem(problem)
+        from . import _profile
+        if _profile.holds_profile(problem):
+            # The structure as it would be sliced, without solving to choose the count.
+            _profile.refuse(problem)
+            slicing = numerics.slicing if isinstance(numerics, Numerics) and numerics.slicing else None
+            count = slicing.count if slicing and slicing.count != 'auto' else (slicing or _profile.Slicing()).min_count
+            rule = (slicing or _profile.Slicing()).rule
+            fractions = tuple(_profile.plan_fractions(problem, i, count, rule)
+                              if isinstance(layer, _profile.ProfiledLayer) else None
+                              for i, layer in enumerate(problem.stack.layers))
+            sliced, owner = _profile.expand(problem, fractions, tuple(False for _ in fractions))
+            return _profile.publish_report(check(sliced, numerics=numerics, backend=backend,
+                                                 device=device, precision=precision), owner)
         solvers = _resolve(problem, numerics, execution)
         _adapt.refuse_nonfinite(problem)
         # prepare refuses a layer whose regions cannot be built while it freezes their geometry,
@@ -549,6 +562,9 @@ class Prepared:
     _partitions: tuple = field(repr=False)
     _coherent_dependencies: object = field(repr=False)
     _host_topology: object = field(repr=False, default=None)
+    #: The slicing plan of a problem holding a ProfiledLayer, which runs its sliced layouts
+    #: through ordinary preparations (:mod:`._profile`); ``None`` for every other problem.
+    _profile: object = field(repr=False, default=None)
 
     def _traced_rectangles(self, problem):
         """The exact Cartesian edge plan has a complete array-valued guard.
@@ -635,6 +651,8 @@ class Prepared:
 
     def validate(self, problem):
         """Eagerly report whether a concrete problem can reuse this preparation."""
+        if self._profile is not None:
+            return self._profile.validate(problem)
         try:
             if _adapt.opaque(problem):
                 raise UnsupportedFeatureError('validate requires concrete inputs; call it outside jax.jit or jax.vmap.',
@@ -654,6 +672,9 @@ class Prepared:
     def run(self, problem):
         """Execute live values after structural and numerical guard checks."""
         from .results import pack
+        if self._profile is not None:
+            with self.execution._scope(), _normalize_errors():
+                return self._profile.run(problem)
         with self.execution._scope(), _normalize_errors():
             solvers = self._solvers(problem)
             checks = _runtime_checks(problem, self.execution, self._partitions)
@@ -702,6 +723,22 @@ def prepare(problem, *, numerics, backend='numpy', device='cpu', precision='doub
     # Under an eager jax.grad, prepare at the point being differentiated, as a PyTorch call
     # reads through its tensors: a preparation keeps static records only, never a tracer.
     problem = _adapt.primal_problem(problem)
+    from . import _profile
+    if _profile.holds_profile(problem):
+        if not isinstance(numerics, Numerics):
+            raise ValidationError('numerics must be rcwa.Numerics.', code='numerics.type', path='numerics')
+        with execution._scope(), _normalize_errors():
+            plan = _profile.Profiled(problem, numerics, lambda sliced: prepare(
+                sliced, numerics=numerics, backend=backend, device=device, precision=precision))
+        inner, owner = plan.inner(problem, plan.count, plan.prepared_merged)
+        contract = MappingProxyType({**inner.contract, 'z_slicing': (
+            'slice boundaries are fractions of each ProfiledLayer thickness, fixed here; a run '
+            'moves the thickness and every slice width, and a layer the same at every height '
+            'is solved as one layer unless its geometry carries a derivative')})
+        return Prepared(numerics=numerics, execution=execution,
+                        report=_profile.publish_report(inner.report, owner), contract=contract,
+                        _structure=None, _geometry=(), _partitions=(), _coherent_dependencies=None,
+                        _profile=plan)
     with execution._scope(), _normalize_errors():
         solvers = _resolve(problem, numerics, execution)
         _adapt.refuse_nonfinite(problem)

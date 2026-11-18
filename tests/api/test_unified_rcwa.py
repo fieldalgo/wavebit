@@ -676,12 +676,17 @@ GEOMETRIES = {'Rectangle': dict(size=(.3, .2), angle=.3),
               'Polygon': dict(vertices=((-.2, -.2), (.2, -.2), (0., .2)))}
 
 
+#: Geometries whose cross-section changes with height: an ``rcwa.ProfiledLayer`` takes them and
+#: an ``rcwa.Layer`` refuses them by name (``tests/rcwa/test_profiled_layer.py``).
+PROFILE_GEOMETRIES = ('Trapezoid', 'Loft', 'Profile')
+
+
 def test_every_exported_region_geometry_is_listed_here():
     from wavebit.rcwa import problem as declarations
     shapes = {name for name in rcwa.__all__
               if getattr(getattr(rcwa, name), '__module__', None) == declarations.__name__
-              and name not in ('Problem', 'Stack', 'Layer', 'Region', 'Excitation', 'Outputs')}
-    assert shapes == set(GEOMETRIES)
+              and name not in ('Problem', 'Stack', 'Layer', 'ProfiledLayer', 'Region', 'Excitation', 'Outputs')}
+    assert shapes == set(GEOMETRIES) | set(PROFILE_GEOMETRIES)
 
 
 #: Exported geometries refused at their declaration, with the ``(code, path)`` they raise. Empty:
