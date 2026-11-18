@@ -210,14 +210,9 @@ that overlaps two blocks of the same material; the step at the routing tolerance
 change across it is 8.0e-10 for a change of 2e-8 in overlap, 9.5e-10 rotated, and a hundred
 times smaller for a change a hundred times smaller). A painted layer is built exactly as before, and `'per_shape'`, the default, names what the path has always done.
 
-It is experimental, a run that uses it emits `ExperimentalWarning`, and three things stand
+It is experimental, a run that uses it emits `ExperimentalWarning`, and two things stand
 between it and a default:
 
-- **It steps where two regions come into contact.** The default is continuous there; under
-  `'interfaces'` the two boxes above, moved from a gap of `1e-8` of the period to an overlap of
-  `1e-8`, step `T` by 2.6e-4 (4.0e-4 rotated). The likely cause, not yet confirmed, is that
-  the two interfaces meeting there -- box and background, background and box -- become one,
-  weighted by a much smaller contrast.
 - **It has no independent reference yet.** On axis-aligned rectangles it was compared, order
   for order, with Li's rules, the established factorization there: it was nearer to them than
   the default at most of orders 3 to 9 (for
@@ -227,6 +222,13 @@ between it and a default:
   of `boundary.POLYGON_VERTICES` (256) edges: one circle of radius 0.25 of the period took 2.5
   to 3 minutes per solve at orders 3 to 9, where the closed form took 1 to 20 s (warm solves on
   a four-core Linux machine running other work).
+
+Until 2026-11-18 a third stood there: it stepped where two regions come into contact. The two
+boxes above, moved from a gap of `1e-8` of the period to an overlap of `1e-8`, stepped `T` by
+2.6e-4 (4.0e-4 rotated), because the two interfaces of the closing gap became one weighted by a
+much smaller contrast. They are now blended toward that interface (see *Closing a gap is
+continuous* below), and the same move changes `T` by 3.5e-9 (3.9e-9 rotated), a hundred times
+less for a move a hundred times smaller, as the default does.
 
 It is read only by regions under `factorization='nvf'` with `nvf_projector='linear'`; on a
 raster, under `'li'` or `'laurent'`, with `nvf_projector='circular'` or with a tensor material,
