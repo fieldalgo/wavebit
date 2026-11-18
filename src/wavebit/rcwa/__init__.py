@@ -4,6 +4,7 @@ from .sources import PlaneWave, IncidentOrders, GaussianBeam, ElectricDipole
 from .numerics import Numerics
 from .results import Result, BoundaryPower
 from ._lifecycle import Prepared, check, prepare, run
+from ._ellipsometry import EllipsometryOrders, EllipsometryResult, run_ellipsometry
 from ._compiled import Compiled, compile
 from ._structure import sample_structure
 from . import diagnostics  # noqa: F401 -- public submodule, listed by __dir__ as fdtd.diagnostics is
@@ -11,7 +12,7 @@ from . import diagnostics  # noqa: F401 -- public submodule, listed by __dir__ a
 __all__ = ['Problem', 'Stack', 'Layer', 'Region', 'Rectangle', 'Circle', 'Ellipse', 'Polygon',
            'Excitation', 'Outputs', 'PlaneWave', 'IncidentOrders', 'GaussianBeam', 'ElectricDipole',
            'Numerics', 'Result', 'BoundaryPower', 'Prepared', 'Compiled', 'check', 'prepare', 'run', 'compile',
-           'sample_structure']
+           'sample_structure', 'EllipsometryOrders', 'EllipsometryResult', 'run_ellipsometry']
 
 #: Names this module no longer has (fieldalgo/wavebit#57), and their full replacements. Each is
 #: a tombstone, not an alias: reading one raises, naming the replacement.
