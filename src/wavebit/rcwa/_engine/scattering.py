@@ -1044,7 +1044,6 @@ class _StretchedPorts:
         import numpy as np
         xp = self.xp
         modes_W, modes_V, q = self._modes(eps)
-        waves_W, waves_V = self._to_computational(W, V)
         try:
             kz_host = np.asarray(_host(kz), dtype=complex)
             q_host = np.asarray(_host(q), dtype=complex)
@@ -1055,6 +1054,8 @@ class _StretchedPorts:
         if q_host.ndim == 2:
             q_host = np.diagonal(q_host)
         propagating = np.abs(kz_host.imag) < 1e-9 * np.abs(kz_host)
+        # Only the propagating orders' waves are read below, so only theirs are written.
+        waves_W, waves_V = self._to_computational(W, V, propagating)
         self.propagating.append(propagating)
         propagating = np.concatenate([propagating, propagating])
         count = int(propagating.sum())
@@ -1381,9 +1382,10 @@ def _stretched_ports(xp, C, stretch, wavelength, kx, ky, Kx, Ky, I, O, F_c, F_s,
     """
     from wavebit.rcwa._engine.stretch import plane_wave_matrix
     n_orders = n_orders_u * n_orders_v
-    unit_x, unit_y, unit_z_i = stretch['unit']
-    mu_x, mu_y, mu_z_i = stretch['mu']
-    axis_u, axis_v = stretch['axes']
+    # Three slots on rectangles (diagonal tensors); five, the in-plane off-diagonals with them,
+    # in the matched coordinates of a circle or an ellipse (`stretch['matched']`).
+    unit_x, unit_y, unit_z_i, *unit_off = stretch['unit']
+    mu_x, mu_y, mu_z_i, *mu_off = stretch['mu']
     half_u, half_v = (n_orders_u - 1) // 2, (n_orders_v - 1) // 2
     k0 = 2 * _PI / wavelength
     c = xp.reshape(F_c, (-1,))[:, None]
@@ -1391,10 +1393,46 @@ def _stretched_ports(xp, C, stretch, wavelength, kx, ky, Kx, Ky, I, O, F_c, F_s,
 
     def modes(eps):
         eps = as_array(xp, eps, dtype=C)
+        off = (O, O) if not unit_off else (eps * unit_off[0], eps * unit_off[1])
         W, V, q, _ = layer_modes_2d(xp, Kx, Ky, I, eps * unit_x, eps * unit_y, unit_z_i / eps,
-                                    O, O, C, mu=(mu_x, mu_y, mu_z_i, None, None),
+                                    *off, C, mu=(mu_x, mu_y, mu_z_i, *(mu_off or (None, None))),
                                     pair_cap=pair_cap, with_coupling=True, ep_rebuild=ep_rebuild)
         return (*sp_modes_2d(xp, W, V, F_c, F_s, n_orders), q)
+
+    def rotate(E_x, E_y, H_x, H_y):
+        # Cartesian (stretched) components -> the s/p rows again; the rotation is
+        # `sp_modes_2d`'s.
+        return (xp.concat([c * E_y - s * E_x, c * E_x + s * E_y], axis=0),
+                xp.concat([c * H_x + s * H_y, c * H_y - s * H_x], axis=0))
+
+    def cartesian(W, V):
+        # s/p boundary rows -> Cartesian; the inverse of `rotate`, which is its transpose.
+        E_s, F_p = W[:n_orders, :], W[n_orders:, :]
+        H_s, H_p = V[:n_orders, :], V[n_orders:, :]
+        return c * F_p - s * E_s, s * F_p + c * E_s, c * H_s - s * H_p, s * H_s + c * H_p
+
+    matched = stretch.get('matched')
+    if matched is not None:
+        centre_u, centre_v = k0 * kx[half_u], k0 * ky[half_v]
+
+        def to_computational(W, V, propagating):
+            # E~ = J^T E for the propagating orders' plane waves; the other columns are zero
+            # and never read (`_StretchedPorts.half_space`).
+            import numpy as np
+            picked = np.flatnonzero(propagating)
+            orders = [(int(j % n_orders_u) - half_u, int(j // n_orders_u) - half_v) for j in picked]
+            columns = matched.wave_columns(xp, centre_u, centre_v, half_u, half_v, orders, C)
+            spread = np.zeros((len(picked), n_orders))
+            spread[np.arange(len(picked)), picked] = 1.0
+            spread = xp.asarray(spread, dtype=C)
+            T_ux, T_uy, T_vx, T_vy = (column @ spread for column in columns)
+            E_x, E_y, H_x, H_y = cartesian(W, V)
+            return rotate(T_ux @ E_x + T_uy @ E_y, T_vx @ E_x + T_vy @ E_y,
+                          T_ux @ H_x + T_uy @ H_y, T_vx @ H_x + T_vy @ H_y)
+
+        return _StretchedPorts(xp, modes, to_computational)
+
+    axis_u, axis_v = stretch['axes']
 
     # One factor per axis and weight: E_x (and H_x) carries the slope along u, E_y along v.
     centre_u, centre_v = k0 * kx[half_u], k0 * ky[half_v]
@@ -1413,14 +1451,9 @@ def _stretched_ports(xp, C, stretch, wavelength, kx, ky, Kx, Ky, I, O, F_c, F_s,
     T_y = kron(factor(nodes_v, axis_v, centre_v, half_v, True),
                factor(nodes_u, axis_u, centre_u, half_u, False))
 
-    def to_computational(W, V):
-        # s/p boundary rows -> Cartesian -> the stretched components -> s/p rows again; the
-        # rotations are `sp_modes_2d`'s and its inverse, which is its transpose.
-        E_s, F_p = W[:n_orders, :], W[n_orders:, :]
-        H_s, H_p = V[:n_orders, :], V[n_orders:, :]
-        E_x, E_y = T_x @ (c * F_p - s * E_s), T_y @ (s * F_p + c * E_s)
-        H_x, H_y = T_x @ (c * H_s - s * H_p), T_y @ (s * H_s + c * H_p)
-        return (xp.concat([c * E_y - s * E_x, c * E_x + s * E_y], axis=0),
-                xp.concat([c * H_x + s * H_y, c * H_y - s * H_x], axis=0))
+    def to_computational(W, V, propagating=None):
+        # s/p boundary rows -> Cartesian -> the stretched components -> s/p rows again.
+        E_x, E_y, H_x, H_y = cartesian(W, V)
+        return rotate(T_x @ E_x, T_y @ E_y, T_x @ H_x, T_y @ H_y)
 
     return _StretchedPorts(xp, modes, to_computational)

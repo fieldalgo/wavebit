@@ -99,7 +99,8 @@
   "values_sha256": "8707a40961835d8fdcdf4dc5b31489ec99aabf7ca104baf52b9173d67001b3f3",
   "content_sha256": "927e4042d6c779441db2f29425a5f5a074908a6e7d6eb0fda3057bedf91146c4",
   "consumers": [
-    "tests/references/test_gyptis_shapes_field_golden.py"
+    "tests/references/test_gyptis_shapes_field_golden.py",
+    "tests/references/test_gyptis_matched_field_golden.py"
   ],
   "provenance_status": "complete",
   "sources": {},

@@ -94,9 +94,85 @@ Solving the half-spaces in the same coordinates needs only the propagating order
 
 These three comparisons were made with a test implementation that the product code reproduces to five digits in `R` and `T` on thirteen cases.
 
+(wall-resolution-circles-measured)=
+## Circles and ellipses
+
+A stack whose patterned layers hold one circle or one axis-aligned ellipse is solved in coordinates matched to it ([the guide](../../guide/rcwa/wall-resolution.md)): the mesh of Weiss et al. (Opt. Express 17, 8051 (2009)) carries the rectangle whose corners are the ellipse's 45-degree points onto the ellipse, and the stretch above puts its four lines half a period apart at the slope `G`. The materials become full in-plane tensors, `eps~ = eps det(J) (J^T J)^-1` with `J` the map's Jacobian, sampled on a 512 by 512 raster of the stretched cell whose pixel edges are those lines and put through the tensor Li factorization. The half-spaces are solved in the same coordinates, as for rectangles, and their propagating orders replaced by the exact plane waves written in the matched basis.
+
+### Near fields on twelve layers
+
+Normal incidence with `E` along x. The cell is the one above (400 nm, a 150 nm layer, 900 nm) except the resonant pair, a circle of radius 280 nm in a 1000 nm cell, 200 nm thick, at 1363 nm. Plane errors as above, wall samples included, at orders 8 / 12, against 3D finite-element fields (gyptis 1.2.0); the default solve is the product's NVF with the plain sum.
+
+| Layer | Default solve | `wall_resolution=0.02` | `R`: matched (reference) |
+| --- | --- | --- | --- |
+| metal circle, radius 100 nm, `eps` -20+1.5j | 27.4 / 21.5% | 2.1 / 0.42% | 0.18804 / 0.18792 (0.18799) |
+| metal circle, radius 60 nm | 17.7 / 19.8% | 3.9 / 0.43% | 0.01656 / 0.01657 (0.01658) |
+| metal circle, radius 140 nm | 32.1 / 24.6% | 1.1 / 0.32% | 0.55233 / 0.55230 (0.55237) |
+| metal circle, `eps` -100+5j | 29.7 / 28.2% | 1.1 / 0.49% | 0.15754 / 0.15749 (0.15755) |
+| metal circle, `eps` -5+1j | 20.9 / 17.3% | 2.1 / 1.8% | 0.37027 / 0.36986 (0.36538) |
+| metal circle, resonant cell | 38.6 / 27.3% | 5.5 / 1.2% | 0.76081 / 0.76214 (0.76235) |
+| metal ellipse, 130 by 80 nm | 30.6 / 27.5% | 2.1 / 0.61% | 0.45155 / 0.45145 (0.45173) |
+| metal ellipse, 150 by 50 nm | 58.2 / 39.2% | 3.1 / 1.4% | 0.76094 / 0.76122 (0.76133) |
+| metal ellipse, 110 by 90 nm | 24.0 / 24.8% | 2.2 / 0.62% | 0.25519 / 0.25515 (0.25553) |
+| dielectric circle, radius 100 nm, `eps` 12.25 | 13.6 / 11.2% | 0.24 / 0.14% | 0.02429 / 0.02428 (0.02431) |
+| dielectric circle, resonant cell | 9.1 / 7.1% | 1.2 / 0.14% | 0.77225 / 0.76715 (0.76816) |
+| dielectric ellipse, 130 by 80 nm | 15.5 / 12.8% | 0.37 / 0.25% | 0.05278 / 0.05277 (0.05282) |
+
+- **Three references are stored**: the two circles of radius 100 nm (`golden_gyptis_cylinder_field.npz`) and the dielectric ellipse (`golden_gyptis_shapes_field.npz`), read by `tests/references/test_gyptis_matched_field_golden.py`, order 8 in the default run and order 12 in the slow tier. The other nine are in a private research repository, and no test reads them.
+- **How good the references are.** The stored ones' next mesh levels are 0.15%, 0.11% and 0.38% of the plane RMS from them. The resonant pair is at the third level of its ladder, the 130 by 80 metal ellipse at the second (against the first, the matched solve reads 0.70% at order 12, against the second 0.61%), the 150 by 50 and 110 by 90 ellipses at the first, the others at the second. Below about 0.3 to 0.6% a difference is within the references' own step between levels and is not read.
+- **The default solve's `R`** is 4% low on the resonant metal cell and 12% low on the 150 by 50 ellipse at order 12 (0.73033 and 0.66875); the matched solve is within 0.03% and 0.01% there.
+- **The weak metal.** On `eps` -5+1j the matched solve's `R` is 1.3% and 1.2% above the reference's at orders 8 and 12. Two finite-element models of that circle agree at their finest levels (0.36548 and 0.36520; the reference is 0.36538), and the default solve's `R` (0.36643 at order 12) is on their side; in a test implementation the offset grew as the stretch was made stronger, while the field kept improving. It is taken to be this method's error on a weak metal, and the guide says so.
+
+### Criteria for circles and ellipses, written before the implementation
+
+Set from a test implementation's values with about a factor of two of margin (design of the second stage), at order 12, with slope 0.02:
+
+| Criterion | Limit | Measured |
+| --- | --- | --- |
+| five metal circles (radius 60, 100, 140 nm; `eps` -100+5j; the resonant cell): field as a fraction of the default solve's | 0.1 | 0.013 to 0.044 |
+| the same five: `R` against the reference | 0.3% | 0.01 to 0.07% |
+| three metal ellipses: field as a fraction of the default solve's | 0.1 | 0.022 to 0.036 |
+| the same three: `R` against the reference | 0.3% | 0.01 to 0.15% |
+| dielectric circle: field | 0.5% | 0.14% |
+| the circle of `eps` -5+1j: field as a fraction / `R` | 0.2 / 1.5% | 0.10 / 1.2% |
+| gold cylinder of Küchenmeister et al. (2012): `R` from order 12 | 0.823 +- 0.001 | 0.8231, 0.8234 (orders 12, 14) |
+
+The gold cylinder is the published case of the mesh (Küchenmeister, Zebrowski and Busch, Opt. Express 20, 17319 (2012), section 9.2: gold of their Drude model, `eps` -26.37+1.80j at 829 nm, radius 150 nm, height 50 nm, period 700 nm, in air). The paper prints no table; its figure shows the mesh's `R` flat at about 0.823 from roughly 500 plane waves on, read off the plot. Here `R` is 0.8129, 0.8210, 0.8231, 0.8234 at orders 8, 10, 12, 14 (289 to 841 plane waves; the paper's truncation is circular, this one square).
+
+All are met. The field reading had to change to meet the first: read as a plain sum, the resonant metal cell was 4.0% off at order 12, 0.147 of the default solve's error; read through the window below, 1.2%.
+
+### How the field is read
+
+The map bends on its four lines, which cross the whole cell, so the component of the solve's `E~` normal to a line jumps there even in a uniform medium, and its plain sum rings. The reading takes that component from the normal `D~ = [[eps~]] E~` within half a resolution unit `period / (2 N + 1)` of a line, keeps the plain sum beyond one and a half units, and blends the two with a `cos^2` between (`H` the same with `B`). At order 12 the plain sum against this window:
+
+| Layer | Plain sum | Window |
+| --- | --- | --- |
+| metal circles: radius 100, 60, 140 nm; `eps` -100+5j, -5+1j | 0.51, 0.55, 1.48, 0.83, 1.80% | 0.42, 0.43, 0.32, 0.49, 1.77% |
+| resonant cell: metal, dielectric | 4.02, 1.07% | 1.20, 0.14% |
+| metal ellipses: 130 by 80, 150 by 50, 110 by 90 nm | 1.09, 2.20, 1.04% | 0.61, 1.39, 0.62% |
+| dielectric circle, dielectric ellipse | 0.31, 0.34% | 0.14, 0.25% |
+
+The window's widths are those a test implementation chose on a weaker stretch; they were not tuned again here. The product code reproduces that implementation's `R` to five digits and its plane errors to the digits that implementation printed, on all twelve layers.
+
+### What the matched construction has to satisfy
+
+Each is a test in `tests/rcwa/test_wall_resolution_matched.py`.
+
+- **The map.** The rectangle's sides land on the ellipse to 1e-12, the map is periodic and does not fold, its analytic Jacobian agrees with finite differences, and its closed-form inverse returns a point to 1e-8 nm, on a circle, on ellipses, one of them across the cell's corner, and in a rectangular cell. The raster's pixel edges are the lines.
+- **The plane waves in the matched basis** agree with a brute-force sum over the cell to the sum's own error.
+- **A uniform stack.** With the shape of the background's own material the physics is a stack of uniform layers, yet the map bends every line and every layer is a full tensor. At order 6, over glass, lit obliquely from either side, `R`, `T` and the specular amplitudes are the plane-wave answer to 6e-9 on a circle and 6e-7 on a 150 by 60 ellipse; the electric field is within 0.15% and 0.41% RMS.
+- **Moving the shape**, also across the cell's edge, gives the same `R` and `T` to 1e-9 and the same field at the moved samples.
+- **Energy.** On a lossless ellipse `R + T = 1` to 1e-4 at order 6, at normal and oblique incidence and with four and five propagating orders.
+- **Backends.** NumPy, JAX and PyTorch agree to 1e-9 in `R` and `T` and 1e-8 of the field's scale on a metal and a dielectric ellipse.
+
+### What the matched solve costs
+
+At order 12 on one layer the matched solve took 16 to 17 seconds where the default NVF solve took 10 to 11, on four cores; at order 8, 3 seconds against 2.
+
 ## Not measured
 
-- Any reference at oblique incidence, with several propagating orders, on a substrate, or on several patterned layers.
+- Any reference at oblique incidence, with several propagating orders, on a substrate, or on several patterned layers; for circles and ellipses, also any reference with a shape away from the cell's centre or in a non-square cell.
+- An independent implementation of the matched mesh: none was found to compare with.
 - Layers with more than two walls along an axis against a reference. A uniform slab through four unevenly placed walls reads the right `R` to 1e-5.
 - A second mesh level for five of the seven references.
 - Single precision; `jax.jit`, `jax.vmap` and gradients, which are refused.

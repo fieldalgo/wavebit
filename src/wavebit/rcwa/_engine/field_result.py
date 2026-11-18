@@ -392,10 +392,11 @@ class FieldState:
         self._require_internal_fields()
         xp = array_namespace(data['lattice'])
         z, owner, edges = self._heights(xp, sample_z)
-        slopes = None
+        to_physical = None
         if self.stretch is not None:
-            grid, slopes = self._stretched_points(xp, grid)
-        result = None
+            grid, to_physical = self._stretched_points(xp, grid)
+        matched = to_physical is not None and not isinstance(self.stretch, tuple)
+        result = flux = None
         for g in data['groups']:
             if self.kind == 'source':
                 coefficient = self._source_coefficients(xp, g, z, owner, edges)
@@ -405,23 +406,59 @@ class FieldState:
             if rule is not None:
                 field = self._apply_lalanne(xp, g, rule, coefficient, field, owner)
             result = field if result is None else result + field
+            if matched:
+                normal = expand_spectrum(xp, g['kxy'], self._matched_flux(xp, coefficient, owner), grid)
+                flux = normal if flux is None else flux + normal
         if self.merged is not None:
             from wavebit.rcwa._engine.half_space_merge import zone_coefficients
             coefficient = zone_coefficients(xp, z, owner, edges, self.merged, data['merge'],
                                             self.names[index], edges.shape[0]-1)
             field = expand_spectrum(xp, data['boundary_kxy'], coefficient, grid)
             result = field if result is None else result + field
-        if slopes is not None:
-            result = result / slopes
+        if matched:
+            result = to_physical(result, flux, owner)
+        elif to_physical is not None:
+            result = to_physical(result)
         return result
 
+    def _matched_flux(self, xp, coefficient, owner):
+        """The series of ``D~ = [[eps~]] E~`` and ``B~ = [[mu~]] H~`` in plane, per sample height.
+
+        ``coefficient`` is ``(heights, orders, 6)`` in the public frame; each height takes the
+        slots of the layer it is in. The slots are the kernels', about the cell corner, so they
+        act in the public frame between two parity flips (:meth:`_ordinary_coefficients`). The
+        off-diagonal slots hold minus the entry. Returns ``(D~_u, D~_v, 0, B~_u, B~_v, 0)``.
+        """
+        from wavebit._common.conventions import centre_parity
+        solved = self.stretch.solved
+        odd = as_array(xp, centre_parity(*self.window).reshape(-1),
+                       device=getattr(coefficient, 'device', None))
+        flipped = xp.where(odd[None, :, None], -coefficient, coefficient)
+
+        def apply(slots, a, b):
+            xx, yy, xy, yx = slots
+            return (a @ xp.matrix_transpose(xx) - b @ xp.matrix_transpose(xy),
+                    b @ xp.matrix_transpose(yy) - a @ xp.matrix_transpose(yx))
+
+        zero = xp.zeros_like(flipped[..., 0])
+        b_u, b_v = apply(solved['mu'], flipped[..., 3], flipped[..., 4])
+        d_u, d_v = zero, zero
+        for layer, slots in enumerate(solved['eps']):
+            held = (owner == layer)[:, None]
+            u, v = apply(slots, flipped[..., 0], flipped[..., 1])
+            d_u, d_v = xp.where(held, u, d_u), xp.where(held, v, d_v)
+        out = xp.stack([d_u, d_v, zero, b_u, b_v, zero], axis=-1)
+        return xp.where(odd[None, :, None], -out, out)
+
     def _stretched_points(self, xp, grid):
-        """The computational points of the Cartesian ``grid``, and each component's slope.
+        """The computational points of the Cartesian ``grid``, and what makes their field physical.
 
         The kernels' records of a stretched solve hold ``E~_x = f E_x``, ``E~_y = g E_y`` and
         ``E~_z = E_z`` (``H`` alike) as series in the computational coordinates. A sample at
         ``(x, y)`` is read at ``u = F^-1(x)``, ``v = G^-1(y)`` and divided by the slopes there.
-        The public origin is the cell centre and the coordinate functions' is its corner.
+        In the matched coordinates of a circle or an ellipse the records hold ``E~ = J^T E`` and
+        the sample is read at the inverse of the whole map and turned back by ``J^-T``. The
+        public origin is the cell centre and the coordinate functions' is its corner.
         """
         x, y = grid
         hosts = _host_value(x), _host_value(y)
@@ -429,6 +466,8 @@ class FieldState:
             raise NotImplementedError(
                 'a field under wall_resolution reads its sample points as numbers, so traced '
                 'coordinates (jax.jit, jax.vmap, jax.grad over x or y) are not sampled yet')
+        if not isinstance(self.stretch, tuple):
+            return self._matched_points(xp, grid, hosts)
         mapped, slope = [], []
         for host, axis, like in zip(hosts, self.stretch, (x, y)):
             half = 0.5 * axis.period
@@ -438,7 +477,65 @@ class FieldState:
         f, g = np.broadcast_arrays(*slope)
         one = np.ones_like(f)
         slopes = _array(xp, np.stack([f, g, one, f, g, one], axis=-1), x)
-        return tuple(mapped), slopes
+        return tuple(mapped), lambda field: field / slopes
+
+    def _matched_points(self, xp, grid, hosts):
+        """:meth:`_stretched_points` in :class:`~wavebit.rcwa._engine.stretch.Matched` coordinates.
+
+        The records hold ``E~ = J^T E``, and ``J`` jumps on the four matched lines across the
+        whole cell, so the component of ``E~`` normal to a line jumps there even in a uniform
+        medium and its plain sum rings; the normal ``D~`` and the tangential ``E~`` do not. So
+        within half a resolution unit ``P / (2N + 1)`` of a line (in the computational cell) the
+        normal component is read from the sum of ``D~`` through the local tensor,
+        ``E~_u = (D~_u - eps~_uv E~_v) / eps~_uu`` beside a line ``u = const``, beyond one and a
+        half units the plain sum is kept, and a ``cos^2`` blends the two between; ``H~`` the same
+        with ``B~``. Then ``E = J^-T E~``. The window is the one measured with the test
+        implementation the product reproduces.
+        """
+        matched = self.stretch
+        solved = matched.solved
+        (half_x, half_y), (x, y) = (0.5 * p for p in matched.period), grid
+        hx, hy = (np.real(np.asarray(h, dtype=complex)) for h in hosts)
+        hx, hy = np.broadcast_arrays(hx, hy)
+        u, v = matched.inverse(hx + half_x, hy + half_y)
+        _, _, xu, xv, yu, yv, inside = matched.at(u, v)
+        det = xu * yv - xv * yu
+        g11, g12, g22 = xu * xu + yu * yu, xu * xv + yu * yv, xv * xv + yv * yv
+        # Distance to the nearest line, in resolution units of its own axis.
+        units = []
+        for coordinate, axis, half_width in ((u, matched.x, solved['half_widths'][0]),
+                                             (v, matched.y, solved['half_widths'][1])):
+            gap = np.min([np.abs((coordinate - line + 0.5 * axis.period) % axis.period
+                                 - 0.5 * axis.period) for line in axis.wall_u], axis=0)
+            units.append(gap * (2 * half_width + 1) / axis.period)
+        near_u = units[0] <= units[1]
+        q = np.minimum(*units)
+        weight = np.cos(0.5 * np.pi * np.clip(q - 0.5, 0.0, 1.0)) ** 2
+        # E = J^-T E~ in plane: E_x = (y_v E~_u - y_u E~_v) / det, E_y = (x_u E~_v - x_v E~_u) / det.
+        a, b, c, d = (_array(xp, w / det, x) for w in (yv, -yu, -xv, xu))
+        uu, vv, uv = (_array(xp, w / det, x) for w in (g22, g11, -g12))
+        near, weight, inside = (_array(xp, w, x) for w in (near_u, weight, inside))
+        mapped = (_array(xp, u - half_x, x), _array(xp, v - half_y, x))
+        scalars = solved['scalars']
+
+        def read(e_u, e_v, d_u, d_v, scale):
+            t_uu, t_vv, t_uv = scale * uu, scale * vv, scale * uv
+            mixed_u = xp.where(near > 0, (d_u - t_uv * e_v) / t_uu, e_u)
+            mixed_v = xp.where(near > 0, e_v, (d_v - t_uv * e_u) / t_vv)
+            return (weight * mixed_u + (1 - weight) * e_u, weight * mixed_v + (1 - weight) * e_v)
+
+        def to_physical(field, flux, owner):
+            parts = [field[..., i] for i in range(6)]
+            layer = np.asarray(_host_value(owner)).reshape(-1)
+            shape = (-1,) + (1,) * (field.ndim - 2)
+            own = [_array(xp, np.array([scalars[j][k] for j in layer]), parts[0]) for k in (0, 1)]
+            scale = xp.where(inside > 0, xp.reshape(own[0], shape), xp.reshape(own[1], shape))
+            e_u, e_v = read(parts[0], parts[1], flux[..., 0], flux[..., 1], scale)
+            h_u, h_v = read(parts[3], parts[4], flux[..., 3], flux[..., 4], 1.0)
+            return xp.stack([a * e_u + b * e_v, c * e_u + d * e_v, parts[2],
+                             a * h_u + b * h_v, c * h_u + d * h_v, parts[5]], axis=-1)
+
+        return mapped, to_physical
 
     def _apply_lalanne(self, xp, g, rule, coefficient, field, owner):
         """``field`` with the rule's ``E`` and ``H`` in the samples of the layers the rule reads.

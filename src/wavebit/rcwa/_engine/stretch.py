@@ -268,3 +268,246 @@ class Stretch:
                 'walls_y': tuple(float(v) for v in self.y.walls),
                 'computational_x': tuple(float(v) for v in self.x.wall_u),
                 'computational_y': tuple(float(v) for v in self.y.wall_u)}
+
+
+#: Pixels per period, at least, of the computational raster a matched layer's tensor is
+#: sampled on (:meth:`Matched.raster`). The prototype gave the same R to five digits and the
+#: same field error at 512, 1024 and 2048 with the matched lines on pixel edges.
+_MATCHED_PIXELS = 512
+
+#: Shape types :class:`Matched` takes. ``disk`` is ``circle``'s other name.
+MATCHED_TYPES = ('circle', 'disk', 'ellipse')
+
+
+class Matched:
+    """Coordinates matched to one circle or axis-aligned ellipse, behind the stretch of :class:`Axis`.
+
+    Two maps, composed. First each axis's stretch, ``(u, v) -> (s, t) = (F(u), G(v))``, with its
+    walls at the lines ``s = cx +- c_x`` and ``t = cy +- c_y``, ``c = r / sqrt(2)``: so those
+    lines sit half a period apart in ``u`` and ``v`` and the coordinates advance at the slope
+    there. Then the mesh of Weiss et al. (Opt. Express 17, 8051 (2009)), as restated by Weiss
+    (thesis, 2011, Eqs. 3.12-3.13) and by Kuechenmeister, Zebrowski and Busch (Opt. Express 20,
+    17319 (2012)), which carries the rectangle
+    ``|p| <= c_x, |q| <= c_y`` (``p = s - cx`` and ``q = t - cy`` wrapped onto the period; the
+    rectangle's corners are the ellipse's 45 degree points) onto the ellipse::
+
+        f_x(q) = r_x sqrt(1 - q^2 / r_y^2)   for |q| <= c_y,   c_x  otherwise
+        |p| <= c_x:   X = (p / c_x) f_x(q)
+        |p| >  c_x:   X = sign(p) [(h_x - |p|) f_x(q) + (|p| - c_x) h_x] / (h_x - c_x),   h_x = P_x / 2
+
+    and ``Y`` the same with the axes exchanged; ``x = cx + X``, ``y = cy + Y``. The rectangle's
+    four sides become the ellipse's four arcs, the four side patches stretch only across the
+    wall, the four corner patches are the identity, and so is the cell's edge: the map is
+    periodic. It is continuous and its Jacobian jumps on the four lines, across the whole cell.
+    That is what Li's rules need: across a coordinate line of a continuous map the tangential
+    ``E~`` and the normal ``D~`` stay continuous whatever the Jacobian does. At the rectangle's
+    four corners the Jacobian is singular (a corner is flattened onto a smooth curve); the
+    material tensor is sampled at pixel centres, never there.
+
+    With ``J = d(x, y)/d(u, v)`` and the components ``E~ = J^T E`` (``E~_z = E_z``; ``H`` alike)
+    Maxwell's equations keep their form and the materials become full in-plane tensors::
+
+        eps~ = eps det(J) (J^T J)^-1  (in plane),   eps~_zz = eps det(J);   mu~ the same with mu
+
+    Everything here is geometry on concrete numbers (NumPy, double precision), as in
+    :class:`Axis`. ``centre`` is in cell coordinates, the corner at 0.
+    """
+
+    def __init__(self, centre, radii, periods, slope):
+        cx, cy = (float(v) for v in centre)
+        rx, ry = (float(v) for v in radii)
+        px, py = (float(v) for v in periods)
+        if not (0 < rx < 0.5 * px and 0 < ry < 0.5 * py):
+            raise ValueError(
+                f'an ellipse of semi-axes {rx:g} and {ry:g} does not fit inside a cell of '
+                f'{px:g} by {py:g}: the matched coordinates need room between its wall and the '
+                'cell\'s edge on every side')
+        self.slope = float(slope)
+        self.centre, self.radii, self.period = (cx, cy), (rx, ry), (px, py)
+        self.inner = (rx / math.sqrt(2.0), ry / math.sqrt(2.0))
+        self.x = Axis([cx - self.inner[0], cx + self.inner[0]], px, slope)
+        self.y = Axis([cy - self.inner[1], cy + self.inner[1]], py, slope)
+
+    identity = False
+
+    def describe(self):
+        """What was resolved, for a report."""
+        return {'slope': self.slope, 'matched': 'ellipse',
+                'centre': tuple(float(v) for v in self.centre),
+                'radii': tuple(float(v) for v in self.radii),
+                'walls_x': tuple(float(v) for v in self.x.walls),
+                'walls_y': tuple(float(v) for v in self.y.walls),
+                'computational_x': tuple(float(v) for v in self.x.wall_u),
+                'computational_y': tuple(float(v) for v in self.y.wall_u)}
+
+    @staticmethod
+    def _wrap(t, period):
+        """``t`` on ``[-period / 2, period / 2)``."""
+        return t - period * np.floor(t / period + 0.5)
+
+    @staticmethod
+    def _one(p, q, rp, rq, half):
+        """One coordinate of the mesh, ``X(p, q)``, with ``dX/dp`` and ``dX/dq``."""
+        cp, cq = rp / math.sqrt(2.0), rq / math.sqrt(2.0)
+        aq = np.abs(q)
+        along = aq <= cq
+        root = np.sqrt(1.0 - (np.minimum(aq, cq) / rq) ** 2)        # >= 1/sqrt(2)
+        f = np.where(along, rp * root, cp)
+        df = np.where(along, -rp * q / (rq * rq * root), 0.0)
+        ap, sign = np.abs(p), np.sign(p)
+        inner = ap <= cp
+        X = np.where(inner, p / cp * f, sign * ((half - ap) * f + (ap - cp) * half) / (half - cp))
+        Xp = np.where(inner, f / cp, (half - f) / (half - cp))
+        Xq = np.where(inner, p / cp * df, sign * (half - ap) * df / (half - cp))
+        return X, Xp, Xq
+
+    def at(self, u, v):
+        """``(x, y, x_u, x_v, y_u, y_v, inside)`` at computational points (broadcast).
+
+        ``inside`` is whether the point is in the ellipse. ``x - u`` and ``y - v`` are periodic.
+        """
+        u, v = np.broadcast_arrays(np.asarray(u, dtype=float), np.asarray(v, dtype=float))
+        (cx, cy), (rx, ry), (px, py) = self.centre, self.radii, self.period
+        s, f = self.x.F(u), self.x.dF(u)
+        t, g = self.y.F(v), self.y.dF(v)
+        p, q = self._wrap(s - cx, px), self._wrap(t - cy, py)
+        X, Xp, Xq = self._one(p, q, rx, ry, 0.5 * px)
+        Y, Yq, Yp = self._one(q, p, ry, rx, 0.5 * py)
+        inside = (np.abs(p) < self.inner[0]) & (np.abs(q) < self.inner[1])
+        return s + (X - p), t + (Y - q), Xp * f, Xq * g, Yp * f, Yq * g, inside
+
+    def _mesh_inverse(self, X, Y):
+        """``(p, q)`` of the mesh's point ``(X, Y)``, both wrapped about the centre. Closed form."""
+        (rx, ry), (cpx, cpy) = self.radii, self.inner
+        hx, hy = 0.5 * self.period[0], 0.5 * self.period[1]
+        ax, ay = np.abs(X), np.abs(Y)
+        # Inside: X / rx = sqrt2 a sqrt(1 - b^2), Y / ry = sqrt2 b sqrt(1 - a^2) with a = p / rx,
+        # b = q / ry; with S, T the left sides over sqrt2, a^2 - b^2 = S^2 - T^2 = d, and a^2 and
+        # b^2 are the smaller roots of A^2 - (1 + d) A + S^2 = 0 and B^2 - (1 - d) B + T^2 = 0,
+        # each taken in the form that does not cancel (B = A - d would, where T is small).
+        inside = (X / rx) ** 2 + (Y / ry) ** 2 <= 1.0
+        S = np.where(inside, X, 0.0) / (math.sqrt(2.0) * rx)
+        T = np.where(inside, Y, 0.0) / (math.sqrt(2.0) * ry)
+        d = S * S - T * T
+        A = 2.0 * S * S / ((1.0 + d) + np.sqrt(np.maximum((1.0 + d) ** 2 - 4.0 * S * S, 0.0)))
+        B = 2.0 * T * T / ((1.0 - d) + np.sqrt(np.maximum((1.0 - d) ** 2 - 4.0 * T * T, 0.0)))
+        p_in, q_in = np.sign(S) * np.sqrt(A) * rx, np.sign(T) * np.sqrt(B) * ry
+        # A side patch keeps the coordinate along the wall and is linear across it.
+        fx = rx * np.sqrt(1.0 - (np.minimum(ay, cpy) / ry) ** 2)
+        fy = ry * np.sqrt(1.0 - (np.minimum(ax, cpx) / rx) ** 2)
+        p_side = np.sign(X) * (ax * (hx - cpx) - hx * fx + cpx * hx) / (hx - fx)
+        q_side = np.sign(Y) * (ay * (hy - cpy) - hy * fy + cpy * hy) / (hy - fy)
+        side_x = ~inside & (ay <= cpy)
+        side_y = ~inside & ~side_x & (ax <= cpx)
+        p = np.where(inside, p_in, np.where(side_x, p_side, X))
+        q = np.where(inside, q_in, np.where(side_y, q_side, Y))
+        return p, q
+
+    def inverse(self, x, y):
+        """Computational ``(u, v)`` of physical points ``(x, y)`` (broadcast, any period)."""
+        x, y = np.broadcast_arrays(np.asarray(x, dtype=float), np.asarray(y, dtype=float))
+        (cx, cy), (px, py) = self.centre, self.period
+        X, Y = self._wrap(x - cx, px), self._wrap(y - cy, py)
+        p, q = self._mesh_inverse(X, Y)
+        # x = s + (X - p) with s = F(u), and the same whole periods as x.
+        return self.x.inverse(x + (p - X)), self.y.inverse(y + (q - Y))
+
+    def _raster_axis(self, axis, half_width):
+        """``(right edges, centres)`` of one axis's pixels, the matched lines on pixel edges.
+
+        ``M`` equal pixels, ``M`` even so that both lines (half a period apart) are edges; the
+        first pixel edge is a line, so the pixel across ``u = 0`` is cut in two segments, which
+        hold the same value.
+        """
+        period = axis.period
+        count = _MATCHED_PIXELS
+        while count < 16 * (2 * half_width + 1):
+            count *= 2
+        step = period / count
+        start = float(axis.wall_u[0]) % step
+        bounds = start + np.arange(count) * step
+        if start < 1e-12 * period:
+            return np.append(bounds[1:], period), bounds + 0.5 * step
+        centres = np.concatenate([[bounds[-1] + 0.5 * step - period], bounds + 0.5 * step])
+        return np.append(bounds, period), centres
+
+    def raster(self, half_u, half_v):
+        """The unit tensor ``det(J) (J^T J)^-1`` and ``det(J)`` on the computational raster.
+
+        Returns ``(edges_u, edges_v, unit, inside)``: right-hand segment edges per axis (for
+        :func:`~wavebit.rcwa._engine.tensor_li.layer_matrices`), the ``(rows, columns, 3, 3)``
+        tensor of a medium of permittivity 1 (rows along ``v``), and the ellipse's pixels.
+        """
+        edges_u, centres_u = self._raster_axis(self.x, half_u)
+        edges_v, centres_v = self._raster_axis(self.y, half_v)
+        U, V = np.meshgrid(centres_u, centres_v)
+        _, _, xu, xv, yu, yv, inside = self.at(U, V)
+        det = xu * yv - xv * yu
+        g11, g12, g22 = xu * xu + yu * yu, xu * xv + yu * yv, xv * xv + yv * yv
+        unit = np.zeros(U.shape + (3, 3))
+        unit[..., 0, 0], unit[..., 1, 1] = g22 / det, g11 / det
+        unit[..., 0, 1] = unit[..., 1, 0] = -g12 / det
+        unit[..., 2, 2] = det
+        return edges_u, edges_v, unit, inside
+
+    def wave_columns(self, xp, k_u, k_v, half_u, half_v, orders, dtype):
+        """Physical plane waves of the given orders written in the computational basis.
+
+        For order ``(m, n)``, ``exp(i (k_x x + k_y y))`` with ``k_x = k_u + 2 pi m / P_x`` and
+        ``k_y = k_v + 2 pi n / P_y``, the computational components of a field along ``x`` are
+        ``x_u`` and ``x_v`` times that wave, of one along ``y`` ``y_u`` and ``y_v`` times it
+        (``E~ = J^T E``). Their coefficients on the computational harmonics
+        ``exp(i (k_u + 2 pi p / P_x) u + i (k_v + 2 pi r / P_y) v)`` are the integrals::
+
+            (1 / (P_x P_y)) int int w(u, v) exp(i (k_x x + k_y y - k_u u - k_v v)) exp(-2 pi i (p u / P_x + r v / P_y)) du dv
+
+        on Gauss-Legendre nodes per patch, where the integrand is smooth. Returns
+        ``(T_ux, T_uy, T_vx, T_vy)``, each ``((2 half_v + 1) (2 half_u + 1), len(orders))``
+        with rows ``r * (2 half_u + 1) + p`` as the orders run elsewhere: ``T_ux`` is ``x_u``'s,
+        ``T_uy`` ``y_u``'s, ``T_vx`` ``x_v``'s, ``T_vy`` ``y_v``'s. ``k_u`` and ``k_v`` may be
+        backend scalars.
+        """
+        u, _, _, wu = self.x.wave_nodes(half_u)
+        v, _, _, wv = self.y.wave_nodes(half_v)
+        V, U = np.meshgrid(v, u, indexing='ij')
+        x, y, xu, xv, yu, yv, _ = self.at(U, V)
+        real = xp.float32 if dtype == xp.complex64 else xp.float64
+        px, py = self.period
+        weight = xp.asarray(wv[:, None] * wu[None, :], dtype=real)
+        dx, dy = xp.asarray(x - U, dtype=real), xp.asarray(y - V, dtype=real)
+        X, Y = xp.asarray(x, dtype=real), xp.asarray(y, dtype=real)
+        rows_u = xp.exp(-1j * xp.astype(xp.asarray(
+            2.0 * math.pi / px * np.outer(np.arange(-half_u, half_u + 1), u), dtype=real), dtype))
+        rows_v = xp.exp(-1j * xp.astype(xp.asarray(
+            2.0 * math.pi / py * np.outer(np.arange(-half_v, half_v + 1), v), dtype=real), dtype))
+        k_u, k_v = xp.asarray(k_u, dtype=dtype), xp.asarray(k_v, dtype=dtype)
+        bloch = xp.exp(1j * (k_u * xp.astype(dx, dtype) + k_v * xp.astype(dy, dtype)))
+        slopes = [xp.astype(xp.asarray(a, dtype=real) * weight, dtype) * bloch
+                  for a in (xu, yu, xv, yv)]
+        out = [[] for _ in slopes]
+        for m, n in orders:
+            wave = xp.exp(1j * xp.astype(2.0 * math.pi * (m / px * X + n / py * Y), dtype))
+            for column, slope in zip(out, slopes):
+                coefficients = rows_v @ (slope * wave) @ xp.matrix_transpose(rows_u)
+                column.append(xp.reshape(coefficients, (-1,)))
+        return tuple(xp.stack(column, axis=1) for column in out)
+
+
+def matched_layer_matrices(xp, matched, inside, outside, half_u, half_v, dtype, raster=None):
+    """The five Li slots of a layer in :class:`Matched` coordinates.
+
+    ``inside`` and ``outside`` are the permittivities of the ellipse and around it (equal for a
+    uniform medium; ``1`` and ``1`` give the permeability of vacuum). The layer is the tensor
+    ``scalar * unit`` of :meth:`Matched.raster`, which jumps on the matched lines only, and it
+    goes through the tensor Li of shapes with those pixels' edges as segment edges. ``raster``
+    reuses an earlier :meth:`Matched.raster` of the same orders.
+    """
+    from wavebit.rcwa._engine import tensor_li
+    edges_u, edges_v, unit, mask = matched.raster(half_u, half_v) if raster is None else raster
+    real = xp.float32 if dtype == xp.complex64 else xp.float64
+    inside = xp.asarray(inside, dtype=dtype)
+    outside = xp.asarray(outside, dtype=dtype)
+    scalar = xp.where(xp.asarray(mask), inside, outside)
+    tensor = scalar[..., None, None] * xp.astype(xp.asarray(unit, dtype=real), dtype)
+    edges = (xp.asarray(edges_u[:, None], dtype=real), xp.asarray(edges_v[:, None], dtype=real))
+    return tuple(tensor_li.layer_matrices(xp, tensor, half_u, half_v, edges))
