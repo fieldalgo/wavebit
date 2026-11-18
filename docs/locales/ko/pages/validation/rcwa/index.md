@@ -73,3 +73,4 @@
 - [NVF 법선장과 그것을 구하는 격자 — 측정](nvf-upsampling.md)
 - [시간 규약 점검 — 어느 근, 어느 방향, 그리고 뒤집은 뒤 남은 것](time-convention-audit.md)
 - [늘린 좌표의 계산을 유한요소 필드와 견줌 — 측정](wall-resolution.md)
+- [프로파일 층: 슬라이스를 무엇과 견주었는가](profiled-layers.md)

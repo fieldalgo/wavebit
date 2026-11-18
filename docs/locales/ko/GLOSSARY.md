@@ -53,6 +53,10 @@ paper, a docstring or an earlier record, in quotation marks) keeps its own wordi
 | ringdown | 링다운 | |
 | dyad | 다이애드 | |
 | Earlier interface (admonition title) | 이전 인터페이스 | |
+| profiled layer (`rcwa.ProfiledLayer`) | 프로파일 층 | |
+| slice / slicing (of a profiled layer) | 슬라이스 / 슬라이스 분할 | 슬라이스 수, 슬라이스 경계. |
+| sidewall angle (SWA) | 측벽각 | footing and undercut stay in English. |
+| arc length | 호 길이 | |
 
 ## Terms already used consistently
 

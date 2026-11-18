@@ -79,7 +79,7 @@ FDTD 모듈에는 자체 선언(`fdtd.Problem`, `fdtd.Scene`, `fdtd.Numerics` �
 
 | 필드 | 기본값 | 받는 값 | 거부하는 값 |
 | --- | --- | --- | --- |
-| `layers` | `()` | `rcwa.Layer`의 튜플, **아래에서 위로**. 아래 계면이 `z = 0`입니다. 빈 적층은 계면 하나입니다 | `Layer`가 아닌 모든 것: `stack.layers`, 생성 시. 영역 층 옆의 래스터 층: `rcwa.mixed_layer_encoding`, check 시 |
+| `layers` | `()` | `rcwa.Layer`와 `rcwa.ProfiledLayer`의 튜플, **아래에서 위로**. 아래 계면이 `z = 0`입니다. 빈 적층은 계면 하나입니다 | 그 밖의 모든 것: `stack.layers`, 생성 시. `ProfiledLayer` 옆의 래스터 층: `layer.profile_raster`, check 시. 영역 층 옆의 래스터 층: `rcwa.mixed_layer_encoding`, check 시 |
 | `top` | `Material(epsilon=1.)` | 위쪽 반공간의 재료 모델. 수동 이중 음수 매질(`Re(eps) < 0`, `Re(mu) < 0`)은 빛이 들어오는 쪽이든 아니든 어느 쪽에서도 계산됩니다. [음의 굴절률 매질](../theory/rcwa/negative-index-media.md)을 보세요 | 맨 숫자: `material.type`. 전파하는 능동 이중 음수 매질(`Re(eps*mu) > 0`이고, `Im(eps) < 0` 또는 `Im(mu) < 0`): `rcwa.invalid`, 둘 다 check 시 |
 | `bottom` | `Material(epsilon=1.)` | 아래쪽 반공간, 같은 방식으로 읽음 | `top`과 같음 |
 | `period` | `lattice`가 주어지지 않으면 `(1., 1.)` | `(Lx, Ly)`: 양수이고 유한한 실수 길이 두 개. 셀의 축 정렬 표기 | `lattice` 옆에서: `stack.cell_ambiguous`, 생성 시. 스칼라, `dict` 또는 양수가 아닌 길이: `stack.period`, check 시 |
@@ -101,11 +101,22 @@ FDTD 모듈에는 자체 선언(`fdtd.Problem`, `fdtd.Scene`, `fdtd.Numerics` �
 | `epsilon` | `None` | 모양이 `(Ny, Nx)`인 표본화된 상대 유전율 래스터, 복소수 허용. 행 하나는 1D 격자이며, `(Ny, Nx, 3, 3)`은 픽셀마다 텐서를 담습니다. 한 적층의 모든 래스터 층은 같은 모양입니다 | 배열 안의 `Material` 객체, 또는 모양이 다른 래스터 층: `rcwa.invalid`, check 시. 그 밖의 모양(1D, 3D, 빈 배열 또는 0차원 배열, 또는 `(Ny, Nx, 2, 2)`): 기대한 모양과 실제 모양을 담은 `layer.raster_shape`, check 시. NaN 또는 무한대 표본: `problem.nonfinite`, check 시. 어느 픽셀에서든 0인 `eps_zz`, 또는 역수가 실행 정밀도에서 오버플로하는 값(배경이나 영역 재료에도 해당): `rcwa.zero_permittivity`, check 시 |
 | `mu` | `None` | `epsilon` 옆의 상대 투자율 래스터, 같은 모양. 영역 층에서 투자율은 각 `Material`에 속합니다 | `epsilon` 없이: `layer.mu_without_raster`, 생성 시. `(Ny, Nx)` 또는 `(Ny, Nx, 3, 3)`이 아닌 모양, 또는 `epsilon`과 다른 `(Ny, Nx)`(어느 쪽이든 픽셀마다 텐서를 담을 수 있음): `stack.layers[i].mu`에서의 `layer.raster_shape`, check 시 |
 
+### `rcwa.ProfiledLayer`
+
+높이에 따라 단면이 바뀌고 Wavebit이 슬라이스하는 층입니다. [프로파일 층](../guide/rcwa/profiled-layers.md)을
+보세요. 래스터 형태는 없습니다.
+
+| 필드 | 기본값 | 받는 값 | 거부하는 값 |
+| --- | --- | --- | --- |
+| `thickness` | 필수 | `rcwa.Layer`와 같음 | `rcwa.Layer`와 같음 |
+| `background` | `Material(epsilon=1.)` | `rcwa.Layer`와 같음 | `rcwa.Layer`와 같음 |
+| `regions` | `()` | `rcwa.Region`의 튜플, 순서대로 칠함. 어느 것이든 `Trapezoid`, `Loft`, `Profile`을 가질 수 있음 | `Region`이 아닌 모든 것: `layer.regions`, 생성 시. 층에 맞지 않는 형상: `shape.profile`, prepare 시 |
+
 ### `rcwa.Region`
 
 | 필드 | 기본값 | 받는 값 | 거부하는 값 |
 | --- | --- | --- | --- |
-| `geometry` | 필수 | `rcwa.Rectangle`, `rcwa.Circle`, `rcwa.Ellipse` 또는 `rcwa.Polygon` | 레시피 `dict`를 포함한 그 밖의 모든 것: `shape.type`, 생성 시 |
+| `geometry` | 필수 | `rcwa.Rectangle`, `rcwa.Circle`, `rcwa.Ellipse` 또는 `rcwa.Polygon`. `rcwa.ProfiledLayer` 안에서는 `rcwa.Trapezoid`, `rcwa.Loft`, `rcwa.Profile`도 | 레시피 `dict`를 포함한 그 밖의 모든 것: `shape.type`, 생성 시. `rcwa.Layer` 안의 `Trapezoid`, `Loft`, `Profile`: `layer.profile_geometry`, 생성 시 |
 | `material` | 필수 | 스칼라 또는 텐서 재료 모델 | 맨 숫자: `material.type`, check 시 |
 
 ### 기하 형상
@@ -124,6 +135,21 @@ prepare 시 `rcwa.invalid`로 거부됩니다.
 | `rcwa.Ellipse` | `radii` | 필수 | 주 반축 `(rx, ry)` | 성분이 두 개가 아님: `shape.dimension`. 복소수 또는 문자열 항목: `shape.value` |
 | | `center`, `angle` | `(0., 0.)`, `0.` | `Rectangle`과 같음 | `Rectangle`과 같음 |
 | `rcwa.Polygon` | `vertices` | 필수 | 경계를 따라 순서대로 놓인 `N >= 3`개의 쌍 `(x, y)`, 또는 `(N, 2)` 배열. 감는 방향은 어느 쪽이든 가능 | 셋 미만: `shape.vertices`. 단순하지 않은 외곽선(길이 0인 변, 서로 교차하거나 맞닿는 두 변): `shape.outline`, 둘 다 생성 시. `factorization='li'` 또는 `nvf_projector='circular'` 아래에서, 또는 텐서 재료와 함께: `rcwa.unsupported`, check 시 |
+
+아래 세 형상은 층의 아래 면에서 위로 잰 높이 `z`에 따라 바뀌며, `rcwa.ProfiledLayer`만 받습니다.
+
+| 선언 | 필드 | 기본값 | 받는 값 | 거부하는 값 |
+| --- | --- | --- | --- | --- |
+| `rcwa.Trapezoid` | `cd` | 필수 | 직선 측벽에서, `cd_at`이 가리키는 높이의 라인 폭 | 양수가 아님: `shape.profile`. 복소수 또는 문자열: `shape.value`, 둘 다 생성 시 |
+| | `swa` | `pi/2` | 바닥면과 측벽이 재료 안쪽에서 이루는 측벽각, 라디안: `pi/2`는 수직, 작으면 테이퍼, 크면 undercut. 또는 `(left, right)` 쌍 | `(0, pi)` 밖: `shape.profile`. 개수가 둘이 아닌 시퀀스: `shape.dimension`, 둘 다 생성 시 |
+| | `top_rounding`, `footing` | `0.`, `0.` | 위쪽 모서리의 볼록한 원호와 아래쪽의 오목한 fillet의 반지름 | 음수: `shape.profile`, 생성 시. 층에 비해 너무 크거나 측벽이 층 안에서 만남: `shape.profile`, prepare 시 |
+| | `center` | `0.` | 그 폭의 중점의 `x`, 셀 중심 기준 | 복소수 또는 문자열: `shape.value` |
+| | `cd_at` | `'bottom'` | `'bottom'`, `'middle'`, `'top'` | 그 밖의 값: `shape.profile` |
+| `rcwa.Loft` | `bottom`, `top` | 필수 | `Polygon`이 받는 외곽선 둘. 꼭짓점 수가 같고 순서대로 짝지어지며, 그 사이는 선형 | 꼭짓점 수가 다름: `shape.vertices`. `Polygon`이 거부하는 외곽선: `Polygon`과 같음, 모두 생성 시 |
+| `rcwa.Profile` | `section` | 필수 | 호출 가능한 `z -> vertices`. 모든 높이에서 꼭짓점 수가 같음 | 호출할 수 없음: `shape.profile`, 생성 시. 문제를 job으로 저장: `job.encoding` |
+
+`Trapezoid`는 셀을 `y` 방향으로 가로지르므로 `Stack(period=...)`가 필요합니다. `lattice`로 주면
+prepare 시 `shape.profile_cell`로 거부됩니다.
 
 `factorization='li'`는 축 정렬 직사각형만 만듭니다. 그 아래에서 다른 영역은 모두
 check 시 `rcwa.unsupported`로 거부됩니다.
@@ -218,6 +244,17 @@ check 시 `rcwa.unsupported`로 거부됩니다.
 | `half_space_merge_tolerance` | `0.0`: 비트 단위로 동일한 재료만 | 층의 재료가 옆 반공간에 병합되려면 얼마나 가까워야 하는지를 나타내는 `[0, 1)` 범위의 상대 허용 오차. `0`은 모든 유전율과 투자율 값이 반공간과 비트 단위로 같은 층만, 그리고 층으로 계산하면 O(1)만큼 틀릴 수 있는 복소수 면내 파동 벡터에서, 또는 층을 계산할 수 없는 2D 경로에서 그 반공간을 정확히 스치는 경우에만 병합합니다. 다른 실수 각도는 비트를 유지합니다. 양수 값은 그 안에 드는 재료를 모든 각도에서 반공간의 재료 **로 간주**하며, 답은 그렇게 맞춘 장면의 답입니다. `result.diagnostics['half_space_merge']`가 해당 층을 알려 줍니다. [connecting algorithms §10](../theory/rcwa/connecting-algorithms.md#10-etms-labels-at-a-complex-in-plane-wavevector)을 보세요 | 음수, 1 미만이 아님, 또는 유한하지 않음: `numerics.half_space_merge_tolerance`, 생성 시. 결맞는 소스와 함께 양수: `rcwa.coherent_half_space_merge`, check 시. `IncidentOrders`와 함께, `jax.jit`나 `jax.vmap`이 추적하는 재료와 함께, 또는 재료 미분과 함께 양수: run 시 거부. 병합은 구체적인 재료로부터 결정되기 때문입니다(추적된 각도만 있는 것은 괜찮으며, jit된 함수 안에서 상수로 쓴 재료도 괜찮습니다) |
 | `exceptional_points` | `'rebuild'` | `'rebuild'`: 예외점과 그 근처의 층을 정칙 기저로 다시 만들며, 그럴 수 없는 곳에서는 경고하거나(즉시 실행) NaN으로 답합니다(추적). `'off'`: 모든 경로(2차 및 1차 2D, 1D conical, 결맞는 소스)에서 즉시 실행이든 추적이든 검출, 재구성, 선별을 건너뛰는 고급 선택입니다 -- 주로 `jax.jit` 아래에서 더 빠르지만, 예외점과 그 근처에서는 경고 없이 답이 틀릴 수 있습니다. 예외점에서 떨어진 곳에서는 답이 반올림 수준까지 일치합니다. {ref}`예외점 §7 <ep-handling-off>`를 보세요 | 그 밖의 모든 것: `numerics.choice`, 생성 시 |
 | `wall_resolution` | `None`: 셀 자체의 좌표 | 축 정렬 직사각형, 또는 원 하나나 축 정렬 타원 하나의 벽에서 계산 좌표의 기울기로, `(0, 1]` 범위의 숫자입니다. `0.02`(권장)는 모든 벽에서 좌표선을 50배 더 촘촘하게 놓습니다. 원이나 타원은 그에 맞춘 좌표에서 계산됩니다. 이를 쓰면 소멸 차수의 진폭은 0으로 보고되며, 경계 필드와 산란 행렬은 사용할 수 없습니다. [늘린 좌표로 벽 분해하기](../guide/rcwa/wall-resolution.md)를 보세요 | `(0, 1]` 밖의 값: `numerics.wall_resolution`, 생성 시. 2차 정식화의 `'smm'`에서 `factorization='li'` 아래, 등방성 비자성 재료, 무손실 유전체 반공간, 평면파 하나인 조건에서 축 정렬 직사각형, 또는 원 하나나 축 정렬 타원 하나(모든 패턴 층에서 같고 셀 가장자리까지 여유가 있어야 함) 이외의 모든 것: `rcwa.unsupported`, check 시. `jax.jit`, `jax.vmap`, 그래디언트 |
+| `slicing` | `None`, `rcwa.Slicing()`으로 읽음 | `rcwa.Slicing`: 모든 `rcwa.ProfiledLayer`를 `z` 방향으로 어떻게 슬라이스하고 계단 오차를 언제 추정하는지. `ProfiledLayer`가 든 적층만 읽음. [프로파일 층](../guide/rcwa/profiled-layers.md#how-the-layer-is-sliced)을 보세요 | 그 밖의 모든 것: `numerics.slicing`, 생성 시 |
+
+### `rcwa.Slicing`
+
+| 필드 | 기본값 | 받는 값 | 거부하는 값 |
+| --- | --- | --- | --- |
+| `count` | `'auto'` | 프로파일 층 하나의 슬라이스 수, 양의 `int`, 또는 `'auto'`: 추정 계단 오차가 `tolerance` 이하가 될 때까지 `min_count`부터 두 배씩 늘림 | 그 밖의 값: `numerics.slicing`, 생성 시. 회절 출력이 없는 문제에서 `'auto'`: `numerics.slicing`, prepare 시 |
+| `rule` | `'arclength'` | `'arclength'`(측벽 호 길이를 같은 간격으로) 또는 `'uniform'`(두께를 같게) | 그 밖의 값: `numerics.slicing` |
+| `tolerance` | `1e-4` | 양수: 더 잘게 잘라 생길 효율 변화로 허용하는 추정 최댓값 | 양수가 아니거나 유한하지 않음: `numerics.slicing` |
+| `min_count`, `max_count` | `4`, `64` | 양의 `int`, `max_count >= min_count`. `tolerance`에 못 미친 채 `max_count`에 닿으면 `rcwa.diagnostics.SlicingWarning`을 냄 | 그 밖의 값: `numerics.slicing` |
+| `estimate` | `'prepare'` | `'prepare'`, `'run'`(매 실행마다도, 슬라이스 절반으로) 또는 `None` | 그 밖의 값: `numerics.slicing` |
 
 ### NVF names changed on 2026-09-21
 

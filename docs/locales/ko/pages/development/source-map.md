@@ -39,6 +39,7 @@
 | 단계 | 구현 | 확인할 내용 |
 | --- | --- | --- |
 | 선언 | [rcwa/problem.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/problem.py), [rcwa/numerics.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/numerics.py) | 아래에서 위로 쌓는 층, 입사 조건, 요청한 장·산란 결과, 수치 설정을 확인합니다. |
+| 프로파일 층 슬라이스 | [rcwa/_profile.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_profile.py) | `ProfiledLayer`를 준비 전에 `Rectangle` 또는 `Polygon` 영역의 보통 층으로 낮춥니다. `Prepared`는 슬라이스 배치마다 준비 하나를 가집니다. 슬라이스 경계는 구체적인 값에서 계획하고 고정합니다. `tests/rcwa/test_profiled_layer.py`와 `tests/references/test_reticolo_taper_golden.py`를 보세요. |
 | 검사와 준비 | [rcwa/_lifecycle.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_lifecycle.py) | `_resolve`, `prepare`, `Prepared._solvers`가 입력을 검사하고 기하를 고정하며 호환되지 않는 재사용을 거부합니다. `check`는 산란 계산을 실행하지 않습니다. |
 | 자동 재준비와 컴파일 | [rcwa/_compiled.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_compiled.py) | `compile`이 준비 하나와 JAX 함수를 보관하며, 같은 새 후보에서 맞지 않는 기하 계획을 다시 만들고 값·미분을 검사한 뒤 호스트 최적화기에 반환합니다. 회귀는 `tests/api/test_compiled_rcwa.py`입니다. |
 | 실행 시점의 값 변환 | [rcwa/_adapt.py](https://github.com/fieldalgo/wavebit/blob/main/src/wavebit/rcwa/_adapt.py) | `build_solver`가 각 파장에서 재료를 평가하고 현재 배열을 내부 팩터리에 전달합니다. 미분 연결을 끊는 호스트 배열 변환을 피합니다. |

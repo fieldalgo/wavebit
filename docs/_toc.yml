@@ -95,6 +95,7 @@ subtrees:
           - file: guide/rcwa/numerics
           - file: guide/rcwa/nvf-method-selection
           - file: guide/rcwa/parametric-modeling
+          - file: guide/rcwa/profiled-layers
           - file: guide/rcwa/guarded-shape-jit
           - file: guide/rcwa/rayleigh-handling-walkthrough
           - file: guide/rcwa/scene
@@ -231,6 +232,7 @@ subtrees:
               - file: validation/rcwa/nvf-thin-gap-energy
               - file: validation/rcwa/fitting-grid-convergence
               - file: validation/rcwa/nvf-upsampling
+              - file: validation/rcwa/profiled-layers
               - file: validation/rcwa/time-convention-audit
               - file: validation/rcwa/wall-resolution
           - file: validation/fdtd/index
