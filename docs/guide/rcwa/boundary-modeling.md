@@ -148,7 +148,8 @@ vertices -- see [Polygon regions](#polygon-regions).
 painting and adding describe the same structure, so the layer stays on the closed-form parametric
 path: exact and cheaper. Routing every shape layer here regardless would move the answer on a
 layer that has no overlap at all — measured 0.8% apart on disjoint rods, because the two paths
-extend the normal differently. A `combine=` key chose the rule by name until 2026-08-27, when
+extend the normal differently; [an experimental option](#one-normal-field-for-every-layer-of-regions-experimental)
+routes them all here on request. A `combine=` key chose the rule by name until 2026-08-27, when
 `'add'` was removed (its overlap is `eps_a + eps_b - eps_background`, which is not a material)
 and `'paint'` stopped being a choice.
 
@@ -184,6 +185,54 @@ This argument used to be made against a document that did not take it: the capab
 published `smooth` and `boundary` as sibling paths until MANIFEST_VERSION `'9'` (2026-09-03).
 It now publishes `parametric` with an `overlap` property, which is this section in
 machine-readable form.
+
+### One normal field for every layer of regions (experimental)
+
+The routing makes two choices at once: whether a layer is painted, and which normal field NVF
+builds for it. The first is forced -- adding overlapping regions is a different structure -- and
+the second is not. A painted layer's field is the line integral over the interfaces left once the
+painting is resolved ([known limits §1c](../../validation/rcwa/normal-field-known-limits.md));
+a layer of disjoint regions takes the closed form's, built region by region. They are different
+fields for the same structure, and under the default that shows twice:
+
+- **One structure, two descriptions, two answers.** A 0.6 x 0.6 block of `epsilon = 4` whose
+  middle 0.2 strip is `epsilon = 9`, written as three abutting tiles and as the block with the
+  strip painted over it: `T` differs by 2.6e-3 at `orders=(3, 3)` (3.0e-3 with the pattern
+  rotated by 0.3 rad) and by 8.7e-5 to 1.4e-3 at orders 5 to 9.
+- **A step at the routing tolerance.** Two 0.3 x 0.3 boxes overlapping by just under and just
+  over `1e-6` of the period change builders between them, and `T` steps by 5.4e-4 (8.0e-4 with
+  the pair rotated by 0.3 rad) however small the change in overlap.
+
+`rcwa.Numerics(shape_normal_method='interfaces')` builds every layer of regions on the boundary
+route, overlapping or not, so the field is always the interfaces'. On the same scenes the two
+descriptions agree to 4e-13 or better at orders 3 to 9, at both angles, and so does a third
+that overlaps two blocks of the same material; the step at the routing tolerance is gone (the
+change across it is 8.0e-10 for a change of 2e-8 in overlap, 9.5e-10 rotated, and a hundred
+times smaller for a change a hundred times smaller). A painted layer is built exactly as before, and `'per_shape'`, the default, names what the path has always done.
+
+It is experimental, a run that uses it emits `ExperimentalWarning`, and three things stand
+between it and a default:
+
+- **It steps where two regions come into contact.** The default is continuous there; under
+  `'interfaces'` the two boxes above, moved from a gap of `1e-8` of the period to an overlap of
+  `1e-8`, step `T` by 2.6e-4 (4.0e-4 rotated). The likely cause, not yet confirmed, is that
+  the two interfaces meeting there -- box and background, background and box -- become one,
+  weighted by a much smaller contrast.
+- **It has no independent reference yet.** On axis-aligned rectangles it was compared, order
+  for order, with Li's rules, the established factorization there: it was nearer to them than
+  the default at most of orders 3 to 9 (for
+  example 1.2e-3 against 1.3e-3 at order 5 on the tiles, 2.1e-4 against 1.3e-3 at order 7 on
+  two boxes apart), and not at every one.
+- **A layer of circles or ellipses costs far more.** A curve on the boundary route is a polygon
+  of `boundary.POLYGON_VERTICES` (256) edges: one circle of radius 0.25 of the period took 2.5
+  to 3 minutes per solve at orders 3 to 9, where the closed form took 1 to 20 s (warm solves on
+  a four-core Linux machine running other work).
+
+It is read only by regions under `factorization='nvf'` with `nvf_projector='linear'`; on a
+raster, under `'li'` or `'laurent'`, with `nvf_projector='circular'` or with a tensor material,
+an explicit value of either kind is refused with `rcwa.unsupported`. A geometry record frozen
+under one value is refused by a replay under the other, because the value decides which layers
+carry a painting plan.
 
 ## Differentiability
 

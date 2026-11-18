@@ -137,6 +137,12 @@ class StaticGeometry:
             -- so another rule's build would find a slot empty and read the gap as an answer.
             ``None`` on a record built by hand, which is replayed on trust, as before. A plain
             string, so the comparison runs the same eagerly and under ``jax.jit``.
+        shape_normal_method: on a shape NVF record, the ``shape_normal_method`` it was taken
+            under -- ``'per_shape'`` or ``'interfaces'``. Compared, not consumed, like
+            ``factorization``: it decides which layers carry a ``boundary_plans`` entry, and a
+            ``None`` entry is read as "sum this layer", so a replay under the other value is
+            refused (``CoreFactorizationMixin._refuse_a_record_of_another_shape_normal_method``).
+            ``None`` on every other record and on one built by hand.
 
     A field left ``None`` means "auto-detect", which is what the strategy in use does not need
     (a sampled build never touches ``normal_field``, for instance).
@@ -175,6 +181,7 @@ class StaticGeometry:
     factorization: Optional[str] = None
     normal_field_plan: Optional[Any] = None
     mu_normal_field_plan: Optional[Any] = None
+    shape_normal_method: Optional[str] = None
 
     def _cache_key(self):
         """What ``__eq__``/``__hash__`` compare: the content when that is well defined.
@@ -200,7 +207,8 @@ class StaticGeometry:
                 and self.tensor_geometry is None and self.normal_field_plan is None\
                 and self.mu_normal_field_plan is None:
             try:
-                key = ('content', self.factorization, _hashable(self.boundary_plans),
+                key = ('content', self.factorization, self.shape_normal_method,
+                       _hashable(self.boundary_plans),
                        _hashable(self.gamma_plans), _hashable(self.rectilinear_plans))
                 hash(key)
                 return key

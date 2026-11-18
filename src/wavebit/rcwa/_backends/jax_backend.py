@@ -757,6 +757,9 @@ class SolverJax(RCWAJax, OptimizerJax):
             # unset, so a rebuilt NVF solver is not handed a request `_reject_unread_nesting`
             # would refuse. Aux rather than a child because the builds branch on it.
             'li_nesting': self._nesting,
+            # The raw slot once more: an unset method comes back unset, and the builds branch on
+            # it (which layers take the boundary route), so it is static.
+            'shape_normal_method': self._shape_normal,
             # Static for the same reason: which layers merge into a half-space is decided from
             # it before any kernel runs, and it fixes the number of layers solved.
             'half_space_merge_tolerance': self._half_space_merge_tolerance,

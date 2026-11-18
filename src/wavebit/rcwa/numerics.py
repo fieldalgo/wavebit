@@ -18,6 +18,10 @@ class Numerics:
     point, or warns (eager) / answers NaN (traced) where it cannot. ``'off'`` is for advanced
     use: it skips that work on every path for speed, mostly under ``jax.jit``, and near an
     exceptional point the answer can then be wrong with no warning.
+
+    ``shape_normal_method='interfaces'`` is experimental: under shape NVF it builds every shape
+    layer's normal field from the interfaces of the resolved structure, overlapping or not,
+    where the default ``'per_shape'`` builds a layer of disjoint shapes shape by shape.
     """
     orders: tuple = (0, 0)
     algorithm: str = 'smm'
@@ -33,10 +37,11 @@ class Numerics:
     half_space_merge_tolerance: float = 0.0
     exceptional_points: str = 'rebuild'
     wall_resolution: float | None = None
+    shape_normal_method: str | None = None
     #: Written to a job only off their default (``jobs._encode``), so a job that does not use
     #: them keeps its key.
     _FIELDS_OMITTED_AT_DEFAULT = ('half_space_merge_tolerance', 'exceptional_points',
-                                  'wall_resolution')
+                                  'wall_resolution', 'shape_normal_method')
 
     def __post_init__(self):
         object.__setattr__(self, 'orders', order_pair('Numerics', self.orders,
@@ -48,6 +53,7 @@ class Numerics:
                    'raster_normal_method': (None, 'distance', 'contour', 'spectral', 'smooth'),
                    'nvf_projector': (None, 'linear', 'circular'),
                    'li_nesting': (None, 'fixed', 'symmetric'),
+                   'shape_normal_method': (None, 'per_shape', 'interfaces'),
                    'topology_check': ('device', 'host'),
                    'exceptional_points': ('rebuild', 'off')}
         for name, allowed in choices.items():
@@ -82,7 +88,7 @@ class Numerics:
     def _engine_kwargs(self):
         out = dict(truncation_order=self.orders, layer_algorithm=self.algorithm.upper())
         for name in ('fourier_coefficients', 'factorization', 'formulation', 'raster_normal_method',
-                     'nvf_projector', 'shape_nvf_grid_size', 'li_nesting'):
+                     'nvf_projector', 'shape_nvf_grid_size', 'li_nesting', 'shape_normal_method'):
             if getattr(self, name) is not None:
                 out[name] = getattr(self, name)
         if self.half_space_merge_tolerance:

@@ -29,6 +29,9 @@ four long and two long instead of one list of eight.
 ``Nesting`` sits one level down on the other side: it is read only under
 ``factorization='li'``, where it says in which order Li's one-dimensional rules are nested for
 each field component. See :class:`Nesting`.
+
+``ShapeNormalMethod`` is ``NormalMethod``'s counterpart on the parametric path: which normal
+field a layer of shapes builds under NVF. See :class:`ShapeNormalMethod`.
 """
 
 
@@ -206,6 +209,32 @@ class Nesting(str, Enum):
     SYMMETRIC = 'symmetric'  # the inverse-rule axis inside, per slot (Li 1997; RETICOLO li=0)
 
 
+class ShapeNormalMethod(str, Enum):
+    """Which normal field the parametric path's NVF builds for a layer of shapes.
+
+    ``'per_shape'`` is what the path has always done: a layer whose rectangles, circles and
+    ellipses are disjoint takes the closed form, which sums the shapes' transforms and builds
+    the normal field shape by shape (:func:`~wavebit.rcwa._engine.parametric.to_conv_mat_parametric_nvf`);
+    a layer the painting has to resolve -- shapes overlapping by more than ``1e-6`` of the
+    period, or any polygon -- is cut into disjoint regions, and its field is the line integral
+    over the interfaces those regions leave (:mod:`~wavebit.rcwa._engine.boundary`). The two
+    fields differ, so the answer steps where a layer crosses the routing tolerance, and a
+    layer reads differently as written and as painted, though both are the same structure.
+
+    ``'interfaces'`` builds every shape layer the second way, overlapping or not: one field,
+    taken from the interfaces of the structure, whatever description produced it. It is
+    experimental -- not measured against independent references, its contact limit differs
+    from the default's (``docs/guide/rcwa/boundary-modeling.md``), and a curved layer costs
+    far more than the closed form.
+
+    Read only by the scalar shape NVF build with the linear projector; explicitly set anywhere
+    else it is refused rather than ignored. The solver option that takes it is
+    ``shape_normal_method``.
+    """
+    PER_SHAPE = 'per_shape'    # closed form for a disjoint layer, interfaces for a painted one
+    INTERFACES = 'interfaces'  # the interfaces' field for every shape layer (experimental)
+
+
 class Formulation(str, Enum):
     """Which layer formulation the 2D solve uses, named by the order of its ODE in ``z``.
 
@@ -328,6 +357,9 @@ DEFAULT_PROJECTOR = Projector.LINEAR
 #: the two should be the default is the maintainer's call -- ``docs/theory/rcwa/factorization-terms.md`` §6
 #: has the measurements it would rest on.
 DEFAULT_NESTING = Nesting.FIXED
+#: What every shape NVF number in the repository was measured on. ``'interfaces'`` is
+#: experimental, and which of the two should be the default is the maintainer's call.
+DEFAULT_SHAPE_NORMAL_METHOD = ShapeNormalMethod.PER_SHAPE
 #: Amplitudes, not fields. The field state is three orders of magnitude larger and most
 #: large runs -- an optimization sweep against a fixed objective -- never reconstruct one.
 DEFAULT_ANSWERS = Answers.AMPLITUDE
@@ -417,6 +449,11 @@ def projector_of(value):
 def nesting_of(value):
     """Validate a ``li_nesting`` value."""
     return _one_of(Nesting, value, 'li_nesting')
+
+
+def shape_normal_method_of(value):
+    """Validate a ``shape_normal_method`` value."""
+    return _one_of(ShapeNormalMethod, value, 'shape_normal_method')
 
 
 def answers_of(value):
