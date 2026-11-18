@@ -21,6 +21,7 @@
 - [수치 설정 고르기](numerics.md)
 - [NVF와 보조 솔버 선택](nvf-method-selection.md)
 - [해석적(계단 근사 없는) 모델링 — 접근과 결과](parametric-modeling.md)
+- [프로파일 층: 측벽각, 라운딩, 자동 z 슬라이스](profiled-layers.md)
 - [계산이 레일리 점을 다루는 방식 — 처음부터 끝까지](rayleigh-handling-walkthrough.md)
 - [늘린 좌표로 벽 분해하기](wall-resolution.md)
 - [장면 기술하기](scene.md)

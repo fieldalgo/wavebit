@@ -13,7 +13,9 @@ outgoing field itself in V/m beside it) and one efficiency.
 
 * **Periodic structures**, in one or two directions: gratings, metasurfaces, photonic crystal
   slabs, wire-grid polarizers, colour filters.
-* **Layered stacks** where each layer's cross-section is constant in `z`.
+* **Layered stacks** where each layer's cross-section is constant in `z`, and layers whose
+  cross-section changes with height -- a sidewall angle, rounding, a tapered pillar -- which
+  Wavebit slices itself ([profiled layers](../guide/rcwa/profiled-layers.md)).
 * **Sweeps and optimization**, because a solve is a few dense linear-algebra operations and the
   whole thing is differentiable end to end.
 
@@ -24,8 +26,11 @@ Being honest about this saves more time than any feature list:
 * **Aperiodic or finite structures.** RCWA solves one unit cell with periodic boundaries. A
   single isolated scatterer needs a supercell large enough that the images stop interacting,
   and the cost grows quickly.
-* **Structures that vary continuously in `z`.** A smooth sidewall is approximated by slicing it
-  into layers, and the slice count is yours to choose.
+* **Structures that vary continuously in `z`.** RCWA solves layers that are uniform in `z`, so a
+  smooth sidewall is always a staircase of slices. A
+  [profiled layer](../guide/rcwa/profiled-layers.md) chooses the slices for you and reports the
+  staircase's estimated error, but the error is there: it falls as the square of the slice
+  count, and each slice costs one more layer's solve.
 * **Broadband time-domain questions** — a pulse, a ring-down, a resonance hunt across a wide
   band in one shot. That is FDTD's shape rather than RCWA's, and it is why this package ships a
   second solver: [the `wavebit.fdtd` module](fdtd.md) answers exactly those, and a band costs one

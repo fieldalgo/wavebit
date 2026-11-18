@@ -26,6 +26,9 @@
 .. autoclass:: wavebit.rcwa.Layer
    :members:
 
+.. autoclass:: wavebit.rcwa.ProfiledLayer
+   :members:
+
 .. autoclass:: wavebit.rcwa.Region
    :members:
 
@@ -39,6 +42,15 @@
    :members:
 
 .. autoclass:: wavebit.rcwa.Polygon
+   :members:
+
+.. autoclass:: wavebit.rcwa.Trapezoid
+   :members:
+
+.. autoclass:: wavebit.rcwa.Loft
+   :members:
+
+.. autoclass:: wavebit.rcwa.Profile
    :members:
 
 .. autoclass:: wavebit.rcwa.Excitation
@@ -60,6 +72,9 @@
    :members:
 
 .. autoclass:: wavebit.rcwa.Numerics
+   :members:
+
+.. autoclass:: wavebit.rcwa.Slicing
    :members:
 
 .. autoclass:: wavebit.rcwa.Prepared
@@ -86,6 +101,8 @@
 .. autoclass:: wavebit.rcwa.diagnostics.GainCutoffWarning
 
 .. autoclass:: wavebit.rcwa.diagnostics.ShapeGridWarning
+
+.. autoclass:: wavebit.rcwa.diagnostics.SlicingWarning
 
 .. autoclass:: wavebit.rcwa.diagnostics.SvdConvergenceWarning
 
