@@ -277,10 +277,15 @@ class FieldState:
         if reconstruction == 'plain' or (self.merged is not None and not self.data['groups']):
             return None      # A stack that merged whole has no patterned layer left to read.
         if self.stretch is not None:
+            # A tuple is the rectangles' stretch; anything else is a circle's or an ellipse's
+            # matched coordinates, whose 'plain' read is not a plain sum beside the matched lines.
+            how = ('' if isinstance(self.stretch, tuple) else
+                   "; in the matched coordinates of a circle or an ellipse, 'plain' reads the "
+                   'component normal to each matched line from D (B for H) beside the line')
             raise NotImplementedError(
                 f'reconstruction={reconstruction!r} is not available under wall_resolution, '
                 "whose field is read with reconstruction='plain': the solve's coordinates "
-                'already resolve the walls the rule is for.')
+                f'already resolve the walls the rule is for{how}.')
         from wavebit.rcwa._engine.lalanne import lalanne_rows
         from wavebit.rcwa._engine.lalanne import layers_holding
         from wavebit.rcwa._engine.lalanne import refusal as lalanne_refusal
