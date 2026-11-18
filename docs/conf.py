@@ -50,6 +50,7 @@ gettext_compact = False
 
 extensions = [
     'wavebit_i18n',           # full Korean chapters and explicit fallback
+    'wavebit_pycode',         # lets viewcode and autodoc read a module with a {**a, **b} decorator argument
     'myst_parser',              # the docs are markdown, and stay markdown
     'sphinx.ext.autodoc',       # the API page, read off the live objects
     'sphinx.ext.napoleon',      # Google-style Args:/Returns: in those docstrings
