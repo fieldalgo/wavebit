@@ -43,12 +43,13 @@ class InterfacePlan(namedtuple('InterfacePlan', 'pieces images groups facing',
 FACING_GAP_FRACTION = 2.0 ** -10
 
 
-def facing_gap(xp, basis):
+def facing_gap(xp, basis, dtype=None):
     """The width below which two facing intervals are blended: :data:`FACING_GAP_FRACTION`
     of the longest reduced basis vector. ``basis`` holds the vectors as columns."""
     first = basis[0][0] * basis[0][0] + basis[1][0] * basis[1][0]
     second = basis[0][1] * basis[0][1] + basis[1][1] * basis[1][1]
-    return FACING_GAP_FRACTION * xp.sqrt(xp.maximum(xp.asarray(first), xp.asarray(second)))
+    first, second = xp.asarray(first, dtype=dtype), xp.asarray(second, dtype=dtype)
+    return FACING_GAP_FRACTION * xp.sqrt(xp.maximum(first, second))
 
 
 def facing_contrasts(xp, regions, background, plan, dtype):
