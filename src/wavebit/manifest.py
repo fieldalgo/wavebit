@@ -43,6 +43,7 @@ from wavebit.rcwa._engine.enums import ModelingPath
 from wavebit.rcwa._engine.enums import Nesting
 from wavebit.rcwa._engine.enums import NormalMethod
 from wavebit.rcwa._engine.enums import Projector
+from wavebit.rcwa._engine.enums import ShapeNormalMethod
 from wavebit._common.enums import Tetm
 from wavebit.rcwa._engine.engine import _COEFFICIENTS_IMPLEMENTED_BY
 from wavebit.rcwa._engine.engine import _COEFFICIENTS_REASON
@@ -98,6 +99,9 @@ from wavebit._common._jobs_v1 import SPEC_VERSION
 #: The ``li_nesting`` axis (2026-09-25) did not earn one either, for the same reason: a key
 #: added to ``paths[*]``, ``enums`` and the parametric path's ``conditional_options``, whose
 #: default is what every Li build already did.
+#:
+#: Nor did the ``shape_normal_method`` axis (2026-11-18): a key added to ``paths[*]`` and
+#: ``enums``, whose default ``'per_shape'`` is what every shape NVF build already did.
 #:
 #: Nor did ``factorization='laurent'`` (2026-09-27): a value added to ``enums.factorization``
 #: and to both paths' ``factorization`` lists, plus the ``tensor_materials`` key that says
@@ -364,6 +368,17 @@ def _options_for(path):
         # which are read only under 'nvf'. On the parametric path 'li' is itself conditional,
         # so the nesting is published there as a condition on it rather than as a plain list.
         'li_nesting': ([m.value for m in Nesting] if path == ModelingPath.RASTER else []),
+        # `raster_normal_method`'s counterpart on shapes: which normal field a shape layer
+        # builds. Read only under factorization='nvf' with the linear projector on scalar
+        # materials, and refused elsewhere; 'interfaces' is experimental.
+        'shape_normal_method': ([] if path == ModelingPath.RASTER
+                                else [m.value for m in ShapeNormalMethod]),
+        'shape_normal_method_reason': (
+            'a raster builds its normal field from samples; raster_normal_method selects how'
+            if path == ModelingPath.RASTER
+            else "read only under factorization='nvf' with nvf_projector='linear' on scalar "
+                 "materials; 'interfaces' (every shape layer's field from the resolved "
+                 "interfaces) is experimental"),
         'li_nesting_reason': (
             "read only under factorization='li'; a tensor raster's Li build is the fixed "
             "nesting only, so 'symmetric' is refused there"
@@ -831,6 +846,7 @@ def manifest() -> dict:
             'raster_normal_method': [m.value for m in NormalMethod],
             'nvf_projector': [m.value for m in Projector],
             'li_nesting': [m.value for m in Nesting],
+            'shape_normal_method': [m.value for m in ShapeNormalMethod],
             'answers': [m.value for m in Answers],
         },
         'backends': _backend_capabilities(),

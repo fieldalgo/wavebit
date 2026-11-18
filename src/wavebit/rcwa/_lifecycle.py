@@ -376,6 +376,14 @@ def _report(problem, numerics, execution, solvers):
                   'shape_nvf_grid_size': (scene.shape_nvf_grid_size
                                           if scene.factorization.value == 'nvf'
                                           and scene.modeling_path == 'parametric' else None),
+                  # Which normal field a shape layer builds: None where nothing reads it (a
+                  # raster, 'li' / 'laurent', the circular projector, tensor materials, which
+                  # refuse an explicit value), else 'per_shape' or the experimental 'interfaces'.
+                  'shape_normal_method': (scene.shape_normal_method.value
+                                          if scene.factorization.value == 'nvf'
+                                          and scene.modeling_path == 'parametric'
+                                          and scene.nvf_projector.value == 'linear'
+                                          and not scene._has_tensor_materials() else None),
                   'backend': execution.backend, 'device': execution.device, 'precision': execution.precision,
                   'retained_fields': problem.outputs.fields, 'retained_scattering': problem.outputs.scattering,
                   'length_units': problem.units.length})

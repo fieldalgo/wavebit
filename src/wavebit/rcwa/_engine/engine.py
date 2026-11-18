@@ -74,11 +74,14 @@ from wavebit.rcwa._engine.enums import DEFAULT_FOURIER_COEFFICIENTS
 from wavebit.rcwa._engine.enums import DEFAULT_NESTING
 from wavebit.rcwa._engine.enums import DEFAULT_NORMAL_METHOD
 from wavebit.rcwa._engine.enums import DEFAULT_PROJECTOR
+from wavebit.rcwa._engine.enums import DEFAULT_SHAPE_NORMAL_METHOD
 from wavebit.rcwa._engine.enums import answers_of
 from wavebit._common.enums import backend_of
 from wavebit.rcwa._engine.enums import nesting_of
 from wavebit.rcwa._engine.enums import normal_method_of
 from wavebit.rcwa._engine.enums import projector_of
+from wavebit.rcwa._engine.enums import shape_normal_method_of
+from wavebit.rcwa._engine.enums import ShapeNormalMethod
 from wavebit._common.names import near_match
 from wavebit._common.names import nvf_option_rename_hint
 from wavebit._common.names import quantity_note
@@ -3347,6 +3350,19 @@ class CoreSolveMixin:
             **({} if stretch is None else {'stretch': stretch})))
 
 
+#: What a build under ``shape_normal_method='interfaces'`` warns with: compared with the default
+#: and with Li on axis-aligned rectangles only, and its contact limit is not the default's.
+_INTERFACES_EXPERIMENTAL = (
+    "shape_normal_method='interfaces' is experimental. Every layer of regions builds its normal "
+    "field from the interfaces of the resolved structure, so tiles and a painting of one "
+    "structure answer alike and nothing steps where regions start to overlap; it is compared "
+    "with the default and with Li on axis-aligned rectangles and with no independent "
+    "implementation, it steps where two regions come into contact, and a layer of circles or "
+    "ellipses costs far more than the default. Its values, what it accepts and its name may "
+    "change between releases; the guide \"Boundary modeling\" has the measurements. "
+    'Silence with warnings.simplefilter("ignore", wavebit.rcwa.diagnostics.ExperimentalWarning).')
+
+
 #: What a solve under ``wall_resolution`` warns with: finite-element fields only, no independent
 #: implementation of the stretched solve to compare with at the same truncation.
 _WALL_RESOLUTION_EXPERIMENTAL = (
@@ -3532,6 +3548,11 @@ class CoreFactorizationMixin:
                  # they advance at this slope (0.02 is fifty times finer there). Axis-aligned
                  # rectangles with factorization='li' on the SMM only. See the wall_resolution
                  # property and `stretch.py`.
+                 shape_normal_method=None,  # shape NVF only: which normal field a layer of
+                 # shapes builds. 'per_shape' (default -- the closed form's field on a layer of
+                 # disjoint primitives, the interfaces' field on a painted one) | 'interfaces'
+                 # (experimental: the interfaces' field on every shape layer). Explicitly set
+                 # where it has no reader it is refused. See the shape_normal_method property.
                  **unknown,                  # collected rather than left to Python, so the
                  # refusal comes from `_refuse_unknown_keywords` and a typo cannot be
                  # swallowed by the catch-all itself.
@@ -3579,6 +3600,7 @@ class CoreFactorizationMixin:
         self.half_space_merge_tolerance = half_space_merge_tolerance
         self.exceptional_points = exceptional_points
         self.wall_resolution = wall_resolution
+        self.shape_normal_method = shape_normal_method
         self._normal_grid = shape_nvf_grid_size
         self.lattice = lattice      # after period: assigning a basis overwrites period
 
@@ -3623,6 +3645,10 @@ class CoreFactorizationMixin:
     _exceptional_points = 'rebuild'
     #: :attr:`wall_resolution`: ``None`` or the slope at the walls, a Python float.
     _wall_resolution = None
+    #: The unset-vs-default slot of :attr:`shape_normal_method`, as :attr:`_normal_method` is for
+    #: the raster's: :meth:`_reject_unread_shape_normal_method` refuses an explicit value on a
+    #: build that has no reader for it.
+    _shape_normal = None
     #: The last solve's :class:`~wavebit.rcwa._engine.half_space_merge.MergePlan`, or ``None``.
     _half_space_merged = None
 
@@ -5538,6 +5564,44 @@ class CoreFactorizationMixin:
         self._nesting = None if value is None else nesting_of(value)
 
     @property
+    def shape_normal_method(self):
+        """Which normal field a layer of shapes builds under NVF: ``'per_shape'`` |
+        ``'interfaces'``.
+
+        ``'per_shape'`` (the default) is what the parametric path has always built. A layer
+        whose rectangles, circles and ellipses are disjoint takes the closed form, with the
+        normal field built shape by shape; a layer the painting resolves -- shapes overlapping
+        by more than ``OVERLAP_TOL_REL`` of the period, or any polygon -- takes the boundary
+        route, whose field is the line integral over the interfaces left once the painting is
+        resolved (``docs/validation/rcwa/normal-field-known-limits.md`` §1c). The two fields
+        differ, so a layer's answer steps where its shapes cross the routing tolerance, and one
+        structure described two ways -- tiles, or a painting -- reads two ways.
+
+        ``'interfaces'`` sends every shape layer down the boundary route, overlapping or not,
+        so the field is the interfaces' whatever description produced them. Experimental: it
+        has no independent reference yet, it steps where two shapes come into contact (the
+        default does not), and a curved layer costs far more than the closed form. See
+        :class:`~wavebit.rcwa._engine.enums.ShapeNormalMethod`.
+
+        Read by the scalar shape NVF build with the linear projector. Like
+        :attr:`raster_normal_method` this reports the default when nothing was asked; an
+        explicit value where it has no reader -- a raster, Li, Laurent, the circular projector,
+        tensor materials -- is refused (:meth:`_reject_unread_shape_normal_method`). A frozen
+        geometry records it (:attr:`~wavebit.rcwa._engine.geometry.StaticGeometry.shape_normal_method`),
+        because it decides which layers carry a painting plan, and a replay under the other
+        value is refused.
+        """
+        return DEFAULT_SHAPE_NORMAL_METHOD if self._shape_normal is None else self._shape_normal
+
+    @shape_normal_method.setter
+    def shape_normal_method(self, value):
+        self._shape_normal = None if value is None else shape_normal_method_of(value)
+
+    def _routes_every_shape_layer(self):
+        """Whether every shape layer takes the boundary route (``shape_normal_method='interfaces'``)."""
+        return self._shape_normal == ShapeNormalMethod.INTERFACES
+
+    @property
     def half_space_merge_tolerance(self):
         """How near a layer's material must be to a half-space's for the layer to merge into it.
 
@@ -5810,6 +5874,41 @@ class CoreFactorizationMixin:
             f"li_nesting={nesting.value!r} has no reader here: {where}. It selects the order Li's "
             f"rules are nested in, so it needs factorization='li'.")
 
+    def _reject_unread_shape_normal_method(self, factorization):
+        """Refuse an explicit ``shape_normal_method`` on a build that cannot honour it.
+
+        Its one reader is the scalar shape NVF build with the linear projector, which chooses
+        per layer between the closed form and the boundary route. Every other build would run
+        to completion with the request ignored: a raster builds its field from samples
+        (:attr:`raster_normal_method`), Li and Laurent build none, the circular projector on
+        shapes builds its own dyadic field on both routes, and tensor materials are built by
+        their own shape builders (:mod:`~wavebit.rcwa._engine.tensor_shapes`), which
+        :func:`~wavebit.rcwa._engine.anisotropy.validate_options` calls this for. The default
+        is exempt, as everywhere: an untouched keyword is not a request.
+        """
+        if self._shape_normal is None:
+            return
+        method = shape_normal_method_of(self._shape_normal).value
+        if self._has_tensor_materials():
+            where = ('tensor materials are built by their own shape builders, which do not '
+                     'take it')
+        elif self._modeling_path != ModelingPath.PARAMETRIC:
+            where = ('a raster builds its normal field from samples -- raster_normal_method '
+                     'selects how')
+        elif factorization == Factorization.LAURENT:
+            where = _LAURENT_BUILDS_NO_NORMAL
+        elif factorization == Factorization.LI:
+            where = "Cartesian shape factorization='li' builds no normal field"
+        elif self.nvf_projector != DEFAULT_PROJECTOR:
+            where = ("nvf_projector='circular' builds its own dyadic field on shapes, "
+                     "overlapping or not")
+        else:
+            return
+        raise NotImplementedError(
+            f"shape_normal_method={method!r} has no reader here: {where}. It selects the "
+            f"normal field of a layer of shapes, so it needs a shape structure of scalar "
+            f"materials, factorization='nvf' and nvf_projector='linear'.")
+
     def _reject_unread_normal_grid(self):
         """Refuse an explicit ``shape_nvf_grid_size`` on a build that samples no normal field.
 
@@ -5895,6 +5994,7 @@ class CoreFactorizationMixin:
         self._reject_unread_normal_method(factorization)
         self._reject_unread_projector(factorization)
         self._reject_unread_nesting(factorization)
+        self._reject_unread_shape_normal_method(factorization)
         self._reject_unread_normal_grid()
         self._reject_unread_merge_tolerance()
         # The *window's* half-width, not the declared `truncation_order`: an excitation can
@@ -5988,8 +6088,12 @@ class CoreFactorizationMixin:
             # images on the same reduced cell.
             cell = self._geometry_lattice_for(None)
             plans = []
+            # Under shape_normal_method='interfaces' every shape layer takes the boundary route,
+            # so every one has a plan, overlapping or not. The record says which way it was
+            # taken (`shape_normal_method` below), because a `None` slot is read as "sum it".
+            every = self._routes_every_shape_layer()
             for index, layer in enumerate(self.structure):
-                if _parametric.layer_needs_resolving(layer, cell):
+                if (every and layer.get('shapes')) or _parametric.layer_needs_resolving(layer, cell):
                     with _boundary.naming_the_layer(index):
                         plans.append(_boundary.plan_layer(layer.get('shapes', []), cell))
                 else:
@@ -6019,6 +6123,11 @@ class CoreFactorizationMixin:
             geometry.gamma_plans = [None if holds_polygon(layer)
                                     else _parametric.plan_gamma(layer.get('shapes', []), basis)
                                     for layer in self.structure]
+            # Which layers carry a plan depends on it, so a record taken under one value and
+            # replayed under the other would route by the wrong answer: refused by
+            # `_refuse_a_record_of_another_rule`. Stamped on NVF records only -- the one build
+            # that reads it.
+            geometry.shape_normal_method = self.shape_normal_method.value
         return geometry
 
     def _check_layer_geometry(self):
@@ -6566,6 +6675,7 @@ class CoreFactorizationMixin:
             return
         now = self.factorization
         if held == now:
+            self._refuse_a_record_of_another_shape_normal_method(geometry)
             return
         raise _fac.StaleGeometryError(
             f"this frozen geometry was taken under factorization={held!r} and is being replayed "
@@ -6574,6 +6684,30 @@ class CoreFactorizationMixin:
             f"and the {now.value!r} build would read what is missing as an answer and replay it "
             f"blind. Call freeze_geometry() again under factorization={now.value!r} (NVF, Li and "
             f"Laurent records are not interchangeable), or drop geometry= to rebuild.")
+
+    def _refuse_a_record_of_another_shape_normal_method(self, geometry):
+        """Refuse a shape NVF record taken under the other ``shape_normal_method``.
+
+        The value decides which layers carry a painting plan, and the build reads a ``None``
+        plan as "disjoint: sum it". A record taken under ``'per_shape'`` and replayed under
+        ``'interfaces'`` would therefore sum the disjoint layers the request asked to route,
+        and the reverse would route layers the default sums: either way a different field,
+        returned without a word. A record without the stamp -- built by hand, or under another
+        rule -- is passed by, as :meth:`_refuse_a_record_of_another_rule` passes one with no
+        ``factorization``.
+        """
+        held = getattr(geometry, 'shape_normal_method', None)
+        if held is None or self._modeling_path != ModelingPath.PARAMETRIC:
+            return
+        now = self.shape_normal_method.value
+        if held == now:
+            return
+        raise _fac.StaleGeometryError(
+            f"this frozen geometry was taken under shape_normal_method={held!r} and is being "
+            f"replayed under shape_normal_method={now!r}. The value decides which layers carry "
+            f"a painting plan, and the build reads a missing plan as 'sum this layer', so the "
+            f"replay would build the other field. Call freeze_geometry() again under "
+            f"shape_normal_method={now!r}, or drop geometry= to rebuild.")
 
     def _mu_conv_matrices(self, geometry=None):
         """The permeability slots, or ``None`` when nothing in the scene is magnetic.
@@ -6640,6 +6774,7 @@ class CoreFactorizationMixin:
         self._reject_unread_normal_method(factorization)
         self._reject_unread_projector(factorization)
         self._reject_unread_nesting(factorization)
+        self._reject_unread_shape_normal_method(factorization)
         self._reject_unread_normal_grid()
         self._reject_unread_merge_tolerance()
         self._reject_layer_count_mismatch()
@@ -6901,6 +7036,11 @@ class CoreFactorizationMixin:
             else:
                 if geometry is not None and geometry.rectilinear_plans is not None:
                     raise _fac.StaleGeometryError("Cartesian Li geometry cannot be replayed with NVF; freeze_geometry() again")
+                if self._routes_every_shape_layer():
+                    # After every refusal (`_check_before_building`), so a refused scene raises
+                    # without a warning.
+                    from wavebit.rcwa._engine.fields import warn_experimental_feature
+                    warn_experimental_feature(_INTERFACES_EXPERIMENTAL)
                 xp = self.xp
                 conv = _parametric.to_conv_mat_parametric_layers(
                     structure, half_width_u, half_width_v,
@@ -6916,6 +7056,7 @@ class CoreFactorizationMixin:
                     # The same record for both quantities: it is geometric, and the permeability
                     # view's own material slots make the seam signs per quantity at build time.
                     gamma_plans=None if geometry is None else geometry.gamma_plans,
+                    every_shape_layer_on_interfaces=self._routes_every_shape_layer(),
                     **({} if self._projector is None else {'nvf_projector': self.nvf_projector}))
 
         else:

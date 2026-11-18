@@ -2971,7 +2971,7 @@ def _gamma_moved(held, fresh, shapes):
 def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, lattice,
                               shape_nvf_grid_size=256, complex_dtype=None, xp=None,
                               boundary_plans=None, gamma_plans=None, nvf_projector=None,
-                              factorization=None):
+                              factorization=None, every_shape_layer_on_interfaces=False):
     """Stack the parametric convolution matrices over layers, under NVF or Laurent's rule.
 
     ``layer_shapes`` is one ``dict(background=..., shapes=[...])`` per layer, with the shapes'
@@ -2998,6 +2998,13 @@ def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, latt
     painting's plan and never ``gamma_plans``, ``shape_nvf_grid_size`` or ``nvf_projector``
     (:func:`laurent_from_coeffs`). Li's rules on shapes are :mod:`.rectilinear`'s, not this
     function's, and are refused here by name.
+
+    ``every_shape_layer_on_interfaces`` is the solver's ``shape_normal_method='interfaces'``:
+    every layer holding a shape takes the boundary route, overlapping or not, so its normal
+    field is the interfaces' line integral rather than the closed form's. Read under NVF with
+    the linear projector only (the solver refuses it elsewhere, and so does this function). A
+    frozen ``None`` plan on a shape layer cannot serve it -- that slot means "sum this layer"
+    -- and is refused rather than summed.
     """
     from wavebit.rcwa._engine.enums import Factorization
     from wavebit.rcwa._engine.enums import factorization_of
@@ -3009,6 +3016,9 @@ def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, latt
     if laurent and (nvf_projector is not None or gamma_plans is not None):
         raise ValueError("factorization='laurent' builds no normal field, so nvf_projector and "
                          "gamma_plans have no reader here; pass neither")
+    if every_shape_layer_on_interfaces and (laurent or nvf_projector not in (None, 'linear')):
+        raise ValueError("every_shape_layer_on_interfaces selects the linear NVF normal field of "
+                         "a shape layer; Laurent builds none and the circular projector its own")
     if xp is None:
         xp = _infer_namespace(layer_shapes)
     dtype = xp.complex128 if complex_dtype is None else complex_dtype
@@ -3023,12 +3033,19 @@ def to_conv_mat_parametric_layers(layer_shapes, half_width_u, half_width_v, latt
         frozen = boundary_plans is not None
         plan = boundary_plans[index] if frozen else None
         gamma = gamma_plans[index] if gamma_plans is not None else None
+        every = every_shape_layer_on_interfaces and bool(layer.get('shapes'))
         if frozen and plan is None:
+            if every:
+                raise StaleGeometryError(
+                    f'the frozen geometry records layer {index} as summed, and '
+                    f"shape_normal_method='interfaces' builds every shape layer on the boundary "
+                    f'route: the record was taken under the other method. Call '
+                    f'freeze_geometry() again, or drop geometry= to rebuild.')
             check_no_plan_still_fits(layer, lattice, index)
         check_layer_shapes(layer, lattice, index)
         background = layer.get('background', 1.0)
         if plan is not None or (not frozen
-                                and layer_needs_resolving(layer, lattice)):
+                                and (every or layer_needs_resolving(layer, lattice))):
             # Shapes that overlap paint -- later over earlier -- and this module can only
             # sum, which is a different structure. Resolve the painting into disjoint polygons
             # and transform those. Where nothing overlaps the two are the same structure, so

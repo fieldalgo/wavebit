@@ -43,7 +43,7 @@ CARRIED = (
     'backend', 'tetm', 'truncation_order', 'layer_algorithm', 'complex_dtype',
     'fourier_coefficients', 'factorization', 'raster_normal_method', 'nvf_projector', 'li_nesting',
     'half_space_merge_tolerance', 'exceptional_points', 'wall_resolution', 'incidence_side',
-    'answers',
+    'answers', 'shape_normal_method',
     'shape_nvf_grid_size', 'theta', 'phi', 'psi', 'chi', 'polarization', 'period', 'wavelength',
     'thickness', 'structure', 'mu', 'top', 'bot', 'lattice', 'excitation', 'formulation',
     'structure_drawn_on', 'kx', 'ky',
@@ -109,6 +109,18 @@ def _one_row(**over):
     return _legacy_wavebit_rcwa(**kw)
 
 
+def _shapes(**over):
+    """A shape NVF scene, for `shape_normal_method`: both scenes above are rasters, where naming
+    it would be refused."""
+    kw = dict(backend='jax', period=[P, P], truncation_order=[2, 2], thickness=[H],
+              wavelength=WL, top=1.0, bot=1.0, shape_normal_method='interfaces',
+              structure=[{'background': 1.0, 'shapes': [
+                  {'type': 'rectangle', 'cx': 0.0, 'cy': 0.0, 'lx': 150.0, 'ly': 100.0,
+                   'material': 4.0}]}])
+    kw.update(over)
+    return _legacy_wavebit_rcwa(**kw)
+
+
 def _same(a, b):
     if a is None or b is None:
         return a is None and b is None
@@ -163,7 +175,7 @@ def test_the_scene_holds_nothing_at_its_default():
                          truncation_order=[1, 1], thickness=[H], wavelength=WL,
                          top=1.0, bot=1.0)
     others = (_one_row(polarization=(1.0, -1j), kx=.002, ky=.001),
-              _one_row(tetm='te', phi=None))
+              _one_row(tetm='te', phi=None), _shapes())
     same_as_default = [
         a for a in CARRIED
         if a not in ('backend', 'period', 'wavelength')
@@ -489,3 +501,16 @@ def test_the_nesting_survives_the_round_trip_and_splits_the_treedef():
     assert _round_trip(_one_row(li_nesting=None))._nesting is None
     assert (jax.tree_util.tree_structure(symmetric)
             != jax.tree_util.tree_structure(_one_row(li_nesting='fixed')))
+
+
+def test_the_shape_normal_method_survives_the_round_trip_and_splits_the_treedef():
+    """The nesting's argument on the shape path: the value comes back, an unset one comes back
+    unset (so a rebuilt solver is not handed a request it never made), and the two methods
+    flatten to different treedefs -- they route layers differently, so one compilation must not
+    serve both."""
+    import jax
+    interfaces = _shapes()
+    assert _round_trip(interfaces).shape_normal_method == 'interfaces'
+    assert _round_trip(_shapes(shape_normal_method=None))._shape_normal is None
+    assert (jax.tree_util.tree_structure(interfaces)
+            != jax.tree_util.tree_structure(_shapes(shape_normal_method='per_shape')))

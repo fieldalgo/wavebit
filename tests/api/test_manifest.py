@@ -37,7 +37,7 @@ import pytest
 import wavebit
 from wavebit.manifest import LATTICE, MATERIAL_QUANTITY, MATERIALS, SPELLINGS, cited_sources, manifest
 from wavebit._common.enums import Backend, Tetm
-from wavebit.rcwa._engine.enums import Factorization, FourierCoefficients, ModelingPath, Nesting, NormalMethod, Projector
+from wavebit.rcwa._engine.enums import Factorization, FourierCoefficients, ModelingPath, Nesting, NormalMethod, Projector, ShapeNormalMethod
 
 
 REPO = repository_root()
@@ -208,6 +208,18 @@ def test_a_nesting_the_manifest_withholds_is_refused(path):
             f'{path}: refused li_nesting={value!r} without naming it')
 
 
+@pytest.mark.parametrize('path', sorted(STRUCTURES))
+def test_a_shape_normal_method_the_manifest_withholds_is_refused(path):
+    """The shape path's twin of `raster_normal_method`: a raster lists none, so naming one there
+    must refuse rather than be ignored."""
+    for value in _unavailable(path, 'shape_normal_method', ShapeNormalMethod):
+        with pytest.raises(Exception) as excinfo:
+            _legacy_wavebit_rcwa(structure=STRUCTURES[path], shape_normal_method=value,
+                                 **KW).solve()
+        assert value in str(excinfo.value), (
+            f'{path}: refused shape_normal_method={value!r} without naming it')
+
+
 #: An axis-aligned rectangle inside the cell: what the parametric path's conditional
 #: `factorization='li'` requires, so the conditional options can be built rather than read.
 _RECTANGLE = [{'background': 1.0,
@@ -243,10 +255,12 @@ def test_an_option_the_manifest_offers_builds_on_an_overlapping_layer_too():
         _legacy_wavebit_rcwa(structure=_OVERLAPPING, fourier_coefficients=value, **KW).solve()
     for value in entry['nvf_projector']:
         _legacy_wavebit_rcwa(structure=_OVERLAPPING, nvf_projector=value, **KW).solve()
+    for value in entry['shape_normal_method']:
+        _legacy_wavebit_rcwa(structure=_OVERLAPPING, shape_normal_method=value, **KW).solve()
     for axis, enum_cls in (('factorization', Factorization),
                            ('fourier_coefficients', FourierCoefficients),
                            ('raster_normal_method', NormalMethod), ('nvf_projector', Projector),
-                           ('li_nesting', Nesting)):
+                           ('li_nesting', Nesting), ('shape_normal_method', ShapeNormalMethod)):
         for value in _unavailable('parametric', axis, enum_cls):
             with pytest.raises(Exception) as excinfo:
                 _legacy_wavebit_rcwa(structure=_OVERLAPPING, **{axis: value}, **KW).solve()
@@ -273,6 +287,10 @@ def test_an_option_the_manifest_offers_actually_builds(path):
         # The other rule's axis, and the other caveat: read only under 'li'.
         _legacy_wavebit_rcwa(structure=STRUCTURES[path], factorization='li',
                        li_nesting=value, **KW).solve()
+    for value in PATHS[path]['shape_normal_method']:
+        # Read only under 'nvf' with the linear projector, the parametric defaults.
+        _legacy_wavebit_rcwa(structure=STRUCTURES[path], factorization='nvf',
+                       shape_normal_method=value, **KW).solve()
 
 
 #: A patterned tensor raster, for the refusals `tensor_materials` publishes: the per-path lists
@@ -391,6 +409,7 @@ def test_enum_lists_match_the_enums():
     assert enums['fourier_coefficients'] == [m.value for m in FourierCoefficients]
     assert enums['nvf_projector'] == [m.value for m in Projector]
     assert enums['li_nesting'] == [m.value for m in Nesting]
+    assert enums['shape_normal_method'] == [m.value for m in ShapeNormalMethod]
 
 
 def test_every_cited_source_exists():

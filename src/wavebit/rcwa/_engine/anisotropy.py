@@ -283,6 +283,8 @@ def validate_options(solver):
     from wavebit.rcwa._engine.enums import Factorization
     from wavebit.rcwa._engine.enums import FourierCoefficients
     solver._reject_layer_count_mismatch()
+    # The tensor shape builders choose their own routes; the scalar switch has no reader here.
+    solver._reject_unread_shape_normal_method(solver._factorization)
     if isinstance(solver.structure, list):
         from wavebit._common.geometry.recipes import check_layer_spec
         from wavebit._common.geometry.recipes import holds_polygon
