@@ -316,6 +316,8 @@ def test_the_result_refuses_what_a_matched_solve_does_not_hold():
         with pytest.raises(UnsupportedFeatureError) as caught:
             result.field(x=[0.0], y=[0.0], z=[75.0], reconstruction=rule)
         assert caught.value.code == 'field.reconstruction'
+        # The refusal says that 'plain' is not a plain sum here.
+        assert 'from D (B for H) beside the line' in str(caught.value)
 
 
 def test_the_check_reports_the_option_and_no_issue():
