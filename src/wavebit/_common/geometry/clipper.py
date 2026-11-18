@@ -353,6 +353,39 @@ _NUDGE_ACROSS = np.array([np.cos(2.3), np.sin(2.3)])
 # `plan_difference_robust` for why none of this reaches the returned coordinates.
 _NUDGE_STEPS = (1e-9, -2.7e-9, 7.1e-9, -1.9e-8, 5.3e-8)
 
+# The smallest nudge, in contact tolerances, that still moves a touching vertex clear of the edge
+# it touches. A pair whose nearest real approach leaves no room for one is refused, not guessed.
+_NUDGE_FLOOR = 4.0
+
+
+def _clearance(A, B):
+    """How near the two outlines come without touching, and the distance that counts as touching.
+
+    The nearest a vertex of either outline comes to an edge of the other, over the pairs farther
+    apart than :func:`point_in_polygon`'s contact tolerance -- the contacts are the ties a nudge
+    exists to break; everything else is a real feature it must not cross. Moving ``B`` rigidly by
+    ``v`` changes which side of an edge a vertex lies on, whether two edges cross, and where a
+    crossing falls, only for a vertex-edge pair nearer than ``|v|``: a crossing reaches an end of
+    its segment only by bringing that endpoint onto the other segment. Returns
+    ``(clearance, tolerance)``; the clearance is ``inf`` when every pair touches.
+    """
+    tol = max(EPS * max(float(np.max(V.max(0) - V.min(0))) for V in (A, B)), _grain(A, B))
+    clear = math.inf
+    for P, Q in ((A, B), (B, A)):
+        d = np.roll(Q, -1, axis=0) - Q
+        lengths2 = np.einsum('ij,ij->i', d, d)
+        lengths2 = np.where(lengths2 > 0, lengths2, 1.)
+        # In blocks of vertices, so two outlines of many thousand vertices that touch do not
+        # build a vertex-by-edge array of gigabytes.
+        for start in range(0, len(P), 256):
+            rel = P[start:start + 256, None, :] - Q[None, :, :]
+            t = np.clip(np.einsum('pqk,qk->pq', rel, d) / lengths2, 0., 1.)
+            dist = np.hypot(*(rel - t[..., None] * d[None, :, :]).transpose(2, 0, 1))
+            real = dist[dist > tol]
+            if real.size:
+                clear = min(clear, float(real.min()))
+    return clear, tol
+
 
 def plan_difference_robust(A, B, steps=_NUDGE_STEPS):
     """``A \\ B`` that survives exactly-touching geometry.
@@ -369,8 +402,16 @@ def plan_difference_robust(A, B, steps=_NUDGE_STEPS):
 
     What a tie-break can still change is the *interpretation* of a degenerate contact, and the
     two readings differ by a zero-area spur -- which contributes nothing to the area or to the
-    Fourier transform. Returns ``(plan, polygons, nudge_used)``, the nudge as a fraction of the
-    pair's size along its direction (zero when none was needed).
+    Fourier transform. That holds only while the nudge is smaller than every real feature of the
+    pair, so no step is taken that moves ``B`` farther than half its :func:`_clearance`. A fixed
+    ``1e-9`` of the pair's size used to be taken regardless: a box overlapping a square by
+    ``1e-10`` of its size, flush with it top and bottom, was nudged clear of it, planned as not
+    overlapping, and replayed as two regions sharing that strip -- refused downstream with "resolved
+    polygon regions overlap on the same side of an interval" for every overlap from about
+    ``1e-12`` to ``1e-9``. Steps of the ladder that are safe are taken as before; when they are
+    not enough, the ladder is scaled down to the clearance, and a pair too close to leave room
+    for any nudge is refused. Returns ``(plan, polygons, nudge_used)``, the nudge as a fraction of
+    the pair's size along its direction (zero when none was needed).
     """
     A, B = np.asarray(A, float), np.asarray(B, float)
     try:
@@ -384,8 +425,16 @@ def plan_difference_robust(A, B, steps=_NUDGE_STEPS):
     span = float(max(A.max(0) - A.min(0)).max() if A.size else 0.0)
     span = max(span, float(max(B.max(0) - B.min(0)).max() if B.size else 0.0)) or 1.0
 
+    clear, tol = _clearance(A, B)
+    room = 0.5 * clear / span
+    ladder = [s for s in steps if abs(s) <= room]
+    if len(ladder) < len(steps):
+        top = max(abs(s) for s in steps)
+        ladder += [s * room / top for s in steps
+                   if abs(s) * room / top * span >= _NUDGE_FLOOR * tol]
+
     for direction in (_NUDGE, _NUDGE_ACROSS):
-        for s in steps:
+        for s in ladder:
             try:
                 plan, _ = plan_difference(A, B + s * span * direction)
             except DegenerateClipError:
@@ -393,6 +442,12 @@ def plan_difference_robust(A, B, steps=_NUDGE_STEPS):
             # Replay the nudged plan against the ORIGINAL vertices.
             return plan, replay(np, plan, A, B), s * direction
 
+    if not ladder:
+        error = DegenerateClipError(
+            f'the two outlines touch, and elsewhere come within {clear / span:.1e} of their size '
+            f'without touching: too close to break the contact by a nudge that keeps them apart')
+        error.clearance = clear / span
+        raise error
     raise DegenerateClipError(
         'no nudge along either direction resolved this contact')
 
@@ -558,15 +613,21 @@ def resolve_painting(shapes):
                     nxt.extend(subtract_loop(table, lp, ids[j]))
                 except DegenerateClipError as error:
                     met = _met_region(table, lp, ids, j, i)
+                    clearance = getattr(error, 'clearance', None)
+                    why = (f'they touch exactly, and elsewhere come within {clearance:.1e} of '
+                           f'their size without touching -- closer than the boundary planner can '
+                           f'shift one outline to decide the contact without crossing that gap or '
+                           f'overlap. Touch there too, or open it to more than about 1e-11 of the '
+                           f'size' if clearance is not None else
+                           f'the boundary planner found no consistent way to cut one outline by '
+                           f'the other where they touch exactly: along edges at, or within about '
+                           f'2e-5 rad of, 1 rad and 2.3 rad to the x axis at once, the two '
+                           f'directions it shifts an outline in to decide a contact, or so far '
+                           f'from the cell that the coordinates cannot resolve the shift')
                     raise DegenerateClipError(
                         f'region {j} cannot be painted over region {met} '
-                        f'(regions counted from 0 in the order declared): the boundary planner '
-                        f'found no consistent way to cut one outline by the other where they '
-                        f'touch exactly: along edges at, or within about 2e-5 rad of, 1 rad and '
-                        f'2.3 rad to the x axis at once, the two directions it shifts an outline '
-                        f'in to decide a contact, or so far from the cell that the coordinates '
-                        f'cannot resolve the shift. Move region {j} by a small fraction of its '
-                        f'size.'
+                        f'(regions counted from 0 in the order declared): {why}. Move region {j} '
+                        f'by a small fraction of its size.'
                     ) from error
             region = nxt
             if not region:
