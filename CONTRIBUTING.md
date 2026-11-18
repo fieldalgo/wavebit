@@ -196,8 +196,9 @@ cannot import as a warning -- so a renamed public symbol fails CI instead of lea
 shorter page. A `github.com` URL into this repository is checked against the tree separately, by
 `tests/api/test_docs_contract.py`.
 
-Nothing is deployed. `.github/workflows/docs-deploy.yml` is written and dormant; its header
-says what has to be true before it runs.
+The `docs` job deploys nothing. `.github/workflows/docs-deploy.yml` publishes the site to
+GitHub Pages when a release is published, built from the release's tag; its header says what
+it waits for and where else the build is served from.
 
 ## Licensing
 

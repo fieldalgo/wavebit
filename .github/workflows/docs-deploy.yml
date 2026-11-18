@@ -1,6 +1,8 @@
 # Publishes the Sphinx site to GitHub Pages when a GitHub release is published, built from the
-# release's tag, and on demand from the Actions tab (pick the tag to rebuild). The website
-# proxies `wavebit.fieldalgo.com/docs/*` to the Pages site.
+# release's tag, and on demand from the Actions tab (pick the tag to rebuild). The company
+# website does not proxy to the Pages site: `wavebit.fieldalgo.com/docs/` is a copy of this
+# build (English and Korean) staged into the website's own deployment. A release therefore
+# updates Pages alone; the website is redeployed separately with the new build.
 #
 # A release because the published documentation describes the released package (owner decision,
 # 2026-10-15): the same event that `python-publish.yml` uploads to PyPI on, so the site and the
