@@ -68,3 +68,72 @@ msgstr "`boundary.py::_nearest_index`는 이제 최솟값에서 `64 eps (S d_min
 
 msgid "**Still outside this fix.** An odd grid also samples the shape's own centre, where the level set has no gradient. The normal there is whatever `_hypot_safe` leaves, and a one-ulp nudge turns it arbitrarily. Every backend reads the same value unnudged. This is a degeneracy of one instance, not a tie between two, and it is not changed here."
 msgstr "**이 수정의 범위 밖.** 홀수 격자는 도형 자신의 중심도 표본화하는데, 거기서는 등위면의 기울기가 없다. 그곳의 법선은 `_hypot_safe`가 남기는 값이고, 1 ulp 밀면 임의로 돌아간다. 밀지 않으면 모든 백엔드가 같은 값을 읽는다. 이것은 두 인스턴스 사이의 동률이 아니라 한 인스턴스의 퇴화이며, 여기서 바꾸지 않는다."
+
+msgid "The cause was checked directly. At a gap of 1e-8 nm, replacing only the two facing weights by half of the closed interval's weight each made the sampled field agree with the contact field to 6.0e-9. The transmission difference fell from 2.58e-4 to 5.2e-12. Nothing else in the layer changed at contact."
+msgstr "원인은 직접 확인했다. 틈 1e-8 nm에서 마주 보는 두 구간의 가중만 각각 닫힌 구간 가중의 절반으로 바꾸면, 표본 법선장이 접촉 시의 장과 6.0e-9까지 일치했다. 투과율 차이는 2.58e-4에서 5.2e-12로 줄었다. 접촉에서 층의 다른 부분은 바뀌지 않았다."
+
+msgid "The planner now records facing pairs. Both intervals have the same region on their right, run in opposite directions, overlap in projection and are separated by less than `ell`, which is 2**-10 of the longest reduced basis vector (about one sample of the default normal grid of 1024). The separation is the largest distance from an end of either common extent to the other interval's line, so a pair that is not parallel enters only when all of its common extent is within `ell`. Over its common extent each interval is weighted `s*contrast**4 + (1 - s)*c_XZ**4/2`. Here `c_XZ` is the live contrast of the two outer materials and `s` is the C2 smootherstep of the separation divided by `ell`, zero at contact and one at `ell`. The difference from the interval's own weight is added on that sub-interval; straight subdivision is additive, so this is the split the contact plan makes. At contact the two halves add to the single interval's weight. Across a slot in one shape X and Z agree, and the closed weight is zero."
+msgstr "계획기는 이제 마주 보는 쌍을 기록한다. 두 구간은 오른쪽에 같은 영역을 두고, 서로 반대 방향으로 진행하며, 서로에 투영했을 때 겹치고, `ell`보다 가깝다. `ell`은 축약 기저에서 가장 긴 벡터의 2**-10이며, 기본 법선 격자 1024의 표본 한 칸 정도이다. 간격은 두 공통 구간의 끝점에서 상대 구간의 직선까지 거리 중 가장 큰 값이므로, 평행하지 않은 쌍은 공통 구간 전체가 `ell` 안에 들어올 때에만 포함된다. 공통 구간에서 각 구간의 가중은 `s*contrast**4 + (1 - s)*c_XZ**4/2`이다. 여기서 `c_XZ`는 바깥 두 재료의 현재 대비이고, `s`는 간격을 `ell`로 나눈 값의 C2 smootherstep으로, 접촉에서 0이고 `ell`에서 1이다. 구간 자체 가중과의 차이를 그 부분 구간에 더한다. 직선 분할은 가법적이므로 이는 접촉 계획이 만드는 분할과 같다. 접촉에서 두 절반은 하나의 구간 가중으로 합쳐진다. 한 형상 안의 홈에서는 X와 Z가 같으므로 닫힌 가중은 0이다."
+
+msgid "A pair whose separation reaches `ell` carries no correction and its sub-intervals are left out. A layer whose slivers are all at least `ell` wide therefore gives the same field and the same results bit for bit. Crossing `ell` changes the frozen plan, so a prepared calculation reports stale geometry there, as it does at contact; the correction is zero at `ell`, so replanning does not move the result. The tensor shapes' nearest extension and the explicit circular projector do not use this blend. A painted overlap thinner than the planner resolves is still refused, as before."
+msgstr "간격이 `ell`에 이른 쌍은 보정이 없고 그 부분 구간은 계산에서 빠진다. 따라서 모든 틈이 `ell` 이상인 층은 법선장과 결과가 비트 단위로 같다. `ell`을 지나면 고정된 계획이 바뀌므로, 준비된 계산은 접촉에서와 마찬가지로 그 지점에서 오래된 형상을 보고한다. `ell`에서 보정이 0이므로 다시 계획해도 결과는 움직이지 않는다. 텐서 형상의 nearest 확장과 명시적 circular projector는 이 혼합을 쓰지 않는다. 계획기가 분해할 수 있는 것보다 얇은 painting 겹침은 이전처럼 거부된다."
+
+msgid "Measured on Linux with Python 3.13, NumPy 2.5.5 and JAX 0.12.0, against main `aa7a462` before the change. The scene has a 600 nm square cell, a 240 nm layer with background epsilon 1, substrate epsilon 2.25, wavelength 840 nm, theta 0.25 rad, phi 0.4 rad, p polarisation and orders (5, 5) on the default normal grid. Two polygon boxes of epsilon 4 (painted first) and 9 face each other across a gap g along the x axis, or along an axis turned by 0.3 rad. The boxes are 180 nm squares; the partial case uses a 120 x 270 nm second box shifted 60 nm along the shared edge. Each entry is T(g = h) - T(g = 0):"
+msgstr "변경 전 main `aa7a462`과 비교해 Linux, Python 3.13, NumPy 2.5.5, JAX 0.12.0에서 측정했다. 장면은 한 변 600 nm인 정사각 셀, 배경 유전율 1인 두께 240 nm 층, 기판 유전율 2.25, 파장 840 nm, theta 0.25 rad, phi 0.4 rad, p 편광, 차수 (5, 5), 기본 법선 격자이다. 유전율 4(먼저 칠함)와 9인 다각형 상자 두 개가 x축을 따라, 또는 0.3 rad 돌린 축을 따라 틈 g를 두고 마주 본다. 상자는 180 nm 정사각형이고, partial 사례의 두 번째 상자는 120 x 270 nm이며 공유 변을 따라 60 nm 이동했다. 각 값은 T(g = h) - T(g = 0)이다:"
+
+msgid "scene"
+msgstr "장면"
+
+msgid "after"
+msgstr "변경 후"
+
+msgid "boxes"
+msgstr "상자"
+
+msgid "turned boxes"
+msgstr "돌린 상자"
+
+msgid "partial"
+msgstr "부분 겹침"
+
+msgid "turned partial"
+msgstr "돌린 부분 겹침"
+
+msgid "At normal grid 64 and orders (3, 3), a 180 nm high box of epsilon 4 meeting its own periodic image beside an epsilon 9 disc stepped by 1.62e-4 before and 4.5e-13 after (h = 1e-8). A square of epsilon 4 with a slot of width 1e-8 nm differed from the filled square by 2.01e-4 before and 2.6e-12 after."
+msgstr "법선 격자 64, 차수 (3, 3)에서 유전율 9 원판 옆의 높이 180 nm, 유전율 4 상자가 자신의 주기 이미지와 만날 때 계단은 변경 전 1.62e-4, 변경 후 4.5e-13이었다(h = 1e-8). 폭 1e-8 nm 홈이 있는 유전율 4 정사각형과 채워진 정사각형의 차이는 변경 전 2.01e-4, 변경 후 2.6e-12였다."
+
+msgid "Results change only below `ell`, here 0.586 nm. Total transmission of the two axis-aligned scenes above, before and after, at gap g:"
+msgstr "결과는 `ell`(여기서 0.586 nm) 아래에서만 바뀐다. 위의 축 정렬 두 장면에서 틈 g에 따른 변경 전후 전체 투과율:"
+
+msgid "boxes before"
+msgstr "상자 변경 전"
+
+msgid "boxes after"
+msgstr "상자 변경 후"
+
+msgid "change"
+msgstr "변화"
+
+msgid "partial before"
+msgstr "부분 겹침 변경 전"
+
+msgid "partial after"
+msgstr "부분 겹침 변경 후"
+
+msgid "Two 256-vertex polygon circles of radius 100 nm and epsilon 4 and 9, 0.1 nm apart, plan four facing pairs; their transmission at orders (3, 3) and grid 256 moved from 0.950802146661 to 0.950738047677 (-6.4e-5). The same circle 0.1 nm above a polygon box plans eight, and moved from 0.655153214189 to 0.655154063843 (+8.5e-7). Planning a layer of three polygonised circles over a box, 1463 intervals, took 0.159 s instead of 0.123 s."
+msgstr "반지름 100 nm, 유전율 4와 9인 256각형 원 두 개가 0.1 nm 떨어져 있으면 마주 보는 쌍 네 개가 계획된다. 차수 (3, 3), 격자 256에서 투과율은 0.950802146661에서 0.950738047677로 움직였다(-6.4e-5). 같은 원이 다각형 상자 위 0.1 nm에 있으면 여덟 쌍이 계획되고 0.655153214189에서 0.655154063843으로 움직였다(+8.5e-7). 상자 위 다각형 원 세 개(1463 구간) 층의 계획 시간은 0.123 s에서 0.159 s가 되었다."
+
+msgid "JAX differentiates through the blend. For the turned boxes at grid 256 and orders (3, 3), the derivative of transmission with respect to the gap at g/ell = 0.2, 0.5 and 0.8 agrees with central differences to 3.0e-8, 8.1e-9 and 4.7e-9."
+msgstr "JAX는 혼합을 통과해 미분한다. 격자 256, 차수 (3, 3)의 돌린 상자에서 g/ell = 0.2, 0.5, 0.8의 틈에 대한 투과율 미분은 중심 차분과 각각 3.0e-8, 8.1e-9, 4.7e-9 이내로 일치한다."
+
+msgid "The §1c acceptance scene plans no facing pair at any of its 41 angle points, 41 centre points or 11 points around 0.313 rad, so it runs the unchanged arithmetic."
+msgstr "§1c 수용 장면은 각도 41점, 중심 41점, 0.313 rad 주변 11점 어디에서도 마주 보는 쌍을 계획하지 않으므로 바뀌지 않은 연산을 실행한다."
+
+msgid "`tests/rcwa/test_integrated_normal.py` requires, at normal grid 64 and orders (3, 3), a transmission difference below 1e-9 at h = 1e-8 with proportional decay at 1e-10 for the boxes, turned boxes, partial and own-image cases, and a slot that meets its filled square to 1e-9. Before the change these differences were 4.3e-4, 5.7e-4, 6.0e-4, 1.6e-4 and 2.0e-4. Field-level tests check the plan at the gap, bit-identity at `ell`, agreement with the contact field, and a JAX derivative through the blend."
+msgstr "`tests/rcwa/test_integrated_normal.py`는 법선 격자 64, 차수 (3, 3)에서 boxes, turned boxes, partial, 주기 이미지 사례가 h = 1e-8에서 투과율 차이 1e-9 미만이고 1e-10에서 비례해 줄어들 것, 그리고 홈이 채워진 정사각형과 1e-9 이내로 만날 것을 요구한다. 변경 전 이 차이는 4.3e-4, 5.7e-4, 6.0e-4, 1.6e-4, 2.0e-4였다. 장 수준 시험은 틈에서의 계획, `ell`에서의 비트 동일성, 접촉 장과의 일치, 혼합을 통과하는 JAX 미분을 확인한다."
+
+msgid "1d. A closing sliver: facing intervals blended toward contact (2026-11-18)"
+msgstr "1d. 닫히는 틈: 마주 보는 구간을 접촉 쪽으로 혼합 (2026-11-18)"
+
+msgid "Until 2026-11-18 the boundary integral of §1c stepped when a sliver of one region closed: a gap between two shapes, a shape meeting its own periodic image, or a slot in one shape. While the sliver was open, its two bounding intervals X|Y and Y|Z were weighted `contrast**4` each. At contact the plan replaced them by one X|Z interval with its own contrast. For epsilon 4 and 9 boxes in air the pair's weight fell at once from 0.6**4 + 0.8**4 = 0.54 to 0.385**4 = 0.022. The normalised field therefore changed wherever that pair carried weight, by up to 0.66 in a diagonal projector entry. Laurent's rule builds no normal field and stayed continuous; contact to overlap was already continuous."
+msgstr "2026-11-18 전까지 §1c의 경계 적분은 한 영역의 얇은 틈이 닫힐 때 계단을 만들었다. 두 형상 사이의 틈, 형상이 자신의 주기 이미지와 만나는 경우, 한 형상 안의 홈이 그렇다. 틈이 열려 있는 동안 이를 둘러싼 두 구간 X|Y와 Y|Z는 각각 `contrast**4`로 가중되었다. 접촉하면 계획은 이 둘을 자신의 대비를 가진 X|Z 구간 하나로 바꾸었다. 공기 중 유전율 4와 9 상자에서 쌍의 가중은 0.6**4 + 0.8**4 = 0.54에서 0.385**4 = 0.022로 한 번에 떨어졌다. 그래서 정규화된 장은 그 쌍이 가중을 가진 모든 곳에서 바뀌었고, projector 대각 성분에서 최대 0.66이 바뀌었다. 법선장을 만들지 않는 Laurent 규칙은 연속이었고, 접촉에서 겹침으로 가는 쪽은 이미 연속이었다."
