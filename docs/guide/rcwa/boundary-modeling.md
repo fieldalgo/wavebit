@@ -555,7 +555,13 @@ pair's size, along `(cos 1, sin 1)` and, if that fails, along `(cos 2.3, sin 2.3
 only, and replays the plan on the outlines as declared. A contact along an edge parallel to a
 nudge slides along itself under it, so only a pair touching along edges within about 2e-5 rad of
 1 rad and of 2.3 rad to the x axis at once is left unresolved, a band that widens far from the
-cell. `rcwa.prepare` and `rcwa.run` then refuse with `UnsupportedFeatureError`, code `rcwa.unsupported`, naming the layer and the two
+cell. A nudge never moves an outline more than half the pair's nearest approach that is not a
+contact, so it cannot erase a real gap or overlap thinner than itself: until 2026-11-18 a box
+flush with a polygon top and bottom and overlapping it by 1e-12 to 1e-9 of the period was planned
+as not overlapping and refused with an internal message. A pair touching and also coming within
+about 1e-11 of its size elsewhere leaves no room for a nudge, and an overlap thinner than about
+1e-12 of it is read as a contact and then found on one side of the shared edge; both are refused
+as well. `rcwa.prepare` and `rcwa.run` then refuse with `UnsupportedFeatureError`, code `rcwa.unsupported`, naming the layer and the two
 regions that meet; move the later one by a small fraction of its size. `rcwa.check` does not plan
 the painting and does not see it: planning took 0.26 s for two overlapping 256-vertex circles
 over a rectangle (measured 2026-10-28), which `check` leaves to `prepare`. A prepared calculation

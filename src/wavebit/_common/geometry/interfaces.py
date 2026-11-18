@@ -130,7 +130,18 @@ def plan_interfaces(regions, lattice, transform):
             left = [owner for owner, count in winding.items() if count > 0]
             right = [owner for owner, count in winding.items() if count < 0]
             if len(left) > 1 or len(right) > 1:
-                raise ValueError('resolved polygon regions overlap on the same side of an interval')
+                # The clipper reads outlines within about 1e-12 of their size as touching, and
+                # an overlap that thin comes back from it uncut, two regions sharing the strip.
+                # Here, at the rounding of the coordinates, the strip has two sides. Said as the
+                # painting the planner cannot express, like the clipper's own refusals, rather
+                # than as a malformed input.
+                from wavebit._common.geometry.clipper import DegenerateClipError
+                pair = sorted(left if len(left) > 1 else right)
+                raise DegenerateClipError(
+                    f'regions {pair[0]} and {pair[1]} (counted from 0 in the order declared) '
+                    f'overlap in a strip thinner than the boundary planner resolves, about 1e-12 '
+                    f'of their size: it reads them as touching there and then finds both on one '
+                    f'side of the edge they share. Write them touching, or overlapping by more.')
             # A resolved contour can contain zero-area out-and-back spurs. Sum
             # signed coverage per region before assigning either side: a spur
             # cannot hide the true contour of a third, co-oriented edge.

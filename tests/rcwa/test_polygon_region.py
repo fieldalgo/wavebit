@@ -523,6 +523,68 @@ def test_a_painting_the_planner_cannot_resolve_is_refused_with_a_code(length, sc
         assert isinstance(caught.value.__cause__, DegenerateClipError)
 
 
+#: A square and a box painted over it, flush with it top and bottom and overlapping it by a strip
+#: ``overlap`` wide: the flush edges are an exact contact, which the planner decides by a nudge.
+def _square_and_box(overlap, scale=1.):
+    square = np.array([(-.3, -.15), (0., -.15), (0., .15), (-.3, .15)]) * scale
+    box = np.array([(-overlap, -.15), (.3 - overlap, -.15), (.3 - overlap, .15),
+                    (-overlap, .15)]) * scale
+    return square, box
+
+
+@pytest.mark.parametrize('overlap', [3e-12, 1e-11, 1e-10, 3e-10, 1e-9, 1e-8])
+def test_a_contact_nudge_never_erases_a_thinner_overlap(overlap):
+    """The nudge that decides the flush contact used to be a fixed 1e-9 of the pair's size. Along
+    ``(cos 1, sin 1)`` that moved the box 1.6e-10 of the square's width to the right, clear of a
+    thinner overlap, so the plan read "not overlapping" and the square came back whole: two
+    regions sharing the strip, which the interface planner refused as "resolved polygon regions
+    overlap on the same side of an interval" -- for every overlap from about 1e-12 to 1e-9 of the
+    period, measured. The nudge now stays under half the pair's nearest approach that is not a
+    contact, so the square is cut and keeps exactly what the box leaves of it."""
+    from wavebit._common.geometry import clipper
+    square, box = _square_and_box(overlap)
+    recs, regions = clipper.resolve_painting([square, box])
+    vals = clipper.eval_table(np, recs, [square, box])
+    under, over = (clipper.region_area(np, r, vals) for r in regions)
+    assert abs(under - .3 * (.3 - overlap)) < 1e-15 and abs(over - .09) < 1e-15
+
+
+@pytest.mark.parametrize('length,scale', [('um', 1.), ('m', 1e-6)])
+@pytest.mark.parametrize('overlap,refused', [
+    (1e-14, None),       # within the rounding: the shared edge, read as touching
+    (1e-13, 'regions 0 and 1 (counted from 0 in the order declared) overlap in a strip'),
+    (1e-12, 'region 1 cannot be painted over region 0'),     # no room for a nudge
+    (3e-12, None), (1e-10, None), (1e-8, None)])
+def test_a_thin_overlap_on_a_polygon_layer_solves_or_is_refused_with_a_code(overlap, refused,
+                                                                           length, scale):
+    """A layer holding a polygon always takes the painting route, whatever the overlap, so the
+    routing tolerance does not shield it from a strip 1e-12 to 1e-9 of the period wide. Such a
+    strip came back from the planner unresolved and reached ``run`` as ``rcwa.invalid`` with the
+    interface planner's internal message. It solves now, painted exactly, or -- thinner than the
+    planner resolves -- is refused as ``rcwa.unsupported`` naming the layer and the regions."""
+    from wavebit.rcwa import operators
+    square, box = _square_and_box(overlap, scale)
+    layer = rcwa.Layer(thickness=.4 * scale, background=Material(1.), regions=(
+        region(tuple(map(tuple, square)), 4.), region(tuple(map(tuple, box)), 9.)))
+    p = rcwa.Problem(units=Units(length=length),
+                     stack=rcwa.Stack(layers=(layer,), bottom=Material(2.25), period=(scale, scale)),
+                     excitation=rcwa.Excitation(wavelength=1.3 * scale, sources=(
+                         rcwa.PlaneWave(theta=.35, phi=.6, polarization='s'),)))
+    if refused is not None:
+        with pytest.raises(UnsupportedFeatureError) as caught:
+            rcwa.run(p, numerics=LAURENT)
+        assert caught.value.code == 'rcwa.unsupported'
+        assert 'Layer 0: ' in caught.value.message
+        assert refused in caught.value.message
+        return
+    epx = np.asarray(operators.assemble(p, numerics=LAURENT).epsilon[0].epx)
+    epx = epx[0] if epx.ndim == 3 else epx
+    mean = epx[epx.shape[0] // 2, epx.shape[1] // 2].real
+    assert abs(mean - (1. + 3. * .3 * (.3 - overlap) + 8. * .09)) < 1e-13, mean
+    result = rcwa.run(p, numerics=LAURENT)
+    assert abs(sum(np.sum(x) for x in efficiencies(result)) - 1.) < 1e-12
+
+
 def test_an_isotropic_layer_of_a_tensor_stack_names_its_layer_in_the_refusal(monkeypatch):
     """A tensor material anywhere sends the stack through the tensor builder, whose isotropic
     layers are planned by the scalar rule at three places of their own: the freeze, the replay
