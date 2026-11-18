@@ -880,6 +880,10 @@ def _continued_in_pair(xp, a, e, l2, valid, tol2, rows=None):
     body per block is the growth :func:`_scanned_normals` describes.
     """
     m = a.shape[0]
+    if rows is None and 'numpy' in xp.__name__ and 'jax' not in xp.__name__ and m:
+        found = _continued_in_pair_near(a, e, l2, valid, tol2)
+        if found is not None:
+            return found
     if rows is None:
         rows = m if 'jax' in xp.__name__ else max(1, _PAIR_BLOCK // max(m, 1))
     start, end = a, a + e
@@ -933,6 +937,88 @@ def _continued_in_pair(xp, a, e, l2, valid, tol2, rows=None):
         found[1].append(xp.any(through & end_on, axis=1))
         found[2].append(xp.any(repeat & (index[None, :] < index[lo:hi, None]), axis=1))
     return tuple(xp.concat(parts) for parts in found)
+
+
+def _continued_in_pair_near(a, e, l2, valid, tol2):
+    """:func:`_continued_in_pair` on NumPy, evaluated only where an endpoint can lie on an
+    interval.
+
+    Every relation it reports needs an endpoint of ``k`` on interval ``j``: within ``tol`` of
+    ``j``'s line and no more than ``tol`` past either end, so within ``tol * sqrt(2)`` of the
+    interval's box. Intervals are ordered by their boxes' left edges; each endpoint is tested
+    against the intervals whose boxes, widened by a margin above that bound, reach it, by the
+    same arithmetic as the dense form, pair by pair. The rest of the dense ``(m, m)`` arrays is
+    false in every term the answer reads, so the three booleans are the dense form's. Two
+    painted 256-gons imaged on a 5x5 ring are about 8800 intervals; the dense form spent about
+    two seconds a solve there."""
+    import numpy as np
+    m = a.shape[0]
+    tol = np.sqrt(tol2)
+    start, end = a, a + e
+    if (valid & np.all(e == 0, axis=1)).any() or not (
+            np.all(np.isfinite(a)) and np.all(np.isfinite(e)) and np.all(np.isfinite(l2))):
+        # A valid zero-length interval holds every point; the dense form says so.
+        return None
+    lower, upper = np.minimum(start, end), np.maximum(start, end)
+    # Four times the bound, so rounding in the widened box cannot exclude a pair `on` keeps.
+    margin = 4.0 * tol + 4.0 * np.finfo(a.dtype).eps * np.max(np.abs(upper), initial=1.0)
+    left = lower[:, 0] - margin
+    right = upper[:, 0] + margin
+    extent = right - left
+    # A few long intervals (a box's edge, imaged) would widen every window; take them whole.
+    long = extent > 8.0 * np.median(extent)
+    wide = np.flatnonzero(long)
+    short = np.flatnonzero(~long)
+    order = short[np.argsort(left[short], kind='stable')]
+    sorted_left = left[order]
+    window = float(np.max(extent[short])) if len(short) else 0.0
+
+    def candidates(points):
+        x = points[:, 0]
+        last = np.searchsorted(sorted_left, x, side='right')
+        first = np.searchsorted(sorted_left, x - window - margin, side='left')
+        size = last - first
+        if size.sum() + len(points)*len(wide) > _PAIR_BLOCK:
+            return None
+        k = np.repeat(np.arange(len(points)), size)
+        offset = np.arange(size.sum()) - np.repeat(np.cumsum(size) - size, size)
+        j = order[np.repeat(first, size) + offset]
+        k = np.concatenate([k, np.repeat(np.arange(len(points)), len(wide))])
+        j = np.concatenate([j, np.tile(wide, len(points))])
+        x, y = points[k, 0], points[k, 1]
+        inside = ((x >= left[j]) & (x <= right[j]) & (y >= lower[j, 1] - margin)
+                  & (y <= upper[j, 1] + margin))
+        return k[inside], j[inside]
+
+    def on_pairs(points, j):
+        d = points - a[j]
+        along = d[:, 0]*e[j, 0] + d[:, 1]*e[j, 1]
+        perp = d[:, 0]*e[j, 1] - d[:, 1]*e[j, 0]
+        slack = np.sqrt(tol2*l2[j])
+        return (perp*perp <= tol2*l2[j]) & (along >= -slack) & (along <= l2[j] + slack)
+
+    near = candidates(start), candidates(end)
+    if near[0] is None or near[1] is None:
+        return None  # crowded: the dense form's row blocks bound the memory instead
+    k = np.concatenate([near[0][0], near[1][0]])
+    j = np.concatenate([near[0][1], near[1][1]])
+    key = np.unique(k * m + j)
+    k, j = key // m, key - (key // m) * m
+    cross = e[k, 0]*e[j, 1] - e[k, 1]*e[j, 0]
+    parallel = cross*cross <= _SAME_POINT**2*l2[k]*l2[j]
+    other = (k != j) & valid[j] & parallel
+    start_on = on_pairs(start[k], j)
+    end_on = on_pairs(end[k], j)
+    both = other & start_on & end_on
+    repeat = np.zeros_like(both)
+    repeat[both] = on_pairs(start[j[both]], k[both]) & on_pairs(end[j[both]], k[both])
+    through = other & ~repeat
+    found = []
+    for hit in (through & start_on, through & end_on, repeat & (j < k)):
+        flag = np.zeros(m, dtype=bool)
+        flag[k[hit]] = True
+        found.append(flag)
+    return tuple(found)
 
 
 def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, contrasts,
