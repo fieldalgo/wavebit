@@ -266,7 +266,8 @@ def test_every_public_rcwa_declaration_has_a_tag():
     for name in rcwa.__all__:
         obj = getattr(rcwa, name)
         if (isinstance(obj, type) and dataclasses.is_dataclass(obj)
-                and name not in ('Prepared', 'Result', 'BoundaryPower')):
+                # Results are not portable declarations: a job encodes what goes in.
+                and name not in ('Prepared', 'Result', 'BoundaryPower', 'EllipsometryOrders', 'EllipsometryResult')):
             assert f'wavebit.rcwa.{name}' in registry, name
 
 

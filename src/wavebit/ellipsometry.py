@@ -32,7 +32,7 @@ The Mueller matrix is the same under either convention (its entries are intensit
 
 import numpy as np
 
-from ._common.backend import array_namespace, as_array, _device_of
+from ._common.backend import array_namespace, as_array, eager_under_torch_compile, _device_of
 from ._common.declarations import Declaration, spec
 from ._common.pytrees import register_dataclass
 
@@ -98,6 +98,7 @@ def _angles(xp, numerator, denominator):
     return psi, delta, ratio
 
 
+@eager_under_torch_compile
 def psi_delta(jones):
     """:class:`Ellipsometry` of ``jones``, whose trailing axes are ``(2, 2)`` in ``(s, p)``.
 
@@ -120,6 +121,7 @@ def _constant(xp, like, value):
     return as_array(xp, value, dtype=like.dtype, device=_device_of(like))
 
 
+@eager_under_torch_compile
 def mueller_from_jones(jones, normalize=True):
     """The ``(4, 4)`` real Mueller matrix of ``jones``: ``M = A (J (x) J*) A^-1``.
 
@@ -146,6 +148,7 @@ def mueller_from_jones(jones, normalize=True):
     return mueller
 
 
+@eager_under_torch_compile
 def depolarization_index(mueller):
     """Gil and Bernabeu's depolarization index of a ``(4, 4)`` Mueller matrix.
 
@@ -158,6 +161,7 @@ def depolarization_index(mueller):
     return xp.sqrt((total - m11**2) / (3 * m11**2))
 
 
+@eager_under_torch_compile
 def cloude_eigenvalues(mueller):
     """The four eigenvalues, ascending, of the coherency matrix of a ``(4, 4)`` Mueller matrix.
 
