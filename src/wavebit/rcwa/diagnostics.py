@@ -12,9 +12,9 @@ has its own category, so a sweep can silence or escalate one without touching th
 """
 from .._common.backend import (AutoDetuneWarning, ComplexIncidenceWarning, ExceptionalPointWarning,
                                ExperimentalWarning, GainCutoffWarning, RayleighPointWarning,
-                               ShapeGridWarning, SvdConvergenceWarning)
+                               ShapeGridWarning, SlicingWarning, SvdConvergenceWarning)
 
 __all__ = ['AutoDetuneWarning', 'ComplexIncidenceWarning', 'ExceptionalPointWarning',
            'ExperimentalWarning', 'GainCutoffWarning', 'RayleighPointWarning', 'ShapeGridWarning',
-           'SvdConvergenceWarning']
+           'SlicingWarning', 'SvdConvergenceWarning']
 

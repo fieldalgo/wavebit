@@ -1262,6 +1262,19 @@ class AutoDetuneWarning(UserWarning):
     """
 
 
+class SlicingWarning(UserWarning):
+    """A profiled layer's automatic slice count stopped at ``max_count`` short of its tolerance.
+
+    Public path: ``wavebit.rcwa.diagnostics.SlicingWarning``.
+
+    ``Slicing(count='auto')`` doubles the slice count of every
+    :class:`~wavebit.rcwa.ProfiledLayer` until the Richardson estimate of the staircase error
+    in the efficiencies falls to ``tolerance``; when doubling again would pass ``max_count`` it
+    stops, solves with the last count, records ``z_slicing_converged`` as false in the result's
+    validity and emits this.
+    """
+
+
 class ShapeGridWarning(UserWarning):
     """A region layer reads a stated ``shape_nvf_grid_size`` below ``4*max(orders)+1``.
 
