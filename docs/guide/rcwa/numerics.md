@@ -24,6 +24,8 @@ A layer whose material is the half-space's beside it is merged into that half-sp
 
 `wall_resolution` (default `None`) solves a stack of axis-aligned rectangles in coordinates whose lines crowd at the rectangles' walls, which brings the near field beside a metal to a finite-element reference at an order where the unstretched solve is tens of percent off. It is experimental, takes `factorization='li'` on the scattering-matrix algorithm, and reports an evanescent order's amplitude as 0: see [Resolving walls with stretched coordinates](wall-resolution.md).
 
+`slicing` (default `None`, read as `rcwa.Slicing()`) is read only by a stack holding an `rcwa.ProfiledLayer`: how many slices each profiled layer is cut into, where, and when the staircase error in `z` is estimated. The default doubles the count from 4 until the estimated change of every efficiency is below `1e-4`. See [profiled layers](profiled-layers.md#how-the-layer-is-sliced).
+
 `exceptional_points` (default `'rebuild'`) controls the handling of layers at and near an exceptional point, where layer modes share an eigenvector: by default they are rebuilt in a regular basis, or the solve warns (eagerly) or answers NaN (under a trace) where they cannot be. `'off'` is an advanced choice that skips that handling on every path, mostly to speed up compiled runs; at and near an exceptional point the answer can then be wrong with no warning. See {ref}`exceptional points §7 <ep-handling-off>`.
 
 Increase orders and geometric/NVF resolution independently and compare the output you actually need. Energy balance alone does not establish optical or gradient convergence. The measurements quoted below were taken through the earlier `wavebit.compat.legacy` interface, which runs the same engine.

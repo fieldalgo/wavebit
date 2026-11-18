@@ -79,7 +79,7 @@ gives the unit square.
 
 | Field | Default | Accepts | Refuses |
 | --- | --- | --- | --- |
-| `layers` | `()` | a tuple of `rcwa.Layer`, **bottom to top**; the bottom interface is `z = 0`. An empty stack is one interface | anything but `Layer`s: `stack.layers`, at construction; raster layers beside region layers: `rcwa.mixed_layer_encoding`, at check |
+| `layers` | `()` | a tuple of `rcwa.Layer` and `rcwa.ProfiledLayer`, **bottom to top**; the bottom interface is `z = 0`. An empty stack is one interface | anything else: `stack.layers`, at construction; a raster layer beside a `ProfiledLayer`: `layer.profile_raster`, at check; raster layers beside region layers: `rcwa.mixed_layer_encoding`, at check |
 | `top` | `Material(epsilon=1.)` | the material model of the upper half-space. A passive double negative (`Re(eps) < 0`, `Re(mu) < 0`) is solved on either side, lit or not; see [negative-index media](../theory/rcwa/negative-index-media.md) | a bare number: `material.type`; an active double negative that propagates (`Re(eps*mu) > 0`, and `Im(eps) < 0` or `Im(mu) < 0`): `rcwa.invalid`, both at check |
 | `bottom` | `Material(epsilon=1.)` | the lower half-space, read the same way | as `top` |
 | `period` | `(1., 1.)` when `lattice` is not given | `(Lx, Ly)`: two positive, finite, real lengths. The axis-aligned spelling of the cell | beside `lattice`: `stack.cell_ambiguous`, at construction; a scalar, a `dict` or a length that is not positive: `stack.period`, at check |
@@ -101,11 +101,22 @@ A layer is either painted with regions over a background or sampled as a raster,
 | `epsilon` | `None` | a sampled relative-permittivity raster of shape `(Ny, Nx)`, complex allowed; one row is a 1D grating, and `(Ny, Nx, 3, 3)` holds a tensor per pixel. Every raster layer of a stack has the same shape | `Material` objects inside the array, or raster layers of different shapes: `rcwa.invalid`, at check; any other shape (a 1D, 3D, empty or 0-d array, or `(Ny, Nx, 2, 2)`): `layer.raster_shape`, with the expected and actual shape, at check; a NaN or infinite sample: `problem.nonfinite`, at check; a zero `eps_zz` in any pixel, or one whose reciprocal overflows the run's precision (also for a background or region material): `rcwa.zero_permittivity`, at check |
 | `mu` | `None` | the relative-permeability raster beside `epsilon`, the same shape. On a region layer a permeability belongs to each `Material` | without `epsilon`: `layer.mu_without_raster`, at construction; a shape other than `(Ny, Nx)` or `(Ny, Nx, 3, 3)`, or another `(Ny, Nx)` than `epsilon`'s (either may hold a tensor per pixel): `layer.raster_shape`, at `stack.layers[i].mu`, at check |
 
+### `rcwa.ProfiledLayer`
+
+A layer whose cross-section changes with height, sliced by Wavebit: see
+[profiled layers](../guide/rcwa/profiled-layers.md). It has no raster form.
+
+| Field | Default | Accepts | Refuses |
+| --- | --- | --- | --- |
+| `thickness` | required | as on `rcwa.Layer` | as on `rcwa.Layer` |
+| `background` | `Material(epsilon=1.)` | as on `rcwa.Layer` | as on `rcwa.Layer` |
+| `regions` | `()` | a tuple of `rcwa.Region`, painted in order; any of them may hold a `Trapezoid`, `Loft` or `Profile` | anything but `Region`s: `layer.regions`, at construction; a shape that does not fit the layer: `shape.profile`, at prepare |
+
 ### `rcwa.Region`
 
 | Field | Default | Accepts | Refuses |
 | --- | --- | --- | --- |
-| `geometry` | required | an `rcwa.Rectangle`, `rcwa.Circle`, `rcwa.Ellipse` or `rcwa.Polygon` | anything else, a recipe `dict` included: `shape.type`, at construction |
+| `geometry` | required | an `rcwa.Rectangle`, `rcwa.Circle`, `rcwa.Ellipse` or `rcwa.Polygon`; in an `rcwa.ProfiledLayer` also an `rcwa.Trapezoid`, `rcwa.Loft` or `rcwa.Profile` | anything else, a recipe `dict` included: `shape.type`, at construction; a `Trapezoid`, `Loft` or `Profile` in an `rcwa.Layer`: `layer.profile_geometry`, at construction |
 | `material` | required | a material model, scalar or tensor | a bare number: `material.type`, at check |
 
 ### The geometries
@@ -124,6 +135,22 @@ refused at prepare with `rcwa.invalid`.
 | `rcwa.Ellipse` | `radii` | required | principal semi-axes `(rx, ry)` | not two components: `shape.dimension`; a complex or string entry: `shape.value` |
 | | `center`, `angle` | `(0., 0.)`, `0.` | as on `Rectangle` | as on `Rectangle` |
 | `rcwa.Polygon` | `vertices` | required | `N >= 3` pairs `(x, y)`, or an `(N, 2)` array, in order around the boundary; either winding | fewer than three: `shape.vertices`; an outline that is not simple (a zero-length edge, two edges crossing or touching): `shape.outline`, both at construction; under `factorization='li'` or `nvf_projector='circular'`, or with a tensor material: `rcwa.unsupported`, at check |
+
+The three shapes below change with the height `z`, measured up from the layer's bottom face, and
+are taken by an `rcwa.ProfiledLayer` only.
+
+| Declaration | Field | Default | Accepts | Refuses |
+| --- | --- | --- | --- | --- |
+| `rcwa.Trapezoid` | `cd` | required | the line's width at the height `cd_at` names, on the straight walls | not positive: `shape.profile`; complex or a string: `shape.value`, both at construction |
+| | `swa` | `pi/2` | the sidewall angle in radians, between the base and the wall inside the material: `pi/2` vertical, less a taper, more an undercut; or a `(left, right)` pair | outside `(0, pi)`: `shape.profile`; a sequence not of two: `shape.dimension`, both at construction |
+| | `top_rounding`, `footing` | `0.`, `0.` | radii of the convex arc at each top corner and of the concave fillet at each foot | negative: `shape.profile`, at construction; too large for the layer, or walls that meet inside it: `shape.profile`, at prepare |
+| | `center` | `0.` | `x` of the width's midpoint, from the cell centre | complex or a string: `shape.value` |
+| | `cd_at` | `'bottom'` | `'bottom'`, `'middle'` or `'top'` | anything else: `shape.profile` |
+| `rcwa.Loft` | `bottom`, `top` | required | two outlines as `Polygon` takes them, with the same number of vertices, matched in order; linear between them | a vertex count that differs: `shape.vertices`; an outline `Polygon` refuses: as `Polygon`, all at construction |
+| `rcwa.Profile` | `section` | required | a callable `z -> vertices`, the same number of vertices at every height | not callable: `shape.profile`, at construction; saving the problem as a job: `job.encoding` |
+
+A `Trapezoid` spans the cell along `y` and needs `Stack(period=...)`; with `lattice` it is
+refused at prepare with `shape.profile_cell`.
 
 `factorization='li'` builds axis-aligned rectangles only; any other region under it is refused at
 check with `rcwa.unsupported`.
@@ -218,6 +245,17 @@ than ignored.
 | `half_space_merge_tolerance` | `0.0`: bit-identical materials only | how near a layer's material must be to the half-space beside it to be merged into it, a relative tolerance in `[0, 1)`. `0` merges only a layer whose every permittivity and permeability value is the half-space's bit for bit, and only at a complex in-plane wavevector, where solving it as a layer can be O(1) wrong, or on the 2D path at an exact graze of that half-space, where the layer cannot be solved; other real angles keep their bits. A positive value takes a material within it **to be** the half-space's, at every angle, and the answer is that snapped scene's; `result.diagnostics['half_space_merge']` names the layers. See [connecting algorithms §10](../theory/rcwa/connecting-algorithms.md#10-etms-labels-at-a-complex-in-plane-wavevector) | negative, not below 1, or not finite: `numerics.half_space_merge_tolerance`, at construction; positive with a coherent source: `rcwa.coherent_half_space_merge`, at check; positive with an `IncidentOrders`, with a material that `jax.jit` or `jax.vmap` traces, or with a material derivative: refused at run, since the merge is decided from concrete materials (a traced angle alone is fine, and so are materials written as constants inside the jitted function) |
 | `exceptional_points` | `'rebuild'` | `'rebuild'`: layers at and near an exceptional point are rebuilt in a regular basis, or warn (eager) / answer NaN (traced) where they cannot be. `'off'`: an advanced choice that skips the detection, rebuilds and screens on every path (second-order and first-order 2D, 1D conical, coherent sources), eagerly and traced -- faster, mostly under `jax.jit`, but at and near an exceptional point the answer can be wrong with no warning. Away from one the answer agrees to rounding. See {ref}`exceptional points §7 <ep-handling-off>` | anything else: `numerics.choice`, at construction |
 | `wall_resolution` | `None`: the cell's own coordinates | the slope of the solve's coordinates at the walls of axis-aligned rectangles, a number in `(0, 1]`: `0.02` (recommended) places the coordinate lines fifty times more densely at every rectangle edge. Experimental: a solve that uses it emits `ExperimentalWarning`. With it an evanescent order's amplitude is reported as 0, and boundary fields and the scattering matrix are not available. See [Resolving walls with stretched coordinates](../guide/rcwa/wall-resolution.md) | a value outside `(0, 1]`: `numerics.wall_resolution`, at construction; anything but axis-aligned rectangles under `factorization='li'` on `'smm'` with the second-order formulation, isotropic non-magnetic materials, lossless dielectric half-spaces and one plane wave: `rcwa.unsupported`, at check; `jax.jit`, `jax.vmap` and gradients |
+| `slicing` | `None`, read as `rcwa.Slicing()` | an `rcwa.Slicing`: how every `rcwa.ProfiledLayer` is cut into slices along `z`, and when the staircase error is estimated. Read only by a stack holding a `ProfiledLayer`. See [profiled layers](../guide/rcwa/profiled-layers.md#how-the-layer-is-sliced) | anything else: `numerics.slicing`, at construction |
+
+### `rcwa.Slicing`
+
+| Field | Default | Accepts | Refuses |
+| --- | --- | --- | --- |
+| `count` | `'auto'` | slices per profiled layer, a positive `int`, or `'auto'`: double from `min_count` until the estimated staircase error is at most `tolerance` | anything else: `numerics.slicing`, at construction; `'auto'` on a problem without diffraction outputs: `numerics.slicing`, at prepare |
+| `rule` | `'arclength'` | `'arclength'` (equal steps of the sidewall's arc length) or `'uniform'` (equal thicknesses) | anything else: `numerics.slicing` |
+| `tolerance` | `1e-4` | a positive number: the largest estimated change of any efficiency from finer slicing | not positive or not finite: `numerics.slicing` |
+| `min_count`, `max_count` | `4`, `64` | positive `int`s, `max_count >= min_count`. Reaching `max_count` short of `tolerance` emits `rcwa.diagnostics.SlicingWarning` | otherwise: `numerics.slicing` |
+| `estimate` | `'prepare'` | `'prepare'`, `'run'` (also every run, from half the slices) or `None` | anything else: `numerics.slicing` |
 
 ### NVF names changed on 2026-09-21
 
