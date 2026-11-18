@@ -393,7 +393,7 @@ Measured on Linux with Python 3.13, NumPy 2.5.5 and JAX 0.12.0, against main `aa
 | turned partial | 1e-8 | 1.259e-5 | 1.6e-12 | 1.5e-12 |
 | turned partial | 1e-10 | 1.259e-5 | 3.5e-14 | 1.6e-14 |
 
-At normal grid 64 and orders (3, 3), a 180 nm high box of epsilon 4 meeting its own periodic image beside an epsilon 9 disc stepped by 1.62e-4 before and 4.5e-13 after (h = 1e-8). A square of epsilon 4 with a slot of width 1e-8 nm differed from the filled square by 2.01e-4 before and 2.6e-12 after.
+At normal grid 64 and orders (3, 3), a 180 nm high box of epsilon 4 meeting its own periodic image beside an epsilon 9 disc stepped by 1.62e-4 before and 4.5e-13 after (h = 1e-8). A square of epsilon 4 with a slot of width 1e-8 nm differed from the filled square by 2.01e-4 before and 2.6e-12 after. Under `shape_normal_method='interfaces'`, two 0.3-period `rcwa.Rectangle` boxes of epsilon 4 and 9 in the scene above, moved from a gap of 1e-8 of the period to an overlap of 1e-8, changed transmission by 2.581e-4 before and 3.490e-9 after (3.994e-4 and 3.946e-9 turned by 0.3 rad); at 1e-10 of the period the change after is 3.49e-11 and 3.94e-11. The default `'per_shape'` is unchanged (6.444e-9 and 4.916e-9).
 
 Results change only below `ell`, here 0.586 nm. Total transmission of the two axis-aligned scenes above, before and after, at gap g:
 
