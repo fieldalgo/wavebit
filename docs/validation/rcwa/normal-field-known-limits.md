@@ -409,7 +409,7 @@ Results change only below `ell`, here 0.586 nm. Total transmission of the two ax
 
 Two 256-vertex polygon circles of radius 100 nm and epsilon 4 and 9, 0.1 nm apart, plan four facing pairs; their transmission at orders (3, 3) and grid 256 moved from 0.950802146661 to 0.950738047677 (-6.4e-5). The same circle 0.1 nm above a polygon box plans eight, and moved from 0.655153214189 to 0.655154063843 (+8.5e-7). Planning a layer of three polygonised circles over a box, 1463 intervals, took 0.159 s instead of 0.123 s.
 
-JAX differentiates through the blend. For the turned boxes at grid 256 and orders (3, 3), the derivative of transmission with respect to the gap at g/ell = 0.2, 0.5 and 0.8 agrees with central differences to 3.0e-8, 8.1e-9 and 4.7e-9.
+JAX differentiates through the blend. For the turned boxes at grid 256 and orders (3, 3), the derivative of transmission with respect to the gap at g/ell = 0.2, 0.5 and 0.8 agrees with central differences to 3.0e-8, 8.1e-9 and 4.7e-9. Across the whole blend window, from 1e-6 `ell` to 2 `ell`, 41-point Simpson integration of the JAX derivative gives 9.281430601e-4 against a transmission change of 9.281129448e-4 (0.003%), within the 1% criterion of §1c.
 
 The §1c acceptance scene plans no facing pair at any of its 41 angle points, 41 centre points or 11 points around 0.313 rad, so it runs the unchanged arithmetic.
 
