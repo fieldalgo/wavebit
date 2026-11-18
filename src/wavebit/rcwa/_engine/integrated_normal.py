@@ -99,8 +99,12 @@ def _facing_corrections(xp, A, E, L2, contrasts, merged, plan, basis, gap):
     """
     parents, lows, highs, weights = [], [], [], []
     for k, (p, q, m, n) in enumerate(plan.facing):
+        # The basis entries are plain floats for a concrete cell and arrays for a traced one.
         shift = xp.stack(
-            [m * basis[0][0] + n * basis[0][1], m * basis[1][0] + n * basis[1][1]]
+            [
+                xp.asarray(m * basis[0][0] + n * basis[0][1], dtype=A.dtype),
+                xp.asarray(m * basis[1][0] + n * basis[1][1], dtype=A.dtype),
+            ]
         )
         ap, ep, aq, eq = A[p], E[p], A[q] + shift, E[q]
         sides = []
@@ -181,7 +185,7 @@ def projector_fields(
     extra = None
     if plan.facing and facing_contrasts is not None:
         base_A, base_E, base_L2, _ = segment_data
-        gap = facing_gap(xp, b.reduced_basis(lattice, transform))
+        gap = facing_gap(xp, b.reduced_basis(lattice, transform), dtype)
         parents, lows, highs, weights = _facing_corrections(
             xp, base_A, base_E, base_L2, contrasts, facing_contrasts, plan,
             b.reduced_basis(lattice, transform), gap,
