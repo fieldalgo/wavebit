@@ -99,8 +99,8 @@ msgstr "부분 겹침"
 msgid "turned partial"
 msgstr "돌린 부분 겹침"
 
-msgid "At normal grid 64 and orders (3, 3), a 180 nm high box of epsilon 4 meeting its own periodic image beside an epsilon 9 disc stepped by 1.62e-4 before and 4.5e-13 after (h = 1e-8). A square of epsilon 4 with a slot of width 1e-8 nm differed from the filled square by 2.01e-4 before and 2.6e-12 after."
-msgstr "법선 격자 64, 차수 (3, 3)에서 유전율 9 원판 옆의 높이 180 nm, 유전율 4 상자가 자신의 주기 이미지와 만날 때 계단은 변경 전 1.62e-4, 변경 후 4.5e-13이었다(h = 1e-8). 폭 1e-8 nm 홈이 있는 유전율 4 정사각형과 채워진 정사각형의 차이는 변경 전 2.01e-4, 변경 후 2.6e-12였다."
+msgid "At normal grid 64 and orders (3, 3), a 180 nm high box of epsilon 4 meeting its own periodic image beside an epsilon 9 disc stepped by 1.62e-4 before and 4.5e-13 after (h = 1e-8). A square of epsilon 4 with a slot of width 1e-8 nm differed from the filled square by 2.01e-4 before and 2.6e-12 after. Under `shape_normal_method='interfaces'`, two 0.3-period `rcwa.Rectangle` boxes of epsilon 4 and 9 in the scene above, moved from a gap of 1e-8 of the period to an overlap of 1e-8, changed transmission by 2.581e-4 before and 3.490e-9 after (3.994e-4 and 3.946e-9 turned by 0.3 rad); at 1e-10 of the period the change after is 3.49e-11 and 3.94e-11. The default `'per_shape'` is unchanged (6.444e-9 and 4.916e-9)."
+msgstr "법선 격자 64, 차수 (3, 3)에서 유전율 9 원판 옆의 높이 180 nm, 유전율 4 상자가 자신의 주기 이미지와 만날 때 계단은 변경 전 1.62e-4, 변경 후 4.5e-13이었다(h = 1e-8). 폭 1e-8 nm 홈이 있는 유전율 4 정사각형과 채워진 정사각형의 차이는 변경 전 2.01e-4, 변경 후 2.6e-12였다. `shape_normal_method='interfaces'`에서는 위 장면의 주기 0.3 크기 `rcwa.Rectangle` 상자 두 개(유전율 4와 9)를 주기의 1e-8 틈에서 1e-8 겹침으로 옮길 때 투과율 변화가 변경 전 2.581e-4, 변경 후 3.490e-9였다(0.3 rad 돌리면 3.994e-4와 3.946e-9). 주기의 1e-10에서 변경 후 변화는 3.49e-11과 3.94e-11이다. 기본값 `'per_shape'`는 바뀌지 않았다(6.444e-9와 4.916e-9)."
 
 msgid "Results change only below `ell`, here 0.586 nm. Total transmission of the two axis-aligned scenes above, before and after, at gap g:"
 msgstr "결과는 `ell`(여기서 0.586 nm) 아래에서만 바뀐다. 위의 축 정렬 두 장면에서 틈 g에 따른 변경 전후 전체 투과율:"
