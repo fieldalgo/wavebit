@@ -291,6 +291,8 @@ admits: fixed-cell Cartesian Li rectangles by default, the other scalar shapes w
 
 On the documented overlapping rectangle/ellipse, the two 41-point JAX derivative integrals agree with the transmission change to 0.180% and 0.116% at orders (4, 4) and normal grid 1024, within the unchanged 1% criterion. Small one-sided slope kinks at finite polygon facets remain. This is not a global C1 guarantee or a convergence result for every geometry. See [the integral and its validation](../../validation/rcwa/normal-field-known-limits.md), section 1c. Tensor shapes keep their previous nearest extension, and the explicit circular projector keeps its analytic construction.
 
+**Closing a gap is continuous.** Two intervals that bound a sliver of one region, such as a gap between two shapes, a shape meeting its own periodic image or a slot in one shape, become one interval when the sliver closes. Below a separation of 2**-10 of the longest reduced basis vector, about one sample of the default normal grid, their weights are blended toward that interval's. Total transmission no longer steps at contact: measured steps of 1.3e-5 to 4.0e-4 fell to about 5e-12 at a gap of 1e-8 nm, the size of Laurent's. Results for slivers at least that wide are unchanged bit for bit; narrower ones change by up to the former step. A sliver crossing that width changes the frozen plan, so a prepared calculation reports stale geometry there, as at contact. Tensor shapes and the circular projector do not use this blend. See [known limits, section 1d](../../validation/rcwa/normal-field-known-limits.md).
+
 ### It carried a position gradient the parametric path could not — and no longer does
 
 **This section's advantage is gone as of 2026-08-17 (`c128fd8`), and the reasoning is kept
