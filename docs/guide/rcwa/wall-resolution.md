@@ -1,6 +1,6 @@
 # Resolving walls with stretched coordinates
 
-`rcwa.Numerics(wall_resolution=G)` solves a stack of axis-aligned rectangles in coordinates whose lines crowd at the rectangles' walls. The retained orders then resolve the field at a wall more finely than their count says, which is what the near field beside a metal needs: at an order where the unstretched solve is tens of percent from a finite-element field, the stretched one is within a few percent or less ([the measurements](../../validation/rcwa/wall-resolution.md)).
+`rcwa.Numerics(wall_resolution=G)` solves a stack of axis-aligned rectangles in coordinates whose lines crowd at the rectangles' walls, and a stack of one circle or one axis-aligned ellipse in coordinates matched to it ({ref}`Circles and ellipses <wall-resolution-circles>`). The retained orders then resolve the field at a wall more finely than their count says, which is what the near field beside a metal needs: at an order where the unstretched solve is tens of percent from a finite-element field, the stretched one is within a few percent or less ([the measurements](../../validation/rcwa/wall-resolution.md)).
 
 ```python
 from wavebit import Material, Units, rcwa
@@ -22,7 +22,7 @@ The default is `None`: the cell's own coordinates, and every solve bit for bit a
 `wall_resolution` is experimental, and every solve that uses it emits `wavebit.rcwa.diagnostics.ExperimentalWarning` on the calling line.
 
 - **What sets it apart.** The unstretched solve is checked two ways: against independent implementations of the same method at the same truncation, and against finite-element fields. The stretched solve has the second check only so far.
-- **What the measurements cover.** Seven layers of axis-aligned rectangles against finite-element fields, one wavelength each, at normal incidence. At oblique incidence and with several propagating orders it is checked for energy conservation and convergence, not against a reference.
+- **What the measurements cover.** Seven layers of axis-aligned rectangles and twelve of one circle or ellipse against finite-element fields, one wavelength each, at normal incidence. At oblique incidence and with several propagating orders it is checked for energy conservation and convergence, not against a reference.
 - **What may change.** Its values, what it accepts and its name, between releases and without the deprecation period the rest of the interface gets.
 - **How to use it.** Compare two orders before relying on a value, as with any solve.
 
@@ -46,14 +46,15 @@ A scene that is refused raises and does not warn.
 - A weaker stretch still helps: `0.1` was measured on two of the layers and was closer than the unstretched solve on both, though not as close as `0.02`.
 - The walls are placed at equal distances in the stretched cell, and one function per axis serves the whole stack: every rectangle edge of every layer is a wall of it. Nothing about the placement is a keyword.
 - `rcwa.check(...).resolved['wall_resolution']` reports the value, `None` when unset.
+- For a circle or an ellipse the walls of the stretch are the four lines of the matched mesh ({ref}`below <wall-resolution-circles>`), and the same value applies there.
 
 ## What it accepts
 
-Rectangles along the cell's axes with `factorization='li'` in a rectangular cell; isotropic, non-magnetic materials in the layers, metals included; lossless dielectric half-spaces; one incident plane wave from either side, at any angle; any number of layers, uniform ones included; the scattering-matrix algorithm (`algorithm='smm'`, the default) and the second-order formulation. NumPy, JAX and PyTorch, run eagerly.
+Rectangles along the cell's axes, or one circle or axis-aligned ellipse ({ref}`below <wall-resolution-circles>`), with `factorization='li'` in a rectangular cell; isotropic, non-magnetic materials in the layers, metals included; lossless dielectric half-spaces; one incident plane wave from either side, at any angle; any number of layers, uniform ones included; the scattering-matrix algorithm (`algorithm='smm'`, the default) and the second-order formulation. NumPy, JAX and PyTorch, run eagerly.
 
 Everything else is refused by name with the code `rcwa.unsupported`, at `rcwa.check` as at `rcwa.run`:
 
-- another factorization (the default on regions is `'nvf'`, so `factorization='li'` has to be named), a raster, a shape that is not an axis-aligned rectangle, a skewed cell;
+- another factorization (the default on regions is `'nvf'`, so `factorization='li'` has to be named), a raster, a polygon, a skewed cell;
 - `algorithm='etm'`, `formulation='first_order'`;
 - tensor materials, a material that names a permeability;
 - a half-space that absorbs or has a negative permittivity;
@@ -65,6 +66,23 @@ Everything else is refused by name with the code `rcwa.unsupported`, at `rcwa.ch
 A rectangle as long as the period along one axis has no wall across that axis, and that axis is not stretched: a lamellar grating is stretched along its one direction.
 
 `jax.jit`, `jax.vmap` and gradients are not supported yet. Which orders propagate, and where a field's samples sit, are read as numbers.
+
+(wall-resolution-circles)=
+## Circles and ellipses
+
+```python
+layer = rcwa.Layer(thickness=150.0, regions=[
+    rcwa.Region(geometry=rcwa.Ellipse(radii=(150.0, 50.0)), material=Material(epsilon=-20 + 1.5j))])
+numerics = rcwa.Numerics(orders=(12, 12), factorization='li', wall_resolution=0.02)
+```
+
+A stack whose patterned layers hold one circle, or one ellipse with its axes along the cell's, is solved in coordinates matched to it. A mesh carries a rectangle onto the ellipse (Weiss et al., Opt. Express 17, 8051 (2009), as restated by Weiss's thesis and by Küchenmeister, Zebrowski and Busch, Opt. Express 20, 17319 (2012)): the rectangle whose corners are the ellipse's 45-degree points, so that its four sides become the ellipse's four arcs. Outside it four side patches stretch only across the wall and four corner patches are left alone, and so is the cell's edge. In front of the mesh the same stretch as for rectangles crowds the coordinate lines at the rectangle's four sides, where they advance at the slope `G`. In these coordinates every layer, the uniform ones and the half-spaces included, is a full in-plane tensor.
+
+- **What it takes.** One circle or one axis-aligned ellipse per patterned layer, the same one (centre and size) in every patterned layer, anywhere in the cell, across its edge as well; uniform layers between them. Each semi-axis has to be shorter than half the period along it, so that the mesh has room between the wall and the cell's edge. `factorization='li'` names it as it does for rectangles; the rest is as for rectangles.
+- **What it refuses**, by name with `rcwa.unsupported`: several shapes in a layer, different circles or ellipses in two layers, a circle in a stack that also holds rectangles, a turned ellipse, an ellipse that reaches the cell's edge, and a single harmonic along either axis.
+- **How the field is read.** The mesh's four lines run across the whole cell, and on them the map bends, so the component of the solve's field normal to a line jumps there even in a uniform medium; its plain sum rings. Within half a resolution unit, `period / (2 N + 1)`, of a line the reading takes that component from the normal displacement (`D` for `E`, `B` for `H`), which does not jump; beyond one and a half units it keeps the plain sum, and between the two it blends them. This is what `reconstruction='plain'` reads here; the other rules are refused, as for rectangles.
+- **What it costs.** The materials are sampled on a raster of the stretched cell, 512 by 512 pixels whose edges are the mesh's lines (more when the orders need them), and go through the tensor Li factorization. Measured at order 12 on one layer, a solve took about 1.6 times the default NVF solve's time.
+- **How close it is.** On six metal circles, three metal ellipses and three dielectric shapes at normal incidence the field is several to tens of times closer to the finite-element reference than the default solve's at the same order, and `R` at order 12 within 0.2% of the reference's on all but the weakest metal ({ref}`the measurements <wall-resolution-circles-measured>`). The 3:1 ellipse, on which the default solve's `R` is 12% off at order 12, is within 0.01%.
 
 ## Reading the result
 
@@ -81,5 +99,5 @@ The matrices are the size they are without the stretch. Each half-space takes an
 ## Where to be careful
 
 - **Just above a Rayleigh wavelength.** On a dielectric block of period 400 nm at 405 nm the stretched solve's `R` read 0.02 at order 8 and 0.31 from order 12 on, where it settled; the unstretched solve was slow there too (0.15, 0.27, 0.30 at orders 8, 12, 16). Just below, at 395 nm, the stretched solve was settled from order 8. Do not read a low order near a Rayleigh wavelength.
-- **A weak metal's `R` and `T`.** The measurements were of fields on rectangles. On a circle, which this version does not take, a strong stretch left a 1% offset in `R` for a weakly negative permittivity; a block of the same material was within 0.6%. If only the efficiencies of a dielectric or weakly metallic structure are wanted, the unstretched solve is the checked one.
+- **A weak metal's `R` and `T`.** On a circle of permittivity -5+1j the matched solve's `R` is 1.2% above the reference's at order 12, where the field is ten times closer than the default solve's; a block of the same material was within 0.6%. If only the efficiencies of a dielectric or weakly metallic structure are wanted, the unstretched solve is the checked one.
 - **Many walls.** Each piece between two walls gets the same share of the stretched cell. A structure with many walls along an axis leaves each piece few harmonics, and that case was not measured.

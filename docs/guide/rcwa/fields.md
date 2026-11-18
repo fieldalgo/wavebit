@@ -647,8 +647,9 @@ function is traced, not each time the compiled function runs.
   - So beside a metal on the air side, where a plasmonic field peaks, no rule here is better
     than the default, whose error within 0.1 period of the wall is 26 to 53% of the plane's RMS
     field at order 12 on the six metal circles. Compare two orders before reading a value there
-    (*Estimating the error without a reference* below). For walls along x and y the solve itself
-    can be brought closer: [Resolving walls with stretched coordinates](wall-resolution.md).
+    (*Estimating the error without a reference* below). For walls along x and y, and for one circle
+    or one ellipse along the cell's axes, the solve itself can be brought closer: [Resolving walls
+    with stretched coordinates](wall-resolution.md).
   - The finite-element fields of the seventeen pairs, and of the three on other shapes, are one
     mesh level each. Three of them repeat cells that have a finer reference and are 0.2 to 0.6%
     of the plane's RMS field from it, so an entry within a few hundredths of 1 is not a ranking.

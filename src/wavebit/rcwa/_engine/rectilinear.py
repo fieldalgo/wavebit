@@ -25,13 +25,19 @@ import wavebit.rcwa._engine.parametric as P
 Plan = namedtuple('RectilinearPlan', 'x y owners count folds')
 
 
-def validate(layers, lattice):
+def validate(layers, lattice, matched=False):
+    """Refuse what Li's rules on shapes do not build. ``matched``: under ``wall_resolution``,
+    where a circle or an ellipse is solved in matched coordinates (its own refusals are the
+    engine's ``_matched_coordinates``), so only a rectangle's angle is read here."""
+    from wavebit.rcwa._engine.stretch import MATCHED_TYPES
     if not is_axis_aligned(lattice):
         raise NotImplementedError("factorization='li' on shapes requires a rectangular, axis-aligned cell")
     for index, layer in enumerate(layers):
         P.check_layer_spec(layer, index)
         for shape in layer.get('shapes', []):
             P.check_shape_spec(shape)
+            if matched and shape.get('type', 'rectangle') in MATCHED_TYPES:
+                continue
             try:
                 angle = P._static_float(shape.get('angle', 0.))
             except (TypeError, ValueError):

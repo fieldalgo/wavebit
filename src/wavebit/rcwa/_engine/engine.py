@@ -20,6 +20,7 @@ import numpy as _np
 
 import wavebit.rcwa._engine.parametric as _parametric
 import wavebit.rcwa._engine.rectilinear as _rectilinear
+from wavebit.rcwa._engine.stretch import Stretch as _Stretch
 import wavebit.rcwa._engine.boundary as _boundary
 import wavebit.rcwa._engine.factorization as _fac
 import wavebit.rcwa._engine.anisotropy as _anisotropy
@@ -3367,8 +3368,9 @@ _INTERFACES_EXPERIMENTAL = (
 #: implementation of the stretched solve to compare with at the same truncation.
 _WALL_RESOLUTION_EXPERIMENTAL = (
     'wall_resolution is experimental. The solve in stretched coordinates is checked against '
-    'finite-element fields on seven layers of axis-aligned rectangles (one wavelength each, normal '
-    'incidence) and against no independent implementation; at oblique incidence and with several '
+    'finite-element fields on seven layers of axis-aligned rectangles and twelve of one circle or '
+    'ellipse (one wavelength each, normal incidence) and against no independent implementation; '
+    'at oblique incidence and with several '
     'propagating orders it is checked for energy conservation and convergence only. Its values, '
     'what it accepts and its name may change between releases. Compare two orders before relying '
     'on a value; the guide "Resolving walls with stretched coordinates" has the measurements. '
@@ -5473,7 +5475,10 @@ class CoreFactorizationMixin:
             _anisotropy.validate_options(self)
             return Factorization.NVF if self._factorization is None else self._factorization
         if self._modeling_path == ModelingPath.PARAMETRIC and self._factorization == Factorization.LI:
-            _rectilinear.validate(self.structure, self.lattice)
+            # Under wall_resolution, Li's rules are taken in the matched coordinates of a circle
+            # or an ellipse too; which stacks those are is `_matched_coordinates`'s refusal.
+            _rectilinear.validate(self.structure, self.lattice,
+                                  matched=self._wall_resolution is not None)
             return Factorization.LI
         implemented = _FACTORIZATION_IMPLEMENTED_BY.get(self._modeling_path)
         if implemented is None:                       # raster, or no structure yet: free choice
@@ -5664,6 +5669,12 @@ class CoreFactorizationMixin:
         cell, isotropic non-magnetic materials, lossless half-spaces, one incident plane wave,
         the SMM and the second-order formulation; everything else is refused by name. ``None``
         leaves every solve bit for bit as it is.
+
+        A stack whose patterned layers hold one circle or one ellipse with its axes along the
+        cell's, the same one in each, is solved in coordinates matched to it instead
+        (:class:`~wavebit.rcwa._engine.stretch.Matched`): the mesh of Weiss et al. (2009) carries
+        a rectangle onto the ellipse behind the same stretch, and the materials become full
+        in-plane tensors. ``factorization='li'`` names it too.
         """
         return self._wall_resolution
 
@@ -6067,6 +6078,13 @@ class CoreFactorizationMixin:
                                   # `_refuse_a_record_of_another_rule`.
                                   factorization=factorization.value)
         if self._modeling_path == ModelingPath.PARAMETRIC:
+            if factorization == Factorization.LI and self._matched_stack():
+                # A circle or an ellipse under wall_resolution has no rectangle plan; the
+                # matched coordinates are read from its numbers at the solve, which is eager.
+                for index, layer in enumerate(self.structure):
+                    _parametric.check_layer_spec(layer, index)
+                    _parametric.check_layer_shapes(layer, basis, index)
+                return geometry
             if factorization == Factorization.LI:
                 geometry.rectilinear_plans = [_rectilinear.plan_layer(layer.get('shapes', []), basis)
                                               for layer in self.structure]
@@ -6157,7 +6175,7 @@ class CoreFactorizationMixin:
         if self._modeling_path != ModelingPath.PARAMETRIC:
             return
         basis = self._geometry_lattice_for(None, freezing=True)
-        if self.factorization == Factorization.LI:
+        if self.factorization == Factorization.LI and not self._matched_stack():
             for layer in self.structure:
                 _rectilinear.plan_layer(layer.get('shapes', []), basis)
             return
@@ -6840,6 +6858,13 @@ class CoreFactorizationMixin:
         if self._modeling_path != ModelingPath.PARAMETRIC:
             return
         self._reject_layer_count_mismatch()
+        if self.factorization == Factorization.LI and self._matched_stack():
+            # Matched coordinates keep no record: the solve reads the shape's numbers itself.
+            basis = self._geometry_lattice_for(geometry)
+            for index, layer in enumerate(self.structure):
+                _parametric.check_layer_spec(layer, index)
+                _parametric.check_layer_shapes(layer, basis, index)
+            return
         from .topology import check_shape_record
         check_shape_record(self.structure, self._geometry_lattice_for(geometry), geometry,
                            self.factorization.value, self.nvf_projector.value)
@@ -7497,6 +7522,8 @@ class CoreFactorizationMixin:
         warn_experimental_feature(_WALL_RESOLUTION_EXPERIMENTAL)
         xp, C = self.xp, self.complex_dtype
         (_, half_width_u), (_, half_width_v) = self.order_window
+        if not isinstance(stretch, _Stretch):
+            return self._solve_matched(stretch)
         plans = None if geometry is None else geometry.rectilinear_plans
         lattice = self.lattice
         eps = _rectilinear.layer_stack(
@@ -7515,27 +7542,82 @@ class CoreFactorizationMixin:
         finally:
             self.__dict__.pop('_stretch_scope', None)
 
-    #: The last stretched solve's :class:`~wavebit.rcwa._engine.stretch.Stretch`, or ``None``.
+    #: The last stretched solve's :class:`~wavebit.rcwa._engine.stretch.Stretch` or
+    #: :class:`~wavebit.rcwa._engine.stretch.Matched`, or ``None``.
     _stretch = None
+
+    def _solve_matched(self, matched):
+        """:meth:`_solve_stretched` for a stack of one circle or axis-aligned ellipse.
+
+        Every layer becomes the full in-plane tensor ``eps~ = eps det(J) (J^T J)^-1`` of the
+        :class:`~wavebit.rcwa._engine.stretch.Matched` coordinates, and every layer's
+        permeability the same tensor of vacuum, both through the tensor Li on a raster whose
+        pixel edges are the matched lines. A uniform layer is its permittivity times the
+        stretched vacuum's slots (the slots are linear in a uniform scalar). The half-spaces are
+        solved in the kernel as in the rectangles' case, with these slots.
+        """
+        from wavebit.rcwa._engine.stretch import matched_layer_matrices
+        from wavebit.materials.response import as_material
+        xp, C = self.xp, self.complex_dtype
+        (_, half_width_u), (_, half_width_v) = self.order_window
+        raster = matched.raster(half_width_u, half_width_v)
+
+        def slots(inside, outside):
+            return matched_layer_matrices(xp, matched, inside, outside, half_width_u,
+                                          half_width_v, C, raster)
+
+        def value(material):
+            return as_array(xp, as_material(material).epsilon, dtype=C)
+
+        unit = slots(1.0, 1.0)
+        layers, scalars = [], []
+        for layer in self.structure:
+            background = value(layer.get('background', 1.))
+            shapes = layer.get('shapes', [])
+            if shapes:
+                inside = value(shapes[0].get('material', 1.))
+                layers.append(slots(inside, background))
+            else:
+                inside = background
+                layers.append((background * unit[0], background * unit[1], unit[2] / background,
+                               background * unit[3], background * unit[4]))
+            scalars.append((complex(_fac._to_numpy(inside)), complex(_fac._to_numpy(background))))
+        eps = _fac.ConvMatrices(*(xp.stack([layer[i] for layer in layers]) for i in range(5)))
+        mu = _fac.ConvMatrices(*(xp.stack([m] * len(layers)) for m in unit))
+        # What the field reading needs beside the records: each layer's in-plane slots and
+        # materials, for the flux normal to a matched line (`FieldState._matched_points`).
+        matched.solved = {'half_widths': (half_width_u, half_width_v), 'scalars': scalars,
+                          'eps': [(layer[0], layer[1], layer[3], layer[4]) for layer in layers],
+                          'mu': (unit[0], unit[1], unit[3], unit[4])}
+        self._stretch_scope = {'axes': matched, 'unit': unit, 'mu': unit, 'matched': matched}
+        self._stretch = matched
+        try:
+            return self._solve_conv(*eps, mu=mu)
+        finally:
+            self.__dict__.pop('_stretch_scope', None)
 
     def _refuse_what_the_stretch_does_not_solve(self, geometry):
         """Refuse, by name, every scene :attr:`wall_resolution` is not implemented for.
 
-        Returns the stack's :class:`~wavebit.rcwa._engine.stretch.Stretch`, which is the last
-        thing that can refuse: it is built from the rectangles' edges, read as numbers.
+        Returns the stack's coordinates, which are the last thing that can refuse: a
+        :class:`~wavebit.rcwa._engine.stretch.Stretch` built from the rectangles' edges, or the
+        :class:`~wavebit.rcwa._engine.stretch.Matched` coordinates of the one circle or
+        axis-aligned ellipse the patterned layers hold, both read as numbers.
         """
         from wavebit.rcwa._engine.stretch import Stretch
         def refuse(what, instead):
             raise NotImplementedError(
                 f'wall_resolution={self._wall_resolution!r} solves in coordinates that crowd '
-                f'at rectangle walls, and {what}. {instead}')
+                f'at material walls, and {what}. {instead}')
 
         if self._modeling_path != ModelingPath.PARAMETRIC:
             refuse('this structure is a raster',
-                   'Describe the layers as rectangles, or leave wall_resolution unset.')
+                   'Describe the layers as rectangles, a circle or an ellipse, or leave '
+                   'wall_resolution unset.')
         if self.factorization != Factorization.LI:
             refuse(f"factorization is {self.factorization.value!r}",
-                   "It is implemented for factorization='li' on axis-aligned rectangles.")
+                   "It is implemented for factorization='li' (axis-aligned rectangles, or one "
+                   'circle or axis-aligned ellipse).')
         if not self.lattice_is_axis_aligned:
             refuse('the cell is not a rectangle along x and y',
                    'It is implemented for a rectangular, axis-aligned cell.')
@@ -7565,6 +7647,14 @@ class CoreFactorizationMixin:
         (_, half_width_u), (_, half_width_v) = self.order_window
         plans = None if geometry is None else geometry.rectilinear_plans
         lattice = self.lattice
+        matched = self._matched_coordinates(refuse)
+        if matched is not None:
+            for axis, half_width, name in ((matched.x, half_width_u, 'x'),
+                                           (matched.y, half_width_v, 'y')):
+                if half_width == 0:
+                    refuse(f'the orders retain a single harmonic along {name}, which cannot '
+                           'hold the matched coordinates', 'Retain orders along both axes.')
+            return matched
         try:
             walls = _rectilinear.wall_positions(self.structure, lattice, plans)
             periods = [float(_fac._to_numpy(lattice[i][i])) for i in (0, 1)]
@@ -7583,6 +7673,63 @@ class CoreFactorizationMixin:
                        'along it, which cannot hold the stretched coordinate',
                        'Retain orders along that axis.')
         return stretch
+
+    def _matched_stack(self):
+        """Whether :attr:`wall_resolution` is set on shapes that include a circle or an ellipse."""
+        from wavebit.rcwa._engine.stretch import MATCHED_TYPES
+        return (self._wall_resolution is not None
+                and self._modeling_path == ModelingPath.PARAMETRIC
+                and any(shape.get('type', 'rectangle') in MATCHED_TYPES
+                        for layer in self.structure for shape in layer.get('shapes', [])))
+
+    def _matched_coordinates(self, refuse):
+        """The :class:`~wavebit.rcwa._engine.stretch.Matched` coordinates of the stack, or ``None``.
+
+        ``None`` when no layer holds a circle or an ellipse: the stack is rectangles, solved on
+        :class:`~wavebit.rcwa._engine.stretch.Stretch`. Otherwise every patterned layer has to
+        hold one circle or one ellipse with its axes along the cell's, the same one in each
+        (one map serves the stack), and nothing else; the rest is refused by name through
+        ``refuse(what, instead)``.
+        """
+        from wavebit._common.geometry.recipes import shape_geometry
+        from wavebit.rcwa._engine.stretch import MATCHED_TYPES, Matched
+        layers = self.structure
+        if not any(shape.get('type', 'rectangle') in MATCHED_TYPES
+                   for layer in layers for shape in layer.get('shapes', [])):
+            return None
+        instead = ('Matched coordinates are implemented for one circle or one ellipse with its '
+                   'axes along the cell\'s, the same in every patterned layer.')
+        lattice = self.lattice
+        found = None
+        for index, layer in enumerate(layers):
+            shapes = layer.get('shapes', [])
+            if not shapes:
+                continue
+            kinds = [shape.get('type', 'rectangle') for shape in shapes]
+            if len(shapes) != 1 or kinds[0] not in MATCHED_TYPES:
+                refuse(f'layer {index} holds {", ".join(kinds)}', instead)
+            try:
+                kind, cx, cy, lx, ly, angle = (
+                    v if isinstance(v, str) else float(_fac._to_numpy(v))
+                    for v in shape_geometry(shapes[0], lattice))
+            except (TypeError, ValueError) as exc:
+                raise NotImplementedError(
+                    'wall_resolution reads the shape\'s centre, size and angle and the cell as '
+                    'numbers, so a traced one (jax.jit, jax.vmap, jax.grad over geometry) is not '
+                    'solved in matched coordinates yet') from exc
+            if kind == 'ellipse' and angle != 0.0:
+                refuse(f'the ellipse of layer {index} is turned (angle {angle:g})', instead)
+            key = (cx, cy, 0.5 * lx, 0.5 * (lx if kind != 'ellipse' else ly))
+            if found is None:
+                found = key
+            elif any(abs(a - b) > 1e-12 * max(1.0, abs(a)) for a, b in zip(found, key)):
+                refuse(f'layer {index} holds another {kind} than the first patterned layer',
+                       instead)
+        periods = [float(_fac._to_numpy(lattice[i][i])) for i in (0, 1)]
+        try:
+            return Matched(found[:2], found[2:], periods, self._wall_resolution)
+        except ValueError as exc:
+            raise NotImplementedError(f'wall_resolution={self._wall_resolution!r}: {exc}') from exc
 
     def _solve_built(self, geometry=None):
         """Build this structure's convolution matrices and hand them to the solve.

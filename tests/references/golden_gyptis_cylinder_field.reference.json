@@ -100,7 +100,8 @@
   "values_sha256": "f72e85a041c846439770c618c4c7d0efea04c752a3b66b32b9e783f5e4351547",
   "content_sha256": "b94f423846ad8ea5ae18091fcb1e92670d1563e87cbed7e2bd89f306ce2da2e5",
   "consumers": [
-    "tests/references/test_gyptis_cylinder_field_golden.py"
+    "tests/references/test_gyptis_cylinder_field_golden.py",
+    "tests/references/test_gyptis_matched_field_golden.py"
   ],
   "provenance_status": "reconstructed",
   "sources": {
