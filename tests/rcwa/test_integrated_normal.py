@@ -408,3 +408,30 @@ def test_jax_derivative_through_the_blend_matches_differences():
     secant = (objective(np, np.asarray(gap + h)) - objective(np, np.asarray(gap - h))) / (2 * h)
     assert float(derivative) == pytest.approx(float(secant), rel=1e-5)
     assert abs(float(secant)) > 1.0
+
+
+def test_torch_derivative_through_the_blend_matches_differences():
+    torch = pytest.importorskip("torch")
+    from array_api_compat import array_namespace
+    from wavebit._common.geometry.interfaces import FACING_GAP_FRACTION
+
+    cell = ((1.0, 0.0), (0.0, 1.0))
+    transform = b.reduction_transform(cell)
+    gap = 0.4 * FACING_GAP_FRACTION
+    plan = b.plan_interfaces(_box_pair(gap), cell, transform)
+    assert plan.facing
+    weights = np.arange(24 * 24).reshape(24, 24) / 576.0
+
+    def objective(xp, g):
+        loops = [(m, [xp.asarray(v, dtype=xp.float64) for v in vs]) for m, vs in _box_pair(0.0)]
+        shift = xp.stack([g / 2, xp.asarray(0.0, dtype=xp.float64)])
+        regions = [(loops[0][0], [loops[0][1][0] - shift]), (loops[1][0], [loops[1][1][0] + shift])]
+        field = _pair_field(xp, regions, plan, cell, transform)[0]
+        return xp.sum(field * xp.asarray(weights, dtype=xp.float64))
+
+    g = torch.tensor(gap, dtype=torch.float64, requires_grad=True)
+    xp = array_namespace(g)
+    objective(xp, g).backward()
+    h = 1e-3 * gap
+    secant = (objective(np, np.asarray(gap + h)) - objective(np, np.asarray(gap - h))) / (2 * h)
+    assert float(g.grad) == pytest.approx(float(secant), rel=1e-5)
