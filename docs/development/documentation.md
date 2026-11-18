@@ -52,7 +52,7 @@ overlays under `docs/locales/ko/pages/`. Their source is loaded only in the Kore
 build; English pages remain canonical. Other maintained pages may also provide complete
 overlays. Currently these are:
 
-- getting started: [installation](../getting-started/installation.md),
+- getting started: [what Wavebit is](../getting-started/overview.md), [installation](../getting-started/installation.md),
   [first RCWA calculation](../getting-started/rcwa.md) and
   [first FDTD calculation](../getting-started/fdtd.md);
 - guides: [run records](../guide/run-records.md),
@@ -60,6 +60,7 @@ overlays. Currently these are:
   [exceptional points](../guide/rcwa/exceptional-points.md),
   [fields and diffraction observations](../guide/rcwa/fields.md),
   [resolving walls with stretched coordinates](../guide/rcwa/wall-resolution.md),
+  [profiled layers](../guide/rcwa/profiled-layers.md),
   [how the FDTD solver models a problem](../guide/fdtd/model.md),
   [physical native Yee grids](../guide/fdtd/native-grids.md),
   [automatic stopping and graded absorbing padding](../guide/fdtd/stopping-and-absorbers.md),
@@ -67,8 +68,9 @@ overlays. Currently these are:
   [Gaussian beams](../guide/fdtd/gaussian-beam.md) and
   [waveguide modes](../guide/fdtd/waveguide-modes.md);
 - migration: [public names and result keys](../migration/public-names.md);
-- RCWA validation: [normal-field resolution and a spectral fit](../validation/rcwa/fitting-grid-convergence.md) and
-  [the solve in stretched coordinates against finite-element fields](../validation/rcwa/wall-resolution.md);
+- RCWA validation: [normal-field resolution and a spectral fit](../validation/rcwa/fitting-grid-convergence.md),
+  [the solve in stretched coordinates against finite-element fields](../validation/rcwa/wall-resolution.md) and
+  [profiled layers against RETICOLO](../validation/rcwa/profiled-layers.md);
 - FDTD validation: [memory-bounded reverse mode](../validation/fdtd/checkpointing.md),
   [a focused Gaussian beam](../validation/fdtd/fd-gaussian-beam.md),
   [a one-way waveguide mode source](../validation/fdtd/fd-mode-source.md),

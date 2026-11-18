@@ -21,6 +21,7 @@ Use `rcwa.Problem`, `rcwa.Numerics` and the shared check/prepare/run lifecycle. 
 - [Choosing the numerics](numerics.md)
 - [Selecting NVF and the auxiliary solver](nvf-method-selection.md)
 - [Analytic (staircase-free) modeling — approach and results](parametric-modeling.md)
+- [Profiled layers: sidewall angles, rounding and automatic z slicing](profiled-layers.md)
 - [How a solve handles a Rayleigh point — the end-to-end walkthrough](rayleigh-handling-walkthrough.md)
 - [Resolving walls with stretched coordinates](wall-resolution.md)
 - [Describing a scene](scene.md)

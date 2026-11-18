@@ -71,6 +71,12 @@ def sample_structure(problem, *, layer=0, samples=512, wavelength_index=0,
                               code='structure.wavelength', path='wavelength_index')
     wavelength = wavelengths[wavelength_index]
     selected = problem.stack.layers[layer]
+    from .problem import ProfiledLayer
+    if isinstance(selected, ProfiledLayer):
+        raise UnsupportedFeatureError(
+            f'stack.layers[{layer}] is a ProfiledLayer, whose cross-section changes with height; this '
+            f'samples one uniform layer. Sample one slice by writing its regions as an rcwa.Layer.',
+            code='structure.profiled_layer', path=f'stack.layers[{layer}]')
 
     def material(model):
         response = _adapt.physical_material(model, wavelength, problem.units)

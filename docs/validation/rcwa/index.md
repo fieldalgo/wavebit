@@ -71,3 +71,4 @@ Records written before 2026-10-13 use the solver interface of their day, kept fr
 - [The NVF normal field and the grid it is taken on — measurements](nvf-upsampling.md)
 - [The time convention, audited — which root, which direction, and what the flip left behind](time-convention-audit.md)
 - [The solve in stretched coordinates against finite-element fields — measurements](wall-resolution.md)
+- [Profiled layers: what the slicing was checked against](profiled-layers.md)
