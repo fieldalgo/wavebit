@@ -105,3 +105,73 @@ def test_a_snapped_height_keeps_its_own_z_derivative():
         return value.item(), z.grad.item()
 
     assert value_and_slope(.1 + .2 + .3) == value_and_slope(.6)
+
+
+# ------------------------------------------------------------------ under a trace
+
+def _jax_problem(thickness, epsilons, side='top'):
+    layers = tuple(rcwa.Layer(thickness=d, background=Material(e)) for d, e in zip(thickness, epsilons))
+    return rcwa.Problem(
+        units=Units(length='um'),
+        stack=rcwa.Stack(period=(.7, .8), top=Material(2.25), bottom=Material(3.24), layers=layers),
+        excitation=rcwa.Excitation(wavelength=.8, sources=(rcwa.PlaneWave(
+            side=side, polarization='p', theta=.29, phi=.4),)),
+        outputs=rcwa.Outputs(fields=True))
+
+
+def _heights_by_rounding(thickness):
+    """Each internal face as the stack sums it, two ulps below it, and the literal one rounding below."""
+    faces = np.cumsum(thickness)[:-1]
+    return np.concatenate([faces, faces * (1 - 2 * np.finfo(float).eps), [.3]])
+
+
+@pytest.mark.parametrize('traced', ['permittivity', 'heights'])
+@pytest.mark.parametrize('side', ['top', 'bottom'])
+def test_a_face_off_by_rounding_selects_the_upper_layer_under_jit(side, traced):
+    """Under ``jax.jit`` a height a rounding below a face reads the upper layer, as eagerly.
+
+    The stack's thicknesses are tracers inside the trace, constants or not, so the faces have no
+    value to read on the host, and the snap onto a face used to be skipped there: ``z = 0.3``, one
+    rounding below the face ``0.1 + 0.2``, and every height two ulps below a face read the lower
+    layer under ``jit`` and the upper one on NumPy, PyTorch and eager JAX -- ``E_z`` up to 0.077
+    apart on an ``E_z`` of 0.17 (2026-11-20). The snap now runs on the arrays.
+    """
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    thickness, epsilons = (.1, .2, .4), EPSILONS
+    z = _heights_by_rounding(thickness)
+    expected = np.asarray(rcwa.run(_jax_problem(thickness, epsilons, side), numerics=rcwa.Numerics())
+                          .field(x=[0.], y=[0.], z=list(z)).values)
+    with jax.enable_x64(True):
+        prepared = rcwa.prepare(_jax_problem(thickness, epsilons, side), backend='jax',
+                                numerics=rcwa.Numerics())
+        if traced == 'permittivity':
+            def values(e):
+                problem = _jax_problem(thickness, (EPSILONS[0], e, EPSILONS[2]), side)
+                return prepared.run(problem).field(x=[0.], y=[0.], z=z).values
+            got = np.asarray(jax.jit(values)(jnp.asarray(EPSILONS[1])))
+        else:
+            result = prepared.run(_jax_problem(thickness, epsilons, side))
+            got = np.asarray(jax.jit(lambda h: result.field(x=[0.], y=[0.], z=h).values)(
+                jnp.asarray(z)))
+    np.testing.assert_allclose(got, expected, rtol=0, atol=1e-12)        # measured 8.1e-16
+
+
+def test_a_snapped_height_keeps_its_own_thickness_derivative_under_jit():
+    """``jit(grad)`` by a thickness, at heights on and a rounding below the faces, is eager
+    ``jax.grad``'s: the snap's shift is a constant to differentiation under the trace as the
+    host read makes it eagerly, so a height does not follow the face it was moved onto."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    thickness = (.1, .2, .4)
+    z = _heights_by_rounding(thickness)
+    with jax.enable_x64(True):
+        prepared = rcwa.prepare(_jax_problem(thickness, EPSILONS), backend='jax', numerics=rcwa.Numerics())
+
+        def loss(d):
+            problem = _jax_problem((thickness[0], d, thickness[2]), EPSILONS)
+            return jnp.sum(jnp.abs(prepared.run(problem).field(x=[0.], y=[0.], z=z).values) ** 2)
+        eager = float(jax.grad(loss)(jnp.asarray(thickness[1])))
+        traced = float(jax.jit(jax.grad(loss))(jnp.asarray(thickness[1])))
+    assert abs(eager) > 1e-3
+    assert traced == pytest.approx(eager, rel=1e-12)                      # measured 3.0e-16
