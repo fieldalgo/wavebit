@@ -951,6 +951,27 @@ def test_the_traced_frechet_takes_two_lanes_a_level(split, scale):
     assert np.max(np.abs(got - ref)) < 1e-13 * np.max(np.abs(ref))
 
 
+def test_the_traced_frechet_takes_a_small_layer():
+    """``modal_gradient._coupled_frechet`` under ``jax.jit`` on a two-mode ``q`` holding one
+    pair, with a chain capacity of one: four times its two coupled rows is more paths than a
+    middle of two lanes can list (four), so the path list is the smaller. Against the doubled
+    matrix's ``expm`` within 1e-13 of its largest entry. Catches the path list sized past its
+    candidates, which raised a shape error on every thin film's traced gradient."""
+    scipy_linalg = pytest.importorskip('scipy.linalg')
+    jax = pytest.importorskip('jax')
+    from wavebit.rcwa._engine import modal_gradient
+    from wavebit._common.backend import _enable_x64
+    _enable_x64()
+    q = np.array([[0.6 + 0.1j, 0.08 - 0.03j], [0.0, 0.6 + 0.1j + 1e-9]])
+    E = np.array([[0.3 - 0.2j, 1.1 + 0.4j], [-0.7 + 0.1j, 0.5j]])
+    scale = -1.5 + 0.0j
+    B = np.block([[scale * q, scale * E], [np.zeros_like(q), scale * q]])
+    ref = scipy_linalg.expm(B)[:2, 2:]
+    got = np.asarray(jax.jit(lambda q, s, E: modal_gradient._coupled_frechet(q, s, E, None, 1))(
+        q, scale, scale * E))
+    assert np.max(np.abs(got - ref)) < 1e-13 * np.max(np.abs(ref))
+
+
 @pytest.mark.parametrize('scale', [-12.0, -0.4 + 2.0j])
 def test_the_traced_frechet_keeps_single_precision(scale):
     """``modal_gradient._coupled_frechet`` under ``jax.jit`` with a chain capacity, at a

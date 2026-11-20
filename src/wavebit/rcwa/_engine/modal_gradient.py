@@ -915,7 +915,7 @@ def _frechet_chain_terms(E, K, OK, i2, s2, X, vT, vX, w, u, F20, F21, F22):
     T21 = jnp.einsum('...g,...gsx,...sx,...gsx->...gs', w, E[..., s2[:, None, None], X[None]], u, F21)
     T12 = jnp.einsum('...sx,...sh,...h,...hsx->...sxh', u, E[..., K[:, None], i2[None, :]], w, F21)
     T22 = (w[..., :, None] * E[..., s2[:, None], i2[None, :]] * w[..., None, :]) * F22
-    OI = jnp.astype(vT[:, None] & (idx[None, :] == i2[:, None]), E.dtype)   # (4 c, m)
+    OI = jnp.astype(vT[:, None] & (idx[None, :] == i2[:, None]), E.dtype)   # (cp, m)
     OS = jnp.astype(vT[:, None] & (idx[None, :] == s2[:, None]), E.dtype)
     rows = jnp.reshape(X, (-1,))
     OX = jnp.astype(jnp.reshape(vX, (-1,))[:, None] & (idx[None, :] == rows[:, None]), E.dtype)
@@ -930,11 +930,11 @@ def _frechet_chain_tables(tau, a, ea, F1, scale, K, vK, middle, c, chains):
 
     The middles are gathered to ``chains`` (:func:`_chain_capacity`), each one's coupled rows
     and columns to a cluster's lanes, as :func:`_chain_paths_traced` gathers them, and the
-    paths ``(i2, k2, s2)``, listed flat, to ``4 c``, ``c`` the caller's count of coupled rows:
-    a path starts on one, and a traced split puts at most two lanes in each upper level
-    (``solve_2d._chain_split_traced_wide``), so a row reaches at most two middles and a middle
-    at most two successors -- four paths a row (two chains beside a third mode: 12 paths on 5
-    rows). ``vT`` marks the real ones, ``w`` their weights. The one-step couplings
+    paths ``(i2, k2, s2)``, listed flat, to ``4 c`` (at most the candidates), ``c`` the
+    caller's count of coupled rows: a path starts on one, and a traced split puts at most two
+    lanes in each upper level (``solve_2d._chain_split_traced_wide``), so a row reaches at most
+    two middles and a middle at most two successors -- four paths a row (two chains beside a
+    third mode: 12 paths on 5 rows). ``vT`` marks the real ones, ``w`` their weights. The one-step couplings
     ``x -> K`` are read by column: each of ``K``'s columns and its coupled rows ``X``, gathered
     to a cluster's lanes (``vX``), since a coupling stays inside its cluster; ``u`` their
     ``n_xK``. The three tables ``F[P, l]``, ``F[P, x, K]`` and ``F[P, P']`` are each built over
@@ -959,11 +959,13 @@ def _frechet_chain_tables(tau, a, ea, F1, scale, K, vK, middle, c, chains):
     P, vP, npre = first(jnp.take(nz, M, axis=1).T, cl)                  # (cm, cl): tau[i, k] != 0
     S, vS, nsuc = first(jnp.take(nz, M, axis=0), cl)                    # (cm, cl): tau[k, s] != 0
     paths = vM[:, None, None] & vP[:, :, None] & vS[:, None, :]
-    pick, vT, npaths = first(jnp.reshape(paths, (-1,)), 4 * c)          # (4 c,)
+    # Four paths a coupled row, but no more than there are candidates (a small layer).
+    cp = min(4 * c, cm * cl * cl)
+    pick, vT, npaths = first(jnp.reshape(paths, (-1,)), cp)             # (cp,)
     g = pick // (cl * cl)                                               # a path's middle
     i2, k2, s2 = P[g, (pick // cl) % cl], M[g], S[g, pick % cl]
     w = jnp.where(vT, (scale[..., None] * tau[i2, k2]) * (scale[..., None] * tau[k2, s2]), 0)
-    fits = ((nm <= cm) & ~jnp.any(vM & ((npre > cl) | (nsuc > cl))) & (npaths <= 4 * c)
+    fits = ((nm <= cm) & ~jnp.any(vM & ((npre > cl) | (nsuc > cl))) & (npaths <= cp)
             & ~jnp.any(middle[:, None] & middle[None, :] & nz))
     # The one-step couplings by column: each of K's columns and its coupled rows, gathered to a
     # cluster's lanes (a coupling stays inside its cluster).
