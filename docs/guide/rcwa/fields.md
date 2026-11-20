@@ -92,7 +92,9 @@ between 0 and `sum(thickness)`. Explicit coordinates retain the requested order.
 A height within a few rounding steps of a face (four per layer, relative to the stack height)
 is read at that face, so a face written as your own sum of thicknesses, such as
 `0.1 + 0.2 + 0.3` for layers `(0.3, 0.2, 0.1)`, selects the same side as the face itself; the
-z derivative at such a height is kept. A height really outside the stack is refused with
+z derivative at such a height is kept. This holds under `jax.jit` and `jax.vmap` as well, where
+the faces and heights are tracers: the move onto a face is then done on the arrays, and the
+height still keeps its own z and thickness derivatives. A height really outside the stack is refused with
 `field.coordinates`, and the message gives the range and every face height.
 
 - Counts on x/y include both ends of the cell. A count of one selects the negative

@@ -147,6 +147,43 @@ def _snap_to_faces(xp, z, actual, faces):
     return moved, actual + shift
 
 
+def _without_tangent(xp, value):
+    """``value`` as a constant to differentiation: what a host read makes of it eagerly."""
+    name = getattr(xp, '__name__', '')
+    if 'jax' in name:
+        import jax                              # local: jax is optional
+        return jax.lax.stop_gradient(value)
+    if 'torch' in name:
+        return value.detach()
+    return value
+
+
+def _snap_to_faces_traced(xp, z, edges):
+    """:func:`_snap_to_faces` where the heights or the faces have no value to read.
+
+    Under ``jax.jit`` or ``jax.vmap`` the stack's thicknesses are tracers even when they are
+    constants, so the faces cannot be read on the host and the snap used to be skipped: a height
+    an ulp or two below a face then sat in the lower layer under the trace and in the upper one
+    eagerly. Measured on four layers ``(0.1, 0.2, 0.4, 0.7)``, the jitted field at ``z = 0.3`` (one
+    ulp below the face ``0.1 + 0.2``), at ``0.7`` and two ulps below each face read ``E_z`` up to
+    0.077 away from NumPy's, PyTorch's and eager JAX's, on an ``E_z`` of 0.17 (2026-11-20). The
+    snap is arithmetic, so it runs here on the arrays: the same nearest face and the same
+    tolerance, with the shift a constant to differentiation, as the host read makes it eagerly,
+    so a height keeps its own tangent. Two faces of a zero-thickness layer are the same number
+    and give the same shift, whichever ``argmin`` takes.
+    """
+    eps = float(xp.finfo(edges.dtype).eps)
+    tol = _FACE_ULPS_PER_LAYER * max(edges.shape[0] - 1, 1) * eps * xp.max(xp.abs(edges))
+    gap = edges[None, :] - z[:, None]
+    nearest = xp.argmin(xp.abs(gap), axis=1)
+    column = xp.arange(edges.shape[0], device=getattr(edges, 'device', None))
+    shift = xp.sum(xp.where(column[None, :] == nearest[:, None], gap, xp.zeros_like(gap)), axis=1)
+    shift = xp.where(xp.abs(shift) <= tol, shift, xp.zeros_like(shift))
+    # Within a factor of two of the face, `face - z` is exact (Sterbenz), so `z + shift` is the
+    # face exactly, and the comparison with `edges` that follows takes its documented side.
+    return z + _without_tangent(xp, shift)
+
+
 def _outside_stack(faces, low, high):
     """The refusal of heights outside ``[0, sum(thickness)]``, naming where the faces are."""
     shown = ', '.join(repr(float(f)) for f in faces[:12])
@@ -350,10 +387,13 @@ class FieldState:
             z = _coordinates(xp, sample_z, self.data['lattice'], 'sample_z')
             actual, faces = _host_value(z), _host_value(edges)
             if actual is not None and faces is not None:
-                # Eager only, like the range check: a trace has no heights to compare.
                 z, actual = _snap_to_faces(xp, z, actual, faces)
                 if np.any(actual < 0) or np.any(actual > faces[-1]):
                     raise _outside_stack(faces, actual.min(), actual.max())
+            else:
+                # A trace has no heights to compare, so the range check is eager only; the snap
+                # is arithmetic and runs on the arrays, or the face's side would follow the trace.
+                z = _snap_to_faces_traced(xp, z, edges)
             owner = xp.sum(xp.astype(z[:, None] >= edges[None, 1:], xp.int64), axis=1)
             owner = xp.minimum(owner, xp.full_like(owner, ds.shape[0]-1))
         return z, owner, edges
