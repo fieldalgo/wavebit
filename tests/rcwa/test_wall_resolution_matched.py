@@ -13,7 +13,7 @@ import math
 import numpy as np
 import pytest
 
-from wavebit import Material, Units, rcwa
+from wavebit import Lattice, Material, Units, rcwa
 from wavebit.errors import UnsupportedFeatureError
 from wavebit.rcwa._engine.stretch import Matched
 
@@ -292,6 +292,28 @@ def test_what_is_not_implemented_is_refused_by_name(layers, numerics, said):
         return
     code, message = _refused(problem, numerics())
     assert code == 'rcwa.unsupported' and said in message
+
+
+def test_a_skewed_cell_is_refused_before_the_matched_map_is_built(monkeypatch):
+    """The map halves the cell's two periods as a rectangle's sides (``tests/api/test_cell_shape_gate.py``
+    lists ``Matched._mesh_inverse`` on the strength of this): a skewed cell never builds one."""
+    built = []
+    original = Matched.__init__
+
+    def counted(self, *args, **kwargs):
+        built.append(args)
+        original(self, *args, **kwargs)
+
+    monkeypatch.setattr(Matched, '__init__', counted)
+    problem = rcwa.Problem(
+        units=Units(length='nm'),
+        stack=rcwa.Stack(lattice=Lattice(u=np.array([P, 0.0]), v=np.array([0.3 * P, P]), axis_aligned=False),
+                         layers=[_layer(rcwa.Circle(radius=100.0), 4.0)]),
+        excitation=rcwa.Excitation(wavelength=900.0, sources=[rcwa.PlaneWave(side='top', polarization='p')]))
+    code, message = _refused(problem, _numerics())
+    # Li on shapes refuses the cell first; the stretch's own refusal says the same.
+    assert code == 'rcwa.unsupported' and 'rectangular, axis-aligned cell' in message
+    assert not built
 
 
 def test_an_ellipse_reaching_the_cell_edge_is_refused():

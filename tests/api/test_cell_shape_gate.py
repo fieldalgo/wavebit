@@ -93,6 +93,16 @@ _ALLOWED = {
         "NotImplementedError`. The add-path branch beside it already goes through "
         "`sample_grid` with the lattice. It was four until the block path was removed -- its "
         "own pair was guarded by `draw._refuse_layer`, and both went with it."),
+    ('src/wavebit/rcwa/_engine/stretch.py', '_mesh_inverse'): (
+        1,
+        "the matched coordinates of one circle or axis-aligned ellipse (wall_resolution) are a "
+        "rectangle's by construction: `Matched` is built in one place, "
+        "`engine._matched_coordinates`, with the lattice's diagonal as its periods. A skewed "
+        "cell never gets there: `rectilinear.validate` refuses it for factorization='li' on "
+        "shapes, which wall_resolution requires, and `_refuse_what_the_stretch_does_not_solve` "
+        "reaches `_matched_coordinates` only after `if not self.lattice_is_axis_aligned: refuse(...)`. "
+        "test_wall_resolution_matched.py::test_a_skewed_cell_is_refused_before_the_matched_map_is_built "
+        "checks the refusal and that no `Matched` is built."),
     ('src/wavebit/rcwa/_engine/conforming/__init__.py', '_layers'): (
         5,
         "the research conforming cell is a rectangle by construction: `periods` are the reduced "
