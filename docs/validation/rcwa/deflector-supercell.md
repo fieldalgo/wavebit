@@ -13,7 +13,7 @@ Targets:
 
 ## TL;DR
 
-- **The rigorous efficiency is below the usual sampled prediction at every ramp, and the gap
+- **The rigorous efficiency is below the sampled prediction at every ramp, and the gap
   grows as the ramp steepens.** For s polarization the sampled prediction is 0.94, 0.95, 0.94,
   0.93 and 0.89 at 12, 8, 6, 4 and 3 pillars per 2π; the supercell solve gives 0.907, 0.912,
   0.886, 0.790 and 0.638. The gap is 0.04 at 12 and 8 pillars and 0.26 at 3.
@@ -21,8 +21,9 @@ Targets:
   within 0.034 of the rigorous value for s** and within 0.17 for p. Neither form is a bound:
   the sampled prediction for p exceeds 1 at 3 and 4 pillars.
 - **Thirty steps of gradient ascent on the diameters add 0.04 to 0.15 for s and 0.05 to 0.17
-  for p**, with both designs re-solved at M = 6 where the ascent ran at M = 4. For s: 0.638 → 0.790, 0.790 → 0.848,
-  0.886 → 0.935, 0.912 → 0.953 and 0.907 → 0.953 at 3, 4, 6, 8 and 12 pillars.
+  for p**, with both designs re-solved at M = 6 where the ascent ran at M = 4. For s:
+  0.638 → 0.790, 0.790 → 0.848, 0.886 → 0.935, 0.912 → 0.953 and 0.907 → 0.953 at 3, 4, 6, 8
+  and 12 pillars.
 - **One value-and-gradient step on PyTorch takes 1.3 s at 3 pillars (225 orders) and 33 s at
   12 (873 orders)**, with a peak resident memory of 1.2 and 7.8 GB. The derivative agrees with
   a central difference to 1.3e-6 or better in all ten runs.
@@ -89,8 +90,8 @@ eta_m = |c_m|^2 * F_m,    F_m = kz_m/k0 (s),   n_sub^2 * k0/kz_m (p)
 with `kz_m` the normal wavevector of order `m` in the substrate. `F_m` is the power an order
 carries per unit squared tangential field, relative to the incident wave. This is the
 *sampled* prediction: one field value per pillar. The *staircase* prediction holds `t(d_k)`
-constant across pillar `k`'s cell, which multiplies `eta_m` by `sinc(m/N)^2`. Both are in
-common use and they differ by 2% at 12 pillars and 32% at 3, so both are reported.
+constant across pillar `k`'s cell, which multiplies `eta_m` by `sinc(m/N)^2`. The two
+forms differ by 2% at 12 pillars and 32% at 3, so both are reported.
 
 **Anchor.** For N equal pillars both predictions reduce to `|t|^2 * n_sub`, the library's
 co-polarized zero-order transmittance; the script asserts that this equals the primitive
@@ -104,9 +105,10 @@ A cell of four equal pillars is then solved against the primitive cell at the sa
 | largest efficiency in any other order | 4.2e-27 | 1.1e-27 |
 
 The two cells keep the same orders, and the orders between the primitive ones stay empty to
-rounding. The values differ at the level of the truncation error because the normal field of
-the default factorization is built on the cell it is given; the difference does not shrink
-monotonically from M = 4 to 6.
+rounding. T still differs by up to 1.8e-4 and the phase by up to 0.011 rad, and the
+difference does not shrink monotonically from M = 4 to 6. Where it comes from was not traced.
+One candidate is the normal field of the default factorization, if it depends on the cell it
+is built on; that was not checked in the source.
 
 **Rigorous value.** One NumPy solve of the cell with the default settings, the efficiency of
 transmitted order (1, 0). Every solve asserts `R + T = 1` to 1e-9.
@@ -169,11 +171,12 @@ for every row.
 ## What the ascent recovers
 
 Efficiency into order (1, 0), solved on NumPy with the default grid. *Looked-up* and
-*ascended* are at M = 6; the ascent itself ran at M = 4.
+*ascended* are at M = 6; the last two columns are the ascended design at M = 4 and M = 5. The
+ascent itself ran at M = 4.
 
 **s polarization**
 
-| N | looked-up | ascended | gain | ascended, M = 4 | ascended, M = 5 |
+| N | looked-up | ascended | gain | M = 4 | M = 5 |
 | --- | --- | --- | --- | --- | --- |
 | 3 | 0.6378 | 0.7901 | 0.152 | 0.7899 | 0.7901 |
 | 4 | 0.7898 | 0.8484 | 0.059 | 0.8496 | 0.8471 |
@@ -183,7 +186,7 @@ Efficiency into order (1, 0), solved on NumPy with the default grid. *Looked-up*
 
 **p polarization**
 
-| N | looked-up | ascended | gain | ascended, M = 4 | ascended, M = 5 |
+| N | looked-up | ascended | gain | M = 4 | M = 5 |
 | --- | --- | --- | --- | --- | --- |
 | 3 | 0.5792 | 0.6579 | 0.079 | 0.6610 | 0.6592 |
 | 4 | 0.6674 | 0.8366 | 0.169 | 0.8365 | 0.8365 |
@@ -218,8 +221,8 @@ diameters, does not follow the gain:
 | p, sampled, ascended | 0.925 | 0.848 | 0.961 | 0.796 | 0.862 |
 | p, rigorous, ascended | 0.658 | 0.837 | 0.956 | 0.942 | 0.954 |
 
-In nine of the ten runs the prediction falls while the rigorous efficiency rises. What the
-ascent finds is in the coupling between unlike neighbours, which the prediction leaves out.
+In nine of the ten runs the prediction falls while the rigorous efficiency rises. The
+per-pillar prediction does not see what the ascent gains.
 
 ## What a step costs
 
