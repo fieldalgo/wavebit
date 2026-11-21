@@ -7,6 +7,7 @@
 - [미분하는 실행의 백엔드 선택 — 측정](backend-choice.md)
 - [모든 백엔드가 쓰는 Bessel $J_1$과 두 상수가 그 값인 이유 — 측정](bessel-j1.md)
 - [복소 반공간의 경계 조건과 전력 점검](half-space-power-audit.md)
+- [기둥 위상 라이브러리의 한 점에 드는 비용과, 같은 배열에서 fmmax가 내는 값 — 측정](metalens-library-cost.md)
 - [법선장의 알려진 한계](normal-field-known-limits.md)
 - [완전 계량 conforming 셀](nvf-affine-cells.md)
 - [독립적인 아핀 셀 비교와 방향별 광학 비교](nvf-affine-convergence.md)

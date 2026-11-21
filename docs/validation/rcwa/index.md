@@ -7,6 +7,7 @@ Records written before 2026-10-13 use the solver interface of their day, kept fr
 - [Backend choice for a differentiated run — measurements](backend-choice.md)
 - [The Bessel $J_1$ every backend uses, and why its two constants are what they are — measurements](bessel-j1.md)
 - [Boundary conditions and power in complex half-spaces, audited](half-space-power-audit.md)
+- [What one point of a pillar phase library costs, and what fmmax gives for the same array — measurements](metalens-library-cost.md)
 - [Known limits of the normal field](normal-field-known-limits.md)
 - [Full-metric conforming cells](nvf-affine-cells.md)
 - [Independent affine-cell and directional optical comparisons](nvf-affine-convergence.md)
