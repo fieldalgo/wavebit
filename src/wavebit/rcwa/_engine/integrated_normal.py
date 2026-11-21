@@ -319,10 +319,11 @@ def projector_fields(
         "numpy" in xp.__name__
         and "jax" not in xp.__name__
         and _tree_matches_numpy(len(A), pts.dtype)
+        and (extra is None or _tree_matches_numpy(extra[0].shape[0], pts.dtype))
     ):
         result = _sparse_fields(
             pts, grid, A, E, L2, valid, contrast, nx, ny, radius, threshold2,
-            chunk or 256,
+            chunk or 256, extra,
         )
     else:
         result = b._chunked(xp, evaluate, pts, chunk or 256, 3, A, E, contrasts)
@@ -577,13 +578,18 @@ def _free_mass(lo, hi, length, h2, d, d3):
     return np.maximum(w4 - 2 * w2 + d3 * length, 0)
 
 
-def _sparse_fields(pts, grid, A, E, L2, valid, contrast, nx, ny, radius, threshold2, chunk):
+def _sparse_fields(pts, grid, A, E, L2, valid, contrast, nx, ny, radius, threshold2, chunk,
+                   extra=None):
     """The NumPy fields of :func:`projector_fields`, bit for bit, from live pairs only.
 
     Samples are taken in square tiles, whose boxes keep fewer intervals than the dense
     evaluation's runs of ``chunk`` consecutive samples; ``chunk`` is still consulted for the
     one thing a run's kept set decides, the 1 a kept but dead interval puts in a row's
-    minimum."""
+    minimum.
+
+    ``extra`` is :func:`projector_fields`' facing sub-intervals. The dense evaluation appends
+    all of them to every run's kept intervals, so they share each row's minimum, and sums
+    their signed masses in a second reduction of their own width; so does this."""
     import numpy as np
     plan = _pairwise_plan(len(A))
     lower, upper = np.minimum(A, A + E), np.maximum(A, A + E)
@@ -598,8 +604,15 @@ def _sparse_fields(pts, grid, A, E, L2, valid, contrast, nx, ny, radius, thresho
                 if run not in kept_in_run:
                     kept_in_run[run] = len(_kept(pts[run * chunk:(run + 1) * chunk],
                                                  lower, upper, valid, radius))
-            return np.asarray([kept_in_run[r] for r in runs.tolist()], dtype=np.int64) > live
+            kept = np.asarray([kept_in_run[r] for r in runs.tolist()], dtype=np.int64)
+            return kept + appended > live
         return padded
+
+    appended = 0 if extra is None else extra[0].shape[0]
+    if appended:
+        sub_A, sub_E, sub_L2, sub_live, sub_weight, sub_nx, sub_ny = extra
+        sub_plan = _pairwise_plan(appended)
+        sub_nx2, sub_ny2 = sub_nx**2, sub_ny**2
 
     nx2, ny2 = nx**2, ny**2
     for i0 in range(0, grid[0], _TILE):
@@ -607,8 +620,19 @@ def _sparse_fields(pts, grid, A, E, L2, valid, contrast, nx, ny, radius, thresho
             sel = flat[i0:i0 + _TILE, j0:j0 + _TILE].reshape(-1)
             p = pts[sel]
             index = _kept(p, lower, upper, valid, radius)
-            rows, columns, mass = _live_mass(p, A[index], E[index], L2[index], radius,
-                                             threshold2, valid[index], padded_for(sel))
+            a, e, l2, live = A[index], E[index], L2[index], valid[index]
+            if appended:
+                a = np.concatenate([a, sub_A], axis=0)
+                e = np.concatenate([e, sub_E], axis=0)
+                l2 = np.concatenate([l2, sub_L2], axis=0)
+                live = np.concatenate([live, sub_live], axis=0)
+            rows, columns, mass = _live_mass(p, a, e, l2, radius, threshold2, live,
+                                             padded_for(sel))
+            if appended:
+                parent = columns < len(index)
+                sub_rows, sub_columns = rows[~parent], columns[~parent] - len(index)
+                sub_mass = mass[~parent] * sub_weight[sub_columns]
+                rows, columns, mass = rows[parent], columns[parent], mass[parent]
             columns = index[columns]
             mass = mass * contrast[columns]
             terms = np.empty((4, len(mass)), dtype=mass.dtype)
@@ -618,6 +642,14 @@ def _sparse_fields(pts, grid, A, E, L2, valid, contrast, nx, ny, radius, thresho
             terms[2] *= ny[columns]
             np.multiply(mass, ny2[columns], out=terms[3])
             sums = _tree_sum(rows, columns, terms, len(sel), plan)
+            if appended:
+                terms = np.empty((4, len(sub_mass)), dtype=sub_mass.dtype)
+                terms[0] = sub_mass
+                np.multiply(sub_mass, sub_nx2[sub_columns], out=terms[1])
+                np.multiply(sub_mass, sub_nx[sub_columns], out=terms[2])
+                terms[2] *= sub_ny[sub_columns]
+                np.multiply(sub_mass, sub_ny2[sub_columns], out=terms[3])
+                sums = sums + _tree_sum(sub_rows, sub_columns, terms, len(sel), sub_plan)
             total = sums[0]
             nonempty = total > 0
             total = np.where(nonempty, total, 1.0)

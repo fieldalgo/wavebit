@@ -64,6 +64,21 @@ SCENES = {
                  material=2.0 + 0.1j),
         ],
     ),
+    # Two tilted boxes 0.4 l apart (l = 2**-10 of the longest basis vector, below which a
+    # facing pair is blended toward contact): the facing sub-intervals ride along, beside a
+    # curve.
+    "near contact": (
+        ((600.0, 0.0), (0.0, 600.0)),
+        lambda cell: [
+            dict(type="rectangle", lx=200.0, ly=180.0, angle=0.3,
+                 cx=-(100.0 + 0.2 * 600.0 / 1024) * np.cos(0.3),
+                 cy=-(100.0 + 0.2 * 600.0 / 1024) * np.sin(0.3), material=4.0),
+            dict(type="rectangle", lx=200.0, ly=140.0, angle=0.3,
+                 cx=(100.0 + 0.2 * 600.0 / 1024) * np.cos(0.3),
+                 cy=(100.0 + 0.2 * 600.0 / 1024) * np.sin(0.3), material=9.0),
+            dict(type="circle", lx=120.0, cx=-180.0, cy=200.0, material=2.25),
+        ],
+    ),
     # A skewed cell folds samples onto a reduced cell whose tiles straddle the fold.
     "skewed cell": (
         ((500.0, 0.0), (230.0, 450.0)),
@@ -88,9 +103,13 @@ def fields(cell, shapes, grid, dtype, chunk=None):
     segments = b.replay_interfaces(xp, regions, 1.0, cell, transform, plan)
     segments = tuple(np.asarray(x, dtype=dtype) if x.dtype.kind == "f" else x for x in segments)
     contrasts = np.asarray(b.interface_contrasts(xp, regions, 1.0, plan, dtype), dtype=dtype)
+    facing = (
+        b.facing_contrasts(xp, regions, 1.0, plan, dtype) if getattr(plan, "facing", ()) else None
+    )
     return np.stack(
         b.material_projector_fields(
-            xp, grid, cell, dtype, segments, contrasts, plan, transform, chunk=chunk
+            xp, grid, cell, dtype, segments, contrasts, plan, transform, chunk=chunk,
+            facing_contrasts=facing,
         )
     )
 
@@ -112,8 +131,14 @@ def test_live_pair_fields_are_the_dense_fields(monkeypatch, scene, grid, dtype):
     assert np.isfinite(got).all()
 
 
-def test_live_pair_layer_matrices_are_the_dense_ones(monkeypatch):
-    cell, shapes = SCENES["overlapping circles"]
+def test_the_near_contact_scene_plans_a_facing_pair():
+    cell, shapes = SCENES["near contact"]
+    assert b.plan_layer(shapes(cell), cell)[3].facing
+
+
+@pytest.mark.parametrize("scene", ["overlapping circles", "near contact"])
+def test_live_pair_layer_matrices_are_the_dense_ones(monkeypatch, scene):
+    cell, shapes = SCENES[scene]
     args = (np, shapes(cell), 1.0, 2, 2, cell, np.complex128)
     got = b.to_conv_mat_boundary_layer(*args, shape_nvf_grid_size=64)
     dense_tree(monkeypatch)
