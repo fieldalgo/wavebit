@@ -52,7 +52,17 @@ overlays under `docs/locales/ko/pages/`. Their source is loaded only in the Kore
 build; English pages remain canonical. Other maintained pages may also provide complete
 overlays. Currently these are:
 
-- getting started: [installation](../getting-started/installation.md),
+- section indexes: [getting started](../getting-started/index.md), [learn](../learn/index.md),
+  [FDTD learning path](../learn/fdtd/index.md), [user guide](../guide/index.md),
+  [shared workflows](../guide/common/index.md), [RCWA guide](../guide/rcwa/index.md),
+  [FDTD guide](../guide/fdtd/index.md), [API reference](../reference/index.md),
+  [shared API](../reference/common/index.md), [RCWA API](../reference/rcwa/index.md),
+  [FDTD API](../reference/fdtd/index.md), [theory and validation](../theory/index.md),
+  [validation studies](../validation/index.md), [RCWA validation](../validation/rcwa/index.md),
+  [FDTD validation](../validation/fdtd/index.md), [design records](../design/index.md),
+  [migration](../migration/index.md) and [developer guide](index.md);
+- getting started: [what Wavebit is](../getting-started/overview.md),
+  [installation](../getting-started/installation.md),
   [first RCWA calculation](../getting-started/rcwa.md) and
   [first FDTD calculation](../getting-started/fdtd.md);
 - guides: [run records](../guide/run-records.md),
@@ -66,6 +76,7 @@ overlays. Currently these are:
   [physical periodic-stack FDTD](../guide/fdtd/periodic-problems.md),
   [Gaussian beams](../guide/fdtd/gaussian-beam.md) and
   [waveguide modes](../guide/fdtd/waveguide-modes.md);
+- learning: [runnable teaching examples](../learn/examples.md);
 - migration: [public names and result keys](../migration/public-names.md);
 - RCWA validation: [normal-field resolution and a spectral fit](../validation/rcwa/fitting-grid-convergence.md) and
   [the solve in stretched coordinates against finite-element fields](../validation/rcwa/wall-resolution.md);
