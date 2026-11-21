@@ -456,7 +456,7 @@ because the replacement got faster.** `c128fd8` made the sampled field a distanc
 which costs 31.9 ms to 378.6 ms on the rectangle pair and 47.4 ms to 161.6 ms on the circles, at
 grid 1024. That is a 12× and 3.4× build-cost regression, paid for the boundary exactness and the
 position gradient that commit bought, and it is recorded there. Read the swap ratios as ratios
-between two things that both moved. Read those as ratios: absolute milliseconds move between runs on the same machine, and
+between two things that both moved. Absolute milliseconds move between runs on the same machine, and
 `studies/README.md` says why. A curved layer would also give up the exact Bessel transform for a
 256-gon.
 
