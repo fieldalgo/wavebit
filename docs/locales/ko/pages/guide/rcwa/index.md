@@ -1,0 +1,27 @@
+# RCWA 사용자 가이드
+
+`rcwa.Problem`, `rcwa.Numerics`와 공통 check/prepare/run 생애주기를 사용합니다. [현재 API로 작성한 완전한 예제](../../getting-started/rcwa.md)부터 시작한 뒤 [장면 선언](scene.md), [조명](light.md), [수치 설정](numerics.md), [관측](fields.md)으로 넘어가세요. 아래의 고급 가이드는 확립된 과학적 작업 흐름을 보존하는 경우 명시적인 호환 인터페이스를 그대로 유지합니다.
+
+- [JAX 변환 안에서 형상 위상 검사하기](guarded-shape-jit.md)
+- [아핀 프로파일로 만드는 conforming NVF](affine-profile-nvf.md)
+- [이방성·자성 재료 — 솔버가 이미 받는 것과 각 공백의 비용](anisotropic-materials.md)
+- [경계 모델링 — 계단 근사 없이 겹친 영역 칠하기](boundary-modeling.md)
+- [유한 쌍 틈 미분하기](cartesian-pair-gap-autodiff.md)
+- [접촉과 양의 틈을 가로지르는 유한 쌍](cartesian-pair-gap.md)
+- [두 직사각형의 유한한 오른쪽 열림 응답](cartesian-pair-opening.md)
+- [사각 격자가 아닌 격자 위의 카르테시안 직사각형 NVF](cartesian-rectangle-nvf.md)
+- [사각 격자가 아닌 격자 위의 두 카르테시안 직사각형](cartesian-rectangle-pair-nvf.md)
+- [결맞는 조명과 내부 광원](coherent-illumination.md)
+- [직사각형 층으로 만드는 conforming NVF](conforming-nvf.md)
+- [예외점: 기저를 바꾸면 전파 계산이 어떻게 달라질까?](exceptional-points.md)
+- [필드와 회절 관측값](fields.md)
+- [패턴 층 안의 전체 텐서 재료](full-tensor-patterns.md)
+- [빛을 기술하기](light.md)
+- [다중 모드 입사 — 여러 차수를 한꺼번에 비추기](multimode-incidence.md)
+- [수치 설정 고르기](numerics.md)
+- [NVF와 보조 솔버 선택](nvf-method-selection.md)
+- [해석적(계단 근사 없는) 모델링 — 접근과 결과](parametric-modeling.md)
+- [계산이 레일리 점을 다루는 방식 — 처음부터 끝까지](rayleigh-handling-walkthrough.md)
+- [늘린 좌표로 벽 분해하기](wall-resolution.md)
+- [장면 기술하기](scene.md)
+- [적분한 이방성 형상](tensor-shape-integration.md)
