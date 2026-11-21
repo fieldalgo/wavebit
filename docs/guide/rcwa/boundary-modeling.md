@@ -218,11 +218,20 @@ between it and a default:
   `1e-8`, step `T` by 2.6e-4 (4.0e-4 rotated). The likely cause, not yet confirmed, is that
   the two interfaces meeting there -- box and background, background and box -- become one,
   weighted by a much smaller contrast.
-- **It has no independent reference yet.** On axis-aligned rectangles it was compared, order
-  for order, with Li's rules, the established factorization there: it was nearer to them than
-  the default at most of orders 3 to 9 (for
-  example 1.2e-3 against 1.3e-3 at order 5 on the tiles, 2.1e-4 against 1.3e-3 at order 7 on
-  two boxes apart), and not at every one.
+- **It is not shown to be more accurate, and has no independent reference yet.** Against
+  converged values the two fields err by like amounts at a given order. On the tiles above,
+  against Li's rules at order 17 (settled to 2e-4 by then), its errors at orders 3, 5, 7 and 9
+  are 1.3e-2, 6.8e-4, 1.5e-3 and 4.5e-4, and the default's 1.0e-2, 5.9e-4, 2.9e-3 and 5.4e-4.
+  On a circle of radius 0.25 of the period, a 0.53 x 0.3 rectangle rotated by 0.3 rad, and a
+  circle and a rotated rectangle apart, against the value the two fields reach together at
+  order 17 (to 2e-5, 3.7e-4 and 9e-5), the default is the nearer at every order from 5 to 15
+  on the last, and each is the nearer at some of them on the other two. What differs is the
+  manner: there `T` moved one way at every step from order 5 to 17 under `'interfaces'` (by
+  2.8e-4 falling to 1.1e-5 on the circle), where under the default it changed direction on all
+  three (by +4.7e-4 and then -1.3e-3 over the rotated rectangle's last two steps). The
+  distance to Li's rules *at the same order*, which this section quoted until 2026-11-21, does
+  not measure accuracy: Li's own result at orders 3 to 9 is 6e-4 to 1.7e-2 from its converged
+  value.
 - **A layer of circles or ellipses costs far more.** A curve on the boundary route is a polygon
   of `boundary.POLYGON_VERTICES` (256) edges: one circle of radius 0.25 of the period took 2.5
   to 3 minutes per solve at orders 3 to 9, where the closed form took 1 to 20 s (warm solves on
