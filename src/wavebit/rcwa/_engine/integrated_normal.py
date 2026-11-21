@@ -115,10 +115,11 @@ def _facing_corrections(xp, A, E, L2, contrasts, merged, plan, basis, gap):
             lo = xp.clip(xp.minimum(t0, t1), 0.0, 1.0)
             hi = xp.clip(xp.maximum(t0, t1), 0.0, 1.0)
             sides.append((a0, e0, lo, hi))
+        # The ends of each whole interval against the other's line, as the planner measures it
+        # (`interfaces._facing_separation`).
         separation = []
-        for (a0, e0, lo, hi), (a1, e1, _, _) in ((sides[0], sides[1]), (sides[1], sides[0])):
-            for t in (lo, hi):
-                x = a0 + t * e0 - a1
+        for (a0, e0, _, _), (a1, e1, _, _) in ((sides[0], sides[1]), (sides[1], sides[0])):
+            for x in (a0 - a1, a0 + e0 - a1):
                 separation.append(xp.abs(x[0] * e1[1] - x[1] * e1[0]) / xp.sqrt(xp.sum(e1 * e1)))
         blend = 1.0 - _smootherstep(xp, xp.max(xp.stack(separation)) / gap)
         closed = merged[k] ** 4 / 2

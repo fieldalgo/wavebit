@@ -229,8 +229,8 @@ def _plan_facing(pieces, spans, basis, inv, tol):
 
     Both intervals carry the sliver's region on their right, run in opposite directions and
     overlap when projected on each other. The separation is the largest distance from an
-    end of either common extent to the other interval's line, so a pair that is not parallel
-    enters only once all of its common extent is within the gap. The plan holds no
+    end of either whole interval to the other's line (:func:`_facing_separation`), so a pair
+    that is not parallel enters only once both intervals lie within the gap of each other. The plan holds no
     coordinates; replay recomputes the extents and the separation from traced vertices.
     """
     if not pieces:
@@ -268,14 +268,17 @@ def _plan_facing(pieces, spans, basis, inv, tol):
 
 
 def _facing_separation(s0, z0, s1, z1, tol):
-    """Largest separation of two facing intervals over their common extent, or infinity.
+    """Separation of two facing intervals, or infinity when they bound no sliver.
 
-    The common extent of each interval is the part covered by the other's projection. The
-    separation is the largest distance from an end of either common extent to the other
-    interval's line, measured on that line's right. A pair whose projections overlap by no
-    more than ``tol``, or that does not face across its right sides, bounds no sliver.
+    The common extent of each interval is the part covered by the other's projection; both
+    must be longer than ``tol``, and the ends of each common extent must lie on the other
+    interval's right. The separation is the largest distance from an end of either *whole*
+    interval to the other's line. Measured over the common extent alone, a short piece that
+    leaves a crossing point beside a longer one would read as a thin sliver while its length,
+    not the gap, shrinks; a vanishing interval already loses its weight continuously, and
+    only a closing gap needs the blend.
     """
-    extents = []
+    frames = []
     for start, end, other_start, other_end in ((s0, z0, s1, z1), (s1, z1, s0, z0)):
         length = math.hypot(*(end - start))
         t = (end - start) / length
@@ -283,13 +286,15 @@ def _facing_separation(s0, z0, s1, z1, tol):
         lo, hi = max(0., u[0]), min(length, u[1])
         if hi - lo <= tol:
             return math.inf
-        extents.append((start + lo * t, start + hi * t, start, np.array([t[1], -t[0]])))
-    distances = [float((x - other[2]) @ other[3])
-                 for own, other in ((extents[0], extents[1]), (extents[1], extents[0]))
-                 for x in own[:2]]
-    if min(distances) < -tol:
+        frames.append((start + lo * t, start + hi * t, start, end, np.array([t[1], -t[0]])))
+    facing = [float((x - other[2]) @ other[4])
+              for own, other in ((frames[0], frames[1]), (frames[1], frames[0]))
+              for x in own[:2]]
+    if min(facing) < -tol:
         return math.inf
-    return max(distances)
+    return max(abs(float((x - other[2]) @ other[4]))
+               for own, other in ((frames[0], frames[1]), (frames[1], frames[0]))
+               for x in own[2:4])
 
 
 def replay_interfaces(xp, regions, background, lattice, transform, plan, material_values=None):
