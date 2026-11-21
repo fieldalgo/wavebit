@@ -324,7 +324,7 @@ symmetric 중첩을 얻지 않는 한 기본값을 뒤집으면 이 테스트가
 
 호출자가 결코 헷갈릴 리 없는 값은 호출자가 다시 말해야 하는 매개변수가 되어서는 안 되며, 기본값이 이를 더
 나쁘게 만들었습니다. 변경 당시 `False`는 8곳 중 3곳이 원하는 답이었으므로, 잊어버렸을 때 얻게 되는 것이
-*다수* 경우였습니다. 그 뒤 `_fourier2d_grid`를 비공개로 만들고 플래그를 기본값 없는 키워드 전용 인자로
+*소수* 경우였습니다. 그 뒤 `_fourier2d_grid`를 비공개로 만들고 플래그를 기본값 없는 키워드 전용 인자로
 바꾸었으므로, 직접 호출하더라도 어느 쪽인지 밝혀야 했습니다. 2026-09-25부터는 넘길 플래그가 남아 있지
 않습니다. 각 진입점은 자기 데이터에 필요한 보정을 `_raster_series`에 넘깁니다 — 계단에는
 `_pixel_correction`, 점 표본에는 `_half_pixel_phase` — 그리고 그 선택이 둘 사이의 차이 전부입니다.
@@ -381,8 +381,8 @@ truncation_order=8). 그 모든 경우에 에너지는 1e-14 이내로 보존되
 | 글, 표, 연구 모드 이름의 `DFS` / `CFS` | `sampled` / `integrated` |
 
 `NVF`는 남습니다. *normal vector field*(법선 벡터장)의 약자로, 방법이 아니라 사물을 가리키며, 다른 축에
-놓입니다. `sampled`와 `integrated`는 `fourier_coefficients`의 두 값이고, `nvf`는 `factorization`의 두 값 중
-하나입니다. 네 가지 조합은 모두 실제 생성기이며, 그래서 `to_conv_mat_raster_integrated_nvf`에는 두 단어가
+놓입니다. `sampled`와 `integrated`는 `fourier_coefficients`의 두 값이고, `nvf`는 `factorization`의 값 중
+하나입니다(`li`와 함께; 2026-09-27부터 `laurent`가 세 번째 값, §9). `sampled` / `integrated`와 `li` / `nvf`의 네 가지 조합은 모두 실제 생성기이며, 그래서 `to_conv_mat_raster_integrated_nvf`에는 두 단어가
 모두 들어 있습니다.
 
 이 작업을 반복하려는 사람에게 주의할 점 하나. `DFS`와 `CFS`는 명사였고, `sampled`와 `integrated`는
@@ -468,7 +468,7 @@ M. G. Moharam, E. B. Grann, D. A. Pommet and T. K. Gaylord, JOSA A **12**, 1068 
 | 기울어진 셀 | 만듦 | 이 규칙은 축을 지정하지 않음 -- 두 칸에 하나의 스칼라 컨볼루션 -- Li는 거부되는 곳 |
 | 1D TE / TM, conical | 만듦 | TE는 반올림 오차 수준으로 Li와 같음. TM은 Li (1996)의 느린 경우 |
 | `formulation='first_order'` | 만듦 | 같은 다섯 칸. 2차 정식화와 1차 정식화가 9e-15까지 일치 |
-| 텐서 재료 | **이름으로 거부** | 텐서 생성기는 텐서 Li와 Popov-Neviere NVF입니다. Laurent 텐서 빌드는 작성되지 않았고 대조한 기준도 없습니다. 균일한 텐서는 어느 규칙에서도 같으므로, 그곳에서는 `factorization`을 지정하지 않아도 잃는 것이 없습니다 |
+| 텐서 재료 | **이름으로 거부** | 텐서 생성기는 텐서 Li와 Popov–Nevière NVF입니다. Laurent 텐서 빌드는 작성되지 않았고 대조한 기준도 없습니다. 균일한 텐서는 어느 규칙에서도 같으므로, 그곳에서는 `factorization`을 지정하지 않아도 잃는 것이 없습니다 |
 | `li_nesting`, `raster_normal_method`, `nvf_projector`, `shape_nvf_grid_size` | **이름으로 거부** | Laurent는 규칙을 중첩하지 않고 법선장을 만들지 않으므로, 이들을 읽는 것이 없습니다 |
 
 **고정된 기하에는 그 규칙이 찍혀 있습니다.** `StaticGeometry.factorization`은 기록이 고정될 때의 규칙을

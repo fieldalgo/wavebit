@@ -793,7 +793,7 @@ property of that scene; r=60 and r=40 both sit near 0.1 there.
 Rod r=90 in a hex cell of pitch 400, eps 5.76, thickness 300, wavelength 900, theta 12 / phi
 30 / psi 40 deg. The reference is the same rod through the *parametric shape* path (exact
 geometry, exact normal field) at `truncation_order=14`, whose own `|14 - 12|` floor is 1.8e-6 — well
-under every gap below, so all eight cells are resolved. Error is the worst per-order
+under every gap below, so all four cells are resolved. Error is the worst per-order
 `|R - R_ref|`, `|T - T_ref|` over shared orders.
 
 | N | truncation_order | `distance` | `contour` | `spectral` | `smooth` | analytic at that truncation_order |

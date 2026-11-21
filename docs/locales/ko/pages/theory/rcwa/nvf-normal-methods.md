@@ -703,7 +703,7 @@ wavebit.rcwa(structure=raster, factorization='nvf',
 
 피치 400인 육각 셀 안의 막대 r=90, eps 5.76, 두께 300, 파장 900, theta 12 / phi 30 / psi 40 deg. 기준은 같은
 막대를 *파라메트릭 형상* 경로(정확한 기하, 정확한 법선장)로 `truncation_order=14`에서 푼 것이며, 그 자신의
-`|14 - 12|` 하한은 1.8e-6으로 아래의 모든 차이보다 훨씬 작으므로 여덟 셀이 모두 분해됩니다. 오차는 공유 차수에
+`|14 - 12|` 하한은 1.8e-6으로 아래의 모든 차이보다 훨씬 작으므로 네 셀이 모두 분해됩니다. 오차는 공유 차수에
 대한 차수별 `|R - R_ref|`, `|T - T_ref|`의 최댓값입니다.
 
 | N | truncation_order | `distance` | `contour` | `spectral` | `smooth` | 그 truncation_order에서의 해석적 경로 |

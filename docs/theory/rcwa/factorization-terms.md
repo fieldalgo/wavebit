@@ -342,7 +342,7 @@ one of today's five. What does not drift is the split itself.
 
 A value the caller can never be in doubt about should not be a parameter the caller restates,
 and the default made it worse: at the time of the change `False` was the answer 3 of 8 sites
-wanted, so the *majority* case was the one you got by forgetting. `_fourier2d_grid` was then made private with the flag keyword-only and
+wanted, so the *minority* case was the one you got by forgetting. `_fourier2d_grid` was then made private with the flag keyword-only and
 undefaulted, so even a direct call had to say which it meant. Since 2026-09-25 there is no flag
 left to pass: each entry point hands `_raster_series` the correction its data needs —
 `_pixel_correction` for a staircase, `_half_pixel_phase` for point samples — and that choice is
@@ -405,7 +405,8 @@ The public words won, everywhere:
 
 `NVF` stays. It abbreviates *normal vector field*, which is a thing rather than a method, and it
 sits on the other axis: `sampled` and `integrated` are the two values of `fourier_coefficients`,
-while `nvf` is one of the two values of `factorization`. The four combinations are all real
+while `nvf` is one of the values of `factorization` (with `li`; `laurent` is a third since
+2026-09-27, §9). The four combinations of `sampled` / `integrated` with `li` / `nvf` are all real
 builders, which is why `to_conv_mat_raster_integrated_nvf` carries both words.
 
 One caution for anyone repeating this. `DFS` and `CFS` were nouns; `sampled` and `integrated`
@@ -499,7 +500,7 @@ series of the product. The code cites them at `laurent_conv_matrices`.
 | a skewed cell | built | the rule names no axis -- one scalar convolution in both slots -- where Li is refused |
 | 1D TE / TM, conical | built | TE equals Li to round-off; TM is Li (1996)'s slow case |
 | `formulation='first_order'` | built | the same five slots; second-order and first-order agree to 9e-15 |
-| tensor materials | **refused by name** | tensor Li and Popov-Neviere NVF are the tensor builders; a Laurent tensor build is not written and has no reference checked against it. A uniform tensor is the same under every rule, so leaving `factorization` unset loses nothing there |
+| tensor materials | **refused by name** | tensor Li and Popov–Nevière NVF are the tensor builders; a Laurent tensor build is not written and has no reference checked against it. A uniform tensor is the same under every rule, so leaving `factorization` unset loses nothing there |
 | `li_nesting`, `raster_normal_method`, `nvf_projector`, `shape_nvf_grid_size` | **refused by name** | Laurent nests no rules and builds no normal field, so nothing reads them |
 
 **A frozen geometry is stamped with its rule.** `StaticGeometry.factorization` records the rule a
