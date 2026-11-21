@@ -621,6 +621,14 @@ Sweeping the pillar diameter from 80 to 260 nm gives a usable library — phase 
 220 nm) sit on resonances and drop to T = 0.50-0.79; excluding them leaves 16 of 19 points with
 a worst transmission of 0.936. The whole sweep takes 14 s.
 
+[`metalens_phase_library.py`](https://github.com/fieldalgo/wavebit/blob/main/examples/rcwa/metalens_phase_library.py)
+runs this sweep on the current API and carries its own checks: power balance, the single
+propagating order, the supercell comparison below, and the monotonic 2*pi coverage in eight
+levels. It prints its own time, which depends on the machine.
+[`metalens_phase_sensitivity.py`](https://github.com/fieldalgo/wavebit/blob/main/examples/rcwa/metalens_phase_sensitivity.py)
+differentiates an entry's phase with respect to the pillar diameter (0.056 rad/nm at 150 nm).
+Both stop at the unit cell; assembling a lens from the table is outside Wavebit.
+
 Cross-checked against S4 on the same structure, which is the useful part: at D = 150 nm S4
 converges to 0.96675 against Wavebit's 0.96643 (3.5e-4), and at D = 240 nm to 0.99694 against
 0.99905 (2.1e-3) while still climbing. Both gaps are S4's own convergence — and Wavebit is
