@@ -26,7 +26,7 @@
 | `fdtd_grid(...)` | [`fdtd.native`](../guide/fdtd/native-grids.md), SI 전류/전도도/극점, 필드, 스냅숏과 푸리에 적분 |
 | `fit_fdtd_modes` | `observations.fit_modes`, 초·Hz와 1/s 단위의 감쇠율 |
 | 사용자 정의 일반 FDTD 형상 | `fdtd.Shape` 정적 형상 프로토콜 |
-| `solver.slice_structure` | `rcwa.sample_structure(problem, quantity='epsilon' 또는 'mu')` |
+| `solver.slice_structure` | `rcwa.sample_structure(problem, quantity='epsilon' or 'mu')` |
 | 실험적 NVF와 산란 연산자 | `rcwa.experimental`과 `rcwa.operators` |
 | `JobSpec` v10 | `migration.migrate_legacy_jobs(document, units=Units(...))` → 현재 `Job` 객체의 튜플 |
 | capability manifest v21 | v22: `current_lifecycle`이 공개 색인이고, 자세한 `solvers`/결과 표는 내부의 정규화된 엔진을 명시적으로 기술합니다. v23 (2026-10-19): [공개 이름](public-names.md)과 `wavebit.job/v2`. v24 (2026-10-19): [native·periodic 이름](public-names.md#native-grid-and-periodic-stack-names). v25 (2026-10-20): [공통·관측·RCWA 이름](public-names.md#shared-observation-and-rcwa-names). v26 (2026-10-20): [결과 키와 리포트 키](public-names.md#result-and-report-keys). v27 (2026-11-08): [진폭비, 필드와 스펙트럼](public-names.md#amplitude-ratios-fields-and-spectra) |
