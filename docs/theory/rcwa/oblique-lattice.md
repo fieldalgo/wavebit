@@ -627,7 +627,12 @@ propagating order, the supercell comparison below, and the monotonic 2*pi covera
 levels. It prints its own time, which depends on the machine.
 [`metalens_phase_sensitivity.py`](https://github.com/fieldalgo/wavebit/blob/main/examples/rcwa/metalens_phase_sensitivity.py)
 differentiates an entry's phase with respect to the pillar diameter (0.056 rad/nm at 150 nm).
-Both stop at the unit cell; assembling a lens from the table is outside Wavebit.
+[`metalens_phase_library_grid.py`](https://github.com/fieldalgo/wavebit/blob/main/examples/rcwa/metalens_phase_library_grid.py)
+repeats the sweep at 450, 532 and 633 nm, for s and p, up to 35 degrees of incidence, and
+checks the solved propagating orders against the pitch condition: at 532 nm the substrate
+gains a second order at 17.2 or 20.7 degrees depending on the azimuth, and from there the
+zero order no longer carries all of the transmitted power.
+All three stop at the unit cell; assembling a lens from the table is outside Wavebit.
 
 Cross-checked against S4 on the same structure, which is the useful part: at D = 150 nm S4
 converges to 0.96675 against Wavebit's 0.96643 (3.2e-4), and at D = 240 nm to 0.99694 against

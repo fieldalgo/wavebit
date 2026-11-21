@@ -582,7 +582,11 @@ Khorasaninejad 등, Science **352**, 1190 (2016)의 기하 계열입니다. 이 
 비교, 그리고 여덟 단계에서 단조로운 2*pi 범위. 걸린 시간은 스크립트가 직접 출력하며 기계에 따라 다릅니다.
 [`metalens_phase_sensitivity.py`](https://github.com/fieldalgo/wavebit/blob/main/examples/rcwa/metalens_phase_sensitivity.py)는
 한 항목의 위상을 기둥 지름에 대해 미분합니다(150 nm에서 0.056 rad/nm).
-두 스크립트 모두 단위 셀에서 멈춥니다. 표로 렌즈를 조립하는 일은 Wavebit의 범위 밖입니다.
+[`metalens_phase_library_grid.py`](https://github.com/fieldalgo/wavebit/blob/main/examples/rcwa/metalens_phase_library_grid.py)는
+이 스윕을 450, 532, 633 nm에서 s와 p 편광에 대해 입사각 35도까지 반복하고, 계산된 전파 차수를 피치 조건과
+대조합니다: 532 nm에서는 방위각에 따라 17.2도 또는 20.7도에서 기판에 두 번째 차수가 생기며, 그 이후로는
+0차가 투과 전력 전체를 실어 나르지 않습니다.
+세 스크립트 모두 단위 셀에서 멈춥니다. 표로 렌즈를 조립하는 일은 Wavebit의 범위 밖입니다.
 
 같은 구조에서 S4와 교차 검사했으며, 이것이 유용한 부분입니다: D = 150 nm에서 S4는 Wavebit의 0.96643에
 대해 0.96675로 수렴하고(3.2e-4), D = 240 nm에서는 0.99905에 대해 0.99694이며(2.1e-3) 아직 올라가는
