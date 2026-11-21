@@ -231,8 +231,8 @@ remain citable Markdown with explicit conditions, recorded outputs and limitatio
 ## Languages and imported teaching material
 
 English is the canonical route and default language. Forty complete imported course chapters
-have English bodies and matching Korean source overlays; the homepage, every section index and
-further maintained pages also have full Korean overlays, listed in
+have English bodies and matching Korean source overlays; the homepage and most maintained pages
+also have full Korean overlays in `locales/ko/pages/`; see
 [documentation and translations](development/documentation.md#contribute-korean-translations).
 Other pages use gettext where available and
 otherwise show an explicit English-fallback notice. Both builds share document names and link to the same page in the other language.

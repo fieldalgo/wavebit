@@ -45,63 +45,22 @@ python -m sphinx -W -b html -D language=ko docs docs/_build/ko
 
 ## Contribute Korean translations
 
-Sphinx gettext catalogs live under `docs/locales/ko/LC_MESSAGES/`. Untranslated
-passages fall back to English on the Korean site, so every page remains usable.
-The homepage and all forty imported course chapters have complete Korean Markdown
-overlays under `docs/locales/ko/pages/`. Their source is loaded only in the Korean
-build; English pages remain canonical. Other maintained pages may also provide complete
-overlays. Currently these are:
+Complete Korean Markdown overlays live under `docs/locales/ko/pages/`, at the same relative
+path as the English page they translate. An overlay replaces that page's whole source in the
+Korean build only; English pages remain canonical, and every relative link, image and include
+in an overlay resolves from the English page's location. The homepage, all forty imported course
+chapters and most maintained pages have overlays; the directory itself is the authority for which
+pages are covered. Sphinx gettext catalogs under `docs/locales/ko/LC_MESSAGES/` remain for a page
+translated passage by passage; a page with neither shows an explicit English-fallback notice, so
+every page remains usable. Localized SVG and PNG assets live under `docs/locales/ko/assets/` with
+the same canonical relative paths. The source-read extension selects them without changing
+English content.
 
-- section indexes: [getting started](../getting-started/index.md), [learn](../learn/index.md),
-  [FDTD learning path](../learn/fdtd/index.md), [user guide](../guide/index.md),
-  [shared workflows](../guide/common/index.md), [RCWA guide](../guide/rcwa/index.md),
-  [FDTD guide](../guide/fdtd/index.md), [API reference](../reference/index.md),
-  [shared API](../reference/common/index.md), [RCWA API](../reference/rcwa/index.md),
-  [FDTD API](../reference/fdtd/index.md), [theory and validation](../theory/index.md),
-  [validation studies](../validation/index.md), [RCWA validation](../validation/rcwa/index.md),
-  [FDTD validation](../validation/fdtd/index.md), [design records](../design/index.md),
-  [migration](../migration/index.md) and [developer guide](index.md);
-- getting started: [what Wavebit is](../getting-started/overview.md),
-  [installation](../getting-started/installation.md),
-  [first RCWA calculation](../getting-started/rcwa.md) and
-  [first FDTD calculation](../getting-started/fdtd.md);
-- guides: [run records](../guide/run-records.md),
-  [backends, devices and precision](../guide/common/backends.md),
-  [exceptional points](../guide/rcwa/exceptional-points.md),
-  [fields and diffraction observations](../guide/rcwa/fields.md),
-  [resolving walls with stretched coordinates](../guide/rcwa/wall-resolution.md),
-  [how the FDTD solver models a problem](../guide/fdtd/model.md),
-  [physical native Yee grids](../guide/fdtd/native-grids.md),
-  [automatic stopping and graded absorbing padding](../guide/fdtd/stopping-and-absorbers.md),
-  [physical periodic-stack FDTD](../guide/fdtd/periodic-problems.md),
-  [Gaussian beams](../guide/fdtd/gaussian-beam.md) and
-  [waveguide modes](../guide/fdtd/waveguide-modes.md);
-- learning: [runnable teaching examples](../learn/examples.md);
-- migration: [public names and result keys](../migration/public-names.md);
-- RCWA validation: [normal-field resolution and a spectral fit](../validation/rcwa/fitting-grid-convergence.md) and
-  [the solve in stretched coordinates against finite-element fields](../validation/rcwa/wall-resolution.md);
-- FDTD validation: [memory-bounded reverse mode](../validation/fdtd/checkpointing.md),
-  [a focused Gaussian beam](../validation/fdtd/fd-gaussian-beam.md),
-  [a one-way waveguide mode source](../validation/fdtd/fd-mode-source.md),
-  [PlaneWave acceptance](../validation/fdtd/fd-planewave-acceptance.md),
-  [the polytope clip](../validation/fdtd/fd-polytope-clip.md),
-  [automatic stopping with incident source columns](../validation/fdtd/fd-source-decay.md),
-  [the off-diagonal constitutive slot](../validation/fdtd/fd-stage4-c11.md),
-  [the stage 4 report](../validation/fdtd/fd-stage4-report.md),
-  [waveguide modes of the discrete Yee system](../validation/fdtd/fd-waveguide-modes.md),
-  [a cell-snapped waveguide through an absorbing layer](../validation/fdtd/fd-waveguide-through-pml.md),
-  [outer-jit memory of area-painted derivatives](../validation/fdtd/fdtd-jit-painting-memory.md),
-  [bounded general-scene CUDA execution](../validation/fdtd/general-cuda.md) and
-  [native Yee-grid CUDA validation](../validation/fdtd/native-cuda.md);
-- development: [the current implementation map](source-map.md),
-  [recorded verification](verification.md) and
-  [third-party software, data and references](third-party.md).
-
-The directory `docs/locales/ko/pages/` is the authority for this list: the language inventory
-records only four of these pages apart from the imported course translations. Other pages use gettext where available
-and otherwise display an explicit English-fallback notice. Localized SVG and PNG
-assets live under `docs/locales/ko/assets/` with the same canonical relative paths.
-The source-read extension selects them without changing English content.
+An overlay is a full translation of the current English page, not a summary, and changes only
+human prose. Copy unchanged: fenced code and output blocks, inline code, math, numbers, link
+targets, directive lines and `eval-rst` blocks. Keep a heading in English when any page links to
+it by `#slug`, because the Korean build resolves that link against the heading itself. When the
+English page changes, change its overlay in the same commit.
 
 Extract current English messages for gettext-based pages with:
 
