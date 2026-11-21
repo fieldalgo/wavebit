@@ -482,7 +482,8 @@ def test_the_wide_traced_split_takes_two_lanes_a_level(name, jit):
     """A length-3 chain beside a Jordan pair at its eigenvalue, or two such chains (a square
     pillar's two mirror blocks at one point), padded to eight lanes. One lane in each upper level
     (``_chain_split_traced``) reads ``cond(X)`` times the coupling ``X^-1 T X`` keeps against the
-    levels at 1e-6 of the slot's scale or more, far past what the check passes; the wide family
+    levels at 1e-9 of the slot's scale or more (9.0e-7 .. 6e-6 measured; the CPU's arithmetic
+    path moves it), far past what the check passes; the wide family
     (``_chain_split_traced_wide``), two lanes in level 1, reads rounding (the check passes 3e-12),
     as the eager split does, and leaves the padded lanes alone. Catches a level layout missing
     from the family, a level placed off its lane, or a padded lane taken as a member."""
@@ -497,7 +498,7 @@ def test_the_wide_traced_split_takes_two_lanes_a_level(name, jit):
         return float(cond[0]) * np.linalg.norm(np.where(up, 0, Mx)) / scale
 
     X, lv, cond = solve_2d._chain_split_traced(np, T, valid, 40.0)
-    assert miss(X, np.asarray(lv)[0], cond) > 1e-6
+    assert miss(X, np.asarray(lv)[0], cond) > 1e-9
     X, lv, cond = solve_2d._chain_split(np, T, valid, 40.0)
     assert miss(X, np.asarray(lv)[0], cond) < 1e-13
     if jit:
