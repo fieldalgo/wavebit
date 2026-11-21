@@ -169,7 +169,8 @@ generator (`rayleigh-points.md` §§8–9). Where exceptional points coincide or
 the pairs merge into a defective cluster of three to eight modes, which both builders rebuild
 as a whole (`solve_2d.py::_rebuild_defective_clusters`; on the first-order split
 `solve_2d_first_order.py::_regular_clusters`, within each direction), eagerly and under every
-trace, with a check of its own; a Jordan chain of length three in three levels, eagerly
+trace, with a check of its own; a Jordan chain of length three, which no two-level split
+represents, is rebuilt in three levels (`rayleigh-points.md` §8, *A chain in three levels*), eagerly
 (derivatives included, `solve_2d.py::_chain_split`) and under a trace (values, fields and
 their derivatives, `solve_2d.py::_chain_split_traced`, the exponential's tangent
 `modal_gradient.py::_frechet_chain_terms`). Clusters no rebuild takes (more than
