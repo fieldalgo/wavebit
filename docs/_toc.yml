@@ -166,6 +166,7 @@ subtrees:
               - file: validation/rcwa/backend-choice
               - file: validation/rcwa/bessel-j1
               - file: validation/rcwa/half-space-power-audit
+              - file: validation/rcwa/metalens-library-cost
               - file: validation/rcwa/normal-field-known-limits
               - file: validation/rcwa/nvf-affine-cells
               - file: validation/rcwa/nvf-affine-convergence
