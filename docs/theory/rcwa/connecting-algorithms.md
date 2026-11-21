@@ -972,7 +972,7 @@ And on §10's own scene with its `eps = 25` block made the double negative `(-25
 permittivities `[1, X, 1, X, X, X]` over 2000 nm, 100 nm thick, on a half-space of `X`,
 `truncation_order = 30`, 900 nm -- where the wide block rests on its own medium:
 
-| `|ETM - SMM|`, all amplitudes | TE | TM | conical, `phi = 0.3` |
+| `\|ETM - SMM\|`, all amplitudes | TE | TM | conical, `phi = 0.3` |
 |---|---|---|---|
 | `theta = 0.5`, before | 6.6e-07 | 1.0e-05 | 1.4e-05 |
 | `theta = 0.5`, after | 1.2e-14 | 5.5e-15 | 6.4e-14 |
@@ -985,7 +985,7 @@ permittivities `[1, X, 1, X, X, X]` over 2000 nm, 100 nm thick, on a half-space 
 |---|---|---|
 | no double-negative region (every layer before this section) | Maystre's cut, capped (§10) | decaying; tie `Im(q) <= 0` |
 | uniform double negative | the **mirror**, `Re(q) + Im(q) > 0`, capped | decaying; tie `Im(q) >= 0` |
-| patterned, holding a double-negative region | **per mode**: propagation-dominated (`|Im q| > |Re q|`) with resolvable flux, the root whose flux is positive; otherwise the decaying root; capped | decaying; tie broken by the flux |
+| patterned, holding a double-negative region | **per mode**: propagation-dominated (`\|Im q\| > \|Re q\|`) with resolvable flux, the root whose flux is positive; otherwise the decaying root; capped | decaying; tie broken by the flux |
 
 SMM's column is its cascade's, and its field state reads no labels (§10, "SMM's field state walks
 the gap").

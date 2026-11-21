@@ -139,7 +139,7 @@ flags, no source edits — and returns the same value as eager.
 | blocker 2 (`linalg.eig` stride) | fails | passes |
 | blocker 4 (backward complex view) | fails | passes |
 | full Wavebit solve, compiled | fails | passes, `diff = 0.0` |
-| compiled `.backward()` | fails | passes, `max|Δgrad| ≤ 8.5e-20` |
+| compiled `.backward()` | fails | passes, `max\|Δgrad\| ≤ 8.5e-20` |
 
 Those two "passes" were measured at `8257e2c`, before `modal_gradient.py` existed (it was created
 by `8ac44120`, 2026-09-29). They are no longer true of a compiled wavebit: once the modal

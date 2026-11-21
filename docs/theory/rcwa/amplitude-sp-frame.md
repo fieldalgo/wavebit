@@ -72,7 +72,7 @@ appears only at the two ends. So:
 
 | quantity | sees it? | why |
 | --- | --- | --- |
-| `R`, `T`, `R_s`, `R_p`, `T_s`, `T_p` | no | `|r|**2` |
+| `R`, `T`, `R_s`, `R_p`, `T_s`, `T_p` | no | `\|r\|**2` |
 | energy conservation | no | same |
 | the reconstructed field | no | basis vectors and coefficients reverse together |
 | RETICOLO / fmmax / S4 goldens | no | all compare efficiencies, or fields, or 1D amplitudes |
