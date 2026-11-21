@@ -62,7 +62,15 @@ polygonization or intermediate raster is used.
 
 The actual clipping combinatorics can change. At generic vertex/cell contacts,
 the area and its first derivative have their geometric limits. Coincident
-parallel edges can instead have different one-sided slopes. There is no claim
+parallel edges can instead have different one-sided slopes. An edge lying on
+a cell face takes the one-sided derivative for an increasing coordinate, in
+the cell above the face, on every backend: a vertex within 64 rounding units
+of a face is placed on it, keeping its tangent in the cell above and none in
+the cell below. Until 2026-11 such an edge carried its tangent into both
+cells, and the total-area derivative read twice the side on a grid whose
+faces the edges hit exactly, and something between, varying by backend, on
+one whose faces sit a rounding off them
+(`tests/fdtd/test_fd_clip_face_contact.py`). There is no claim
 of globally C1 sharp geometry or general higher derivatives. The measurements
 on this page use zero smoothing. Positive `shape_smoothing` now uses
 [exact translated-polygon moments](fdtd-rotation-smoothing.md); its separate
