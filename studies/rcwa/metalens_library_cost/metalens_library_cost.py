@@ -20,13 +20,21 @@ amplitude (reference planes at the two faces of the pillar layer for both solver
 wall time of one solve as the median of ``REPEATS`` calls after one untimed call. For the jit
 rows the untimed call is the compilation, and its time is printed beside the row.
 
+A second part, ``--part resolution``, holds the truncation at 289 orders and the diameter at
+150 nm and refines what each solver is given instead: Wavebit's normal-field grid
+(``shape_nvf_grid_size`` 512, 1024, 2048) and fmmax's raster (128, 256, 512 pixels a side,
+``JONES_DIRECT``). It asks whether the phase the two solvers disagree by is an input-resolution
+effect.
+
 The two halves run in different environments, because fmmax pins its own JAX. Neither half
 imports the other's package:
 
     python studies/rcwa/metalens_library_cost/metalens_library_cost.py --solver wavebit
     python studies/rcwa/metalens_library_cost/metalens_library_cost.py --solver fmmax
+    python studies/rcwa/metalens_library_cost/metalens_library_cost.py --solver wavebit --part resolution
+    python studies/rcwa/metalens_library_cost/metalens_library_cost.py --solver fmmax --part resolution
 
-Run from the repository root. The two printed logs, concatenated, are
+Run from the repository root. The four printed logs, concatenated in that order, are
 ``studies/rcwa/metalens_library_cost/records/metalens_library_cost.log``.
 """
 
@@ -97,7 +105,19 @@ def row(label, orders, transmittance, amplitude, seconds, first):
 HEADER = ('    solver                     orders   T          phase (rad)   time (s)   first call (s)')
 
 
-def run_wavebit():
+RESOLUTION_ORDER = 8
+RESOLUTION_DIAMETER = 150.0
+NVF_GRIDS = (512, 1024, 2048)
+RASTERS = (128, 256, 512)
+RESOLUTION_HEADER = '    solver                     input            T            phase (rad)'
+
+
+def resolution_row(label, setting, transmittance, amplitude):
+    phase = float(np.angle(amplitude)) % (2*np.pi)
+    print(f'    {label:26s} {setting:14s}   {transmittance:.8f}   {phase:.7f}', flush=True)
+
+
+def run_wavebit(part):
     from wavebit import Lattice, Material, Units, eps_from_refractive_index, rcwa
 
     environment(('wavebit', 'numpy', 'scipy'))
@@ -114,6 +134,19 @@ def run_wavebit():
                                        sources=(rcwa.PlaneWave(polarization='s'),)),
         )
 
+    if part == 'resolution':
+        print(f'\ninput resolution, diameter {RESOLUTION_DIAMETER:.0f} nm, '
+              f'{(2*RESOLUTION_ORDER+1)**2} orders')
+        print(RESOLUTION_HEADER)
+        for grid in NVF_GRIDS:
+            numerics = rcwa.Numerics(orders=(RESOLUTION_ORDER, RESOLUTION_ORDER),
+                                     shape_nvf_grid_size=grid)
+            result = rcwa.run(problem(RESOLUTION_DIAMETER), numerics=numerics)
+            amplitude = complex(np.asarray(
+                result.transmission.order(0, 0).amplitude_ratio_s).reshape(-1)[0])
+            resolution_row('wavebit numpy', f'nvf grid {grid}', float(result.T.sum()), amplitude)
+        return
+
     for diameter in DIAMETERS:
         print(f'\ndiameter {diameter:.0f} nm')
         print(HEADER)
@@ -127,11 +160,11 @@ def run_wavebit():
             row('wavebit numpy', (2*order+1)**2, total, amplitude, seconds, first)
 
 
-def pillar_raster(diameter):
+def pillar_raster(diameter, raster=RASTER):
     """Area-averaged permittivity on the lattice grid of the 120-degree hexagonal cell."""
     a1 = np.array([PITCH, 0.0])
     a2 = np.array([-PITCH/2, PITCH*np.sqrt(3)/2])
-    count = RASTER*SUBSAMPLING
+    count = raster*SUBSAMPLING
     u = (np.arange(count)+0.5)/count-0.5
     grid_u, grid_v = np.meshgrid(u, u, indexing='ij')
     nearest = np.full(grid_u.shape, np.inf)
@@ -141,18 +174,19 @@ def pillar_raster(diameter):
             y = (grid_u+i)*a1[1]+(grid_v+j)*a2[1]
             nearest = np.minimum(nearest, x*x+y*y)
     inside = (nearest <= (diameter/2)**2).astype(float)
-    fill = inside.reshape(RASTER, SUBSAMPLING, RASTER, SUBSAMPLING).mean(axis=(1, 3))
+    fill = inside.reshape(raster, SUBSAMPLING, raster, SUBSAMPLING).mean(axis=(1, 3))
     return 1.0+(N_PILLAR**2-1.0)*fill, a1, a2
 
 
-def run_fmmax():
+def run_fmmax(part):
     import jax
     import jax.numpy as jnp
     jax.config.update('jax_enable_x64', True)
     from fmmax import basis, fields, fmm, scattering
 
     environment(('fmmax', 'jax', 'jaxlib', 'numpy'))
-    print(f'raster {RASTER} x {RASTER}, {SUBSAMPLING} x {SUBSAMPLING} area averaging')
+    if part == 'orders':
+        print(f'raster {RASTER} x {RASTER}, {SUBSAMPLING} x {SUBSAMPLING} area averaging')
 
     def solver(order, formulation, a1, a2):
         vectors = basis.LatticeVectors(u=jnp.asarray(a1), v=jnp.asarray(a2))
@@ -189,6 +223,19 @@ def run_fmmax():
             return (jnp.sum(through).real/power, -jnp.sum(back).real/power, transmitted[zero, 0])
         return solve
 
+    if part == 'resolution':
+        print(f'\ninput resolution, diameter {RESOLUTION_DIAMETER:.0f} nm, '
+              f'{(2*RESOLUTION_ORDER+1)**2} orders')
+        print(RESOLUTION_HEADER)
+        for raster in RASTERS:
+            grid, a1, a2 = pillar_raster(RESOLUTION_DIAMETER, raster)
+            solve = jax.jit(solver(RESOLUTION_ORDER, fmm.Formulation.JONES_DIRECT, a1, a2))
+            through, back, amplitude = jax.block_until_ready(solve(jnp.asarray(grid, dtype=complex)))
+            assert abs(float(through)+float(back)-1.0) < 1e-3
+            resolution_row('fmmax jones_direct jit', f'raster {raster}', float(through),
+                           complex(amplitude))
+        return
+
     formulations = (('fft', fmm.Formulation.FFT), ('jones_direct', fmm.Formulation.JONES_DIRECT))
     for diameter in DIAMETERS:
         raster, a1, a2 = pillar_raster(diameter)
@@ -210,5 +257,7 @@ def run_fmmax():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('--solver', choices=('wavebit', 'fmmax'), required=True)
-    {'wavebit': run_wavebit, 'fmmax': run_fmmax}[parser.parse_args().solver]()
+    parser.add_argument('--part', choices=('orders', 'resolution'), default='orders')
+    arguments = parser.parse_args()
+    {'wavebit': run_wavebit, 'fmmax': run_fmmax}[arguments.solver](arguments.part)
     sys.stdout.flush()
