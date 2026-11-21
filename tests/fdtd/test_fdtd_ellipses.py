@@ -105,8 +105,10 @@ def test_circle_limit_and_narrow_full_period_kernels_preserve_gradients(backend,
     p = np.array([.431, -.369, .4])
     def f(p):
         return fractions([p[0], p[1], p[2], p[2], .53], backend, smoothing).reshape(-1)
-    value, jac = value_and_jacobian(f, p, backend)
-    expected, target = value_and_jacobian(lambda p: circle_fractions(p, backend, smoothing).reshape(-1), p, backend)
+    # Eight cotangents at a time: all 80 at once peaked at 10.6 GB under JAX for (1., .8).
+    value, jac = value_and_jacobian(f, p, backend, chunk=8)
+    expected, target = value_and_jacobian(lambda p: circle_fractions(p, backend, smoothing).reshape(-1), p,
+                                          backend, chunk=8)
     np.testing.assert_allclose(value, expected, atol=3e-11)
     np.testing.assert_allclose(jac, target, atol=3e-10)
 

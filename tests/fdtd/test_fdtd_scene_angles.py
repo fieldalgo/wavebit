@@ -19,17 +19,36 @@ def options(**changes):
                      backend='numpy', truncation_order=0, theta=.3, tetm='te', align_layers=True), **changes)
 
 
-def value_and_jacobian(function, value, backend):
+def value_and_jacobian(function, value, backend, chunk=None):
+    """Value and reverse-mode Jacobian of a real vector function.
+
+    ``chunk`` pulls the output cotangents back that many at a time instead of all at once:
+    the same reverse-mode products, with memory bounded by ``chunk`` copies of the
+    backward intermediates rather than one per output. A period-wide smoothing kernel
+    pulled back over all 80 cells of `test_fdtd_ellipses.py` peaked at 10.6 GB under JAX.
+    """
     if backend == 'jax':
         jax = pytest.importorskip('jax')
         jax.config.update('jax_enable_x64', True)
         # Return a real vector so reverse mode checks phase as well as power.
-        return jax.jit(lambda p: (function(p), jax.jacrev(function)(p)))(value)
+        if chunk is None:
+            return jax.jit(lambda p: (function(p), jax.jacrev(function)(p)))(value)
+
+        def chunked(p):
+            output, pullback = jax.vjp(function, p)
+            basis = jax.numpy.eye(output.shape[0], dtype=output.dtype)
+            return output, jax.lax.map(lambda e: pullback(e)[0], basis, batch_size=chunk)
+        return jax.jit(chunked)(value)
     torch = pytest.importorskip('torch')
     parameter = torch.tensor(value, dtype=torch.float64, requires_grad=True)
     output = function(parameter)
-    derivative = torch.autograd.functional.jacobian(function, parameter, vectorize=True)
-    return output.detach().numpy(), derivative.detach().numpy()
+    if chunk is None:
+        derivative = torch.autograd.functional.jacobian(function, parameter, vectorize=True)
+        return output.detach().numpy(), derivative.detach().numpy()
+    basis = torch.eye(output.shape[0], dtype=output.dtype)
+    rows = [torch.autograd.grad(output, parameter, basis[i:i+chunk], retain_graph=True,
+                                is_grads_batched=True)[0] for i in range(0, len(basis), chunk)]
+    return output.detach().numpy(), torch.cat(rows).detach().numpy()
 
 
 @pytest.mark.parametrize('theta', [-.01, np.pi/2, np.inf, np.nan, .2j, [.2], True])
