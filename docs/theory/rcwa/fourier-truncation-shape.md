@@ -183,10 +183,11 @@ again.
 ## Reproducing
 
 ```bash
-conda run -n wavebit python studies/rcwa/benchmark_truncation_shape/benchmark_truncation_shape.py
+python studies/rcwa/benchmark_truncation_shape/benchmark_truncation_shape.py
 ```
 
-Run it from the repo root. `main()` takes `max_order_ref`, the structure list, the factorization
-modes and `plot=<path>`; the low-contrast control is the same call with `n_ridge=1.5` and
-`modes=('laurent',)`. The full sweep above is about 25 minutes and peaks near 2.5 GB at
+Run it from the repo root in a configured environment (see the
+[source checkout guide](../../development/source-checkout.md)). `main()` takes `max_order_ref`,
+the structure list, the factorization modes and `plot=<path>`; the low-contrast control is the
+same call with `n_ridge=1.5` and `modes=('laurent',)`. The full sweep above is about 25 minutes and peaks near 2.5 GB at
 `max_order_ref=20`.
