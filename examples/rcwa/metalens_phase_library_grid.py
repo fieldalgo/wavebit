@@ -12,8 +12,9 @@ Design decisions, and what they leave out:
   the normal-incidence script and the rest shows what that table does not cover. A pitch
   designed for 532 nm at normal incidence is not single-order elsewhere: the substrate gains a
   second propagating order at 17.2 degrees (azimuth 90) or 20.7 degrees (azimuth 0) at 532 nm,
-  and at 1.4 or 1.6 degrees at 450 nm; at 633 nm it stays single-order to 38.9 degrees. Lighting from the substrate side would not change this:
-  the in-plane wavevector, and so the set of propagating orders, is the same.
+  and at 1.4 or 1.6 degrees at 450 nm; at 633 nm it stays single-order to 38.9 degrees.
+  Lighting from the substrate side would not change this: the in-plane wavevector, and so
+  the set of propagating orders, is the same.
 * Both indices are constants. The wavelength dependence printed here is therefore geometric
   only (the same pillar measured in a different wavelength); material dispersion is not in it.
 * Each entry is still one infinite periodic array. Placing pillars from the table (the local
