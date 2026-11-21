@@ -48,9 +48,9 @@ python -m sphinx -W -b html -D language=ko docs docs/_build/ko
 Complete Korean Markdown overlays live under `docs/locales/ko/pages/`, at the same relative
 path as the English page they translate. An overlay replaces that page's whole source in the
 Korean build only; English pages remain canonical, and every relative link, image and include
-in an overlay resolves from the English page's location. The homepage, all forty imported course
-chapters and most maintained pages have overlays; the directory itself is the authority for which
-pages are covered. Sphinx gettext catalogs under `docs/locales/ko/LC_MESSAGES/` remain for a page
+in an overlay resolves from the English page's location. Every page of the site has an overlay; the
+directory itself is the authority for which pages are covered, and a new English page gets its
+overlay in the same change. Sphinx gettext catalogs under `docs/locales/ko/LC_MESSAGES/` remain for a page
 translated passage by passage; a page with neither shows an explicit English-fallback notice, so
 every page remains usable. Localized SVG and PNG assets live under `docs/locales/ko/assets/` with
 the same canonical relative paths. The source-read extension selects them without changing
