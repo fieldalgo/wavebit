@@ -1,0 +1,44 @@
+# 학습 자료와 라이선스 고지
+
+개념 설명용 SVG 그림과 상호작용 교육 코드는 이 프로젝트에서 작성했습니다. 수치 그림은 원래의 결과를 유지합니다. 반입하면서 원래의 문서 도구와 브라우저 자산의 라이선스 고지를 보존했습니다. 기록된 버전은 원본 사이트의 것이며, 이 체크아웃에 설치된 버전이라는 주장이 아닙니다.
+
+- {download}`Bootstrap-5.3.3-LICENSE.txt <../_static/learning/notices/Bootstrap-5.3.3-LICENSE.txt>`
+- {download}`Font-Awesome-7.2.0-LICENSE.txt <../_static/learning/notices/Font-Awesome-7.2.0-LICENSE.txt>`
+- {download}`accessible-pygments-LICENSE <../_static/learning/notices/accessible-pygments-LICENSE>`
+- {download}`alabaster-LICENSE.txt <../_static/learning/notices/alabaster-LICENSE.txt>`
+- {download}`babel-LICENSE <../_static/learning/notices/babel-LICENSE>`
+- {download}`beautifulsoup4-AUTHORS <../_static/learning/notices/beautifulsoup4-AUTHORS>`
+- {download}`beautifulsoup4-LICENSE <../_static/learning/notices/beautifulsoup4-LICENSE>`
+- {download}`certifi-LICENSE <../_static/learning/notices/certifi-LICENSE>`
+- {download}`charset-normalizer-LICENSE <../_static/learning/notices/charset-normalizer-LICENSE>`
+- {download}`click-LICENSE.txt <../_static/learning/notices/click-LICENSE.txt>`
+- {download}`docutils-BSD-0-Clause.txt <../_static/learning/notices/docutils-BSD-0-Clause.txt>`
+- {download}`docutils-BSD-2-Clause.txt <../_static/learning/notices/docutils-BSD-2-Clause.txt>`
+- {download}`docutils-COPYING.txt <../_static/learning/notices/docutils-COPYING.txt>`
+- {download}`docutils-gpl-3-0.txt <../_static/learning/notices/docutils-gpl-3-0.txt>`
+- {download}`idna-LICENSE.md <../_static/learning/notices/idna-LICENSE.md>`
+- {download}`imagesize-LICENSE.txt <../_static/learning/notices/imagesize-LICENSE.txt>`
+- {download}`jinja2-LICENSE.txt <../_static/learning/notices/jinja2-LICENSE.txt>`
+- {download}`markdown-it-py-LICENSE <../_static/learning/notices/markdown-it-py-LICENSE>`
+- {download}`markdown-it-py-LICENSE.markdown-it <../_static/learning/notices/markdown-it-py-LICENSE.markdown-it>`
+- {download}`markupsafe-LICENSE.txt <../_static/learning/notices/markupsafe-LICENSE.txt>`
+- {download}`mdit-py-plugins-LICENSE <../_static/learning/notices/mdit-py-plugins-LICENSE>`
+- {download}`mdurl-LICENSE <../_static/learning/notices/mdurl-LICENSE>`
+- {download}`myst-parser-LICENSE <../_static/learning/notices/myst-parser-LICENSE>`
+- {download}`packaging-LICENSE <../_static/learning/notices/packaging-LICENSE>`
+- {download}`packaging-LICENSE.APACHE <../_static/learning/notices/packaging-LICENSE.APACHE>`
+- {download}`packaging-LICENSE.BSD <../_static/learning/notices/packaging-LICENSE.BSD>`
+- {download}`pydata-sphinx-theme-LICENSE <../_static/learning/notices/pydata-sphinx-theme-LICENSE>`
+- {download}`pygments-AUTHORS <../_static/learning/notices/pygments-AUTHORS>`
+- {download}`pygments-LICENSE <../_static/learning/notices/pygments-LICENSE>`
+- {download}`pyyaml-LICENSE <../_static/learning/notices/pyyaml-LICENSE>`
+- {download}`requests-LICENSE <../_static/learning/notices/requests-LICENSE>`
+- {download}`roman-numerals-LICENCE.txt <../_static/learning/notices/roman-numerals-LICENCE.txt>`
+- {download}`snowballstemmer-COPYING <../_static/learning/notices/snowballstemmer-COPYING>`
+- {download}`soupsieve-LICENSE.md <../_static/learning/notices/soupsieve-LICENSE.md>`
+- {download}`sphinx-LICENSE.txt <../_static/learning/notices/sphinx-LICENSE.txt>`
+- {download}`sphinx-design-LICENSE <../_static/learning/notices/sphinx-design-LICENSE>`
+- {download}`sphinx-external-toc-LICENSE <../_static/learning/notices/sphinx-external-toc-LICENSE>`
+- {download}`sphinx-multitoc-numbering-LICENSE <../_static/learning/notices/sphinx-multitoc-numbering-LICENSE>`
+- {download}`sphinxcontrib-jsmath-LICENSE <../_static/learning/notices/sphinxcontrib-jsmath-LICENSE>`
+- {download}`urllib3-LICENSE.txt <../_static/learning/notices/urllib3-LICENSE.txt>`
