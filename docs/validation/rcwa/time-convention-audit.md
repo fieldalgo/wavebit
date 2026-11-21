@@ -30,7 +30,7 @@ with `Re(kz) + Im(kz) > 0`, and `_off_principal_branch` is gone; see
 [branch-cuts.md §8](../../theory/rcwa/branch-cuts.md#8-maystres-cut-2026-10-02). A re-walk of §3 found three
 problems with this audit's half-space finding.
 
-* §3's "`A = B = D` on every row" does not reproduce on the two lossless-substrate rows.
+* §3's "`A = B = D` on every row" does not reproduce on the 52° and 75° lossless-substrate rows.
   Path A lands on the growing root there, while B, D and C all land on the decaying one.
 * The closed form §3 shipped is path A's segment, not the path D it names as the mandate.
 * Limiting absorption, path C, is exactly Maystre's cut. It is not the odd one out: it agrees
@@ -171,7 +171,7 @@ always taking whichever of `±sqrt` was nearer the previous step — no priority
 Result, on seven configurations spanning lossless and absorbing substrates. `A = B = D` on
 every row, so they are one column; `=` means "the same root as the shipped rule".
 
-> **Re-walked 2026-10-02: the merged column does not reproduce.** On the two lossless-substrate
+> **Re-walked 2026-10-02: the merged column does not reproduce.** On the 52° and 75° lossless-substrate
 > rows only path A reaches the root in the table. B and D (and C) reach `−0.397235+0.695107j`
 > and `−0.388775+1.080525j`, the decaying roots. That is also Maystre's cut, which the solver
 > has taken since that date. The walker code behind this table is not in the repository. The

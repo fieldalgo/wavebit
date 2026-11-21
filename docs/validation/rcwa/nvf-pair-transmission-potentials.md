@@ -452,8 +452,8 @@ reference modes in three sectors and all four corner orientations at radii
 potential and both Cartesian gradient components. Complete potential finite
 differences also verify arbitrary mixed polynomial/transmission coordinates
 at degrees 5 and 6 and on a refined degree-5 mesh, retaining the original
-3e-9 derivative bound. Separate moving-field differences cover all four
-supported degrees, including collapsing triangles.
+3e-9 derivative bound. Separate moving-field differences cover degrees 3
+through 6, including collapsing triangles.
 
 The compensated common-coordinate sampler also accepts a moving barycentric
 sample. It differentiates each sector's harmonic homogeneous potential,

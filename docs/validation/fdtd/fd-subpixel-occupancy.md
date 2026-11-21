@@ -231,8 +231,8 @@ about a radius-0.25 sphere per row, one sub-cell jitter each, all three axes:
 
 The mean falls like `h`, first order; the worst barely falls at all, because a cell whose
 corner the plane misses is wrong by a finite fraction of the cell at any resolution. The
-research operator's measured convergence orders -- 2.137819 on the cylinder, 2.063617 and
-2.057240 on the glass and weak spheres, 2.468123 percent on the small high-index sphere --
+research operator's measured convergence orders and error -- 2.137819 on the cylinder, 2.063617 and
+2.057240 on the glass and weak spheres, an error of 2.468123 percent on the small high-index sphere --
 were every one of them taken with the exact forms, so substituting the plane silently
 would invalidate all of them while still returning a plausible number.
 
@@ -732,7 +732,7 @@ the file's 31 cases.
 ## S2b: how few cells across a smoothed body may be (2026-09-26)
 
 *The energy certificate this section measures was replaced on 2026-09-27 by the star lift
-(the last section); its refusals are history. The door's numbers are the unlifted rule's, which
+(its section below); its refusals are history. The door's numbers are the unlifted rule's, which
 the star lift leaves unchanged on every `eps <= 12` sphere measured.*
 
 Run before the cells-across door (stage 4, C5). The plan first meant to set that number from
@@ -938,7 +938,7 @@ refused as crossing 1, the exact comparison restored 2, a body's rows claiming a
 
 ## C5: the cells-across door, and where the certificate refuses (2026-09-26)
 
-*The certificate was replaced on 2026-09-27 by the star lift (the last section): the plan no
+*The certificate was replaced on 2026-09-27 by the star lift (its section below): the plan no
 longer refuses on it, and its table below is history.*
 
 S2b above set the door: a smoothed body under **4** cells across its smallest extent is refused

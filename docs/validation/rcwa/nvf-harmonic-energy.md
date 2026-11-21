@@ -227,7 +227,7 @@ adequate integration grid, rejection of an aliasing grid, and rejection of a
 failed corrector solve. They do not turn the unresolved convergence findings
 into passing physics gates. Selected packaged output is retained in
 [`studies/rcwa/nvf_harmonic_energy/records/nvf_harmonic_energy.log`](../../../studies/rcwa/nvf_harmonic_energy/records/nvf_harmonic_energy.log).
-The H=15/63 rows above come from the local prototype; the H=127/255 rows use the
+The H=15/31/63 rows above come from the local prototype; the H=127/255 rows use the
 packaged study. The latter uses a smaller adequate evaluation grid and Wavebit's
 layer eigensolve. Forward values match the prototype to about 1e-12; the 1e-6
 secants amplify the remaining solver roundoff.
