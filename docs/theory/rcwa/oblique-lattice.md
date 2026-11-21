@@ -30,7 +30,7 @@ from wavebit.compat import legacy as wavebit
 
 solver = wavebit.rcwa(
     backend='numpy', structure=cell, truncation_order=dict(x=10, y=10), thickness=[300.0], wavelength=900.0,
-    factorization='nvf',                       # required — see "What is refused"
+    factorization='nvf',                       # required — see "What works and what is refused"
     lattice=wavebit.Lattice.hexagonal(400.0),          # or lattice=np.column_stack((a1, a2))
 )
 ```
@@ -378,7 +378,7 @@ answers: the check compares the basis matrices, not the keywords, and `period=[6
 the same cell. And declaring costs nothing when it agrees — 0.420214 either way, since the
 wrapper is taken apart at ingest and no array downstream ever sees the type.
 
-The rule underneath all twelve rows fits in a line: **a raster belongs to a cell and an
+The rule underneath all twelve rows fits in a line: **a raster belongs to a cell and a
 parametric structure does not.** The refusals are the places that sentence is enforced.
 
 ## What it buys
@@ -622,7 +622,7 @@ Sweeping the pillar diameter from 80 to 260 nm gives a usable library — phase 
 a worst transmission of 0.936. The whole sweep takes 14 s.
 
 Cross-checked against S4 on the same structure, which is the useful part: at D = 150 nm S4
-converges to 0.96675 against Wavebit's 0.96643 (3.5e-4), and at D = 240 nm to 0.99694 against
+converges to 0.96675 against Wavebit's 0.96643 (3.2e-4), and at D = 240 nm to 0.99694 against
 0.99905 (2.1e-3) while still climbing. Both gaps are S4's own convergence — and Wavebit is
 already at its final value with 289 orders, where S4 has not settled at 595. That is the
 staircase-free shape transform and NVF together, not the lattice.

@@ -124,7 +124,7 @@ Read the tensor straight off:
 ```
 
 **The slot holds the negative.** This agrees with `_nvf_assemble`, which returns
-`(eps_xx, eps_yy, inv(⟦eps⟧), -eps_xy, -eps_xy)` — the negation is applied there, on the way in,
+`(eps_xx, eps_yy, inv(⟦eps⟧), -eps_xy, -eps_yx)` — the negation is applied there, on the way in,
 and every consumer downstream has been written against it ever since.
 
 (That tuple was ordered `(eps_xx, eps_yy, -eps_xy, -eps_xy, inv(⟦eps⟧))` when this document was
@@ -247,11 +247,11 @@ Compute `Omega_L = Omega2_LR @ inv(Omega_R)` symbolically and the mismatch shows
 At normal incidence, with scalar entries:
 
 ```
-                                 ┌                                             ┐
-                             1   │ epx (epyx - epxy)      -epx epy + epxy²     │
-     Omega_L =  ─────────────── ·│                                             │
+                                     ┌                                         ┐
+                         1           │ epx (epyx - epxy)    -epx epy + epxy²   │
+     Omega_L =  ─────────────────── ·│                                         │
                 epx epy - epxy epyx  │ epx epy - epyx²      epy (epyx - epxy)  │
-                                 └                                             ┘
+                                     └                                         ┘
 ```
 
 For `Omega_L` to be geometry-only, its diagonal must vanish, which requires
@@ -365,7 +365,7 @@ Two corrections this pass forced:
 * **Power efficiencies do discriminate here.** §3 shows the *sign* error hiding from R and T, and
   that remains true — but it is a statement about a mirrored optic axis, not about the ordering
   defect. For an asymmetric tensor the efficiencies are simply wrong, which makes the discriminator
-  convention-free and much easier to check than the amplitude argument in §6.
+  convention-free and much easier to check than the amplitude argument in §3.
 * **Onsager reciprocity does not discriminate.** `T(-g) = T(g)^T` holds to 5.7e-16 for the shipped
   code as well as the exchanged one. A plausible-looking symmetry check passes on the wrong answer.
 

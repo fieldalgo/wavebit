@@ -30,7 +30,7 @@ from wavebit.compat import legacy as wavebit
 
 solver = wavebit.rcwa(
     backend='numpy', structure=cell, truncation_order=dict(x=10, y=10), thickness=[300.0], wavelength=900.0,
-    factorization='nvf',                       # required — see "What is refused"
+    factorization='nvf',                       # required — see "What works and what is refused"
     lattice=wavebit.Lattice.hexagonal(400.0),          # or lattice=np.column_stack((a1, a2))
 )
 ```
@@ -578,7 +578,7 @@ Khorasaninejad 등, Science **352**, 1190 (2016)의 기하 계열입니다. 이 
 0.936입니다. 스윕 전체에 14 s가 걸립니다.
 
 같은 구조에서 S4와 교차 검사했으며, 이것이 유용한 부분입니다: D = 150 nm에서 S4는 Wavebit의 0.96643에
-대해 0.96675로 수렴하고(3.5e-4), D = 240 nm에서는 0.99905에 대해 0.99694이며(2.1e-3) 아직 올라가는
+대해 0.96675로 수렴하고(3.2e-4), D = 240 nm에서는 0.99905에 대해 0.99694이며(2.1e-3) 아직 올라가는
 중입니다. 두 차이 모두 S4 자체의 수렴 때문입니다 — Wavebit은 289개 차수에서 이미 최종 값에 있고, S4는
 595개에서도 안정되지 않았습니다. 이것은 격자가 아니라 계단 근사 없는 형상 변환과 NVF가 함께 만든 결과입니다.
 

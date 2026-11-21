@@ -149,7 +149,7 @@ The contract, in order of importance:
   of the removed `perturbation` knob, which nudged every solve, silently, by an amount
   too small to help.
 - **Gradients survive.** The knobs are multiplied, not replaced, so a differentiable
-  `wavelength`/`theta` keeps its autodiff graph through the retry (pinned:`jax.grad`
+  `wavelength`/`theta` keeps its autodiff graph through the retry (pinned: `jax.grad`
   through the refused point returns a finite, nonzero thickness gradient). The gradient
   returned is the nearby problem's — which is also the only one that exists, since the
   exact point is a cusp of `R(lambda)`.
@@ -576,7 +576,7 @@ formulations, re-measured", which is a run on `aadbc351`.
 **What it was.** The 2D path diagonalises each layer's product `Omega2 = Omega_L Omega_R`. Where
 two of its eigenvalues form a 2x2 Jordan block (an exceptional point, EP) `eig` returns two
 columns that are each accurate to the unit round-off `u` but meet at a sine `s` of
-1e-8..1e-6: `(Omega2 - w) ` has one singular value at 1e-16 and the next at 4e-3..7e-2, and the
+1e-8..1e-6: `(Omega2 - w)` has one singular value at 1e-16 and the next at 4e-3..7e-2, and the
 eigenvalues split by `sqrt(u)`-sized amounts (1e-9..5e-8). Each column still satisfies both
 first-order relations to 1e-15; what breaks is the basis: `cond(W)` 6e6..1.6e8, and the
 interface inverses amplify rounding by about `1/s**2` -- measured `K u / s**2` with `K <= 1e-2`
@@ -1244,7 +1244,7 @@ are now added (`_frechet_chain_terms`):
   a selection and every lane forms them. Only values enter the branch: the selection passes the
   branch's operands through `stop_gradient`, which reverse mode cannot transpose on a tangent,
   so with the direction `E` inside, `jax.grad` of a sum over `jax.vmap` raised
-  `NotImplementedError` (§5's *Why not a `lax.cond`* meets the same trap with a solve). `E` is
+  `NotImplementedError` (§7's *Why not a `lax.cond`* meets the same trap with a solve). `E` is
   contracted outside, and where no middle is, a negative zero is added, which leaves every bit
   of the one-step form. The contraction sits between optimization barriers
   (`lax.optimization_barrier`): without them XLA rescheduled the one-step form's sums around it,

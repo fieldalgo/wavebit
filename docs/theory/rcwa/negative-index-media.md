@@ -1849,7 +1849,7 @@ followed is named by commit title, since its ids change if the branch is rebased
    the factor's real part, not on the round-off of its root's `Re + Im`, which had decided the
    cut's tie by backend (§6); `refractive_index_from_eps` takes the lip a signed zero names on JAX
    too (§15); and corrections to this page -- the mirror symmetry is Lakhtakia's, which Grunhut and
-   Depine cite; §12's scene has one first order propagating; PyMoosh is not the only code lit
+   Depine cite; §9's scene has one first order propagating; PyMoosh is not the only code lit
    from a double negative; the gaps between `cmath` and NumPy are one or two ulp.
 
 ---
