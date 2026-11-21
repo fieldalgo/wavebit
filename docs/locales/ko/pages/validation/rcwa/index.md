@@ -6,6 +6,7 @@
 
 - [미분하는 실행의 백엔드 선택 — 측정](backend-choice.md)
 - [모든 백엔드가 쓰는 Bessel $J_1$과 두 상수가 그 값인 이유 — 측정](bessel-j1.md)
+- [초격자로 푼 기둥 편향기: 국소 주기 근사와 엄밀한 효율의 차이, 그리고 경사 상승이 되찾는 양 — 측정](deflector-supercell.md)
 - [복소 반공간의 경계 조건과 전력 점검](half-space-power-audit.md)
 - [기둥 위상 라이브러리의 한 점에 드는 비용과, 같은 배열에서 fmmax가 내는 값 — 측정](metalens-library-cost.md)
 - [법선장의 알려진 한계](normal-field-known-limits.md)

@@ -165,6 +165,7 @@ subtrees:
             - entries:
               - file: validation/rcwa/backend-choice
               - file: validation/rcwa/bessel-j1
+              - file: validation/rcwa/deflector-supercell
               - file: validation/rcwa/half-space-power-audit
               - file: validation/rcwa/metalens-library-cost
               - file: validation/rcwa/normal-field-known-limits
