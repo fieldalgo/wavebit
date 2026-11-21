@@ -33,9 +33,8 @@ A metalens design looks up one complex number per pillar: the zero-order transmi
 of the periodic array that pillar would belong to. The table is cheap or expensive according
 to two things: what one point costs, and how many orders that point needs before its phase
 stops moving. This page measures both on the array of the
-[worked case](../../theory/rcwa/oblique-lattice.md#a-worked-case-a-visible-metalens-phase-library),
-and runs fmmax on the same array so that the numbers have something outside this repository
-beside them.
+[worked case on the oblique-lattice page](../../theory/rcwa/oblique-lattice.md), and runs fmmax
+on the same array so that the numbers have something outside this repository beside them.
 
 ## Scene and method
 
