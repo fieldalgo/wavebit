@@ -6,6 +6,7 @@ Records written before 2026-10-13 use the solver interface of their day, kept fr
 
 - [Backend choice for a differentiated run — measurements](backend-choice.md)
 - [The Bessel $J_1$ every backend uses, and why its two constants are what they are — measurements](bessel-j1.md)
+- [A pillar deflector solved as a supercell: the local periodic approximation against the rigorous efficiency, and what gradient ascent recovers — measurements](deflector-supercell.md)
 - [Boundary conditions and power in complex half-spaces, audited](half-space-power-audit.md)
 - [What one point of a pillar phase library costs, and what fmmax gives for the same array — measurements](metalens-library-cost.md)
 - [Known limits of the normal field](normal-field-known-limits.md)
