@@ -385,6 +385,55 @@ def clipped_ball_volume(cx, cy, cz, radius, x0, x1, y0, y1, z0, z1, xp):
     return xp.where(near >= radius * radius, zero, xp.where(far <= radius * radius, box, total))
 
 
+#: A vertex this many rounding units of its coordinate from a voxel face is **on** it, to
+#: :func:`_onto_face`. A vertex is a centre plus a rotated half-length (``cos`` and ``sin`` of
+#: the angle, a few rounding units apart between NumPy, PyTorch and XLA), and a face is an
+#: index times a step: placed on a face, the two meet to a few units, never to a voxel.
+_FACE_ULPS = 64
+
+
+def _constant(value, xp):
+    """``value`` with no tangent: ``jax.lax.stop_gradient``, ``detach``, or itself on NumPy."""
+    name = getattr(xp, '__name__', '')
+    if 'jax' in name:
+        import jax
+        return jax.lax.stop_gradient(value)
+    if 'torch' in name:
+        return value.detach()
+    return value
+
+
+def _onto_face(polygon, axis, bound, sign, xp):
+    """``polygon`` with each vertex within :data:`_FACE_ULPS` of the face ``bound`` placed on it.
+
+    The clip below admits a vertex on a face to both voxels that share it (``d >= 0`` on either
+    side), and the shoelace sum then carries that vertex's tangent in both: an edge on the face
+    between two voxels moved the pair's total area at twice its length (an axis-aligned square
+    on the faces of a 0.125 grid: ``d(total)/d(edge)`` 0.75 against its side 0.375, on NumPy
+    central differences 0.375; on a 0.1 grid, whose faces are a rounding off the square's edges,
+    the doubling came and went per edge and per backend). Half-open voxels fix it:
+
+    * on a **lower** face (``sign > 0``) the vertex keeps its tangent and only its value moves,
+      by ``bound - coordinate`` held constant -- exact, the two being this close (Sterbenz);
+    * on an **upper** face (``sign < 0``) the vertex is the face itself, tangent and all, so
+      this voxel's area does not move with it.
+
+    The derivative is then the one-sided one for an increasing coordinate, once, in the voxel
+    above the face. The margin makes the vertex that one backend rounds onto a face and another
+    a unit off it the same vertex on all of them; it moves no vertex by more than it.
+    """
+    coordinate = polygon[..., axis]
+    scale = xp.abs(coordinate) + xp.abs(bound)
+    on = xp.abs(coordinate - bound) <= _FACE_ULPS * xp.finfo(coordinate.dtype).eps * scale
+    if sign > 0:
+        placed = coordinate + _constant(bound - coordinate, xp)
+    else:
+        placed = bound + xp.zeros_like(_constant(coordinate, xp))
+    coordinate = xp.where(on, placed, coordinate)
+    other = polygon[..., 1 - axis]
+    return xp.stack((coordinate, other) if axis == 0 else (other, coordinate), axis=-1)
+
+
 def clipped_polygon_area(vertices, left, right, bottom, top, xp, convex=False):
     """Exact area of a simple polygon inside the axis-aligned box, differentiably.
 
@@ -397,7 +446,9 @@ def clipped_polygon_area(vertices, left, right, bottom, top, xp, convex=False):
     the survivors' cyclic order without a host-side plan, and the safe inactive denominators that
     keep a derivative finite on an edge parallel to a face, are the original's and are unchanged.
     Combinatorics are piecewise; an edge lying exactly on a face is admitted to both neighbours,
-    as there.
+    as there -- with no area in one of them, and since 2026-11 with its tangent in one of them
+    only (:func:`_onto_face`): the voxel above the face, so the derivative is the one-sided one
+    for an increasing coordinate.
 
     On a non-convex polygon Sutherland-Hodgman leaves **degenerate bridge edges** running along
     the clip box's own faces. They carry no area -- each traverses a face line and comes back --
@@ -417,6 +468,7 @@ def clipped_polygon_area(vertices, left, right, bottom, top, xp, convex=False):
     index = xp.arange(cap)
     for axis, bound, sign in ((0, left, 1), (0, right, -1), (1, bottom, 1), (1, top, -1)):
         bound = xp.broadcast_to(bound, shape)
+        polygon = _onto_face(polygon, axis, bound[..., None], sign, xp)
         previous = xp.where(index == 0, count[..., None] - 1, index - 1)
         previous = xp.maximum(previous, xp.zeros_like(previous))
         a = xp.take_along_axis(polygon, xp.broadcast_to(previous[..., None], polygon.shape), axis=-2)
@@ -443,7 +495,10 @@ def clipped_polygon_area(vertices, left, right, bottom, top, xp, convex=False):
     cross = a[..., 0] * b[..., 1] - a[..., 1] * b[..., 0]
     cross = xp.where(index < count[..., None], cross, xp.zeros_like(cross))
     area = .5 * xp.sum(cross, axis=-1)
-    return xp.where(area < 0, xp.zeros_like(area), area)
+    # The source's rounding guard, by a constant: the zero-width piece a vertex on a face leaves
+    # in the voxel above it carries that vertex's tangent (_onto_face) and rounds to -1e-18 as
+    # often as to 0, so a `where` to a literal zero would drop the derivative it exists to keep.
+    return area + _constant(xp.maximum(-area, xp.zeros_like(area)), xp)
 
 
 def polygon_edge_moments(vertices, left, right, bottom, top, xp):

@@ -173,7 +173,7 @@ all 48 complex cells remain in the report. A worker count is not concurrency.
 | Placements and samples | Fractions `0.3` and `0.1`; `s` and `p`; wavelengths `0.9`, `1.0`, `1.1`; complex `r` and `t`. |
 | Base roster | Forty worker runs: five runs for each family/placement/polarization combination. This is a run count, not concurrent execution. |
 | Five runs per combination | `40/base120/PML24`, `80/base120/PML24`, `80/long240/PML24`, `80/long240/PML48`, `160/base120/PML24`. |
-| Reported cells | All 48 family/placement/polarization/wavelength/amplitude cells, including slow, mixed or unresolved classifications. |
+| Reported cells | All 48 family/placement/polarization/wavelength/amplitude cells, including low, mixed or unresolved classifications. |
 | Known-case calibration | Six coarse `p`, fraction `0.3` rows: both families on NumPy, JAX and Torch. Absolute complex-amplitude ceilings were accepted after these rows were disclosed and remain known-case checks. |
 | Reference | Declared continuum materials and geometry in a multilayer reference, checked independently with recursive scattering or single-film Airy controls; no fitted field response. |
 | Sensitivity | Separate time and absorber differences at the middle rung, retained as an empirical proxy under the inherited order rule; not a rigorous fine-grid error bound. |

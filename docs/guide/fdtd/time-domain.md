@@ -2231,7 +2231,7 @@ cannot fit source, monitors and PML, increase `pad_scale`. CPML still counts
 extraction integrates local discrete homogeneous dispersion between each monitor
 and its reference interface. Grading introduces mesh reflections; this phase
 correction does not remove them. Refine resolution, grading, padding and duration
-for new structures. The slab example at resolution40 uses 112 z cells instead
+for new structures. The slab example at resolution 40 uses 112 z cells instead
 of 200; this is a cell-count saving, not a universal speedup guarantee.
 
 Records, user planes, bottom incidence and material differentiation all work with

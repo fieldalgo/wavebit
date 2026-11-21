@@ -1,0 +1,84 @@
+python 3.12.3  Linux x86_64  logical CPUs 4
+cpu Intel(R) Xeon(R) Processor @ 2.10GHz
+wavebit 0.0.5  numpy 2.5.5  scipy 1.18.1
+thread settings library defaults
+
+diameter 150 nm
+    solver                     orders   T          phase (rad)   time (s)   first call (s)
+    wavebit numpy                121   0.966610   3.15073       0.16       0.81
+    wavebit numpy                289   0.966428   3.14733       1.31       1.75
+    wavebit numpy                529   0.966440   3.14737       6.39       6.82
+    wavebit numpy                841   0.966406   3.14994      21.35      22.13
+
+diameter 240 nm
+    solver                     orders   T          phase (rad)   time (s)   first call (s)
+    wavebit numpy                121   0.999075   0.79010       0.16       0.55
+    wavebit numpy                289   0.999049   0.79344       1.38       1.65
+    wavebit numpy                529   0.999043   0.79468       6.43       7.32
+    wavebit numpy                841   0.999042   0.79492      20.79      23.38
+
+python 3.12.3  Linux x86_64  logical CPUs 4
+cpu Intel(R) Xeon(R) Processor @ 2.10GHz
+fmmax 1.7.1  jax 0.12.1  jaxlib 0.12.1  numpy 2.5.5
+thread settings library defaults
+raster 256 x 256, 4 x 4 area averaging
+
+diameter 150 nm
+    solver                     orders   T          phase (rad)   time (s)   first call (s)
+    fmmax fft eager              121   0.967450   3.32416       0.73       6.11
+    fmmax fft jit                121   0.967450   3.32416       0.14       1.28
+    fmmax jones_direct eager     121   0.967389   3.15919       2.58       3.82
+    fmmax jones_direct jit       121   0.967389   3.15919       0.21       3.10
+    fmmax fft eager              289   0.966983   3.26325       2.04       5.87
+    fmmax fft jit                289   0.966983   3.26325       1.31       2.49
+    fmmax jones_direct eager     289   0.966549   3.16046       4.06       4.72
+    fmmax jones_direct jit       289   0.966549   3.16046       1.50       4.75
+    fmmax fft eager              529   0.966796   3.23548       6.01      10.12
+    fmmax fft jit                529   0.966796   3.23548       4.52       5.49
+    fmmax jones_direct eager     529   0.966288   3.16139       8.86       9.47
+    fmmax jones_direct jit       529   0.966288   3.16139       5.84       9.38
+    fmmax fft eager              841   0.966690   3.21719      16.83      21.02
+    fmmax fft jit                841   0.966690   3.21719      13.37      15.86
+    fmmax jones_direct eager     841   0.966334   3.16177      22.17      21.40
+    fmmax jones_direct jit       841   0.966334   3.16177      15.41      18.62
+
+diameter 240 nm
+    solver                     orders   T          phase (rad)   time (s)   first call (s)
+    fmmax fft eager              121   0.990552   0.96815       0.72       0.80
+    fmmax fft jit                121   0.990552   0.96815       0.19       1.42
+    fmmax jones_direct eager     121   0.999026   0.80275       2.67       2.87
+    fmmax jones_direct jit       121   0.999026   0.80275       0.20       3.06
+    fmmax fft eager              289   0.995022   0.91070       1.88       1.94
+    fmmax fft jit                289   0.995022   0.91070       1.19       2.70
+    fmmax jones_direct eager     289   0.998779   0.80659       4.11       4.13
+    fmmax jones_direct jit       289   0.998779   0.80659       1.43       4.15
+    fmmax fft eager              529   0.996689   0.88175       5.58       5.55
+    fmmax fft jit                529   0.996689   0.88175       4.26       6.05
+    fmmax jones_direct eager     529   0.998864   0.80757       8.05       8.43
+    fmmax jones_direct jit       529   0.998864   0.80757       4.98       8.35
+    fmmax fft eager              841   0.997486   0.86441      16.93      17.88
+    fmmax fft jit                841   0.997486   0.86441      13.70      14.65
+    fmmax jones_direct eager     841   0.998902   0.80787      20.81      22.80
+    fmmax jones_direct jit       841   0.998902   0.80787      15.45      18.20
+
+python 3.12.3  Linux x86_64  logical CPUs 4
+cpu Intel(R) Xeon(R) Processor @ 2.10GHz
+wavebit 0.0.5  numpy 2.5.5  scipy 1.18.1
+thread settings library defaults
+
+input resolution, diameter 150 nm, 289 orders
+    solver                     input            T            phase (rad)
+    wavebit numpy              nvf grid 512     0.96642786   3.1473263
+    wavebit numpy              nvf grid 1024    0.96642788   3.1473253
+    wavebit numpy              nvf grid 2048    0.96642788   3.1473250
+
+python 3.12.3  Linux x86_64  logical CPUs 4
+cpu Intel(R) Xeon(R) Processor @ 2.10GHz
+fmmax 1.7.1  jax 0.12.1  jaxlib 0.12.1  numpy 2.5.5
+thread settings library defaults
+
+input resolution, diameter 150 nm, 289 orders
+    solver                     input            T            phase (rad)
+    fmmax jones_direct jit     raster 128       0.96651599   3.1761636
+    fmmax jones_direct jit     raster 256       0.96654872   3.1604642
+    fmmax jones_direct jit     raster 512       0.96654995   3.1549330

@@ -74,7 +74,7 @@ identical adjacent layers preserves all returned order efficiencies under
 2e-11 at a different wavelength and substrate. These are finite-model
 integration controls, not a claim of optical convergence.
 
-The original closure integration record has 29 builder/integration checks and 62 contact,
+In the original closure integration record, 29 builder/integration checks and 62 contact,
 polynomial-body, localized-flux, pose and slot-order checks pass. The 28
 documentation-contract checks also pass. These are 119 distinct checks,
 not a run of the entire repository suite. The recorded command summaries

@@ -121,8 +121,8 @@ failure at exact contact. It is retained as a strict expected-failure research
 gate; production's original split/merge expected failure also remains.
 
 The ratio has a physical explanation. For a thin planar gap in a host, the
-tangential electric field is continuous but the **normal displacement** is
-continuous. If host and gap permittivities are `eh` and `eg`, differentiating a
+tangential electric field is continuous, but in the normal direction the
+**displacement**, not the field, is continuous. If host and gap permittivities are `eh` and `eg`, differentiating a
 series laminate at zero gap gives the local normal constitutive variation
 `eh*(eg-eh)/eg`, while a smooth finite-field material perturbation gives only
 `eg-eh`. Here `eh/eg=12.25`. A shrinking gap carries an O(1) normal-field change

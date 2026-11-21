@@ -319,19 +319,62 @@ def _shape_partition(structure, periods, *, xp, array, check, integration='separ
     return epsilon, mu, edges
 
 
+#: Rounding units of a coordinate within which a vertex is on a cell face (:func:`_onto_cell_face`).
+_CELL_FACE_ULPS = 64
+
+
+def _onto_cell_face(polygon, axis, bound, sign, *, xp):
+    """``polygon`` with each vertex within :data:`_CELL_FACE_ULPS` of the face ``bound`` placed on it.
+
+    The clip admits a vertex on a face to both cells sharing it, and the shoelace sum carried its
+    tangent in both: a square on the faces of a 0.125 grid moved the total area at twice its side
+    (0.75 against 0.375), and on a 0.1 grid -- faces a rounding off the edges, ``left + dx`` beside
+    the next ``left`` -- the doubling and the translation slope came and went by backend (PyTorch,
+    eager JAX and jax.jit three different Jacobians). On a lower face (``sign > 0``) the vertex
+    keeps its tangent and moves by ``bound - coordinate`` held constant (exact by Sterbenz); on
+    an upper face it is the face, tangent and all. The derivative is the one-sided one for an
+    increasing coordinate, in the cell above the face. The twin of
+    ``src/wavebit/fdtd/_shapes/_exact.py::_onto_face``, which this package may not import.
+    """
+    coordinate = polygon[..., axis]
+    scale = xp.abs(coordinate) + xp.abs(bound)
+    on = xp.abs(coordinate - bound) <= _CELL_FACE_ULPS * xp.finfo(coordinate.dtype).eps * scale
+    if sign > 0:
+        placed = coordinate + _no_tangent(bound - coordinate, xp=xp)
+    else:
+        placed = bound + xp.zeros_like(_no_tangent(coordinate, xp=xp))
+    coordinate = xp.where(on, placed, coordinate)
+    other = polygon[..., 1 - axis]
+    return xp.stack((coordinate, other) if axis == 0 else (other, coordinate), axis=-1)
+
+
+def _no_tangent(value, *, xp):
+    """``value`` with no tangent: ``jax.lax.stop_gradient``, ``detach``, or itself on NumPy."""
+    name = getattr(xp, '__name__', '')
+    if 'jax' in name:
+        import jax
+        return jax.lax.stop_gradient(value)
+    if 'torch' in name:
+        return value.detach()
+    return value
+
+
 def _clipped_rectangle_area(vertices, left, right, bottom, top, *, xp, moment_weights=None):
     """Exact clipped area or bilinearly weighted integral with live vertices.
 
     Four half-plane clips can produce at most eight vertices. Stable packing
     keeps their cyclic order without a host geometry plan or detached values.
     Safe inactive denominators prevent NaN derivatives on parallel edges.
-    Combinatorics are piecewise; edge-on-edge contacts may have distinct slopes.
+    Combinatorics are piecewise; edge-on-edge contacts may have distinct slopes. A vertex on a
+    cell face is that face in the cell below it and keeps its tangent in the cell above
+    (:func:`_onto_cell_face`), so an edge on a face moves one cell's area, not both.
     """
     shape = left.shape
     polygon = xp.broadcast_to(xp.concat((vertices, vertices), axis=-2), (*shape, 8, 2))
     count = xp.full(shape, 4, dtype=xp.int64, device=getattr(vertices, 'device', None))
     index = xp.arange(8, device=getattr(vertices, 'device', None))
     for axis, bound, sign in ((0, left, 1), (0, right, -1), (1, bottom, 1), (1, top, -1)):
+        polygon = _onto_cell_face(polygon, axis, bound[..., None], sign, xp=xp)
         previous = xp.where(index == 0, count[..., None]-1, index-1)
         previous = xp.maximum(previous, xp.zeros_like(previous))
         a = xp.take_along_axis(polygon, xp.broadcast_to(previous[..., None], polygon.shape), axis=-2)
@@ -371,7 +414,10 @@ def _clipped_rectangle_area(vertices, left, right, bottom, top, *, xp, moment_we
                        +b[..., 0]*a[..., 1]+2*b[..., 0]*b[..., 1])*cross, axis=-1)/24
         a0, a1, b0, b1 = [moment_weights[..., k] for k in range(4)]
         area = (a0*b0*area+a1*b0*mx+a0*b1*my+a1*b1*mxy)*extent[..., 0]*extent[..., 1]
-    return xp.where(area < 0, xp.zeros_like(area), area)
+    # The rounding guard lifts a negative rounding to 0 by a constant, so the area's own tangent
+    # survives it: the zero-width piece a vertex on a face leaves in the cell above it is where
+    # that vertex's derivative lives (_onto_cell_face), and it rounds to -1e-18 as often as to 0.
+    return area + _no_tangent(xp.maximum(-area, xp.zeros_like(area)), xp=xp)
 
 
 def _translation_windows(centres, width, smoothing):

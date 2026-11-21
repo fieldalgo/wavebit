@@ -154,7 +154,8 @@ ULP 하나만 옮기면 문제는 평범해집니다. 특이점은 물리가 아
 거의 일치하는 곳에서는 쌍들이 모드 세 개에서 여덟 개로 된 결함 클러스터로 합쳐지며, 두 빌더 모두 이를
 통째로 다시 만듭니다(`solve_2d.py::_rebuild_defective_clusters`; 1차 분리에서는
 `solve_2d_first_order.py::_regular_clusters`, 각 방향 안에서). 즉시 실행에서도 모든 트레이스 아래에서도
-그렇게 하며, 자체 검사를 거칩니다. 길이 3인 Jordan 사슬은 세 단계로, 즉시 실행에서는
+그렇게 하며, 자체 검사를 거칩니다. 두 단계 분할로는 나타낼 수 없는 길이 3인 Jordan 사슬은 세 단계로(`rayleigh-points.md` §8,
+*세 단계의 사슬*), 즉시 실행에서는
 (미분 포함, `solve_2d.py::_chain_split`) 그리고 트레이스 아래에서는 (값, 필드와 그 미분,
 `solve_2d.py::_chain_split_traced`, 지수 함수의 접선은
 `modal_gradient.py::_frechet_chain_terms`) 다시 만듭니다. 어떤 재구성도 맡지 않는 클러스터(모드가 여덟 개보다

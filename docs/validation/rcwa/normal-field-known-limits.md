@@ -120,7 +120,7 @@ A 350-wide grating with an internal same-material cutter is additionally checked
 integrated raster Li factorization at orders 1, 3, and 5. At each order, `(n,0)` and `(n,n)`
 transmission agree to the test's 2e-11 absolute tolerance, as does the Li result. This is an
 exact 1D invariant and an order-for-order check, not a convergence claim for resonant 2D
-geometries. The prior section's 1e-5 transverse-order violations described the old field.
+geometries. The 1e-5 transverse-order violations this section recorded before the fix described the old field.
 
 The reduced-basis regression now checks its two-bar layer against a separately written
 500x300 union contour instead of pinning the old internal-seam field's transmission.
@@ -1477,8 +1477,8 @@ NVF findings above or a claim of Fourier-order convergence for every structure.
 
 ## Rectangular contacts with circular NVF
 
-`factorization='nvf', nvf_projector='circular'` now provides the non-cancelling normal-
-dyad construction for rectangular shapes. It passes the period-gap, unequal-
+`factorization='nvf', nvf_projector='circular'` now provides the non-cancelling
+normal-dyad construction for rectangular shapes. It passes the period-gap, unequal-
 material contact, material-equality, and frozen-contact JIT derivative checks.
 See [usage and accuracy limits](../../guide/rcwa/parametric-modeling.md#complex-nvf-projection-for-rectangular-contacts).
 The earlier J/K measurements describe the default linear field. Circular NVF

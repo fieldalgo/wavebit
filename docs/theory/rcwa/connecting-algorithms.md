@@ -627,9 +627,9 @@ which is read off the gap and takes no labels (above), so it does not care how t
 it took the ETM's labels it met the same pivot, at 2.2e-5 and 2.3e-11.
 
 The middle column is the LAPACK's as much as the rule's. Across the plane each turned row of `a`
-is `(1 + Y) - (1 - Y)`, two O(1) terms whose difference is that mode's `Y`; in the first row that
-is 2e-13 for one mode and 1e-19 and 1e-31 for two more, which are rounding alone. The numbers above
-are Accelerate's (macOS). OpenBLAS rounds those two rows to a residue that swamps them and lands on
+is `((1 + Y) - (1 - Y))/2`, half the difference of two O(1) terms, which is that mode's `Y`;
+in the first row that is 2e-13 for one mode and 1e-19 and 1e-31 for two more, which are rounding
+alone. The numbers above are Accelerate's (macOS). OpenBLAS rounds those two rows to a residue that swamps them and lands on
 the right limit, and only the 2e-13 mode's lost digits remain: 4.2e-10 and 4.1e-9 for the two TE
 rows on arm64, 5.7e-10 and 6.8e-9 on x86-64; TM and conical read 5.4e-7 and 2.0e-8 on arm64.
 The tests therefore ask a control only to break the bound, which those lost digits do on every
@@ -972,7 +972,7 @@ And on §10's own scene with its `eps = 25` block made the double negative `(-25
 permittivities `[1, X, 1, X, X, X]` over 2000 nm, 100 nm thick, on a half-space of `X`,
 `truncation_order = 30`, 900 nm -- where the wide block rests on its own medium:
 
-| `|ETM - SMM|`, all amplitudes | TE | TM | conical, `phi = 0.3` |
+| `\|ETM - SMM\|`, all amplitudes | TE | TM | conical, `phi = 0.3` |
 |---|---|---|---|
 | `theta = 0.5`, before | 6.6e-07 | 1.0e-05 | 1.4e-05 |
 | `theta = 0.5`, after | 1.2e-14 | 5.5e-15 | 6.4e-14 |
@@ -985,9 +985,9 @@ permittivities `[1, X, 1, X, X, X]` over 2000 nm, 100 nm thick, on a half-space 
 |---|---|---|
 | no double-negative region (every layer before this section) | Maystre's cut, capped (§10) | decaying; tie `Im(q) <= 0` |
 | uniform double negative | the **mirror**, `Re(q) + Im(q) > 0`, capped | decaying; tie `Im(q) >= 0` |
-| patterned, holding a double-negative region | **per mode**: propagation-dominated (`|Im q| > |Re q|`) with resolvable flux, the root whose flux is positive; otherwise the decaying root; capped | decaying; tie broken by the flux |
+| patterned, holding a double-negative region | **per mode**: propagation-dominated (`\|Im q\| > \|Re q\|`) with resolvable flux, the root whose flux is positive; otherwise the decaying root; capped | decaying; tie broken by the flux |
 
-SMM's column is its cascade's, and its field state reads no labels (§10, "SMM's field state walks
+SMM's column is its cascade's, and its field state reads no labels (§10, "SMM's field state is read off
 the gap").
 
 * **Uniform: the half-space's own rule.** `etm_mode_q(..., mirrored)` is

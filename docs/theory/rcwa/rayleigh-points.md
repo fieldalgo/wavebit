@@ -109,7 +109,7 @@ to the true `q = 0` on *every* path — consistency is what matters, not closene
 The 2D efficiency error of the *old product construction* follows
 `~eps / (min|w| / max|w|)` — measured on four exact-graze stacks over a detune ladder:
 
-| `min|w|/max|w|` | efficiency error |
+| `min\|w\|/max\|w\|` | efficiency error |
 | --- | --- |
 | 1e-17 (exact) | 2e-3 … 8e0, some with **no warning of any kind** (5 of 48 solves) |
 | 1e-15 | ~1e-3 |
@@ -149,7 +149,7 @@ The contract, in order of importance:
   of the removed `perturbation` knob, which nudged every solve, silently, by an amount
   too small to help.
 - **Gradients survive.** The knobs are multiplied, not replaced, so a differentiable
-  `wavelength`/`theta` keeps its autodiff graph through the retry (pinned:`jax.grad`
+  `wavelength`/`theta` keeps its autodiff graph through the retry (pinned: `jax.grad`
   through the refused point returns a finite, nonzero thickness gradient). The gradient
   returned is the nearby problem's — which is also the only one that exists, since the
   exact point is a cusp of `R(lambda)`.
@@ -576,7 +576,7 @@ formulations, re-measured", which is a run on `aadbc351`.
 **What it was.** The 2D path diagonalises each layer's product `Omega2 = Omega_L Omega_R`. Where
 two of its eigenvalues form a 2x2 Jordan block (an exceptional point, EP) `eig` returns two
 columns that are each accurate to the unit round-off `u` but meet at a sine `s` of
-1e-8..1e-6: `(Omega2 - w) ` has one singular value at 1e-16 and the next at 4e-3..7e-2, and the
+1e-8..1e-6: `(Omega2 - w)` has one singular value at 1e-16 and the next at 4e-3..7e-2, and the
 eigenvalues split by `sqrt(u)`-sized amounts (1e-9..5e-8). Each column still satisfies both
 first-order relations to 1e-15; what breaks is the basis: `cond(W)` 6e6..1.6e8, and the
 interface inverses amplify rounding by about `1/s**2` -- measured `K u / s**2` with `K <= 1e-2`
@@ -674,7 +674,7 @@ and a zero coupling. More qualifying pairs than the cap multiply the layer's `q`
 
 | measured (oracles: the 1D rebuild for §7's points; a Cauchy circle for the genuinely 2D ones) | before | now |
 | --- | --- | --- |
-| PA616 / PB687 / PD574 / MU614 / PL952 rasters, `rel` 0, +-1e-15, +-1e-12, +-1e-9 .. +-1e-3, amplitudes | 4.2e-8..5.4e-3 (ETM), 8.2e-7..3.6e-2 (SMM) | <= 4.5e-14 for `|rel|` <= 1e-9 and <= 1.0e-13 to 1e-3 (PB687 SMM at -1e-3, where develop gives the same 1.0e-13); `R + T - 1` <= 7.2e-15 and <= 4.1e-14 |
+| PA616 / PB687 / PD574 / MU614 / PL952 rasters, `rel` 0, +-1e-15, +-1e-12, +-1e-9 .. +-1e-3, amplitudes | 4.2e-8..5.4e-3 (ETM), 8.2e-7..3.6e-2 (SMM) | <= 4.5e-14 for `\|rel\|` <= 1e-9 and <= 1.0e-13 to 1e-3 (PB687 SMM at -1e-3, where develop gives the same 1.0e-13); `R + T - 1` <= 7.2e-15 and <= 4.1e-14 |
 | genuinely 2D EPs, `fy` 0.95 / 0.8 / 0.5 (six points), amplitudes | 4e-11..1.7e-6 (ETM), 2.5e-9..6.4e-6 (SMM) | 5.8e-15..1.6e-13 |
 | complex `theta`: patterned double negatives at 18 angles (fits of the 1D family construction) and PA616 at three | `R` up to 9e-2, amplitudes up to 3.4e-2 | within each fit's residual; PA616 <= 9.4e-13 |
 | `jax.grad`, `jvp`, torch reverse, `forward_ad` (raster, wavelength, thickness, `theta`) and `jit(grad)`, vs `jax.grad` of the 1D rebuild, `rel` 0 .. 1e-9 | 4.7e-8..6.2e-2 | <= 2.2e-13 (MU614 <= 6.0e-12, the 1D path's own consistency there) |
@@ -939,18 +939,18 @@ thick layers' fell to 2.4e-13), and no answer warned that had not before.
 
 | case | screens alone (`ea57624b`) | joint rebuild |
 | --- | --- | --- |
-| PL952 / PA616, truncation 5, seven paths (1092 solves) | loud to `|dtheta| = 1e-5`, up to 1.0e-3 off (SMM at the coincidence) | <= 1.7e-14, no warning; the gate engaged out to `|dtheta| = 1e-4` |
+| PL952 / PA616, truncation 5, seven paths (1092 solves) | loud to `\|dtheta\| = 1e-5`, up to 1.0e-3 off (SMM at the coincidence) | <= 1.7e-14, no warning; the gate engaged out to `\|dtheta\| = 1e-4` |
 | the same at truncations 10, 15, 20, four paths (1872 solves) | up to 4.9e-4 off, loud | <= 7.1e-14, no warning |
-| PA616 at 10 and 3 um, `|q| = 0.025`, 17 offsets down to +-1e-11, four paths (272) and NumPy / JAX / PyTorch (204) | 3.3e-12 off at -5.999e-6 | <= 3.1e-13 (the 1D rebuild's own spread there is ~2e-13), no warning |
+| PA616 at 10 and 3 um, `\|q\| = 0.025`, 17 offsets down to +-1e-11, four paths (272) and NumPy / JAX / PyTorch (204) | 3.3e-12 off at -5.999e-6 | <= 3.1e-13 (the 1D rebuild's own spread there is ~2e-13), no warning |
 | eager `jax.grad`, `jax.jvp`, torch reverse, `forward_ad` (raster, wavelength, thickness, `theta`) at PL952 0, 7e-8, 1e-7 and PA616 0, 1e-8 | 3.3e-8 .. 3.1e-3 | <= 1.8e-13 |
 | at those points: `jit`, `jit(vmap)`, `torch.func.vmap` values; `jit(grad(sum vmap))`, `jit(vmap(grad))`, torch `vmap` + backward | silent, 1.1e-9 .. 1.9e-3; 3.2e-8 .. 7.5e-3 | <= 1.4e-14; <= 9.6e-14 |
-| at those points: fields (six components, of `max|F|`) / `jax.grad` of `sum |E|**2`, eager and `jit` | 9.1e-9 .. 3.2 / 1.5e-8 .. 5.9e-2 | <= 1.3e-13 / <= 3.3e-12 |
-| truncation `(5, 2)`, two clusters per layer, 9 offsets each | up to 2.5e-3 off | <= 8.1e-15 (both clusters' layer model <= 4.8e-15 of `||A||`), no warning |
+| at those points: fields (six components, of `max\|F\|`) / `jax.grad` of `sum \|E\|**2`, eager and `jit` | 9.1e-9 .. 3.2 / 1.5e-8 .. 5.9e-2 | <= 1.3e-13 / <= 3.3e-12 |
+| truncation `(5, 2)`, two clusters per layer, 9 offsets each | up to 2.5e-3 off | <= 8.1e-15 (both clusters' layer model <= 4.8e-15 of `\|\|A\|\|`), no warning |
 | genuinely 2D: a C4v square pillar at normal incidence, 11 exact coincidences (NVF at truncations 4 and 7, Laurent at 4), against a Cauchy circle in the pillar's permittivity (spread <= 5.7e-15) | loud, 1.6e-12 .. 9.3e-5 off | <= 3.1e-14 (two truncation-7 points 1.5e-13 .. 3.2e-13, that layer's floor off the point), no warning; JAX and PyTorch eager and traced values <= 1.3e-14, `jax.jvp` <= 1.2e-13 |
-| synthetic: Jordan pair beside a root at 0 .. 1e-7, six bases, eight paths (and 9e-8, 1e-7 on three more) | refused by the pair gate | <= 2.8e-15 of `||A||`; where `eig` collapsed one basis (one path, at 0) the check warned |
-| synthetic: two clusters and a pair, 2e-4 .. 1e-2 apart, basis of condition 10, seven paths | -- | one step: <= 2.5e-15 of `||A||` at 5e-4 .. 1e-2, up to 4.3e-13 at 2e-4, where the check on one path read a miss and warned; with the second step <= 2.0e-15 at every gap (five bases), quiet on every path |
+| synthetic: Jordan pair beside a root at 0 .. 1e-7, six bases, eight paths (and 9e-8, 1e-7 on three more) | refused by the pair gate | <= 2.8e-15 of `\|\|A\|\|`; where `eig` collapsed one basis (one path, at 0) the check warned |
+| synthetic: two clusters and a pair, 2e-4 .. 1e-2 apart, basis of condition 10, seven paths | -- | one step: <= 2.5e-15 of `\|\|A\|\|` at 5e-4 .. 1e-2, up to 4.3e-13 at 2e-4, where the check on one path read a miss and warned; with the second step <= 2.0e-15 at every gap (five bases), quiet on every path |
 | off a C4v coincidence: the pillar above at relative offsets 1e-9 .. 1e-5 either side (and 1e-4, 1e-3 above) of five coincidences, Laurent 641.11 and 623.60 nm, NVF 603.50, 614.90 and 634.19 nm, seven paths (1330 solves), against the Cauchy circle | the narrow radius alone: silent, up to 9.1e-12 off where the doublets leave it | <= 3.3e-14 where rebuilt jointly, no warning; the wide ball took the four out to a relative 3e-6 at least on every path, and beyond it `eig`'s own basis was within 1.5e-13 |
-| synthetic: two degenerate doublets `2 s` apart with nearly dependent columns, `s` 1e-6 .. 3e-4, seven paths | not taken beyond `s = 5e-5` | <= 2.4e-15 of `||A||`, quiet |
+| synthetic: two degenerate doublets `2 s` apart with nearly dependent columns, `s` 1e-6 .. 3e-4, seven paths | not taken beyond `s = 5e-5` | <= 2.4e-15 of `\|\|A\|\|`, quiet |
 | synthetic: a start off by 1e-7 .. 1e-4 in a cluster's subspace, seven paths | one step: 8.0e-14 .. 1.5e-12 at 1e-6 .. 3e-6, loud from 3e-6 | two steps: <= 1.2e-14 to 3e-6, quiet; at 1e-5 up to 4.3e-13, loud on one basis of three; loud at 1e-4 |
 
 *Byte identity.* 168 digests (`R`, `T`, `r_xyz`, `t_xyz`) on `test_conical_cutoff`'s uniform and
@@ -989,11 +989,11 @@ of them (one, by a swap, before).
 | `DC612`, one offset at a time (`theta` from `Gy / 2`, 0 .. 1e-3; permittivity +-1e-12 .. 1e-4; wavelength +-1e-12 .. 1e-4), 2D and first order, ETM and SMM | loud and off out to `theta` 1e-4, permittivity 1e-6 and wavelength 1e-5: 2D up to 1.2e-5 (ETM) and 9.8e-4 (SMM), first order up to 1.5e-5 and 1.5 | <= 2.1e-14, quiet |
 | `DC612`, 240 random joint offsets (each of the three 0, or log-uniform in +-[1e-12, 1e-3]) and 240 more with `theta` exact, four solves each (1920) | -- | within 1e-4 of the point <= 2.7e-14; beyond it ETM <= 4.1e-14 and SMM <= 7.6e-13, the same with four; quiet (one false alarm, on both algorithms, before the split's retry: *Collapsed eigenvectors*, below) |
 | `DC612` at the point: `jit`, `jit(vmap)`, `torch.func.vmap` values; `jit(grad(sum vmap))`, `jit(vmap(grad))`, torch `vmap` + backward of `sum R` in the wavelength; lanes `rel` 0, +-1e-12, 1e-2 | NaN | <= 1.9e-14; <= 6.2e-14 (relative) |
-| `DC612` at the point: derivatives in the raster, wavelength, thickness and `theta` (`jax.grad`, `jvp`, torch reverse, `forward_ad`); fields, and `jax.grad` of `sum |E|**2` eagerly and under `jit`, 2D and first order, ETM and SMM | loud | derivatives <= 2.9e-13 (relative); fields <= 2.9e-14 of `max|F|`, their gradients <= 7.1e-14 |
-| synthetic: three and four coincident Jordan pairs, two pairs and a root within `_EP_CLUSTER`, a five-mode chain at `_EP_CLUSTER` that is one closed wide ball; three or four bases | loud | <= 1.8e-15 of `||A||`, quiet |
-| synthetic: two gated pairs 1e-7 .. 1e-5 apart beside a root 5e-5 away (*The screens under a trace*, below), three bases | each pair rebuilt alone: loud (the backward-error screen) | one cluster of five, <= 1.9e-15 of `||A||`, quiet |
+| `DC612` at the point: derivatives in the raster, wavelength, thickness and `theta` (`jax.grad`, `jvp`, torch reverse, `forward_ad`); fields, and `jax.grad` of `sum \|E\|**2` eagerly and under `jit`, 2D and first order, ETM and SMM | loud | derivatives <= 2.9e-13 (relative); fields <= 2.9e-14 of `max\|F\|`, their gradients <= 7.1e-14 |
+| synthetic: three and four coincident Jordan pairs, two pairs and a root within `_EP_CLUSTER`, a five-mode chain at `_EP_CLUSTER` that is one closed wide ball; three or four bases | loud | <= 1.8e-15 of `\|\|A\|\|`, quiet |
+| synthetic: two gated pairs 1e-7 .. 1e-5 apart beside a root 5e-5 away (*The screens under a trace*, below), three bases | each pair rebuilt alone: loud (the backward-error screen) | one cluster of five, <= 1.9e-15 of `\|\|A\|\|`, quiet |
 | synthetic: four pairs and a root, five pairs (nine and ten modes), a ten-mode chain | loud | loud: not taken |
-| 200 random clustered operators (the basis the 2D path keeps, then the unresolved screen) | 121 loud | 56 loud; the 96 clusters taken (four to eight modes) within 2.7e-15 of `||A||`, quiet; the traced screen gave the eager verdict on all 200, either way |
+| 200 random clustered operators (the basis the 2D path keeps, then the unresolved screen) | 121 loud | 56 loud; the 96 clusters taken (four to eight modes) within 2.7e-15 of `\|\|A\|\|`, quiet; the traced screen gave the eager verdict on all 200, either way |
 
 The splits of the eight-mode clusters are four and four, `cond(X) <= 20.0` where `eig`'s
 vectors are independent.
@@ -1244,7 +1244,7 @@ are now added (`_frechet_chain_terms`):
   a selection and every lane forms them. Only values enter the branch: the selection passes the
   branch's operands through `stop_gradient`, which reverse mode cannot transpose on a tangent,
   so with the direction `E` inside, `jax.grad` of a sum over `jax.vmap` raised
-  `NotImplementedError` (§5's *Why not a `lax.cond`* meets the same trap with a solve). `E` is
+  `NotImplementedError` (§7's *Why not a `lax.cond`* meets the same trap with a solve). `E` is
   contracted outside, and where no middle is, a negative zero is added, which leaves every bit
   of the one-step form. The contraction sits between optimization barriers
   (`lax.optimization_barrier`): without them XLA rescheduled the one-step form's sums around it,
@@ -1664,7 +1664,7 @@ oracles: the §7 1D rebuild for the y-invariant scenes, §8's Cauchy circle for 
 | genuinely 2D: the C4v pillar's three coincidences of §8 (Laurent 641.11 and 623.60 nm, NVF 603.50 nm), relative offsets 0 and +-1e-9, and at two of them (641.11, 603.50) +-1e-8 .. 1e-5, ETM and SMM against the circle on this split | loud, up to 3.7e-4 off at the coincidence; with the gate closed, silent and up to 3.1e-13 off at +-1e-7 (the doublets, which the screen's narrow balls read two at a time) | <= 2.0e-14, quiet, one four-mode cluster a direction |
 | eager `jax.grad` (raster, wavelength, thickness, `theta`), `jax.jvp`, torch reverse and `forward_ad` at PL952 0, 7e-8 and PA616 1e-8, against the 1D `jax.grad` | loud | <= 1.2e-13 |
 | at PL952 0 and PA616 1e-8, lanes `rel` 0, +-1e-12 and 1e-2: `jit`, `jit(vmap)`, `torch.func.vmap` values; `jit(grad(sum vmap))`, `jit(vmap(grad))`, torch `vmap` + backward | NaN | <= 1.6e-14; <= 1.2e-13 |
-| at those points: fields (six components, of `max|F|`) / `jax.grad` of `sum |E|**2` in the raster and wavelength, eagerly and under `jit` | loud | <= 3.5e-14 / <= 1.0e-12 |
+| at those points: fields (six components, of `max\|F\|`) / `jax.grad` of `sum \|E\|**2` in the raster and wavelength, eagerly and under `jit` | loud | <= 3.5e-14 / <= 1.0e-12 |
 | truncation `(5, 1)`, `jit` values and `jit(grad)` of `sum R`, five offsets 0 .. 1e-4 | NaN | <= 1.7e-14; <= 1.0e-13 |
 | truncation `(5, 2)`, two clusters a direction beside a pair (five coupled rows): eager, `jit` values and `jit(grad)`, the same offsets | loud, up to 0.65 off; NaN | <= 1.9e-14, <= 1.3e-14; <= 1.2e-13 |
 | synthetic: two coincident Jordan blocks (three bases); a Jordan pair beside a root at 0 .. 2.9e-3 (three bases each) | loud | an invariant subspace of `M` to <= 1.6e-15 of `abs(M)`, quiet |
