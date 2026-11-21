@@ -33,6 +33,9 @@ Physical materials and units are shared by both solvers. A common declaration do
 
 .. autofunction:: wavebit.layer_thicknesses
 
+.. automodule:: wavebit.ellipsometry
+   :members:
+
 .. autoclass:: wavebit.Units
    :members:
 

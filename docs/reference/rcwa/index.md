@@ -9,6 +9,8 @@ See the [runnable first calculation](../../getting-started/rcwa.md) and [common 
 
 .. autofunction:: wavebit.rcwa.run
 
+.. autofunction:: wavebit.rcwa.run_ellipsometry
+
 .. autofunction:: wavebit.rcwa.compile
 
 .. autoclass:: wavebit.rcwa.Compiled
@@ -69,6 +71,12 @@ See the [runnable first calculation](../../getting-started/rcwa.md) and [common 
    :members:
 
 .. autoclass:: wavebit.rcwa.BoundaryPower
+   :members:
+
+.. autoclass:: wavebit.rcwa.EllipsometryResult
+   :members:
+
+.. autoclass:: wavebit.rcwa.EllipsometryOrders
    :members:
 
 .. automodule:: wavebit.rcwa.diagnostics

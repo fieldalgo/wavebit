@@ -12,6 +12,7 @@ Use `rcwa.Problem`, `rcwa.Numerics` and the shared check/prepare/run lifecycle. 
 - [Cartesian rectangle NVF on an oblique lattice](cartesian-rectangle-nvf.md)
 - [Two Cartesian rectangles on an oblique lattice](cartesian-rectangle-pair-nvf.md)
 - [Coherent illumination and internal sources](coherent-illumination.md)
+- [Ellipsometry outputs: Jones, Psi/Delta and Mueller](ellipsometry.md)
 - [Conforming NVF from rectangle layers](conforming-nvf.md)
 - [Exceptional points: why changing the basis fixes propagation](exceptional-points.md)
 - [Near fields](fields.md)
