@@ -180,10 +180,11 @@ GRCWA의 `kbloch.py`는 직접 이식한 것이므로("From Liu's gsel.c") 알�
 ## 재현
 
 ```bash
-conda run -n wavebit python studies/rcwa/benchmark_truncation_shape/benchmark_truncation_shape.py
+python studies/rcwa/benchmark_truncation_shape/benchmark_truncation_shape.py
 ```
 
-저장소 루트에서 실행하세요. `main()`은 `max_order_ref`, 구조 목록, 인수분해
+구성된 환경에서 저장소 루트에서 실행하세요([소스 체크아웃 안내](../../development/source-checkout.md) 참고).
+`main()`은 `max_order_ref`, 구조 목록, 인수분해
 모드, `plot=<path>`를 받습니다. 저대비 대조군은 `n_ridge=1.5`와
 `modes=('laurent',)`로 같은 호출을 하면 됩니다. 위의 전체 스윕은 약 25분이 걸리며
 `max_order_ref=20`에서 최대 약 2.5 GB를 씁니다.
