@@ -231,8 +231,10 @@ remain citable Markdown with explicit conditions, recorded outputs and limitatio
 ## Languages and imported teaching material
 
 English is the canonical route and default language. Forty complete imported course chapters
-have English bodies and matching Korean source overlays; the homepage and ten maintained guide
-and developer pages, plus the first RCWA and FDTD calculations, also have full Korean overlays. Other pages use gettext where available and
+have English bodies and matching Korean source overlays; the homepage, every section index and
+further maintained pages also have full Korean overlays, listed in
+[documentation and translations](development/documentation.md#contribute-korean-translations).
+Other pages use gettext where available and
 otherwise show an explicit English-fallback notice. Both builds share document names and link to the same page in the other language.
 
 The imported curriculum includes 100 figures, 15 runnable examples and seven drawing/measurement
