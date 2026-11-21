@@ -577,6 +577,13 @@ Khorasaninejad 등, Science **352**, 1190 (2016)의 기하 계열입니다. 이 
 220 nm)은 공진 위에 있어 T = 0.50-0.79로 떨어집니다. 이를 제외하면 19개 점 중 16개가 남고 최악의 투과율은
 0.936입니다. 스윕 전체에 14 s가 걸립니다.
 
+[`metalens_phase_library.py`](https://github.com/fieldalgo/wavebit/blob/main/examples/rcwa/metalens_phase_library.py)는
+이 스윕을 현행 API로 실행하며 자체 검사를 담고 있습니다: 전력 보존, 전파하는 차수가 하나뿐이라는 점, 아래의 슈퍼셀
+비교, 그리고 여덟 단계에서 단조로운 2*pi 범위. 걸린 시간은 스크립트가 직접 출력하며 기계에 따라 다릅니다.
+[`metalens_phase_sensitivity.py`](https://github.com/fieldalgo/wavebit/blob/main/examples/rcwa/metalens_phase_sensitivity.py)는
+한 항목의 위상을 기둥 지름에 대해 미분합니다(150 nm에서 0.056 rad/nm).
+두 스크립트 모두 단위 셀에서 멈춥니다. 표로 렌즈를 조립하는 일은 Wavebit의 범위 밖입니다.
+
 같은 구조에서 S4와 교차 검사했으며, 이것이 유용한 부분입니다: D = 150 nm에서 S4는 Wavebit의 0.96643에
 대해 0.96675로 수렴하고(3.5e-4), D = 240 nm에서는 0.99905에 대해 0.99694이며(2.1e-3) 아직 올라가는
 중입니다. 두 차이 모두 S4 자체의 수렴 때문입니다 — Wavebit은 289개 차수에서 이미 최종 값에 있고, S4는
