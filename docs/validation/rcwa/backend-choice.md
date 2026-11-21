@@ -26,11 +26,10 @@ lists which inputs differentiate on which backend there.
 
 Targets:
 - `studies/rcwa/benchmark_backends/benchmark_backends.py` — the sweep this document reports
-- `src/wavebit/rcwa/_engine/geometry.py::StaticGeometry` — what a freeze records, and what its equality
-  costs
+- `src/wavebit/rcwa/_engine/geometry.py::StaticGeometry` — what a freeze records, what its equality
+  costs, and the frozen records' staleness checks
 - `src/wavebit/rcwa/_engine/factorization.py::compression_indices`, `normal_field_for_raster` — the two
   raster decisions that must be taken eagerly
-- `src/wavebit/rcwa/_engine/geometry.py::StaticGeometry` — the frozen records and their staleness checks
 - [`nvf-upsampling.md`](nvf-upsampling.md) — why NVF's cost fell between the first run of this
   sweep and the one reported here; [`torch-compile.md`](../../development/torch-compile.md) — why PyTorch is
   measured eager
@@ -76,7 +75,7 @@ the speed of a wrong answer.
   freeze against a 277 ms step at `N=128, truncation_order=5` — because its normal field was taken on a
   grid `4*truncation_order+1` times finer per axis. That is gone ([`nvf-upsampling.md`](nvf-upsampling.md));
   its freeze is
-  now under 2 ms and its step is level with the sampled path.
+  now 5 ms and its step is level with the sampled path.
 
 ---
 
@@ -262,8 +261,8 @@ strategies.
 | N=128, truncation_order=5, NVF | 144 | 173 | 88 | 727 | 922 | 5 |
 
 **This is the control.** None of the code behind this table was touched by the block-path
-removal, and every cell is within ~12% of the 2026-08-20 run — uniformly, and in the same
-direction. That is what licenses reading the shape-path table above as a difference between
+removal, and over its cells above 40 ms it lands at 0.86-1.27x the 2026-08-20 run with a median
+of 1.04, with no drift in either direction. That is what licenses reading the shape-path table above as a difference between
 paths rather than between machines.
 
 Four things this says.
@@ -351,8 +350,8 @@ point than at the centre of the search range.
 ## What to use
 
 For the compatibility interface these were measured on. Through `rcwa.prepare(...)` and
-`prepared.run(problem)`, a shape traced under `jax.jit` is refused and one under `jax.grad` runs
-eagerly; see the interface scope at the top.
+`prepared.run(problem)`, a shape differentiates under eager `jax.grad`, and under `jax.jit` only
+for the shapes `Numerics(topology_check=...)` admits; see the interface scope at the top.
 
 | situation | use |
 |---|---|
@@ -368,7 +367,7 @@ eagerly; see the interface scope at the top.
 The general shape, and it is not what this document said before the block path was removed:
 **on shapes JAX is the default and re-freezing every step is both the safe option and the fast
 one; on rasters PyTorch still is.** The two paths now want different backends, which is a more
-useful answer than the single verdict that replaced — and the reason is in the decomposition:
+useful answer than the single verdict that it replaced — and the reason is in the decomposition:
 a compiler helps where there are many array operations to fuse, and the shape path's modeling
 half is exactly that while a raster's is one array already.
 

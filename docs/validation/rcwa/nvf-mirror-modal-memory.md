@@ -112,7 +112,7 @@ Final relevant validation after the modal, interface and sector-selection
 changes: **76 passed in 82.41 s**. The five files are
 `test_nvf_energy_closure.py`, `test_nvf_mirror_convergence.py`,
 `test_nvf_mirror_cartesian.py`, `test_nvf_mirror_doubling.py` and
-`test_nvf_mirror_modes.py`; the latter contributes 17 tests.
+`test_nvf_mirror_modes.py`; the last contributes 17 tests.
 The suite includes the existing independent full-Fourier, Cartesian interval,
 Airy, contact and JAX/doubling checks. Log:
 `studies/rcwa/nvf_mirror_modal_memory/records/nvf_mirror_modes_validation.log`.

@@ -138,7 +138,7 @@ not treat the graded derivative as the exact derivative of a sharp film.
 The public generator's new `--parameter depth` mode places its output phase
 reference at each perturbed film thickness. Its earlier `thickness` mode
 keeps the output at 0.4 and retains its old behavior. The new mode uses
-central forward differences, not Meep adjoint.
+central finite differences, not Meep adjoint.
 
 Meep 1.34.0 uses the same linear epsilon/mu profile through its public global
 material function, a periodic 3D cell with one cell per transverse axis,

@@ -1626,7 +1626,9 @@ below `1/N` at orders 22-26; the FEM has a `3e-3` degree sensitivity and its
 degree-4 footprint is unrecorded. A reference good to `1e-3` needs the
 degree-4 FEM (or finer) with its footprint recorded, run on a host with more
 free memory, plus a FEM wavelength scan at degree 3 to pin the resonance
-independently. Reproduce with:
+independently. (This paragraph predates the degree-4 rerun above, which
+recorded a 14 GB physical footprint, and the degree-3 and degree-4 FEM
+wavelength scans above.) Reproduce with:
 
 ```bash
 PYTHONPATH=$PWD python studies/rcwa/nvf_resonant_spectrum/nvf_resonant_spectrum.py --orders 6 10 14 --methods circular pieces wavebit-direct

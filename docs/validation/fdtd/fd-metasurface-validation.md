@@ -1310,7 +1310,7 @@ printed digits. The runs themselves were not repeated independently.
 
 ## What the tests hold
 
-`tests/fdtd/test_fd_metasurface.py` keeps three things in the suite.
+`tests/fdtd/test_fd_metasurface.py` keeps two things in the suite.
 
 * **The frame the comparison rests on.** Moving M1's pillar by one cell along x, then along y,
   multiplies every order's amplitude by `exp(-2 pi i (m dx/Px + n dy/Py))` and leaves every
