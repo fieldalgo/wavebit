@@ -236,6 +236,105 @@ def test_xdist_records_each_phase_once_and_resume_uses_the_same_membership(check
     assert result.returncode == 0 and len(two['reused_nodeids']) == 4
 
 
+def reported(directory):
+    rows = [json.loads(line) for line in (directory/'events.jsonl').read_text(encoding='utf-8').splitlines()]
+    return {row['nodeid'] for row in rows if row['event'] == 'report'}
+
+
+def test_memory_heavy_tests_wait_for_the_workers_and_run_without_them(checkout):
+    pytest.importorskip('xdist')
+    # Each test asserts where it runs: a light one in an xdist worker, a heavy one in none.
+    suite(checkout, '''
+        import os
+        import pytest
+        @pytest.mark.parametrize('i', range(4))
+        def test_light(i): assert os.environ.get('PYTEST_XDIST_WORKER')
+        @pytest.mark.parametrize('heavy', [False, pytest.param(True, marks=pytest.mark.memory_heavy)])
+        def test_case(heavy): assert bool(os.environ.get('PYTEST_XDIST_WORKER')) != heavy
+        @pytest.mark.memory_heavy
+        def test_alone(): assert not os.environ.get('PYTEST_XDIST_WORKER')
+    ''')
+    output = checkout/'artifacts/run'
+    result, receipt = run(checkout, output, '--workers', '2')
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert receipt['counts'] == {'passed': 7} and not receipt['integrity_errors']
+    assert [phase['name'] for phase in receipt['phases']] == ['collection', 'tests', 'memory']
+    tests, memory = receipt['phases'][1:]
+    assert '-n' in tests['command'] and '-n' not in memory['command']
+    heavy = ['tests/test_tiny.py::test_case[True]', 'tests/test_tiny.py::test_alone']
+    assert receipt['phases'][0]['memory_nodes'] == heavy
+    assert reported(output/'memory') == set(heavy)
+    assert reported(output/'tests') == set(receipt['collected_nodeids']) - set(heavy)
+    # Without workers the heavy tests still get a process of their own, after the others.
+    result, serial = run(checkout, checkout/'artifacts/serial')
+    assert result.returncode == 1, result.stdout + result.stderr      # the light tests want a worker
+    assert [phase['name'] for phase in serial['phases']] == ['collection', 'tests', 'memory']
+    assert reported(checkout/'artifacts/serial/memory') == set(heavy)
+    assert all(serial['outcomes'][node]['outcome'] == 'passed' for node in heavy)
+
+
+def test_a_failed_memory_heavy_test_is_retried_alone_on_resume(checkout):
+    suite(checkout, '''
+        from pathlib import Path
+        import pytest
+        def test_pass(): pass
+        @pytest.mark.memory_heavy
+        def test_heavy_pass(): pass
+        @pytest.mark.memory_heavy
+        def test_heavy_retry():
+            sentinel = Path('artifacts/attempt')
+            if not sentinel.exists():
+                sentinel.parent.mkdir(exist_ok=True)
+                sentinel.write_text('attempted')
+                assert False
+    ''')
+    first = checkout/'artifacts/first'
+    result, one = run(checkout, first)
+    assert result.returncode == 1 and one['counts'] == {'passed': 2, 'failed': 1}
+    second = checkout/'artifacts/second'
+    result, two = run(checkout, second, '--resume', str(first))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert two['counts'] == {'passed': 3}
+    assert [phase['name'] for phase in two['phases']] == ['collection', 'memory']
+    assert reported(second/'memory') == {'tests/test_tiny.py::test_heavy_retry'}
+
+
+def test_a_shard_keeps_its_memory_heavy_tests_and_the_shards_still_add_up(checkout):
+    (checkout/'tests/test_a.py').write_text(
+        'import pytest\ndef test_a1(): pass\n@pytest.mark.memory_heavy\ndef test_a2(): pass\ndef test_a3(): pass\n',
+        encoding='utf-8')
+    (checkout/'tests/test_b.py').write_text('def test_b1(): pass\ndef test_b2(): pass\n', encoding='utf-8')
+    heavy = 'tests/test_a.py::test_a2'
+    for index in (1, 2):
+        result, receipt = run(checkout, checkout/'artifacts'/f'shard{index}', '--shard', f'{index}/2')
+        assert result.returncode == 0, result.stdout + result.stderr
+        phases = [phase['name'] for phase in receipt['phases']]
+        # Whole files: a (3 nodes) is shard 1, b is shard 2. The heavy test stays with its file's shard.
+        assert phases == (['collection', 'tests', 'memory'] if index == 1 else ['collection', 'tests'])
+        assert (heavy in receipt['collected_nodeids']) == (index == 1)
+    assert reported(checkout/'artifacts/shard1/memory') == {heavy}
+    check = [sys.executable, str(ROOT/'tools/verify_shards.py'), '--count', '2',
+             str(checkout/'artifacts/shard1'), str(checkout/'artifacts/shard2')]
+    result = subprocess.run(check, text=True, capture_output=True, timeout=60, encoding='utf-8')
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout.rsplit('\n}', 1)[0] + '\n}')['counts'] == {'passed': 5}
+
+
+def test_a_memory_heavy_source_mutation_runs_once_in_its_snapshot(checkout):
+    suite(checkout, '''
+        from pathlib import Path
+        import pytest
+        import wavebit
+        @pytest.mark.memory_heavy
+        @pytest.mark.source_mutation
+        def test_mutation(): assert 'snapshot' in Path(wavebit.__file__).parts
+    ''')
+    result, receipt = run(checkout, checkout/'artifacts/run')
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert receipt['counts'] == {'passed': 1}
+    assert [phase['name'] for phase in receipt['phases']] == ['collection', 'mutations']
+
+
 def test_xpass_is_visible_and_strict_xpass_is_retried(checkout):
     suite(checkout, """
         import pytest

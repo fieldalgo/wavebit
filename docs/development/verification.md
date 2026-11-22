@@ -224,6 +224,24 @@ actual elapsed times still depend on collection, compilation and worker scheduli
 cases within a shard run in the runner's separate serial snapshot, not in the shared
 parallel checkout.
 
+A test that needs most of a runner's memory by itself is marked `memory_heavy`. The runner
+holds such tests back from the workers and runs them afterwards in a third phase, `memory`:
+one process, no workers, one test at a time, once the parallel phase has exited and given its
+memory back. They stay in their shard, keep their shard unit and their row in the timing
+table, and resume like any other test. The mark is for a measured peak, not a guess. Run the
+test alone and read its peak resident memory (kilobytes on Linux, which this converts):
+
+```shell
+python -c "import resource, subprocess, sys; subprocess.run([sys.executable, '-m', 'pytest', '-q', sys.argv[1]]); print(round(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 2**20, 2), 'GB')" "tests/rcwa/test_file.py::test_name[case]"
+```
+
+Mark it when that is above about 4 GB, a quarter of the 16.4 GB runner that two workers
+share. A parametrized test marks only its heavy cases, with
+`pytest.param(..., marks=pytest.mark.memory_heavy)`. On 2026-11-21 runners were shut down,
+with no failed test, in two first-order exceptional-point tests that peak at 9.4 and 7.1 GB
+alone: main was red on 3 commits in a row, and a pull request that changed 2 Markdown files
+lost a shard to it.
+
 GitHub artifacts `verification-default-N` and `verification-slow-N` retain each shard's
 JSON receipts and inventories, JSONL events, JUnit XML and logs. The writable source
 snapshot is excluded from upload to avoid copying the repository into every
