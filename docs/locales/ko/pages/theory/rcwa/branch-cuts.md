@@ -219,7 +219,7 @@ inc = -1j * kz_inc * delta
 두 번째의 단서는 답이 실수 스케일 `s`에 대해 `s * conj(analytic)`으로 나왔다는 점이었습니다 — 스케일 오차가
 아니라 *뒤집힌 가지*입니다. `boundary_kz`는 처음부터 옳았습니다.
 
-### 독립적인 증인
+### 독립적인 증거
 
 `smm_1d`와 `_smm_sp`는 아무것도 다르게 표기한 적이 없습니다: 이들은 `boundary_kz`에서 유도한 `V_top`으로
 입사 필드를 만듭니다. **SMM은 이미 복소 각도에서 정확했으며**, 수정 후 TMM은 SMM의 답에 도달합니다. 두
@@ -316,7 +316,7 @@ flip = xp.where(xp.abs(xp.real(v)) > _FLAT, xp.real(v) < 0, xp.imag(v) < 0)
 답을 반환합니다. 같은 complex64 점에서 NumPy는 `|R| = 1.80`을 주고 경고하지만, JAX는 4.12, PyTorch는 5.68을
 조용히 줍니다 — 사람들이 그래디언트와 GPU를 위해 택하는 경로에서 말입니다. 검사를 막는 것은 네임스페이스가
 아니라 *추상* 값이므로, 축약(reduction)은 호출자 자신의 네임스페이스에서 실행되고 스칼라만 읽습니다. 그 읽기가
-예외를 내면 그 값은 tracer였고 검사할 것이 없었던 것입니다. `jax.jit(jax.grad(...))`는
+예외를 내면 그 값은 추적자(tracer)였고 검사할 것이 없었던 것입니다. `jax.jit(jax.grad(...))`는
 `test_the_check_does_not_break_tracing`에 고정되어 있습니다.
 
 비용은 해당 층의 `eig`와 따로 떼어 비교하여 측정했습니다(truncation_order=60):
@@ -341,7 +341,7 @@ trace와 단정밀도는 모두 속도를 위해 택하며, 둘의 조합이 잘
 | complex128 | 조용함, \|R\| = 0.672 | 조용함, \|R\| = 0.672 |
 | complex64 | **경고** ("a branch was decided from…"), \|R\| = 3.974 | **경고** ("this solve is traced…"), \|R\| = 3.929 |
 
-`integrated` 경로는 아예 trace할 수 없다는 점에 유의하세요 — `factorization.py::_as_bools`가 tracer에
+`integrated` 경로는 아예 추적할 수 없다는 점에 유의하세요 — `factorization.py::_as_bools`가 추적자에
 `bool()`을 호출합니다 — 그래서 jit된 풀이는 어쨌든 샘플링 경로를 탑니다. 이것은 이 작업 이전부터 그랬습니다.
 
 ### x64 순서 함정과, 이제 경고하는 이유

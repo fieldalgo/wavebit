@@ -1,7 +1,7 @@
 # 접촉과 양의 틈을 가로지르는 유한 쌍
 
 실험적이며 NumPy 전용인 `CartesianPairGapCell`은 정확한 접촉을 포함해, 명시적으로 준 음이 아닌 물리적 틈에서
-유한 쌍 하나를 평가합니다. 계수 또는 선택된 에너지 closure를 그 해석적 틈 미분과 함께 반환합니다.
+유한 쌍 하나를 평가합니다. 계수 또는 선택된 에너지 닫힘(closure)을 그 해석적 틈 미분과 함께 반환합니다.
 `wavebit.rcwa._engine.conforming.cartesian_pair_gap`에서 가져오고, `wavebit.rcwa.experimental`의 기존
 `CartesianPairOpeningPlan`을 주세요.
 
@@ -78,18 +78,18 @@ epsilon, Gyx`입니다. 모양은 `(9, 4*y+1, 4*x+1)`이며, y와 x 레이블은
 필요한 계수 차이를 모두 포괄합니다. 위상은 물리적 셀 면적으로 정규화한
 `exp(-2*pi*1j * [m,n] @ inv(basis) @ position)`입니다.
 
-두 메서드 모두 `(value, derivative, metadata, details)`를 반환합니다. closure의 값과 미분은 층 축이 하나인
-다섯 슬롯 `ConvMatrices` 튜플입니다. 역행렬을 구하기 전에 요청한 차이를 선택합니다. closure는 현재
+두 메서드 모두 `(value, derivative, metadata, details)`를 반환합니다. 닫힘의 값과 미분은 층 축이 하나인
+다섯 슬롯 `ConvMatrices` 튜플입니다. 역행렬을 구하기 전에 요청한 차이를 선택합니다. 닫힘은 현재
 설정에서 계수를 다시 계산하며, 캐시된 값으로 덮어쓰는 것은 받지 않습니다.
 
 메타데이터에는 물리적 틈, `normalized_gap=gap/sqrt(det(basis))`, 면적, 정규화 길이, 차수, 차트, 개수,
-원래 잔차와 사영된 잔차, 조건수가 기록됩니다. closure는 저장 에너지, 부호 있는 소산과 역행렬 잔차 검사도
+원래 잔차와 사영된 잔차, 조건수가 기록됩니다. 닫힘은 저장 에너지, 부호 있는 소산과 역행렬 잔차 검사도
 보고합니다. details는 정규화된 행렬과 그 미분, 정규화된 꼭짓점, 필드와 푸리에 가중치를 노출합니다.
 접미사 `_ds`는 정규화된 틈에 대한 미분을 뜻합니다. 이 진단 배열은 물리적 길이 단위를 쓰지 않습니다.
-반환되는 계수와 closure의 미분은 물리적 길이 단위를 씁니다.
+반환되는 계수와 닫힘의 미분은 물리적 길이 단위를 씁니다.
 
 [방법 노트](../../validation/rcwa/nvf-cartesian-pair-gap.md)는 정확한 유한 재축척과 그 독립적인 적격성
-확인을 설명합니다. 이 노트가 연속체나 패턴 층의 광학적 정확도를 보증하지는 않습니다. 별도의
+확인을 설명합니다. 이 노트는 연속체나 패턴 층의 광학적 정확도 증명서를 주지 않습니다. 별도의
 [끝점 응답](cartesian-pair-opening.md)은 독립적으로 적격성을 확인한 기준으로 계속 사용할 수 있습니다.
 
 ## Fixed reference transmission potentials

@@ -14,14 +14,14 @@ NumPy 2.5.1 / SciPy 1.18.0 / jax 0.11.0으로 측정했습니다. **갱신 2026-
 - `src/wavebit/_common/backend.py::eig` — 나머지 실패들이 다루는 기본 연산
 - `pyproject.toml` — 그 결과로 2.7에서 2.13으로(§3), 그리고 §6의 상류 수정을 위해 2.14로 올린 torch 하한
 - `src/wavebit/_common/backend.py::eager_under_torch_compile` — 2026-10부터 wavebit을 컴파일된 그래프 밖에
-  두는 문; §6 참고
+  두는 입구(door); §6 참고
 
 ---
 
 ## 요약
 
 **2026-10부터 컴파일된 호출자는 정확합니다. wavebit은 결코 컴파일되지 않기 때문입니다(§6).** 모든 공개
-wavebit 호출 가능 객체는 `torch.compiler.disable` 문이므로, wavebit은 `torch.compile`된 함수 안에서 즉시
+wavebit 호출 가능 객체는 `torch.compiler.disable` 입구이므로, wavebit은 `torch.compile`된 함수 안에서 즉시
 실행되고 그 값과 그래디언트는 즉시 실행 torch의 것입니다. 컴파일되는 것은 호출자가 wavebit의 출력에 대해
 수행하는 자기 산술뿐입니다. `fullgraph=True`와 `torch.export`는 이름으로 거부되며, `torch.jit.trace`도 모든
 공개 호출에서(풀린 결과의 읽기 포함) 거부됩니다.
@@ -279,7 +279,7 @@ TM 두께와, 밖에서 만든 솔버의 theta 설정자는
 `InternalTorchDynamoError: TypeError: Cannot interpret 'torch.complex128' as a data type`를 일으켰고,
 `fullgraph=True`는 `cmath.sqrt`에서 `Unsupported`를 일으켰습니다. 틀린 두 행은 아무것도 일으키지 않았습니다.
 
-### 문
+### 입구
 
 거부는 추적 안에서 일으킬 수 없습니다. Dynamo는 추적 중에 일어난 예외를 그래프 분리로 바꾸고 프레임을 기본
 방식으로 다시 실행하며, 거기서 예외가 삼켜집니다(wavebit 없는 장난감 예제가 오류 없이 5.0을 돌려주었습니다).
@@ -287,9 +287,9 @@ TM 두께와, 밖에서 만든 솔버의 theta 설정자는
 `src/wavebit/_common/backend.py::eager_under_torch_compile`는 `wavebit.__all__`의 모든 클래스, 공개 호출이
 돌려주는 모든 타입, 그리고 그 둘 중 어느 것의 모든 wavebit 기반 클래스 — 클래스 자체 네임스페이스의 각 공개
 메서드, 속성 접근자, `classmethod`/`staticmethod`와 dunder — 그리고 공개 함수들을 꾸밉니다. 65개 지점입니다.
-2026-10-13부터는 `wavebit.rcwa`와 `wavebit.fdtd` 생애주기 함수와 그 선언 및 결과 타입도 문입니다. 문 안에서만
-만들어 쓰고 호출자에게 넘기지 않는 클래스는 문이 필요 없습니다. 문이 호출하는 모든 것은 이미 밖에 있기
-때문입니다. 문은
+2026-10-13부터는 `wavebit.rcwa`와 `wavebit.fdtd` 생애주기 함수와 그 선언 및 결과 타입도 입구입니다. 입구 안에서만
+만들어 쓰고 호출자에게 넘기지 않는 클래스는 입구가 필요 없습니다. 입구가 호출하는 모든 것은 이미 밖에 있기
+때문입니다. 입구는
 
 - `torch._dynamo`가 `sys.modules`에 없는 동안에는 그대로 호출합니다. 그때는 아무것도 컴파일 중일 수 없습니다.
   `torch.compile`이 그것을 가져오기 때문이며, 즉시 실행 풀이와 역전파는 그것을 가져오지 않습니다;
@@ -301,7 +301,7 @@ TM 두께와, 밖에서 만든 솔버의 theta 설정자는
 같아 보이는 두 지름길은 틀립니다.
 `torch.compiler.is_compiling()`으로 경로를 고르면 `tests/api/test_torch_compile.py`의 다섯 경보 장면이 모두
 틀립니다. Dynamo는 프레임이 아무것도 아닌 것으로 컴파일된 래퍼의 추적을 멈추고 그것을 기본 방식으로
-실행하며, 문 자체의 프레임은 여전히 컴파일된 채로 남습니다. 이미 문 안에 있을 때 래퍼를 건너뛰면,
+실행하며, 입구 자체의 프레임은 여전히 컴파일된 채로 남습니다. 이미 입구 안에 있을 때 래퍼를 건너뛰면,
 `torch.compile`로 컴파일한 사용자 호출 가능 객체가 그 안에서 호출될 때마다 Dynamo가 wavebit을 다시
 추적하게 됩니다. 그 호출 가능 객체가 프레임 훅을 다시 설정하기 때문입니다. 그 결과 컴파일된 `forward`를 쓴
 `solver.grad`가 유전율 그래디언트를 최대 0.8165 어긋나게 돌려주었고(즉시 실행의 가장 큰 항목은
@@ -326,16 +326,16 @@ NumPy 2차 차분 1.1001006765e-04에 대해 1.1001006774e-04를 읽으며, 전�
 - `fullgraph=True`와 엄격한 `torch.export`는 `torch._dynamo.exc.Unsupported: Skip
   calling torch.compiler.disable()d function ... (reason: wavebit runs eagerly under
   torch.compile: compiling it buys no speed, and Inductor has silently miscompiled its complex
-  arithmetic before (torch 2.13, fixed in 2.14) -- see docs/development/torch-compile.md)`를 일으킵니다. 문은
+  arithmetic before (torch 2.13, fixed in 2.14) -- see docs/development/torch-compile.md)`를 일으킵니다. 입구는
   Dynamo가 로드된 상태에서 실행된 뒤에야 이유를 담습니다. 한 프로세스에서 첫 `fullgraph` 컴파일이나 엄격한
   export는 즉시 실행 wavebit 호출 뒤라도(그 호출은 빠른 경로를 타고 아무것도 캐시하지 않습니다) 이유 없이
   `torch.compiler.disable`만 지명합니다 -- 그래도 `Unsupported`로 크게 알립니다.
-- 엄격하지 않은 `torch.export`는 `disable`이 적용되지 않는 기본 방식으로 문을 실행하므로, 문은
+- 엄격하지 않은 `torch.export`는 `disable`이 적용되지 않는 기본 방식으로 입구를 실행하므로, 입구는
   `torch.compiler.is_exporting()`이 참인 동안 `NotImplementedError`("wavebit cannot be exported: ...")로
   거부합니다. 그것이 없으면 내보낸 모듈은 즉시 실행 값과 `grad_fn` 없음을 돌려주었습니다.
 - `torch.jit.trace`는 모든 공개 wavebit 호출에서 `NotImplementedError`("wavebit cannot be traced by
   torch.jit.trace: ...")를 일으킵니다. Dynamo가 관여하지 않고 값이 구체적이므로 `disable`이 잡지 못합니다.
-  각 문은 공개 `torch.jit.is_tracing()`이 참인 동안 거부합니다. 그 전에는 닿는 곳마다 조용했습니다.
+  각 입구는 공개 `torch.jit.is_tracing()`이 참인 동안 거부합니다. 그 전에는 닿는 곳마다 조용했습니다.
   - 풀이 하나가 `TracerWarning` 66개와 함께 추적되어 `grad_fn` 없는 출력을 돌려주었으므로, 추적한 풀이를 다른
     항과 섞은 손실은 그래디언트에서 wavebit의 몫을 잃었습니다. p = 0에서 즉시 실행이 0.2721483665790을 읽는
     곳에서 0.0, p = 0.05에서 즉시 실행이 0.3733920308334를 읽는 곳에서 0.1(즉 2p뿐)이었습니다;
@@ -347,12 +347,12 @@ NumPy 2차 차분 1.1001006765e-04에 대해 1.1001006774e-04를 읽으며, 전�
     실행의 1574.35에 해당하는 그래디언트는 없었습니다.
 
   첫 판은 풀이가 결정 지점에서 값을 읽는 곳(`backend._concrete`)에서만 거부했습니다. 마지막 둘은 거기에
-  닿지 않으므로, 검사는 모든 공개 호출이 지나는 문에 있습니다.
+  닿지 않으므로, 검사는 모든 공개 호출이 지나는 입구에 있습니다.
 
 **다루지 않는 것.**
 
 - 실제 텐서에 대한 `make_fx`는 `grad_fn` 없는 값을 돌려줍니다. 거부할 근거가 되는 공개 플래그가 없습니다.
-- 컴파일된 autograd(`torch._dynamo.config.compiled_autograd = True`)는 문이 아닌 wavebit의 사용자 정의
+- 컴파일된 autograd(`torch._dynamo.config.compiled_autograd = True`)는 입구가 아닌 wavebit의 사용자 정의
   `autograd.Function` 역전파 규칙을 컴파일합니다. 즉시 실행과 7.2e-13 이내로 측정했지만(2026-10-11), 그것은
   계약이 아닙니다.
 - 컴파일된 함수를 거친 `forward_ad` 접선은 `None`으로 돌아옵니다. wavebit 없이도 그러므로, torch의
@@ -360,22 +360,22 @@ NumPy 2차 차분 1.1001006765e-04에 대해 1.1001006774e-04를 읽으며, 전�
 
 ### 비용과, 그것이 기대는 것
 
-Dynamo가 로드되지 않은 동안 문 호출당 약 90 ns, 로드된 뒤에는 약 490 ns이며, 순방향 한 번에 374–548회의 문
+Dynamo가 로드되지 않은 동안 입구 호출당 약 90 ns, 로드된 뒤에는 약 490 ns이며, 순방향 한 번에 374–548회의 입구
 호출이 있습니다(2026-10-11에 67개 지점으로 셈). 번갈아 실행한 세 라운드의 최솟값, 스레드 하나,
 `develop` → 이 변경: 1D TE (3,0) 값만 구하는 풀이는 Dynamo 없이 2.14 → 2.17 ms, 있을 때
 2.17 → 2.40 ms; 필드가 있는 2D (2,2) 풀이는 7.66 → 8.04 ms와 7.64 → 7.96 ms입니다.
 순방향 모드 이원수, `torch.func.grad`, 모든 `torch.optim` 단계는 Dynamo를 가져오므로, 최적화 루프는 첫 단계
 뒤로 두 번째 수치의 비용을 치릅니다. 순방향당 고정된 ~0.2–0.3 ms이며, 풀이 하나가 수백 밀리초 걸리는 차수 (15,15)
-이상에서는 0.1% 미만입니다. `torch.jit.trace` 검사는 어느 경로에서든 모든 문 호출에 약 100 ns를 더합니다.
-아무것도 하지 않는 함수를 감싼 문은 Dynamo 없이 61에서 158 ns로, 있을 때 346에서 449 ns로 늘었습니다
+이상에서는 0.1% 미만입니다. `torch.jit.trace` 검사는 어느 경로에서든 모든 입구 호출에 약 100 ns를 더합니다.
+아무것도 하지 않는 함수를 감싼 입구는 Dynamo 없이 61에서 158 ns로, 있을 때 346에서 449 ns로 늘었습니다
 (2026-10-12, 두 실행의 평균, 각 실행은 백만 회 호출 반복 일곱 번의 최솟값). 1D TE, conical, 2D 장면에서
-순방향당 문 호출은 373, 390, 392회이며 — 순방향당 약 0.04 ms입니다.
+순방향당 입구 호출은 373, 390, 392회이며 — 순방향당 약 0.04 ms입니다.
 
 두 가지 구현 사실에 기대며, 둘 다 바뀌면 조용히 실패할 것입니다.
 
 1. `torch.compile`과 엄격하지 않은 `torch.export`는 무엇이든 컴파일하기 전에 `torch._dynamo`라는 모듈을
    가져옵니다 — 빠른 경로의 전제입니다.
-2. `torch.compiler.disable`은 재귀적이므로(문서화된 기본값 `recursive=True`), 문이 호출하는 모든 것은 즉시
+2. `torch.compiler.disable`은 재귀적이므로(문서화된 기본값 `recursive=True`), 입구가 호출하는 모든 것은 즉시
    실행으로 남습니다.
 
 `tests/api/test_torch_compile.py`가 둘 중 어느 것이든 잡으므로(그 경보는 컴파일된 풀이를 즉시 실행 autograd와
@@ -391,5 +391,5 @@ Dynamo가 로드되지 않은 동안 문 호출당 약 90 ns, 로드된 뒤에�
 compiled output and gradients for overlapping-input `torch.diagonal_scatter` operations"로 실렸습니다.
 코드 조각을 쓰인 그대로 여기서 다시 측정했습니다. 2.13.0은 grad가 있을 때 complex128과 complex64 모두
 1.381을 주고, 2.14.0과 2.14.1은 macOS arm64와 CI의 Linux x86-64에서 모든 dtype에 대해 0을 줍니다. 그날부터
-하한이 2.14이므로 카나리아는 모든 플랫폼에서 단언합니다. 문은 위의 이유로 남습니다. 측정한 비용으로 앞으로의
+하한이 2.14이므로 카나리아는 모든 플랫폼에서 단언합니다. 입구는 위의 이유로 남습니다. 측정한 비용으로 앞으로의
 모든 Inductor 결함에서 wavebit을 지켜 주며, wavebit 부분을 컴파일해도 얻는 것이 없습니다(§4).

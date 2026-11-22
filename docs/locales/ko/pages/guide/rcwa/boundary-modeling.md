@@ -4,7 +4,7 @@
 예제는 현재의 `rcwa.Problem` / `rcwa.Numerics` 생애주기를 사용합니다. 다만
 [미분 가능성](#differentiability) 아래의 예제 하나는 측정 당시의 이전 `wavebit.compat.legacy`
 표기 그대로 남겨 두었습니다(2026-10-15에 퇴역했으며, 과거 체크아웃에서 실행됩니다). 현재
-생애주기에서는 같은 미분이 PyTorch에서, 즉시(eager) `jax.grad`에서, 그리고
+생애주기에서는 같은 미분이 PyTorch에서, 즉시 실행(eager) `jax.grad`에서, 그리고
 `Numerics(topology_check=...)`가 받아들이는 형상에 대해서는 `jax.jit`에서 실행됩니다([JAX 변환 안에서 형상 위상 검사하기](guarded-shape-jit.md)).
 :::
 
@@ -267,7 +267,7 @@ res = solver.solve(geometry=solver.freeze_geometry())
 그래디언트는 `(cx, cy, lx, ly, angle)`에서 재생, 다각형 변환과 법선장을 거쳐 합성곱 행렬까지
 이어지며, 유한 차분과 2.3e-08 이내로 일치합니다. 현재 생애주기에서는 `rcwa.prepare`가 고정을
 맡고, 같은 미분이 PyTorch에서(`backend='torch'`로 준비하고 grad를 요구하는 형상 값을
-`prepared.run`에 넘깁니다), 즉시 `jax.grad`에서, 그리고 `Numerics(topology_check=...)`가 받아들이는
+`prepared.run`에 넘깁니다), 즉시 실행 `jax.grad`에서, 그리고 `Numerics(topology_check=...)`가 받아들이는
 형상에 대해서는 `jax.jit`이나 `jax.vmap`에서 실행됩니다. 기본으로는 고정 셀 카르테시안 Li 직사각형,
 `'host'`를 주면 다른 스칼라 형상도 받아들입니다([JAX 변환 안에서 형상 위상 검사하기](guarded-shape-jit.md)).
 
@@ -500,7 +500,7 @@ jit하지 않은 그래디언트 루프, 바로 옵티마이저가 사는 곳에
 :::
 
 이 표는 이전 인터페이스의 것입니다. `rcwa.prepare`와 `prepared.run`을 거치면 즉시 실행 행과 PyTorch
-행은 쓰인 그대로 성립합니다. 형상의 즉시 `jax.grad`는 PyTorch 텐서와 마찬가지로 그 구체적인 primal
+행은 쓰인 그대로 성립합니다. 형상의 즉시 실행 `jax.grad`는 PyTorch 텐서와 마찬가지로 그 구체적인 primal
 값으로 검사합니다. `jax.jit`이나 `jax.vmap`에서 추적된 형상은 기하에 닿기 전에 거부합니다(코드
 `prepared.host_topology`).
 

@@ -15,7 +15,7 @@ silicon, 단일 프로세스, float64)에서 측정했습니다.
 `solver.freeze_geometry()`와 `solver.solve(geometry=...)`로 측정했습니다. 이 인터페이스는
 2026-10-15에 `wavebit.compat`와 함께 퇴역했으므로, 이 행들을 재현하려면 과거 체크아웃이 필요합니다.
 공개 생애주기인 `rcwa.prepare(...)` 다음 `prepared.run(problem)`은 즉시 실행(eager) `jax.grad` 아래에서는
-tracer의 primal에서 형상의 위상을 검사해 형상 치수를 미분하고, `jax.jit`나 `jax.vmap` 아래에서는
+추적자의 primal에서 형상의 위상을 검사해 형상 치수를 미분하고, `jax.jit`나 `jax.vmap` 아래에서는
 `Numerics(topology_check=...)`가 허용하는 형상에 대해 미분합니다. 기본값(`'device'`)에서는 셀이 고정된
 카르테시안 Li 직사각형, `'host'`에서는 나머지 스칼라 형상이 허용되고, 그 밖의 형상은 이름을 밝혀
 거부합니다([JAX 변환 안에서 형상 위상 검사하기](../../guide/rcwa/guarded-shape-jit.md)). 따라서
@@ -266,13 +266,13 @@ jit를 쓰지 않아야 합니다.
 `one freeze` 열과 정확히 같고, 낡음이 생길 수 없습니다. 패턴이 매 단계 움직이는 래스터 역설계에서 택할
 전략이 이것입니다.
 
-**3. 모든 래스터 전략은 고정 없이 미분됩니다.** grad tracer는 배열 전체의 NumPy 변환은 거부하지만 값을 하나씩
+**3. 모든 래스터 전략은 고정 없이 미분됩니다.** grad 추적자는 배열 전체의 NumPy 변환은 거부하지만 값을 하나씩
 좁혀 읽는 것은 허용합니다 — primal이 구체적인 값이므로 각 원소를 읽을 수 있습니다.
 
 | | `np.asarray(whole_array)` | `bool(one_element)` |
 |---|---|---|
-| `jax.grad` tracer | `TracerArrayConversionError` | **OK** |
-| `jax.jit` tracer | `TracerArrayConversionError` | `TracerBoolConversionError` |
+| `jax.grad` 추적자 | `TracerArrayConversionError` | **OK** |
+| `jax.jit` 추적자 | `TracerArrayConversionError` | `TracerBoolConversionError` |
 
 두 즉시 실행 결정은 모두 두 번째 방식으로 묻습니다. 압축은 이웃한 행과 열을 직접 비교합니다. 법선장은 그렇게
 할 수 없으므로(SciPy는 마스크를 배열로 원합니다), 마스크를 들어 올린 격자에서 읽는 대신 *기저* 래스터에서

@@ -20,7 +20,7 @@
 해시한 방식을 말합니다.
 
 - [섞인 재료 매개변수와 극점 산술 거부](fd-pole-arithmetic.md)
-- [한 칸에 지나가는 두 매끈한 표면: 다면체 자르기 (4단계, C10)](fd-polytope-clip.md)
+- [한 칸에 지나가는 두 스무딩한 표면: 다면체 자르기 (4단계, C10)](fd-polytope-clip.md)
 - [대각 밖 구성 칸 (4단계, C11): 등록한 관문의 결과](fd-stage4-c11.md)
 - [4단계 보고: 모양과 정확도 (C0-C12)](fd-stage4-report.md)
 - [C8: 유전체 안의 전도성 박막 하나](fd-conductive-film.md)

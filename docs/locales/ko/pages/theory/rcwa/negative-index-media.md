@@ -41,7 +41,7 @@ ETM/SMM 표 -- 은 그 페이지에 있습니다. 두 종류의 서술은 스터
   `_lit_index_is_negative`, `_frame_azimuth`, `_indices_signed_by_pairs`,
   `CoreFactorizationMixin._layer_double_negative`
 - `src/wavebit/materials/response.py` — `refractive_index_from_eps`; `src/wavebit/_common/backend.py` — `principal_sqrt`
-- `src/wavebit/rcwa/_engine/illumination.py` — `_plane_basis`, coherent door의 포트
+- `src/wavebit/rcwa/_engine/illumination.py` — `_plane_basis`, coherent 입구의 포트
 - `src/wavebit/rcwa/_engine/source_expansion.py` — `resolve_wave`, `gaussian_waves`
 - `src/wavebit/rcwa/_engine/solve_2d_first_order.py` — `split_forward_backward`
 - `studies/rcwa/negative_index_media/negative_index_media.py` — 아래의 모든 숫자
@@ -87,7 +87,7 @@ ETM/SMM 표 -- 은 그 페이지에 있습니다. 두 종류의 서술은 스터
   해가 아예 없습니다(§9).
 * **`s = +1`인 모든 매질 -- 모든 비자성 매질과 모든 보통 자성 매질 -- 은 develop의 숫자를 비트 단위로
   그대로 냅니다.** 예외는 §13이 이름을 밝힌 곳뿐입니다. 하네스 배열 26,124개 중 26,090개가 develop
-  `0dfc4ce`와 바이트 단위로 같고, 같지 않은 34개(정확한 수직 입사에서의 coherent door, 그리고 추적되는
+  `0dfc4ce`와 바이트 단위로 같고, 같지 않은 34개(정확한 수직 입사에서의 coherent 입구, 그리고 추적되는
   자성 반공간에 대한 `jax.jit`)는 상대적으로 최대 2.8e-15만큼 움직입니다. develop에서 틀렸던 정확히
   `theta = 0`에서의 그래디언트 두 개는 이제 맞습니다. 그리고 일부 거부 문구가 바뀌었습니다. `s = -1`인
   매질 -- 이중 음성 매질과 수동 자성 금속 -- 은 §13이 나열하는 대로 의도적으로 바뀝니다.
@@ -139,7 +139,7 @@ ETM/SMM 표 -- 은 그 페이지에 있습니다. 두 종류의 서술은 스터
 | 차수별 좌표계 | 각 회절 차수의 s/p 기저: `s_hat = z_hat x k_hat_par`이며, `k_hat_par`는 그 차수의 면내 방향입니다(§8). 진폭 `r_s`, `r_p`, `t_s`, `t_p`는 이 좌표계로 표시합니다 |
 | `psi`, `polarization` | 입사 편광: `psi`는 라디안 단위 각도(`pi/2`가 s, `0`이 p), 또는 입사 차수의 좌표계에서 존스 성분인 `polarization=(a_s, a_p)` |
 | `power_entering` | 비추는 계면을 지나 구조 안으로 들어가는 전력을 입사 전력 단위로 나타낸 값. `T`에 적층이 흡수하는 양을 더한 것이며, 비추는 매질이 흡수할 때는 `1 - R`이 *아닙니다*(§7) |
-| 문(door) | 빛이나 데이터가 풀이에 도달하는 방식: **theta door**(`theta`, `phi`), **direct-k door**(`kx`, `ky`), **coherent door**(`excitation={side: PlaneWave(...)}`), **field door**(`reconstruct_field`, `boundary_fields`) |
+| 입구(door) | 빛이나 데이터가 풀이에 도달하는 방식: **theta 입구**(`theta`, `phi`), **direct-k 입구**(`kx`, `ky`), **coherent 입구**(`excitation={side: PlaneWave(...)}`), **field 입구**(`reconstruct_field`, `boundary_fields`) |
 | 하네스 | §13이 이 트리와 develop의 트리에서 풀어 모든 배열을 바이트 단위로 비교하는 고정된 장면 집합 |
 
 ---
@@ -604,7 +604,7 @@ ETM과 SMM, 어느 쪽에서 비추든, 손실 있는 먼 쪽과 손실 없는 �
 ### 규칙, 그리고 어느 매질의 부호를 뒤집는가
 
 `conventions.signed_index(eps, mu)`는 `(eps, mu)` 쌍이 굴절률이 되는 유일한 곳입니다. 공개
-`n_top` / `n_bot` / `n_inc`가 이를 읽고, 커널의 `n/mu`, 입사 `k_par`, field door와 coherent door의 평면파
+`n_top` / `n_bot` / `n_inc`가 이를 읽고, 커널의 `n/mu`, 입사 `k_par`, field 입구와 coherent 입구의 평면파
 기저도 이를 읽습니다. 투자율이 없는 매질은 결코 여기에 도달하지 않습니다. 그 굴절률은 언제나처럼 주근
 `sqrt(eps)`(`refractive_index_from_eps`)입니다 *(스터디 §3)*.
 
@@ -878,7 +878,7 @@ P. Kinsler와 M. W. McCall(*Phys. Rev. Lett.* **101**, 167401 (2008))은 음굴�
 
 `theta = 0`에서 0차 차수에는 면내 방향이 없으며, 입사 편광을 표시하는 차수별 s/p 좌표계는 규약으로 방향을
 하나 정합니다. `k_par` 자신의 방향의 극한 `theta -> 0+`입니다. 음굴절률 쪽에서 그것은 `phi + pi`이므로 좌표계를
-그곳에 둡니다(`CoreSolveMixin._frame_azimuth`; 순수 1D 좌표계 부호 `order_frame_sign`과 coherent door의
+그곳에 둡니다(`CoreSolveMixin._frame_azimuth`; 순수 1D 좌표계 부호 `order_frame_sign`과 coherent 입구의
 `resolve_wave`도 같은 방위각을 읽습니다). `(-3+0.1i, -0.5+0.05i)`에서 `phi = 0.6`으로 비춘 격자에서,
 `theta = 0`을 `1e-9`와 비교하면, 모든 진폭, `r_xyz` / `t_xyz`, 재구성 필드와 입사 필드가, 5개 경로 x 2개 쪽
 x ETM / SMM에서 최대 8.7e-09만큼 움직입니다. 좌표계를 `phi`에 두면 conical, 2D, first-order 경로에서 최소
@@ -893,13 +893,13 @@ x ETM / SMM에서 최대 8.7e-09만큼 움직입니다. 좌표계를 `phi`에 �
   움직이며 법선의 같은 쪽에 머뭅니다(실수 `-0.4203`, 복소 `-0.4202`) *(스터디 §4)*. 그 `R`과 `T`는 모든 복소
   각도에서처럼 형식적인 비율입니다([`conventions.md`](../../reference/common/conventions.md#real-angle-incidence)).
 * **direct `kx`와 `ky`는** 물리적 파수이며 각도를 담지 않으므로, 비추는 매질이 무엇이든 주어진 그대로 받습니다.
-  `theta` door 자신의 `(kx, ky)`로 두면 모든 진폭을 3.1e-15까지 재현합니다 *(스터디 §4)*.
-* **정확한 수직 입사에서 두 door는 음굴절률 쪽에서 서로 다른 좌표계를 택합니다.**
-  direct-`k` door에는 `phi`가 없으므로 `kx = ky = 0`에서 그 s/p 기저는 방위각 0을 쓰고, `theta = 0, phi = 0`의
-  `theta` door는 `phi + pi`를 씁니다. `(-2, -1)`에서 `polarization=(1, 0)`으로 비추면
-  `theta` door의 입사 필드는 `E = (0, -1, 0)`이고 direct-`k` door의 것은 `(0, +1, 0)`이며, 둘 다
-  `r_s = -0.029437`을 보고합니다 *(스터디 §4)*. 각 진폭은 자기 door의 좌표계로 표시됩니다. 양굴절률 쪽에서는 두
-  door가 일치합니다. 수직 입사에서 두 door 사이의 위상을 비교하려면 그 부호가 필요합니다.
+  `theta` 입구 자신의 `(kx, ky)`로 두면 모든 진폭을 3.1e-15까지 재현합니다 *(스터디 §4)*.
+* **정확한 수직 입사에서 두 입구는 음굴절률 쪽에서 서로 다른 좌표계를 택합니다.**
+  direct-`k` 입구에는 `phi`가 없으므로 `kx = ky = 0`에서 그 s/p 기저는 방위각 0을 쓰고, `theta = 0, phi = 0`의
+  `theta` 입구는 `phi + pi`를 씁니다. `(-2, -1)`에서 `polarization=(1, 0)`으로 비추면
+  `theta` 입구의 입사 필드는 `E = (0, -1, 0)`이고 direct-`k` 입구의 것은 `(0, +1, 0)`이며, 둘 다
+  `r_s = -0.029437`을 보고합니다 *(스터디 §4)*. 각 진폭은 자기 입구의 좌표계로 표시됩니다. 양굴절률 쪽에서는 두
+  입구가 일치합니다. 수직 입사에서 두 입구 사이의 위상을 비교하려면 그 부호가 필요합니다.
 
 ### 흡수하는 비추는 매질의 `s = +-1` 경계
 
@@ -976,7 +976,7 @@ NPV 쪽에서 주어진 필드 *벡터*를 요청하려면 두 존스 성분의 
 | `(-3, -0.5)` | `+1.1281`: 위상은 위로 | `0` | `-1.1281`: 전력은 아래로 | 1.7e-16 | 4.5e-18 |
 | `(-3+0.1i, -0.5+0.05i)` | `+1.1291` | `-0.0886`: 구조를 향해 감쇠 | `-1.1262` | 4.2e-17 | 8.5e-17 |
 
-coherent door(`excitation={side: PlaneWave(...)}`)는 자체 기저(`illumination._plane_basis`)로 같은 파동을
+coherent 입구(`excitation={side: PlaneWave(...)}`)는 자체 기저(`illumination._plane_basis`)로 같은 파동을
 만들며, 어느 쪽이든 손실 있는 또는 손실 없는 이중 음성 매질에서 비출 때, `(0.35, 0.6)`에서, 그리고 `phi = 0.6`과
 `2.5`의 수직 입사에서, 보통 풀이와 전력은 3.7e-15, 필드는 1.5e-14까지 일치합니다 *(스터디 §8)*.
 
@@ -1260,7 +1260,7 @@ arXiv:1008.2874)는 능동 매질 굴절률의 부호가 한 주파수의 `eps`�
 | **상반성**: 손실 없는 `(-3, -0.5)`에서 비추어 유리로 가는 `+-1` 차수를, 그 차수의 역방향으로 비춘 유리와 비교 | 비추는 쪽의 방향과 정규화, 정리에 의해 | 1.7e-15 *(스터디 §8)* |
 | 손실 없는 포트 사이 공개 산란 행렬의 **유니터리성** | 부호 있는 굴절률에서의 포트 정규화 | 1.6e-15 conical, 7.5e-15 2D *(스터디 §5)* |
 | 입사파에 대한 맥스웰 방정식, `H = k x E / mu`, `k.E = 0` | 입사 기저 | 1.7e-16 *(스터디 §5)* |
-| **fmmax 1.7.1**, `tests/references/test_fmmax_dng_golden.py`: 모든 차수의 비편광 `R`과 `T`, 픽셀당 16/32/64/128 샘플에 대한 Richardson | 이런 선택을 하나도 하지 않은 솔버(그 규칙 `Im(kz) > 0`은 모든 손실 매질에 옳습니다) | 경우별 최악 차수: DNG 위의 1D 격자 5.9e-14(한계 4.7e-12); 2D 7.5e-14(5.6e-12); DNG 위 격자 속의 DNG 픽셀 6.1e-12(3.9e-10); DNG에서 비춤 2.7e-14(2.7e-12); ETM과 SMM, `theta` door와 direct-`k` door *(스터디 §8)* |
+| **fmmax 1.7.1**, `tests/references/test_fmmax_dng_golden.py`: 모든 차수의 비편광 `R`과 `T`, 픽셀당 16/32/64/128 샘플에 대한 Richardson | 이런 선택을 하나도 하지 않은 솔버(그 규칙 `Im(kz) > 0`은 모든 손실 매질에 옳습니다) | 경우별 최악 차수: DNG 위의 1D 격자 5.9e-14(한계 4.7e-12); 2D 7.5e-14(5.6e-12); DNG 위 격자 속의 DNG 픽셀 6.1e-12(3.9e-10); DNG에서 비춤 2.7e-14(2.7e-12); ETM과 SMM, `theta` 입구와 direct-`k` 입구 *(스터디 §8)* |
 | **거울 매질**(A. Lakhtakia의 켤레 대칭, 2004, V. Grunhut과 R. A. Depine 2011이 계면에 적용한 대로): 먼 쪽 `(eps, mu)`를 `(-conj(eps), -conj(mu))`와 비교, 유리에서 0, 0.3 rad, 60 deg로 비춤, 손실 있는, 손실 없는, 소멸하는 먼 쪽, 5개 경로 x 2개 쪽 x ETM / SMM | 이중 음성 매질이 거울 근과 부호 있는 굴절률을 택함, 정리에 의해 | 사이에 층 없음: 2,376개 배열 중 2,376개가 정확히 켤레, 비트 단위로; 모든 층도 거울로 바꿈: 7.8e-15 *(스터디 §8)* |
 | **PyMoosh 4.0.1**, `tests/references/test_pymoosh_dng_golden.py`: **손실 없는** 이중 음성 매질을 기판, 비추는 상부 매질, 내부 층, 그리고 셋 모두로 둔 평판 적층; `r`, `t`, `R`, `T`, TE와 TM, 각각 네 개의 `kx` | fmmax가 읽을 것이 없는 곳에서 손실 없는 근과 `t_p`의 굴절률 부호; PyMoosh의 규칙은 모든 손실 없는 매질에서 Wavebit의 규칙과 같습니다 | 32개 행 x TE/TM, 2D, first-order 경로 x ETM / SMM에서 8.8e-15(한계 1e-13); 비추는 쪽 너머의 각 이중 음성 매질을 그 양의 쌍둥이로 바꾸면 1.8에서 2.9만큼 빗나감 *(스터디 §8)* |
 | 이중 음성 층에서 ETM 대 SMM | 라벨 규칙 | §9 |
@@ -1292,7 +1292,7 @@ fmmax 1.7.1과 그 환경이 필요합니다(`tests/references/README.md`). PyMo
 | 부호 있는 0의 근은 모든 백엔드에서 같음 | `tests/materials/test_material.py::test_a_signed_zero_names_the_same_root_on_every_backend` |
 | `theta`는 빛을 가리킴: 포인팅, 굴절, 상반성 | `test_theta_and_phi_are_the_direction_the_incident_power_travels`, `test_light_from_a_negative_index_medium_refracts_negatively`, `test_a_grating_lit_from_a_negative_index_side_is_reciprocal` |
 | `theta = 0`에서와 복소 각도에서의 연속성 | `test_the_incident_field_is_continuous_through_normal_incidence`, `test_a_complex_angle_meets_the_real_one` |
-| coherent door | `test_the_coherent_door_agrees_with_the_ordinary_solve`, `test_the_coherent_door_lights_a_negative_index_side_as_the_ordinary_solve` |
+| coherent 입구 | `test_the_coherent_door_agrees_with_the_ordinary_solve`, `test_the_coherent_door_lights_a_negative_index_side_as_the_ordinary_solve` |
 | 거부와 이득 대역 | `test_an_active_negative_index_half_space_is_refused`, `test_a_gaussian_beam_from_a_negative_index_side_is_refused`, `test_the_refusals_read_torch_values_eagerly`, `test_the_gain_band_of_a_double_negative_is_the_mirror_image`, `test_the_gain_band_flags_an_active_double_negative_under_jit` |
 | `solve_conv` 반공간 쌍 | `test_solve_conv_half_space_terms_are_read`, `test_a_solve_conv_pair_signs_the_index_it_is_solved_with`, `test_under_jit_the_scenes_own_pairs_sign_nothing` |
 | 백엔드, `jit`, 그래디언트 | `test_the_backends_agree`, `test_jit_through_a_lit_negative_index_superstrate`, `test_jit_and_grad_through_a_negative_index_substrate` |
@@ -1305,7 +1305,7 @@ fmmax 1.7.1과 그 환경이 필요합니다(`tests/references/README.md`). PyMo
 | `theta = 0`에서의 미분(모든 매질) | `tests/rcwa/test_order_azimuth.py::test_the_column_carries_its_derivative_along_kx`, `tests/rcwa/test_order_azimuth.py::test_the_theta_derivative_at_normal_incidence_on_a_2d_grating`, `tests/rcwa/test_coherent_illumination.py::test_torch_gradients_at_normal_incidence_are_the_one_sided_limit` |
 | 파동이 없는 매질에서 실수 각도의 거부 | `tests/rcwa/test_phase_incidence.py::test_a_lossless_lit_medium_that_carries_no_wave_is_refused_by_name` |
 
-**각 테스트는 돌연변이에 대해 확인했습니다**. 새로운 동작을 하나씩 되돌렸으며 -- 부호 없음, "이중 음성"을 기준으로
+**각 테스트는 변이에 대해 확인했습니다**. 새로운 동작을 하나씩 되돌렸으며 -- 부호 없음, "이중 음성"을 기준으로
 한 부호, `sign(Re(q))`만 쓰기, 엄격한 동점, 부호 없는 `k_par`, 좌표계를 읽는 각 장소에서 좌표계를 돌리지 않기, 주근
 위의 coherent 기저, 이득 대역, 거울 절단 끄기, 각 라벨 규칙 -- 각 되돌림은 적어도 하나의 테스트를 실패시킵니다.
 커밋 메시지가 그 개수를 기록합니다.
@@ -1328,11 +1328,11 @@ develop은 이 작업이 분기한 커밋 `0dfc4ce`입니다.
 | NumPy: 5개 경로 x ETM / SMM x 비추는 쪽 / 먼 쪽 x `theta` 0, 0.3, 0.3+0.05i, 1.4 | 20,796 (90) | 20,796 | 0 |
 | JAX 즉시 실행: conical과 2D x ETM / SMM x 비추는 쪽 / 먼 쪽, `theta = 0.3` | 2,616 (12) | 2,616 | 0 |
 | PyTorch 즉시 실행: 같음 | 2,616 (12) | 2,616 | 0 |
-| coherent door, 그 매질에서 쏘는 `PlaneWave`, `theta` 0.3과 0 | 60 (6) | 34 | 26, 모두 `theta = 0`에서, 상대적으로 최대 2.8e-15 |
+| coherent 입구, 그 매질에서 쏘는 `PlaneWave`, `theta` 0.3과 0 | 60 (6) | 34 | 26, 모두 `theta = 0`에서, 상대적으로 최대 2.8e-15 |
 | `jax.jit`, 자성 반공간의 `Re(eps)`를 추적, 비추는 쪽과 먼 쪽 | 36 (0) | 28 | 8, 상대적으로 최대 7.6e-16 |
 
 거부 기록은 발생한 예외의 클래스 이름이므로, 문구가 바뀐 메시지는 변경으로 세지 않습니다. 두 예외는 모두
-의도된 것입니다. 정확한 수직 입사에서 coherent door는 이제 편광이 아니라 좌표계를 돌리며, 그것이 그 그래디언트를
+의도된 것입니다. 정확한 수직 입사에서 coherent 입구는 이제 편광이 아니라 좌표계를 돌리며, 그것이 그 그래디언트를
 맞게 만듭니다(§11). 그리고 `jit` 아래에서 추적되는 *자성* 반공간의 부호 있는 굴절률과 비추는 쪽 `k_par` 부호는
 런타임 선택이며, XLA는 이를 다른 반올림으로 컴파일합니다. 그 `where`들을 제거하면 일치가 복원되지만, 추적되는
 재료에는 필요합니다.
@@ -1398,7 +1398,7 @@ JAX 배열로 넘기면, NumPy, PyTorch, Python 숫자에서 늘 그랬듯이 �
 조사가 알려 준 것, 그리고 Wavebit의 규칙이 어디에서 왔는가:
 
 * **어떤 RCWA 코드도 음굴절률 매질에서 각도가 무엇을 뜻하는지 정의하지 않으며**, 음굴절률 매질을 문서화한 코드도
-  없습니다. RETICOLO, fmmax, Wavebit의 direct-`k` door는 모두 면내 파동 벡터를 기본 입력으로 받습니다.
+  없습니다. RETICOLO, fmmax, Wavebit의 direct-`k` 입구는 모두 면내 파동 벡터를 기본 입력으로 받습니다.
 * **`Im(kz) > 0`은 어느 부호든 모든 손실 매질에 대한 물리적 규칙입니다**(fmmax, inkstone, 그리고 Depine과
   Lakhtakia의 격자 논문: R. A. Depine and A. Lakhtakia, *Phys. Rev. E* **69**,
   057602 (2004)). 손실 없는 차수에서는 읽을 것이 없으며, 그곳에서는 바깥으로 나가는 전력 `Re(kz/mu) > 0`으로 동점을
@@ -1490,7 +1490,7 @@ JAX 배열로 넘기면, NumPy, PyTorch, Python 숫자에서 늘 그랬듯이 �
 * **`eps*mu`만 가진 호출자.** `eps_bot` 없이 `mu_bot`으로 호출한 커널은 Maystre 근을 택합니다
   ([`branch-cuts.md`](branch-cuts.md) §9). 엔진은 자성 장면에서 항상 둘 다 넘깁니다.
 * **`solve_conv` 반공간 쌍.** 비추는 쪽의 부호를 뒤집는 쌍은 그 풀이에만 유효합니다. 그 뒤에는 입사를 실시간으로
-  읽는 솔버 자신의 `reconstruct_field`가 두 장면을 섞지 않고 거부합니다. 결과의 field door는 여전히 작동합니다. 층
+  읽는 솔버 자신의 `reconstruct_field`가 두 장면을 섞지 않고 거부합니다. 결과의 field 입구는 여전히 작동합니다. 층
   개수는 맞지만 장면의 것이 아닌 행렬을 준 `solve_conv`는 장면의 라벨을 씁니다. 그 대가는 조건수뿐이며, 답은 결코
   아닙니다.
 * **테스트되지 않음:** 스침 차수 묶음에 대한 2D 경로의 재라벨링에는 자체 테스트가 없습니다.
@@ -1594,7 +1594,7 @@ result = solver.solve()
 float(np.sum(result.R)), float(np.sum(result.T))   # 0.11623, 0.74861
 ```
 
-**coherent door를 거쳐**: 음굴절률 쪽에서 쏘는 `PlaneWave`는 `theta`가 뜻하는 것을 뜻하며, 같은 빛을 돌려줍니다(§8).
+**coherent 입구를 거쳐**: 음굴절률 쪽에서 쏘는 `PlaneWave`는 `theta`가 뜻하는 것을 뜻하며, 같은 빛을 돌려줍니다(§8).
 coherent 결과는 `R`이 아니라 쪽별 전력을 보고합니다.
 
 ```python
@@ -1613,7 +1613,7 @@ float(np.sum(plain.R)), float(np.sum(plain.T))              # 0.06712053, 0.9331
 
 **`solve_conv` 반공간 쌍**: `solve_conv`에 넘기는 반공간 항은 장면이 갖지 않은 `(eps, mu)` 쌍을 지정할 수 있습니다.
 그러면 풀이는 그 쌍의 근과 부호 있는 굴절률을 쓰고, 그 뒤 솔버는 다시 자기 장면으로 돌아갑니다. 쌍이 *비추는* 쪽의
-부호를 뒤집으면 솔버 자신의 `reconstruct_field`는 그 뒤에 거부하지만, 결과의 field door는 여전히 작동합니다(§15).
+부호를 뒤집으면 솔버 자신의 `reconstruct_field`는 그 뒤에 거부하지만, 결과의 field 입구는 여전히 작동합니다(§15).
 
 ```python
 nim = (-3 + 0.1j, -0.5 + 0.05j)

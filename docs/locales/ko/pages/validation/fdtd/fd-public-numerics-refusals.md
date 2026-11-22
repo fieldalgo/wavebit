@@ -1,6 +1,6 @@
 # 공개 수치 선택자 거부 메시지
 
-공개 lowering 경로는 지원하지 않는 `Numerics.junction` 및
+공개 낮추기(lowering) 경로는 지원하지 않는 `Numerics.junction` 및
 `Numerics.discretization` 값(이 기록 당시의 철자는 `discretisation`)을 거부합니다.
 기존 공개 철자 회귀 테스트가 요구하듯이, 이 경로의 이른 거부 메시지는 여전히 공개 생성자와
 선택자의 이름을 밝혀야 합니다.

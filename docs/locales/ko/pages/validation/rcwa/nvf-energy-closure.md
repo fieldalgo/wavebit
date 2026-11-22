@@ -75,7 +75,7 @@ y 파동벡터는 y 성분이 0이 아닌 각 파동을 반대 패리티의 파�
 원시 기록은 `studies/rcwa/nvf_energy_closure/records/nvf_closure_memory.log`에, 빌드/런타임 세부 사항은
 `studies/rcwa/nvf_energy_closure/records/nvf_closure_runtime.log`에 있습니다.
 
-더 큰 cap-96 투영은 같은 시험 공간, 셀 설정, 등급화 반지름 .01과 함께 국소 플럭스 좌표를 씁니다. 옛 cap-80
+더 큰 cap-96 투영은 같은 시험 공간, 셀 설정, 비균일화 반지름 .01과 함께 국소 플럭스 좌표를 씁니다. 옛 cap-80
 계수와 겹치는 부분은 최대 3.57e-11만큼 다릅니다. 바깥 차수 16에서 p/s 투과는 이전 거울 기록과
 +6.28e-12 / -5.27e-12만큼 다릅니다.
 이는 좌표 변환을 검사하는 것이며, 셀 세분화 측정이 아닙니다.
