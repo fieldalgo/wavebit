@@ -531,8 +531,10 @@ def genuine_derivatives():
     return value, da
 
 
+# The first-order cases peak at 7.6 GB alone (7.55 ETM, 7.63 SMM, main e30f85c).
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
-@pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
+@pytest.mark.parametrize('first_order', [False, pytest.param(True, marks=pytest.mark.memory_heavy)],
+                         ids=['second_order', 'first_order'])
 def test_genuinely_2d_ep_derivatives_match_cauchy_oracles(first_order, algo, genuine_derivatives):
     """At a genuinely 2D EP, against :func:`genuine_derivatives`: ``jax.jacfwd`` of every amplitude
     in ``(theta, wavelength, eps_p, d)``, and the gradient of ``sum |a|**2`` (oracle
@@ -752,8 +754,10 @@ def genuine_fields():
                 _circle(lambda z: field(0.3, z), wl, 0.5, 32, derivative=True))
 
 
+# The first-order cases peak at 5.2 GB alone (5.25 ETM, 5.18 SMM, main e30f85c).
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
-@pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
+@pytest.mark.parametrize('first_order', [False, pytest.param(True, marks=pytest.mark.memory_heavy)],
+                         ids=['second_order', 'first_order'])
 def test_a_genuinely_2d_ep_field_matches_cauchy_oracles(first_order, algo, genuine_fields):
     """The field at a genuinely 2D EP against :func:`genuine_fields`: NumPy (silent, the pair
     rebuilt) and ``jax.jit`` values to 1e-12 of ``max|F|``; ``jax.jacfwd`` in theta and the

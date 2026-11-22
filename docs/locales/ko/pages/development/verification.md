@@ -212,6 +212,24 @@ run 39098232669의 두 시도 모두 shard 3의 runner가 약 95 %에서 종료�
 실제 경과 시간은 수집, 컴파일, worker 스케줄링에도 영향을 받습니다. 각 shard 안에서 소스를 수정하는 사례는 공유 체크아웃의 병렬 실행
 대신 도구가 만든 별도 스냅샷에서 순차 실행합니다.
 
+혼자서 runner 메모리의 대부분을 쓰는 테스트에는 `memory_heavy` 표시를 붙입니다. 도구는 그런
+테스트를 worker에게 주지 않고, 병렬 단계가 끝나 메모리를 돌려준 뒤 셋째 단계 `memory`에서
+실행합니다. 프로세스 하나, worker 없음, 한 번에 테스트 하나입니다. 이 테스트들은 자기 shard에
+그대로 남고, shard 단위와 시간표의 행도 그대로이며, 다른 테스트처럼 이어서 실행(resume)됩니다.
+이 표시는 짐작이 아니라 측정한 최댓값에 붙입니다. 테스트를 혼자 실행해 최대 상주 메모리를
+읽습니다(Linux에서는 킬로바이트이며, 아래 명령이 변환합니다).
+
+```shell
+python -c "import resource, subprocess, sys; subprocess.run([sys.executable, '-m', 'pytest', '-q', sys.argv[1]]); print(round(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 2**20, 2), 'GB')" "tests/rcwa/test_file.py::test_name[case]"
+```
+
+그 값이 약 4 GB, 곧 worker 둘이 나눠 쓰는 16.4 GB runner의 사분의 일을 넘으면 표시합니다.
+매개변수화한 테스트는 무거운 사례에만
+`pytest.param(..., marks=pytest.mark.memory_heavy)`로 표시합니다. 2026-11-21에는 혼자서 9.4 GB와
+7.1 GB까지 쓰는 first-order 예외점 테스트 둘을 실행하던 runner가 실패한 테스트 없이
+종료되었습니다. main이 3개 커밋 연속 빨간색이었고, Markdown 파일 2개만 바꾼 pull request도
+shard 하나를 잃었습니다.
+
 GitHub artifact `verification-default-N`과 `verification-slow-N`에는 shard별 JSON 결과
 기록과 입력 목록, JSONL 이벤트, JUnit XML, 로그를 보관합니다. artifact마다 저장소를
 복제해 올리지 않도록 쓰기 가능한 소스 스냅샷은 업로드에서 제외합니다.

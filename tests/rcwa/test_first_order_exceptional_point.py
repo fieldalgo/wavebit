@@ -458,7 +458,11 @@ _FIELDS = {'PA616': PATTERNED['PA616'], 'MU614': PATTERNED['MU614'],
            'glass over PA616, bottom lit': dict(_GLASS, incidence_side='bottom')}
 
 
-@pytest.mark.parametrize('name', list(_FIELDS))
+# The two glass-over scenes peak at 4.9 GB alone (4.86 top lit, 4.85 bottom lit; PA616 at
+# 3.1 GB; main e30f85c).
+@pytest.mark.parametrize('name', [
+    pytest.param(name, marks=pytest.mark.memory_heavy) if name.startswith('glass over') else name
+    for name in _FIELDS])
 def test_fields_and_field_gradients_at_a_patterned_exceptional_point(name):
     """Fields (eager and jitted) and field gradients (``jax.grad``, ``jit(grad)``, torch): the 1D
     rebuild's. Measured: fields <= 2.0e-13 of ``max|F|``, gradients <= 7.1e-13; SMM = ETM to

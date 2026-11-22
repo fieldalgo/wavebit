@@ -33,7 +33,9 @@ Use `python tools/run_verification.py --profile quick` for the small smoke profi
 Each run writes an exact collection and result record to a new directory under
 `artifacts/verification/`; `--resume RUN_DIRECTORY` reuses completed nonfailed
 nodes only when inputs, environment, configuration and collection still match.
-Source mutation tests run in a separate serial snapshot. CI uses two workers per shard
+Source mutation tests run in a separate serial snapshot. Tests marked `memory_heavy` wait
+until the workers have exited and then run one at a time in a process of their own (the
+`memory` phase); the verification guide says when to mark one. CI uses two workers per shard
 and retains the per-test timeouts: 1,200 seconds for the ordinary partition, 2,400 seconds
 for slow tests, both with the thread timeout method. The ordinary partition runs as thirty-two
 shards and the slow one as twelve, each shard limited to 120 minutes; a `complete` job after

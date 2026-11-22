@@ -110,14 +110,15 @@ def shard_nodes(nodes, index, count, timings=None, units=None):
 def collections(directory):
     records = [load(path) for path in sorted(directory.glob('collection-*.json'))]
     if not records:
-        return [], [], {}, ['No collection record was produced.']
+        return [], [], {}, [], ['No collection record was produced.']
     errors = []
     first = records[0]
     if any(record != first for record in records[1:]):
         errors.append('Workers collected different test lists.')
     for path in directory.glob('collection-errors-*.jsonl'):
         errors.extend(json.loads(line)['message'] for line in path.read_text(encoding='utf-8').splitlines())
-    return first['nodeids'], first['mutation_nodes'], first.get('shard_units', {}), errors
+    return (first['nodeids'], first['mutation_nodes'], first.get('shard_units', {}),
+            first.get('memory_nodes', []), errors)
 
 
 def relay_output(stream, log, errors):
@@ -155,11 +156,11 @@ def relay_output(stream, log, errors):
 
 
 def phase_run(output, name, root, config, *, expected=None, selected=None,
-              collect=False, isolated=False, paths=None):
+              collect=False, isolated=False, memory=False, paths=None):
     directory = output / name
     directory.mkdir()
     contract = dict(directory=str(directory), root=str(root), expected=expected,
-                    selected=selected, snapshot=isolated)
+                    selected=selected, snapshot=isolated, memory=memory)
     contract_path = directory / 'phase.json'
     save(contract_path, contract)
     args = [sys.executable, '-u', '-m', 'pytest', *(paths or config['paths']),
@@ -172,7 +173,7 @@ def phase_run(output, name, root, config, *, expected=None, selected=None,
                  '--timeout-method=' + config['timeout_method']]
     if collect:
         args.append('--collect-only')
-    elif config['workers'] and not isolated:
+    elif config['workers'] and not isolated and not memory:
         args += ['-p', 'xdist.plugin', '-n', str(config['workers']), '--dist', 'loadfile']
     env = dict(os.environ)
     for key in ('PYTEST_ADDOPTS', 'PYTEST_PLUGINS', 'PYTHONHOME', 'PYTEST_XDIST_WORKER', 'PYTEST_XDIST_WORKER_COUNT'):
@@ -214,12 +215,12 @@ def phase_run(output, name, root, config, *, expected=None, selected=None,
                 relay.join(timeout=5)
                 if relay.is_alive():
                     stream_errors.append('Pytest exited but a child kept its output pipe open.')
-    nodes, mutations, units, errors = collections(directory)
+    nodes, mutations, units, heavy, errors = collections(directory)
     errors.extend(stream_errors)
     result = dict(name=name, directory=str(directory), command=args, exit_code=exit_code,
                   seconds=round(time.monotonic()-started, 3), interrupted=interrupted,
                   collected=nodes, mutation_nodes=mutations, shard_units=units,
-                  collection_errors=errors)
+                  memory_nodes=heavy, collection_errors=errors)
     save(directory / 'result.json', result)
     return result
 
@@ -319,9 +320,19 @@ def run(args):
         if not args.collect_only:
             pending = [node for node in nodes if node not in inherited]
             mutations = [node for node in pending if node in collection['mutation_nodes']]
-            ordinary = [node for node in pending if node not in mutations]
+            # Tests marked `memory_heavy` peak at several GB each. Beside a second worker
+            # they exhaust a CI runner (tests.yml), so they wait until the workers have
+            # exited and then run one at a time in a process of their own.
+            heavy = [node for node in pending if node in collection['memory_nodes']]
+            ordinary = [node for node in pending if node not in mutations and node not in heavy]
             if ordinary:
                 result = phase_run(output, 'tests', root, config, expected=all_nodes, selected=ordinary)
+                phases.append(result)
+                if result['interrupted'] or result['exit_code'] == 2:
+                    raise KeyboardInterrupt
+            if heavy:
+                result = phase_run(output, 'memory', root, config, expected=all_nodes, selected=heavy,
+                                   memory=True)
                 phases.append(result)
                 if result['interrupted'] or result['exit_code'] == 2:
                     raise KeyboardInterrupt

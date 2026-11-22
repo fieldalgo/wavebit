@@ -41,6 +41,7 @@ import wavebit._common.geometry.clipper as _clipper
 from wavebit._common.geometry.interfaces import plan_interfaces
 from wavebit._common.geometry.interfaces import replay_interfaces
 from wavebit._common.geometry.interfaces import interface_contrasts
+from wavebit._common.geometry.interfaces import facing_contrasts
 from wavebit.rcwa._engine.parametric import nvf_from_coeffs
 from wavebit._common.geometry.recipes import shape_geometry
 from wavebit.rcwa._engine.parametric import _sampled_coeffs
@@ -880,6 +881,10 @@ def _continued_in_pair(xp, a, e, l2, valid, tol2, rows=None):
     body per block is the growth :func:`_scanned_normals` describes.
     """
     m = a.shape[0]
+    if rows is None and 'numpy' in xp.__name__ and 'jax' not in xp.__name__ and m:
+        found = _continued_in_pair_near(a, e, l2, valid, tol2)
+        if found is not None:
+            return found
     if rows is None:
         rows = m if 'jax' in xp.__name__ else max(1, _PAIR_BLOCK // max(m, 1))
     start, end = a, a + e
@@ -935,9 +940,91 @@ def _continued_in_pair(xp, a, e, l2, valid, tol2, rows=None):
     return tuple(xp.concat(parts) for parts in found)
 
 
+def _continued_in_pair_near(a, e, l2, valid, tol2):
+    """:func:`_continued_in_pair` on NumPy, evaluated only where an endpoint can lie on an
+    interval.
+
+    Every relation it reports needs an endpoint of ``k`` on interval ``j``: within ``tol`` of
+    ``j``'s line and no more than ``tol`` past either end, so within ``tol * sqrt(2)`` of the
+    interval's box. Intervals are ordered by their boxes' left edges; each endpoint is tested
+    against the intervals whose boxes, widened by a margin above that bound, reach it, by the
+    same arithmetic as the dense form, pair by pair. The rest of the dense ``(m, m)`` arrays is
+    false in every term the answer reads, so the three booleans are the dense form's. Two
+    painted 256-gons imaged on a 5x5 ring are about 8800 intervals; the dense form spent about
+    two seconds a solve there."""
+    import numpy as np
+    m = a.shape[0]
+    tol = np.sqrt(tol2)
+    start, end = a, a + e
+    if (valid & np.all(e == 0, axis=1)).any() or not (
+            np.all(np.isfinite(a)) and np.all(np.isfinite(e)) and np.all(np.isfinite(l2))):
+        # A valid zero-length interval holds every point; the dense form says so.
+        return None
+    lower, upper = np.minimum(start, end), np.maximum(start, end)
+    # Four times the bound, so rounding in the widened box cannot exclude a pair `on` keeps.
+    margin = 4.0 * tol + 4.0 * np.finfo(a.dtype).eps * np.max(np.abs(upper), initial=1.0)
+    left = lower[:, 0] - margin
+    right = upper[:, 0] + margin
+    extent = right - left
+    # A few long intervals (a box's edge, imaged) would widen every window; take them whole.
+    long = extent > 8.0 * np.median(extent)
+    wide = np.flatnonzero(long)
+    short = np.flatnonzero(~long)
+    order = short[np.argsort(left[short], kind='stable')]
+    sorted_left = left[order]
+    window = float(np.max(extent[short])) if len(short) else 0.0
+
+    def candidates(points):
+        x = points[:, 0]
+        last = np.searchsorted(sorted_left, x, side='right')
+        first = np.searchsorted(sorted_left, x - window - margin, side='left')
+        size = last - first
+        if size.sum() + len(points)*len(wide) > _PAIR_BLOCK:
+            return None
+        k = np.repeat(np.arange(len(points)), size)
+        offset = np.arange(size.sum()) - np.repeat(np.cumsum(size) - size, size)
+        j = order[np.repeat(first, size) + offset]
+        k = np.concatenate([k, np.repeat(np.arange(len(points)), len(wide))])
+        j = np.concatenate([j, np.tile(wide, len(points))])
+        x, y = points[k, 0], points[k, 1]
+        inside = ((x >= left[j]) & (x <= right[j]) & (y >= lower[j, 1] - margin)
+                  & (y <= upper[j, 1] + margin))
+        return k[inside], j[inside]
+
+    def on_pairs(points, j):
+        d = points - a[j]
+        along = d[:, 0]*e[j, 0] + d[:, 1]*e[j, 1]
+        perp = d[:, 0]*e[j, 1] - d[:, 1]*e[j, 0]
+        slack = np.sqrt(tol2*l2[j])
+        return (perp*perp <= tol2*l2[j]) & (along >= -slack) & (along <= l2[j] + slack)
+
+    near = candidates(start), candidates(end)
+    if near[0] is None or near[1] is None:
+        return None  # crowded: the dense form's row blocks bound the memory instead
+    k = np.concatenate([near[0][0], near[1][0]])
+    j = np.concatenate([near[0][1], near[1][1]])
+    key = np.unique(k * m + j)
+    k, j = key // m, key - (key // m) * m
+    cross = e[k, 0]*e[j, 1] - e[k, 1]*e[j, 0]
+    parallel = cross*cross <= _SAME_POINT**2*l2[k]*l2[j]
+    other = (k != j) & valid[j] & parallel
+    start_on = on_pairs(start[k], j)
+    end_on = on_pairs(end[k], j)
+    both = other & start_on & end_on
+    repeat = np.zeros_like(both)
+    repeat[both] = on_pairs(start[j[both]], k[both]) & on_pairs(end[j[both]], k[both])
+    through = other & ~repeat
+    found = []
+    for hit in (through & start_on, through & end_on, repeat & (j < k)):
+        flag = np.zeros(m, dtype=bool)
+        flag[k[hit]] = True
+        found.append(flag)
+    return tuple(found)
+
+
 def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, contrasts,
                                interface_plan, transform=None, chunk=None,
-                               candidate_fields=None, average=True):
+                               candidate_fields=None, average=True, facing_contrasts=None):
     """Positive normal-dyad boundary integral for scalar painted layers.
 
     Straight subdivision leaves the integral unchanged; a vanishing interval carries
@@ -948,13 +1035,18 @@ def material_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
     Tensor shape fields and their analytic curve candidates retain the nearest
     extension through ``average=False``. No analytic curves replace the scalar
     painting's actual polygon interfaces.
+
+    ``facing_contrasts`` (:func:`~wavebit._common.geometry.interfaces.facing_contrasts`)
+    blends the two intervals of each planned facing pair toward the one their sliver's
+    closing leaves, so contact is continuous. Without it the pair keeps its own weights.
+    The nearest extension ignores it.
     """
     if not average or candidate_fields:
         return _nearest_projector_fields(xp, grid_shape, lattice, dtype, segment_data, contrasts,
                                          interface_plan, transform, chunk, candidate_fields)
     from .integrated_normal import projector_fields
     return projector_fields(xp, grid_shape, lattice, dtype, segment_data, contrasts,
-                            interface_plan, transform, chunk)
+                            interface_plan, transform, chunk, facing_contrasts)
 
 
 def _chunked(xp, evaluate, pts, chunk, width, *live):
@@ -1160,7 +1252,8 @@ def _nearest_projector_fields(xp, grid_shape, lattice, dtype, segment_data, cont
 
 def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_width_v,
                             dtype, cdtype, transform=None, segment_data=None, images=None,
-                            image_groups=None, anchor=None, contrasts=None, interface_plan=None):
+                            image_groups=None, anchor=None, contrasts=None, interface_plan=None,
+                            facing_contrasts=None):
     """Coefficient grids of ``n_u**2``, ``n_u*n_v``, ``n_v**2``, built with the layer CENTRED.
 
     The resolved route supplies the area centroid of the unwrapped painted
@@ -1204,7 +1297,8 @@ def normal_projector_coeffs(xp, loops, grid_shape, lattice, half_width_u, half_w
 
     if contrasts is not None and segment_data is not None:
         fields = material_projector_fields(xp, grid_shape, lattice, dtype, segment_data,
-                                            contrasts, interface_plan, transform)
+                                            contrasts, interface_plan, transform,
+                                            facing_contrasts=facing_contrasts)
     else:
         normal_x, normal_y = distance_gradient_normal_field(xp, built, grid_shape, lattice, dtype,
                                                             transform=transform,
@@ -1311,6 +1405,8 @@ def conv_mats(xp, regions, background, half_width_u, half_width_v, lattice, shap
         images=interface_plan.images, image_groups=interface_plan.groups,
         contrasts=interface_contrasts(xp, regions, background, interface_plan, dtype),
         interface_plan=interface_plan,
+        facing_contrasts=(facing_contrasts(xp, regions, background, interface_plan, dtype)
+                          if getattr(interface_plan, 'facing', ()) else None),
         anchor=(_paint_centroid(xp, segment_data, interface_plan, all_loops, lattice, transform)
                 if segment_data is not None else None))
     return nvf_from_coeffs(xp, eps_c, inv_c, *coeffs[:3], half_width_u, half_width_v,
@@ -1526,6 +1622,10 @@ def _what_moved(fresh_key, plan_key):
         return ('the cell basis reduces by a different transform than the one the record '
                 'enumerated its periodic images on')
     if fresh_key[:2] == plan_key[:2] and fresh_key[3] != plan_key[3]:
+        if fresh_key[3]._replace(facing=()) == plan_key[3]._replace(facing=()):
+            return ('a sliver between two facing interface intervals crossed the width below '
+                    'which they are blended toward contact (2**-10 of the longest reduced '
+                    'basis vector)')
         return 'the polygon interface intervals or their periodic image bounds changed'
     fresh, held = fresh_key[1], plan_key[1]
     if len(fresh) != len(held):
