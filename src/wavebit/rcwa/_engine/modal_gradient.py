@@ -974,12 +974,37 @@ def _frechet_chain_tables(tau, a, ea, F1, scale, K, vK, middle, c, chains):
     u = jnp.where(vX, scale[..., None, None] * tau[X, K[:, None]], 0)   # (.., c, cl): n_{x, K_s}
     fits = fits & ~jnp.any(vK & (nX > cl))
     idx = jnp.arange(m)
-    F20 = _dd_lattice(a, ea, F1, [i2[:, None], k2[:, None], s2[:, None], idx[None, :]])  # (.., c, m)
-    F21 = _dd_lattice(a, ea, F1, [i2[:, None, None], k2[:, None, None], s2[:, None, None],
-                                  X[None, :, :], K[None, :, None]])                   # (.., c, c, cl)
-    F22 = _dd_lattice(a, ea, F1, [i2[:, None], k2[:, None], s2[:, None],
-                                  i2[None, :], k2[None, :], s2[None, :]])             # (.., c, c)
+    # Formed `c` paths at a time, and F22 `c**2 // cp` rows at a time: the batches of the tables
+    # before the path capacity grew to `4 c`. At once, a 66-mode first-order layer's
+    # `jit(grad(sum vmap))` held 8.9 GB (4.5 GB at capacity `c`), past what a CI runner holds
+    # beside a second worker.
+    F20 = _dd_lattice_rows(a, ea, F1, [i2[:, None], k2[:, None], s2[:, None], idx[None, :]],
+                           c)                                                         # (.., cp, m)
+    F21 = _dd_lattice_rows(a, ea, F1, [i2[:, None, None], k2[:, None, None], s2[:, None, None],
+                                       X[None, :, :], K[None, :, None]], c)          # (.., cp, c, cl)
+    F22 = _dd_lattice_rows(a, ea, F1, [i2[:, None], k2[:, None], s2[:, None],
+                                       i2[None, :], k2[None, :], s2[None, :]],
+                           max(1, c * c // cp))                                       # (.., cp, cp)
     return fits, i2, s2, X, vT, vX, w, u, F20, F21, F22
+
+
+def _dd_lattice_rows(a, ea, F1, idx, block):
+    """:func:`_dd_lattice` over the broadcast ``idx``, ``block`` of its leading rows at a time.
+
+    The same table: each row's entries are :func:`_dd_lattice`'s, formed by ``jax.lax.map`` in
+    batches of ``block`` rows, so the lattice's intermediates -- a set's ``_DD_SERIES_TERMS``
+    series degrees for every subset of its points -- are held for one batch, not every row. A
+    table of no more than ``block`` rows is formed at once, as before.
+    """
+    import jax
+    import jax.numpy as jnp
+    full = jnp.broadcast_arrays(*idx)
+    if full[0].shape[0] <= block:
+        return _dd_lattice(a, ea, F1, idx)
+    stacked = jnp.stack(full, axis=-1)                                  # (rows, ..., r)
+    out = jax.lax.map(lambda one: _dd_lattice(a, ea, F1, [one[..., j] for j in range(len(idx))]),
+                      stacked, batch_size=block)                        # (rows, *batch, ...)
+    return jnp.moveaxis(out, 0, a.ndim - 1)
 
 
 def _dd_lattice(a, ea, F1, idx):
