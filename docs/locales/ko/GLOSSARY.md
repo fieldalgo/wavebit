@@ -8,6 +8,11 @@ original Korean. Code, identifiers and option values are never translated.
 Where a term is first used on a page and the Korean is not obvious, add the English once in
 parentheses, e.g. 동결 검사(freezer). After that, use the Korean alone.
 
+Write every page in the polite formal style (합니다체: 계산합니다, 보세요, ~라 합시다), including
+validation records, theory pages and dated notes. Do not end sentences in the plain written style
+(해라체: 계산한다, ~이다); the pages do not mix the two. A quotation (a sentence from a
+paper, a docstring or an earlier record, in quotation marks) keeps its own wording.
+
 ## Terms whose rendering was unified
 
 | English | 한국어 | Notes |
