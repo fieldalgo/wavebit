@@ -47,8 +47,8 @@ python -m sphinx -W -b html -D language=ko docs docs/_build/ko
 경로에 둡니다. overlay는 한국어 빌드에서만 그 페이지의 소스 전체를 대체합니다. 영어 페이지가 정본으로
 남고, overlay 안의 상대 링크·그림·include는 모두 영어 페이지의 위치를 기준으로 해석됩니다. 사이트의
 모든 페이지에 overlay가 있으며, 어떤 페이지가 포함되는지는 이 디렉터리 자체가 기준이고, 새 영어 페이지는
-같은 변경에서 overlay를 함께 갖춥니다. `docs/locales/ko/LC_MESSAGES/` 아래의 Sphinx gettext 카탈로그는 문단
-단위로 번역한 페이지를 위해 남아 있습니다. 둘 다 없는 페이지는 영어로 대체 표시한다는 안내를 명시적으로
+같은 변경에서 overlay를 함께 갖춥니다. 페이지를 문단 단위로 번역할 때는 Sphinx gettext 카탈로그
+`docs/locales/ko/LC_MESSAGES/<page>.po`를 쓸 수도 있지만, 지금 쓰는 카탈로그는 없습니다. 둘 다 없는 페이지는 영어로 대체 표시한다는 안내를 명시적으로
 보여 주므로, 모든 페이지를 쓸 수 있습니다. 현지화한 SVG와 PNG 자산은 같은 정본 상대 경로로
 `docs/locales/ko/assets/` 아래에 있습니다. source-read 확장이 영어 내용을 바꾸지 않고 이 자산을
 선택합니다.
