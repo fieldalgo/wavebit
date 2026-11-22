@@ -60,7 +60,9 @@ An overlay is a full translation of the current English page, not a summary, and
 human prose. Copy unchanged: fenced code and output blocks, inline code, math, numbers, link
 targets, directive lines and `eval-rst` blocks. Keep a heading in English when any page links to
 it by `#slug`, because the Korean build resolves that link against the heading itself. When the
-English page changes, change its overlay in the same commit.
+English page changes, change its overlay in the same commit. Recurring technical terms have one
+Korean rendering each, listed in `docs/locales/ko/GLOSSARY.md`; use it, and add a term there when a
+new one recurs.
 
 Extract current English messages for gettext-based pages with:
 
