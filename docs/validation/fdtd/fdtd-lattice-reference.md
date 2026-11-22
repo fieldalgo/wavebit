@@ -138,7 +138,7 @@ The shared discrepancy survives both position controls.
 ## Finite CPML error is not monotone in strength or width
 
 All rows below fix the source at z=-1, padding at 1 and extraction planes
-at z=-0.2/0.4. No time integration enters this table. The target is the
+at z=-0.2/0.4. No time integration enters this table. The target, set by `--pml-reflection`, is the
 nominal CPML amplitude parameter, not measured reflection power or an error
 bound. Table entries compare the **finite-CPML harmonic amplitudes with the
 exact outgoing harmonic amplitudes**, at identical resolution.
@@ -184,7 +184,7 @@ measurement frequency. No harmonic result is fed into the time update.
 | 40 | 3200 | 8.46480e-6 / 2.32742e-6 | 0.0278088 / 0.0507192 |
 | 80 | 800 | 8.00971e-4 / 2.68474e-4 | 0.00720676 / 0.0117110 |
 
-The resolution-40 run contains 133022 updates with dt=0.0115470053838 and
+The resolution-40, 1600-period run contains 133022 updates with dt=0.0115470053838 and
 grid shape (264, 2, 32). Its complete 800-period prefix has time error
 0.00326394 TE and 0.000903322 TM. Direct prefix-to-final amplitude changes
 are 0.00313771/0.000868317. Both state decay and scattering convergence

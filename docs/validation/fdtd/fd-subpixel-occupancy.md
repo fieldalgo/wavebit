@@ -2558,7 +2558,9 @@ its log `center_tie_at_d9b4311f.log`, whose first line, a scratch import path, w
 by a note, is archived outside the repository) gives a centre-z derivative of `20.468` by central differences against
 `-20.522` (Torch) and `28.671` (JAX) with the centre at `z = .05`, a half-node
 plane where Ez, Hx and Hy sit, while at `z = 0` and `.0013` all three agree to
-ten digits. A sphere centred on a symmetry plane of its grid is the common
+ten digits. Re-measured on 2026-11-22 at bd149464 (Linux, NumPy 2.5.5, PyTorch 2.15.0,
+JAX 0.12.0.1): the script gives the same `20.468`, `-20.522` and `28.671`; `d9b4311f` in
+its name is not a commit in the repository. A sphere centred on a symmetry plane of its grid is the common
 case, so this is the next defect to fix. The probe moved the mirror ball's
 centre to `.103`.
 

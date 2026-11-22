@@ -74,11 +74,12 @@ inclusion permittivity 12.25, background/top/bottom 1/1/2.25, wavelength 900,
 thickness 300, theta 0.2 and phi 0. Fourier truncation is `(n,n)`.
 The quadratic potential mesh has geometric refinements 1, 2 and 3.
 
-Each row records both polarizations at gaps 0, 0.0005, 0.001, 0.002 and 1e-9.
+Each log row records one polarization at one order and refinement, at gaps 0, 0.0005,
+0.001, 0.002 and 1e-9.
 Two second-order opening secants use the first four values. Two additional
 central differences perturb the constitutive matrices along the analytical
 gap JVP, checking its propagation through the optical solve. All 24 rows
-pass the original equation and lossless physical power guards. The largest
+(4 orders, 3 refinements, 2 polarizations) pass the original equation and lossless physical power guards. The largest
 recorded residual is below 8e-14; the largest discrepancy between the narrower
 geometric and constitutive-tangent slopes is about 2.2e-9.
 

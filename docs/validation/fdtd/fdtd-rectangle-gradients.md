@@ -153,7 +153,7 @@ at z=0.2. The output includes the outgoing s-frame signs and the conversion
 from Meep's cell-centred Fourier origin to Wavebit's corner origin.
 
 The final Gaussian-windowed source has width 3, peak time 15 and end time 30.
-Durations 100 and 140 and centered steps 1e-4 and 5e-5 control reference error.
+Durations 100 and 140 and centred steps 1e-4 and 5e-5 control reference error.
 The frozen sharp archives retain both grids, durations and steps.
 
 | Sharp reference check | Grid 40 | Grid 80 |
@@ -192,7 +192,7 @@ for the normal TM coefficient.
 
 The [Meep smoothing theory](https://meep.readthedocs.io/en/latest/Subpixel_Smoothing/)
 explains the tangential/normal averaging distinction and corner limitations.
-The [public API](https://meep.readthedocs.io/en/master/Python_User_Interface/)
+The [public API](https://meep.readthedocs.io/en/latest/Python_User_Interface/)
 documents Blocks, material functions and DFT quadrature. No Meep implementation
 or previously excluded Meep-derived FDTDX projection file was opened or copied.
 

@@ -48,7 +48,8 @@ for each incident polarization, not power errors.
 | 40 | 3 | 0.00753039 | 0.00867680 | 1.39814e-13 | True |
 | 80 | 3 | 0.00189230 | 0.00217176 | 1.56178e-13 | True |
 
-Width 1 fails both temporal flags; width 3 passes. With the narrower spectrum,
+Width 1 fails both temporal flags, `state_decayed` and `amplitudes_settled` (its TE
+amplitude change exceeds the 1e-4 tolerance); width 3 passes both. With the narrower spectrum,
 TE and TM errors decrease by approximately four times under refinement.
 The small broad-pulse TM error at resolution 80 is not convergence evidence:
 residual contributions can cancel other numerical errors at a particular time.

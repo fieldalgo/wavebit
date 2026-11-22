@@ -182,8 +182,8 @@ same 128-triangle bound. Tests prevent re-preparation during a live contact /
 positive sweep and check exact simultaneous material scaling, unit scaling and
 gap/material derivative identities after those inputs change.
 
-In that same contact control, the common-coordinate condition dropped to
-`1.06e4`. The original contact-derivative residual became `6.48e-11`, and
+In the degree-three, order-zero metal contact control described first above,
+the common-coordinate condition dropped from `2.53e8` to `1.06e4`. The original contact-derivative residual became `6.48e-11`, and
 the independent energy-derivative residual was `9.88e-15`. These measurements
 use NumPy 2.5.1 with Apple Accelerate on macOS arm64. They qualify this finite
 calculation, not all resolution or material choices.
