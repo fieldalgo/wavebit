@@ -21,8 +21,6 @@ import pytest
 from wavebit import Material, Units, rcwa
 
 HERE = Path(__file__).parent
-# wall_resolution is experimental and warns at each solve; tests/rcwa/test_wall_resolution.py pins that.
-pytestmark = pytest.mark.filterwarnings('ignore::wavebit.rcwa.diagnostics.ExperimentalWarning')
 PERIOD, THICKNESS, WAVELENGTH, METAL = 400.0, 150.0, 900.0, -20 + 1.5j
 #: file, array, shape, permittivity
 CELLS = {

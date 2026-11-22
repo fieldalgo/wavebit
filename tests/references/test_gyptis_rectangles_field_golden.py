@@ -32,8 +32,6 @@ import pytest
 from wavebit import Material, Units, rcwa
 
 GOLDEN = Path(__file__).with_name('golden_gyptis_rectangles_field.npz')
-# wall_resolution is experimental and warns at each solve; tests/rcwa/test_wall_resolution.py pins that.
-pytestmark = pytest.mark.filterwarnings('ignore::wavebit.rcwa.diagnostics.ExperimentalWarning')
 PERIOD, THICKNESS, WAVELENGTH, METAL = 400.0, 150.0, 900.0, -20 + 1.5j
 #: size of the rectangle (nm), its permittivity, the layer's around it
 LAYERS = {

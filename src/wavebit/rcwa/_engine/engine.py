@@ -3364,18 +3364,6 @@ _INTERFACES_EXPERIMENTAL = (
     'Silence with warnings.simplefilter("ignore", wavebit.rcwa.diagnostics.ExperimentalWarning).')
 
 
-#: What a solve under ``wall_resolution`` warns with: finite-element fields only, no independent
-#: implementation of the stretched solve to compare with at the same truncation.
-_WALL_RESOLUTION_EXPERIMENTAL = (
-    'wall_resolution is experimental. The solve in stretched coordinates is checked against '
-    'finite-element fields on seven layers of axis-aligned rectangles and twelve of one circle or '
-    'ellipse (one wavelength each, normal incidence) and against no independent implementation; '
-    'at oblique incidence and with several '
-    'propagating orders it is checked for energy conservation and convergence only. Its values, '
-    'what it accepts and its name may change between releases. Compare two orders before relying '
-    'on a value; the guide "Resolving walls with stretched coordinates" has the measurements. '
-    'Silence with warnings.simplefilter("ignore", wavebit.rcwa.diagnostics.ExperimentalWarning).')
-
 # The rules a modeling path builds on every structure it accepts, its default first.
 # `ModelingPath.RASTER` is absent because it implements all of them and so takes the option
 # as given. Shapes default to NVF and take Laurent's rule on any shape -- it reads the same
@@ -7517,9 +7505,6 @@ class CoreFactorizationMixin:
         handed the stretched vacuum's slots beside the axes.
         """
         stretch = self._refuse_what_the_stretch_does_not_solve(geometry)
-        # After the refusals, so a scene that is not solved raises without a warning.
-        from wavebit.rcwa._engine.fields import warn_experimental_feature
-        warn_experimental_feature(_WALL_RESOLUTION_EXPERIMENTAL)
         xp, C = self.xp, self.complex_dtype
         (_, half_width_u), (_, half_width_v) = self.order_window
         if not isinstance(stretch, _Stretch):
