@@ -341,7 +341,7 @@ def test_single_precision_reads_no_branch_from_round_off(backend, regime, algori
     the answer holds -- within 3e-6 of double precision on every backend here. SMM's layer labels
     still come from a round-off ``Re(q)``, but SMM does not depend on them, so they are not
     checked: they used to warn on every one of these solves while the answer sat within 6.4e-6.
-    In 2026-08 the same point was 1.80 off on NumPy, 4.12 on JAX and 5.68 on PyTorch, and ETM
+    In 2026-08 the same point gave |R| = 1.80 on NumPy, 4.12 on JAX and 5.68 on PyTorch, and ETM
     was still 5e-2 off until its labels moved.
 
     Every backend, deliberately: unlike the guards in ``src/wavebit/_common/backend.py`` this check is not

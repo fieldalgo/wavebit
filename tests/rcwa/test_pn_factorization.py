@@ -211,8 +211,8 @@ def test_the_two_paths_agree_in_the_limit_where_they_have_to():
 
     **Not the trend in truncation_order.** Measured, that gap does not fall: it sits near 1.3e-5 from truncation_order=6
     to truncation_order=14 on the strongest contrast here. Nor should it — two vector formulations differ at
-    any finite truncation, and 1.3e-5 is an order tighter than the 1.8e-4 between fmmax's own
-    two formulations on the same structure. An earlier version of this test asserted the truncation_order
+    any finite truncation, and 1.3e-5 is an order tighter than the 1.6e-4 to 4.3e-4 between fmmax's own
+    two formulations on the same structure over that range. An earlier version of this test asserted the truncation_order
     trend and was simply wrong about the physics.
 
     The limit that *is* forced is the contrast. As ``n_in -> 1`` the layer becomes uniform,
@@ -312,7 +312,7 @@ def test_the_z_slot_reads_the_raster_as_the_staircase_it_is():
     rather than here — it needs a raster sweep against a fine-grid reference, which is far too
     slow for this file. The verdict: at fixed truncation_order and a frozen geometry the DFT arm carries 3.5x
     to 4.8x the closed form's error from 45 to 55 degrees, crossing over near 38 degrees, below
-    which it leads by 5% of a term 30x smaller.
+    which it leads by up to 6.5% of a term 30x smaller.
     """
     eps = pillar(1.6 ** 2)
     g = pillar(0.30j, 0.0)
