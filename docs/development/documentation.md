@@ -50,9 +50,9 @@ path as the English page they translate. An overlay replaces that page's whole s
 Korean build only; English pages remain canonical, and every relative link, image and include
 in an overlay resolves from the English page's location. Every page of the site has an overlay; the
 directory itself is the authority for which pages are covered, and a new English page gets its
-overlay in the same change. Sphinx gettext catalogs under `docs/locales/ko/LC_MESSAGES/` remain for a page
-translated passage by passage; a page with neither shows an explicit English-fallback notice, so
-every page remains usable. Localized SVG and PNG assets live under `docs/locales/ko/assets/` with
+overlay in the same change. A page can instead be translated passage by passage in a Sphinx
+gettext catalog, `docs/locales/ko/LC_MESSAGES/<page>.po`; none is in use now. A page with neither
+shows an explicit English-fallback notice, so every page remains usable. Localized SVG and PNG assets live under `docs/locales/ko/assets/` with
 the same canonical relative paths. The source-read extension selects them without changing
 English content.
 
