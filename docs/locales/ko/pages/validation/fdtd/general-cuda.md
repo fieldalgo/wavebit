@@ -119,7 +119,7 @@ CUDA 범위 밖입니다. 지원하지 않는 조합은 계획 수립 전에 해
 padding 등 과학적 검사를 면제하지 않습니다. `check`나 `prepare` 통과는
 장을 시간 진행했다는 뜻이 아닙니다.
 
-## 정적인 내부 SnappedBox
+## Static interior SnappedBox
 
 별도로 제한한 SnappedBox 경로는 일반 `Structure(name, shape=SnappedBox(...), material=...)` 하나,
 여섯 `Periodic` 면과 외부 광원이 없는 경우를 대상으로 합니다. 각 SnappedBox
@@ -520,7 +520,7 @@ CUDA 13.0, NumPy 2.5.4, Windows 11, RTX 4060 Ti, Torch CPU 스레드 하나입�
 기본 `--block 0`은 일반 스캔을 선택하며 공개
 `Numerics(checkpoint_steps=0)`을 뜻하지 않습니다.
 
-## 균질 단일 극점 ADE
+## Homogeneous single-pole ADE
 
 제한된 분산 경로는 실제 격자 전체를 덮는 `SnappedSlab` 하나에
 `DispersiveMaterial`을 놓고, 여섯 면 모두 `Periodic`이며 `Lorentz` 또는
@@ -1006,7 +1006,7 @@ Hessian을 상대 `2e-12`, 절대 0으로 비교하며 혼합 미분의 양쪽 �
 임의의 기하, CPML, 다른 광원·재료 종류의 Hessian이나 `torch.func` 변환을
 검증하지 않습니다.
 
-## Gaussian pulse 파장·대역폭·위상·지연 Hessian
+## Gaussian pulse wavelength, bandwidth, phase and delay Hessians
 
 이 검사는 기존 electric Ey CurrentDipole 경로를 사용하며 런타임이나 입력 허용 규칙을
 바꾸지 않습니다. 주기적 8³ 픽스처는 dx 0.05 um, Courant 0.5, 상대 epsilon 2.25,

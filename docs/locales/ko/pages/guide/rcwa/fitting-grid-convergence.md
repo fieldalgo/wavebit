@@ -15,7 +15,7 @@
 소스 체크아웃의
 [`spectral_fit_grid.py`](https://github.com/fieldalgo/wavebit/blob/main/examples/rcwa/spectral_fit_grid.py)는
 응용 함수 `fit_grid_ladder`를 제공합니다. 설치되는 피팅 API나 `rcwa.run`의
-새 옵션이 아니라, 사용자 모델에 맞춰 가져다 쓰는 예제 코드입니다.
+새 옵션이 아니라 예제 코드입니다. 작은 NumPy/SciPy 시연 전체는 다음과 같이 실행합니다.
 
 ```shell
 python examples/rcwa/spectral_fit_grid.py
@@ -25,6 +25,8 @@ python examples/rcwa/spectral_fit_grid.py
 factory를 전달합니다. 스펙트럼은 `(m,)`, Jacobian은 `(m, n)`의 실수 유한
 배열이어야 합니다. 모델 함수 안에서 실행 유효성과 기하 재준비를 처리합니다.
 최적화·격자 반복은 호스트에서 실행하며 개별 값/Jacobian 계산은 컴파일해도 됩니다.
+
+`fit_grid_ladder`에는 다음 제어 인수를 명시적으로 전달합니다.
 
 | 인수 | 의미 |
 | --- | --- |
@@ -80,5 +82,6 @@ factory를 전달합니다. 스펙트럼은 `(m,)`, Jacobian은 `(m, n)`의 실�
 그 다음 Fourier 차수·다각형 근사·실험 모델을 검사합니다.
 
 [측정 예제와 네 매개변수 연구](../../validation/rcwa/fitting-grid-convergence.md)는
-치수 이동·잡음 불확도·격자 차이를 구분합니다. 작은 예제는 중앙차분, 큰 연구는
-JAX 전방 자동미분을 사용합니다. 두 합성 표적 모두 독립 Maxwell 기준은 아닙니다.
+추정 치수, 잡음 불확도와 격자 변화가 어떻게 다른지 보여 줍니다. 작은 예제는 하나뿐인
+매개변수에 중앙 차분을 쓰고 합성 표적을 사용하며, 큰 연구는 JAX 순방향 모드 미분을 사용합니다.
+어느 표적도 독립적인 Maxwell 기준은 아닙니다.
