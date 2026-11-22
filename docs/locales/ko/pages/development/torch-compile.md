@@ -389,7 +389,7 @@ Dynamo가 로드되지 않은 동안 입구 호출당 약 90 ns, 로드된 뒤�
 함수화되면 이것이 됩니다)는 `torch/_refs`의
 [PR #182292](https://github.com/pytorch/pytorch/pull/182292)로 닫혔고, 2.14.0 릴리스 노트에 "Fix incorrect
 compiled output and gradients for overlapping-input `torch.diagonal_scatter` operations"로 실렸습니다.
-코드 조각을 쓰인 그대로 여기서 다시 측정했습니다. 2.13.0은 grad가 있을 때 complex128과 complex64 모두
-1.381을 주고, 2.14.0과 2.14.1은 macOS arm64와 CI의 Linux x86-64에서 모든 dtype에 대해 0을 줍니다. 그날부터
+코드 조각을 쓰인 그대로 여기서 다시 측정했습니다. 2.13.0은 grad가 있을 때 complex128에서 1.381,
+complex64에서 5.709를 주고, 2.14.0과 2.14.1은 macOS arm64와 CI의 Linux x86-64에서 모든 dtype에 대해 0을 줍니다. 그날부터
 하한이 2.14이므로 카나리아는 모든 플랫폼에서 단언합니다. 입구는 위의 이유로 남습니다. 측정한 비용으로 앞으로의
 모든 Inductor 결함에서 wavebit을 지켜 주며, wavebit 부분을 컴파일해도 얻는 것이 없습니다(§4).
