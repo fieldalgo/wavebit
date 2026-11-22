@@ -145,8 +145,9 @@ held fixed.
 | 80 | 2 | 0.001832 | 0.01985 | 0.004186 |
 
 One cell gave the smallest sampled derivative error against the sharp
-interface at each resolution. Two cells further reduced the fine-grid error
-against the graded profile, but increased sharp-interface bias. At resolution
+interface at each resolution. Two cells further reduced the error against the graded profile
+at resolutions 20 and 80, but not at 40 (0.01893 vs 0.01874), and increased
+sharp-interface bias at every resolution. At resolution
 80, the continuum derivative bias is 0.003921 for one cell and 0.015667 for
 two cells; the corresponding value biases are 0.0001978 and 0.0007903.
 Wider averaging is therefore not automatically more accurate.
@@ -226,5 +227,5 @@ from being reported as the exact physical performance.
 This remains a bounded single-parameter example. Total-depth changes,
 transverse shape derivatives, anisotropic shape homogenization and GPU
 execution need separate implementation and evidence. Total-depth and transverse
-rectangle derivatives received theirs later on 2026-09-09
+rectangle derivatives received theirs later the same day, 2026-09-09
 ([variable depth](fdtd-variable-depth.md), [rectangles](fdtd-rectangle-gradients.md)).

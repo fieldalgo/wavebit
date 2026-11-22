@@ -1385,7 +1385,7 @@ has no gradient. The normal there is whatever `_hypot_safe` leaves, and a one-ul
 arbitrarily. Every backend reads the same value unnudged. This is a degeneracy of one instance,
 not a tie between two, and it is not changed here.
 
-## 9. The cases, A to L, as of 2026-09-11
+## 9. The cases, A to L, as of 2026-09-11; rows updated through 2026-10-01
 
 The letters are the design's. "Exact" means the field equals the geometry's on the interface
 set; a band error is against `overlap.interfaces_of` over 1.5 pixels at N = 512, and the gate a
@@ -1454,8 +1454,8 @@ What does work, in order of how little it asks you to trust:
 The piece field carries its own harness: `tests/rcwa/test_gamma_field.py::test_the_mutant_is_killed`
 applies each mutant to the source (`gamma_instruments.mutated`, which says DID-NOT-APPLY and
 NO-OP out loud and restores by md5), reloads, and asserts that the named instrument fails —
-the flush substitution, the pair substitution, the tie and its axis, one face family's image
-list (killed by the L box and its transpose through the oracle band), the coverage union, and
+the flush substitution, the pair substitution, the tie and its axis, the image lists of the u
+and of the v face family (killed by the L box and its transpose through the oracle band), the coverage union, and
 the blend exponent. The second half added its own: the seam sign forced opposed (killed by the
 K scene turned with its cell, whose seam axis the tie's `(1, 0)` fallback is 17 deg from -- a
 mutant of the record's sign, which the seam contrast retired on 2026-09-11, §8e; the three sign
@@ -1473,7 +1473,7 @@ against and `engine` imported by name, so a reload would leave two classes of th
 process. Fourteen then; the verifiers' round added eight more -- the self substitution keyed by
 instance alone (the double-covered face), the arc ring dropped and the ring picking by the
 algebraic distance (the ellipse that leaves its cell), the sign window always open, the sign
-keyed on either piece and the run window built from the partner's half-length (the A|B|C
+keyed on the p piece, the sign keyed on the q piece and the run window built from the partner's half-length (the A|B|C
 scene and the column above the K seam's end), and the cross-pair substitution removed (the
 off-centre stacked bars, exact) -- twenty-two, all killed, none DID-NOT-APPLY. The reduced basis
 (§8c) added two: the replay folding on the basis as given (killed by the 693 circle on the

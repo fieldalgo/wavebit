@@ -24,7 +24,9 @@ The full positive-gap tensor, its joint gap/material JVP, exact contact tensor
 and right-opening derivative share the enlarged space. This explicit NumPy
 family still requires the fixed Cartesian opening plan, positive diagonal
 period, horizontal equal-height pair, degree 3 or 4 and distinct exponents
-chosen from `(0.6, 0.8)`. Empty exponents retain the original polynomial and
+chosen from `(0.6, 0.8)`. Later that day the
+[corner family](nvf-pair-corner-potentials.md) added `0.55` and `0.95`, which
+`junctions=True` also accepts. Empty exponents retain the original polynomial and
 continuous-trace space. Ordinary NVF dispatch is unchanged.
 
 ## The thin triangles carry common junction fields

@@ -217,7 +217,9 @@ from the earlier quadrature-32 export. The analytic material-coefficient
 error in the quadrature-40 export is below `1.91e-15`. This extends the
 available Fourier data without changing the fitted auxiliary cell.
 
-Holding that reference fixed gives:
+Holding that reference fixed gives the rows below. They are a separate run, made after
+the affine contact factorization (study log); its (16,16) p value differs from the table above
+by 1.9e-12.
 
 | x half width | y half width | p T | s T |
 | ---: | ---: | ---: | ---: |

@@ -119,8 +119,9 @@ at step 1e-4 nm are:
 The existing 1e-7 continuity gate now passes for the new model. It remains a
 strict expected failure for the old local model. New p/s checks also compare
 the JIT seam derivative with both one-sided NumPy secants at the mesh node.
-The default order-3 CLI log independently shows the discrepancy reduced from
-about 1.72e-6 to 8.13e-9. These finite-difference differences include ordinary
+The stored default-CLI logs at outer order 3, for the same s-polarized gap and
+seam, independently show the discrepancy reduced from about 1.72e-6 (local) to
+8.13e-9 (integrated). These finite-difference differences include ordinary
 curvature and floating-point error; they are not claimed to be identically zero.
 
 Closed mixed-bar static energy and seam/material/width derivatives retain

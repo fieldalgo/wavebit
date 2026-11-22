@@ -163,7 +163,7 @@ Wavebit의 꼭짓점 원점으로 바꾸는 변환이 포함됩니다.
 
 [Meep 스무딩 이론](https://meep.readthedocs.io/en/latest/Subpixel_Smoothing/)은 접선/법선 평균의
 구분과 모서리에서의 한계를 설명합니다.
-[공개 API](https://meep.readthedocs.io/en/master/Python_User_Interface/)는 Block, 재료 함수, DFT
+[공개 API](https://meep.readthedocs.io/en/latest/Python_User_Interface/)는 Block, 재료 함수, DFT
 구적법을 문서화합니다. Meep 구현이나, 앞서 배제한 Meep 유래 FDTDX 투영 파일은 열거나 복사하지
 않았습니다.
 

@@ -1482,7 +1482,8 @@ The glass measurement and mutation audit precede an additive CLI radius
 option; their exact source hashes are preserved. The material, geometry,
 assembly and certificate arithmetic is unchanged in the weak and small
 high-index runs. All measurement batches exit 0 with unchanged watched
-source during execution. The production `src/wavebit/fd/` tree is unchanged.
+source during execution. The production `src/wavebit/fd/` tree (moved to
+`src/wavebit/fdtd/` on 2026-10-13) is unchanged.
 
 Final targeted validation exits 0: **86 fast plus two slow cases**, with
 matching collected/reported counts, no skips, errors, failures or

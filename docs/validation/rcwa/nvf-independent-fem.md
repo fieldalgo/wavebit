@@ -1822,7 +1822,8 @@ The native-action peak is 6,717,440 bytes, about 1.88%, below the B128/B64
 release control. This is one shared-host observation. It is smaller than
 the 20,834,852-byte A128 array that is no longer retained and does not
 establish a general memory reduction. The child takes 1.45 s longer, and the
-mean request takes .0511 s instead of .0269 s. The added per-request work
+mean request duration (not child time over the 40 requests) is .0511 s
+instead of .0269 s. The added per-request work
 includes hashing the full native CSR at entry and exit and building
 full-length native vectors for every product; the split of the extra time
 was not profiled. The factor again has 8,932,284 nonzeros.
@@ -1891,7 +1892,7 @@ the same moment. The release run has no footprint record, so no footprint
 comparison is possible.
 
 The child takes 1,699.576 s instead of 1,367.095 s, and the mean request
-2.948 s instead of 1.938 s. The added per-request work includes hashing the
+duration (not child time over the 328 requests) 2.948 s instead of 1.938 s. The added per-request work includes hashing the
 native CSR at entry and exit; the split was not profiled, and the memory
 pressure may also have slowed the run. The observed 8 GiB guard never
 tripped, yet it did not bound the solver's real memory: the factorization
