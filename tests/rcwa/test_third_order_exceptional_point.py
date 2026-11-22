@@ -1108,7 +1108,9 @@ def test_traced_values_at_a_third_order_point_are_exact(first_order):
                 assert err < 1e-12, (algo, how, rel, err)
 
 
-@pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
+# The first-order case peaks at 4.8 GB alone (main e30f85c).
+@pytest.mark.parametrize('first_order', [False, pytest.param(True, marks=pytest.mark.memory_heavy)],
+                         ids=['second_order', 'first_order'])
 def test_traced_fields_at_a_third_order_point_are_exact(first_order):
     """``jax.jit`` of the six field components at :data:`_FIELD_AT`, at the fy 0.5, 620.55 nm
     point, ETM and SMM, against :func:`_derivative_oracle`'s: the values within 1e-12 relative,

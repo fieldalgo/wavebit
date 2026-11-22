@@ -1133,6 +1133,8 @@ def _sum_R(s):
     return lambda w: jnp.sum(jnp.real(s.solve(wavelength=w, auto_detune=False).R))
 
 
+# Both cases peak at 4.5 GB alone (main e30f85c).
+@pytest.mark.memory_heavy
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 def test_two_clusters_a_direction_on_the_first_order_path(algo):
     """The first-order split of the ``(5, 2)`` layer at the coincidence holds two four-mode
@@ -1339,7 +1341,10 @@ def test_a_coincidence_under_an_abstract_trace(name, dth, algo, first_order):
         assert np.isfinite(err) and err < 1e-11, f'{label}: {err:.1e}'
 
 
-@pytest.mark.parametrize('first_order', [False, True], ids=['2d', 'first_order'])
+# The first-order cases peak at 5.2 to 5.4 GB alone (all six measured; a 2D one at 2.5 GB;
+# main e30f85c).
+@pytest.mark.parametrize('first_order', [False, pytest.param(True, marks=pytest.mark.memory_heavy)],
+                         ids=['2d', 'first_order'])
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('name, dth', LITTROW_CASES)
 @pytest.mark.shard_unit
