@@ -1273,7 +1273,10 @@ def test_derivatives_at_a_coincidence_are_the_1d_rebuild_s(name, dth, algo, firs
         assert _rel(float(tangent), ref[1]) < 1e-10
 
 
-@pytest.mark.parametrize('first_order', [False, True], ids=['2d', 'first_order'])
+# The first-order cases peak at 9.4 GB alone (DC612, SMM; the 2D ones at 2.6 GB), and CI
+# runners were shut down in them beside a second worker on 2026-11-21.
+@pytest.mark.parametrize('first_order', [False, pytest.param(True, marks=pytest.mark.memory_heavy)],
+                         ids=['2d', 'first_order'])
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('name, dth', LITTROW_CASES)
 @pytest.mark.shard_unit

@@ -91,6 +91,9 @@ def pytest_configure(config):
         'markers', "shard_unit(name | per='test'): CI may run this node apart from the rest of its "
         "file (tools/run_verification.py --shard); per='test' keeps a test's cases together, and "
         'nodes of one file that share a name stay together')
+    config.addinivalue_line(
+        'markers', 'memory_heavy: peaks at several GB alone; tools/run_verification.py runs it after the '
+        'workers have exited, one test at a time (tests/README.md)')
 
 
 def pytest_collection_modifyitems(config, items):
