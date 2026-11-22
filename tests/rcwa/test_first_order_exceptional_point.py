@@ -458,8 +458,8 @@ _FIELDS = {'PA616': PATTERNED['PA616'], 'MU614': PATTERNED['MU614'],
            'glass over PA616, bottom lit': dict(_GLASS, incidence_side='bottom')}
 
 
-# The two glass-over scenes peak at 4.9 GB alone (4.86 top lit, 4.85 bottom lit; PA616 at
-# 3.1 GB; main e30f85c).
+# The two glass-over scenes peak at 4.85 GB alone (4.83 top lit, 4.85 bottom lit; main
+# 3770848d). PA616 peaked at 3.1 GB on main e30f85c.
 @pytest.mark.parametrize('name', [
     pytest.param(name, marks=pytest.mark.memory_heavy) if name.startswith('glass over') else name
     for name in _FIELDS])

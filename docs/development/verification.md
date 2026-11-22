@@ -238,9 +238,9 @@ python -c "import resource, subprocess, sys; subprocess.run([sys.executable, '-m
 Mark it when that is above about 4 GB, a quarter of the 16.4 GB runner that two workers
 share. A parametrized test marks only its heavy cases, with
 `pytest.param(..., marks=pytest.mark.memory_heavy)`. On 2026-11-21 runners were shut down,
-with no failed test, in two first-order exceptional-point tests that peak at 9.4 and 7.1 GB
-alone: main was red on 3 commits in a row, and a pull request that changed 2 Markdown files
-lost a shard to it.
+with no failed test, in two first-order exceptional-point tests that peaked at 9.4 and 7.1 GB
+alone then: main was red on 3 commits in a row, and a pull request that changed 2 Markdown
+files lost a shard to it. Since 2026-11-22 the same two peak at 4.6 and 3.4 GB.
 
 GitHub artifacts `verification-default-N` and `verification-slow-N` retain each shard's
 JSON receipts and inventories, JSONL events, JUnit XML and logs. The writable source
