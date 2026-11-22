@@ -45,7 +45,7 @@ Material/ConductiveMaterial이고 외부 광원 없이 유한한 실수 전체 �
 이 범위의 텐서 패턴·callable은 제외합니다. 스칼라 재료 값과 실수 초기 진폭은
 live 입력으로 둘 수 있지만 형상 미분·여러 body·full-span/주기 이음새·
 Open/PML·Bloch·FieldMonitor/FluxMonitor는 제외합니다. 정확한 계약과 독립 이산 검증 기준은
-[내부 SnappedBox 범위](../../validation/fdtd/general-cuda.md#정적인-내부-snappedbox)를 참고하세요.
+[내부 SnappedBox 범위](../../validation/fdtd/general-cuda.md#static-interior-snappedbox)를 참고하세요.
 
 별도의 균질 ADE 범위는 전체 격자를 채우는 SnappedSlab 하나, Lorentz 또는 Drude
 극점 하나, 여섯 Periodic 면, 유한 실수 전체 격자 NumPy 초기 배열과
@@ -58,7 +58,7 @@ Lorentz `omega_0`는 비미분 값이며(`mu=None`은 1), 호환되는 prepared
 상태에서 시작하여 첫 전기장 갱신에는 전달된 극점 증가량이 없습니다.
 시험한 원래 시간축의 연속체 초기화 오차는 시간 간격에 대해 일차이며,
 시간축을 옮긴 진단은 보정이나 이차 정확도 주장이 아닙니다. 독립 이산·미분
-검사와 eager 역방향·double backward 근거는 [균질 ADE 범위와 근거](../../validation/fdtd/general-cuda.md#균질-단일-극점-ade)를
+검사와 즉시 실행 역방향·double backward 근거는 [균질 ADE 범위와 근거](../../validation/fdtd/general-cuda.md#homogeneous-single-pole-ade)를
 참고하세요.
 
 ## 단위와 규약
@@ -122,7 +122,7 @@ E와 H는 번갈아 갱신됩니다(leapfrog). E는 정수 스텝에, H는 반 �
 담아 거절됩니다(그때는 `courant`를 낮추세요). `check`는 `resolved["time_step_seconds"]`와
 `resolved["steps"]`를 보고합니다.
 
-`Duration`은 `steps`, `seconds`, 또는 `source="이름"`과 함께 쓰는 `periods`(이름 붙은 소스의
+`Duration`은 `steps`, `seconds`, 또는 `source="name"`과 함께 쓰는 `periods`(이름 붙은 소스의
 중심 파장 주기 수) 중 정확히 하나를 받습니다. 기본적으로 실행은 그 시간만큼 이어집니다.
 명시적인 `Numerics(stopping=fdtd.DecayStop(threshold=..., window_seconds=...))`를 주면 그 시간은
 구체적인 순방향 CPU 실행의 상한이 되고, 그보다 먼저 완료된 감쇠 창에서 멈출 수 있습니다.
@@ -149,9 +149,9 @@ E와 H는 번갈아 갱신됩니다(leapfrog). E는 정수 스텝에, H는 반 �
 0.325 µm 필름은 비트 단위로 같게 실행됩니다.
 
 ```
-셀 경계 (dx = 0.025):          0.275    0.300    0.325    0.350
+cell boundaries (dx = 0.025):  0.275    0.300    0.325    0.350
                                  |--------|--------|--------|
-요청한 경계면 0.317 ----------------------------^  실제로는 0.325
+requested interface 0.317 ----------------------^  runs at 0.325
 ```
 
 두 셀 경계의 정확히 한가운데에 있는 면은 **높은 쪽** 경계(`+x`, `+y`, `+z` 방향)로 옮겨집니다.
@@ -232,7 +232,7 @@ flush 접합(서로 겹치는 두 면,
 예를 들어 면 위에 선 `Prism`이나 회전한 `Box`), 겹치는 곡면 바디, 같은 재료의 겹친 바디(한
 바디로 쓰세요), 한 셀의 세 스무딩 표면, 셀에 닿는 세 번째 구조(먼저 나열되어 셀 전체를 채우는
 경우는 예외), 손실·분산·자성·이방성 매질, `discretization="stencil"`, 그리고 두 바디 중 하나에
-걸린 범위 지정(미분) 형상입니다. 쌍의 재료 값은 traced여도 됩니다. `check`는 바디 블록에 각
+걸린 범위 지정(미분) 형상입니다. 쌍의 재료 값은 추적된 값이어도 됩니다. `check`는 바디 블록에 각
 쌍을 `clip with structures[j]`로 보여 주고, 실행의 `SubpixelAccuracyWarning`도 그 쌍을 적습니다.
 측정한 결과는 [다면체 자르기](../../validation/fdtd/fd-polytope-clip.md)에 있습니다.
 
@@ -241,9 +241,9 @@ flush 접합의 standing body(기둥)에만 전달됩니다. 기판과 관계없
 무관하게 기존 규칙을 유지합니다. `"staircase"`는 접합 점의 소유 매질을 선택하고,
 `"refuse"`는 실제 공유 계면을 거부합니다. 잘못된 값이나 지원 flush 접합 없이 지정한
 비기본 설정은 `numerics.junction` 오류입니다. 기본 `"split"`은 접합이 없어도 사용할
-수 있으며, 준비된 traced 접합 형상은 기존처럼 `"split"`만 지원합니다. 준비된 계산을
-재사용해도 설정은 유지됩니다. traced standing body의 `"staircase"`는
-`numerics.junction`에서 명시적으로 거부하며, 관계없는 traced body는 정적 staircase
+수 있으며, 준비된, 추적된 접합 형상은 기존처럼 `"split"`만 지원합니다. 준비된 계산을
+재사용해도 설정은 유지됩니다. 추적된 standing body의 `"staircase"`는
+`numerics.junction`에서 명시적으로 거부하며, 관계없는 추적된 body는 정적 staircase
 접합을 바꾸지 않습니다. `"refuse"`는 준비 단계에서 접합을 거부하므로 split으로
 대체된 계산을 준비할 수 없습니다.
 
@@ -269,8 +269,8 @@ custom protocol 분류를 유지합니다. `junction`은 기록된 standing body
 `Result.provenance["numerical_policies"]`는 해당 run의 scene과 실행 plan에서 만든 같은
 정책 형식입니다. runtime guard가 필드를 무효화해도 적용된 연산자 정책을 기록하며,
 그 자체가 수치값의 허용 판정은 아닙니다. 보고서의 `capabilities["runtime_validation"]`는
-입력을 구체적으로 읽을 수 있으면 `"concrete_inputs"`, traced 입력을 host에서 읽지 못하면
-`"deferred"`입니다. deferred validate 보고서의 성공은 구조와 정책의 확인이며 실제 수치
+낮춘 입력을 구체적으로 읽을 수 있으면 `"concrete_inputs"`, 추적된 입력을 host에서 읽지 못하면
+`"deferred"`입니다. 그 밖에는 성공한 deferred `Prepared.validate` 보고서는 구조와 정책을 증명하며, 실제 수치
 판정은 run의 `validity.checks["runtime_stability"]`를 확인해야 합니다. 구체적인 거부값은
 issues를 반환하고 resolved 정책 행을 제공하지 않습니다. validate/run은 이전 보고서와
 Result의 정책 기록을 변경하지 않습니다.
@@ -424,8 +424,8 @@ stencil의 지원 범위는 그대로입니다. 진공 속 구 하나와 미분�
 
 모든 소스는 `GaussianPulse(wavelength, frequency_sigma_hz, cutoff=1e-3)`를 가집니다. 중심 진동수
 `f0 = c / wavelength`의 사인파에 가우시안 포락선을 씌운 것으로, **진폭 스펙트럼**의 표준편차가
-`frequency_sigma_hz`입니다. 펄스는 최댓값의 `cutoff`에서 시작하고, 스펙트럼은 `exp(-k²/2) =
-cutoff`인 `k`에 대해 `f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 대역의 단파장 끝이 해상도 규칙이
+`frequency_sigma_hz`입니다. 펄스는 최댓값의 `cutoff`에서 시작하고, 스펙트럼은 `exp(-k²/2) = cutoff`일 때
+`f0 ± k·σ`에서 `cutoff`로 떨어집니다. 그 대역의 단파장 끝이 해상도 규칙이
 읽는 파장입니다(다음 절). `amplitude`, `phase`, `delay_seconds`는 파형을 이동하고 스케일합니다.
 
 `Plane`은 `fdtd.Plane(z=.3)`처럼 법선 축 하나를 스칼라로 지정합니다.
@@ -488,8 +488,8 @@ s 편광과 정확한 수직 입사는 hard 전기장 구동을 유지합니다.
 | 모니터 | 돌려주는 것 |
 | --- | --- |
 | `TimeSeriesMonitor(name, at=..., component="Ey")` | 한 성분의, 가장 가까운 Yee 점에서의 시계열. V/m 또는 A/m, 시간 축 `times_seconds`는 초 |
-| `FieldMonitor(name, wavelengths=..., plane=... 또는 box=..., components=...)` | 각 성분의 점에서의 푸리에 페이저(V·s/m, A·s/m) |
-| `FluxMonitor(name, wavelengths=..., plane=... 또는 box=...)` | 평면을 (`+` 법선 방향으로) 지나거나 닫힌 상자에서 나가는 포인팅 에너지의 진동수당 양: 와트가 아니라 J/Hz 단위의 펄스 스펙트럼 에너지(`spectral_energy`). 닫힌 상자는 각 구조물을 통째로 감싸거나 통째로 빼야 합니다. |
+| `FieldMonitor(name, wavelengths=..., plane=... or box=..., components=...)` | 각 성분의 점에서의 푸리에 페이저(V·s/m, A·s/m) |
+| `FluxMonitor(name, wavelengths=..., plane=... or box=...)` | 평면을 (`+` 법선 방향으로) 지나거나 닫힌 상자에서 나가는 포인팅 에너지의 진동수당 양: 와트가 아니라 J/Hz 단위의 펄스 스펙트럼 에너지(`spectral_energy`). 닫힌 상자는 각 구조물을 통째로 감싸거나 통째로 빼야 합니다. |
 | `DiffractionMonitor(name, plane=..., wavelengths=..., source=..., wave=..., orders=None)` | 주기 셀에서 한 파동으로 나가는 차수들(입사 쪽의 `"reflected"` 또는 반대쪽의 `"transmitted"`). 각 차수의 s/p 좌표계에서의 복소 진폭비(`amplitude_ratio_s`, `amplitude_ratio_p`, 입사장에 대한 비율이라 단위가 없음)와 효율이며, 이름 붙은 `PlaneWave`가 직접 잰 입사장으로 정규화됩니다. 그 입사장의 스펙트럼은 `reference['incident_spectrum']`(V*s/m)입니다. 펄스에는 V/m 단위의 단일 전기장이 없으므로 `field_s`, `field_p`, `field_xyz`는 None입니다. `PlaneWave`가 정확히 하나여야 합니다. `reference_plane`과 `incident_plane`은 위상 기준면을 옮기고, `raw=True`는 대신 `RawDiffractionSpectrum`을 돌려줍니다. 그 정규화하지 않은 `spectrum_s`, `spectrum_p`(V*s/m)는 펄스의 사용 가능한 대역(`metadata['source_usable']`이 참인 파장) 안에서 진폭비에 그 스펙트럼을 곱한 값입니다. `orders`는 남길 차수 창 `(Mu, Mv)`로, 두 격자 벡터 방향의 음이 아닌 정수 쌍을 명시합니다(`None`이면 요청 파장에서 전파하는 모든 차수). 정수 하나만 주면 생성 시점에 `monitor.orders`로 거부합니다. 사용 가능한 대역 밖 파장에서는 진폭비와 효율이 NaN이고 정규화하지 않은 스펙트럼은 NaN이 되지 않고 측정값 그대로 남으며, 그곳에서 `validity.checks["source_reference"]`가 거짓입니다. |
 | `FarFieldMonitor(name, wavelengths=..., box=..., propagation="continuum")` | 열린 장면의 복사: 모든 것을 감싸는 닫힌 상자를 무한원으로 변환합니다. 모든 구조물과 모든 `CurrentDipole` 스탬프는 한 셀 여유를 두고 상자 안쪽에 있어야 합니다. 상자 밖의 다이폴은 상자가 복사하지 못하므로 거절됩니다(`monitor.source_outside`). `intensity(theta, phi)`는 라디안을 받습니다. 주기 셀은 거절됩니다(주기 셀의 원거리장은 회절 차수입니다). `propagation="yee"`는 격자 자체의 분산을 씁니다. |
 | `Outputs(final_fields=True)` | 실행 끝의 E, H 배열과 각 성분의 좌표 |
@@ -497,7 +497,7 @@ s 편광과 정확한 수직 입사는 hard 전기장 구동을 유지합니다.
 (fdtd-model-accuracy-rules)=
 ## 실행 전에 강제되는 정확도 규칙
 
-`check`, `prepare`, `run`이 같은 관문을 공유합니다. 거절 메시지는 바꿔야 할 설정을 알려
+`check`, `prepare`, `run`이 같은 입구(door)를 공유합니다. 거절 메시지는 바꿔야 할 설정을 알려
 줍니다.
 
 - **모든 재료에서 파장당 8셀.** 소스 대역의 최단 파장에서(그리고 모든 `DiffractionMonitor` 파장에서),
@@ -570,7 +570,7 @@ Python의 `NotImplementedError`, 알 수 없는 키워드는 `TypeError`입니�
 `DiffractionOrders.reference['invariant_axes']`는 `InvariantAxis` 축의 이름(예: `('y',)`)이며, 없으면
 `()`입니다.
 
-`runtime_stability`가 true이면 구현된 런타임 certificate를 통과했다는
+`runtime_stability`가 true이면 구현된 런타임 증명서를 통과했다는
 뜻입니다. 모든 출력이나 미분값의 유한성을 스캔한 결과는 아닙니다.
 고정 시간 광원은 각 광원 행의 끝점에서 Gaussian 중간 연산의 표현 가능성도
 검사합니다. Concrete 무효 값은 `source.waveform_range`로 거부하고 carried
@@ -581,7 +581,7 @@ Python의 `NotImplementedError`, 알 수 없는 키워드는 `TypeError`입니�
 
 `admitted`는 정적 선언의 허용 여부이며, 실패한 `runtime_stability` 판정을 덮어쓰지
 않습니다. 미분하는 실행에서 `diagnostics['grazing']`는 host에서 지수를 조사할 수 없는
-traced 물리 매질을 `skipped`로 표시합니다. 준비할 때 사용한 구체적인 재료 seed의
+추적된 물리 매질을 `skipped`로 표시합니다. 준비할 때 사용한 구체적인 재료 seed의
 허용 행을 실제 실행 재료의 허용 판정으로 보고하지 않습니다. 실제 수치값의 유효성은
 runtime guard가 판정합니다. 고정된 PML `reference_media` 항목은 수치적인 stretch를
 고정할 뿐, 물리 매질의 grazing 허용 판정을 대신하지 않습니다.
@@ -593,11 +593,11 @@ runtime guard가 판정합니다. 고정된 PML `reference_media` 항목은 수�
 구체적인 검사와 같은 반올림된 코사인으로 판정하며, 요구값을 잘라내거나 grazing
 허용오차를 완화하지 않습니다.
 명시적인 아주 작은 `InvariantAxis(k=...)`에서는 구간의 하한이 0으로 반올림될 수 있습니다.
-0은 열린 경계의 표식으로만 취급하며, 양수 재료 지수의 eager 연산과 모든 수용 기준은 그대로입니다.
+0은 열린 경계의 표식으로만 취급하며, 양수 재료 지수의 즉시 실행 연산과 모든 수용 기준은 그대로입니다.
 
 각 `prepared.run(problem)`은 새로운 필드 상태에서 시작하고 자체 검사 결과를
 반환합니다. 가드가 무효로 판정한 값은 NaN과 실패한 runtime validity를 반환하며,
-host에서만 검사할 수 있는 지원되지 않는 trace는 명시적으로 예외를 발생시킵니다.
+host에서만 검사할 수 있는 지원되지 않는 추적은 명시적으로 예외를 발생시킵니다.
 어느 경우도 이후의 유효한 실행을 무효로 만들거나 이전 결과를 변경하지 않습니다.
 다시 실행하려면 유효한 전체 problem을 전달하세요.
 
@@ -633,7 +633,7 @@ float64 Drude 감수율은 큰 감쇠에서 식을 재스케일링하여, 공개
 FDTD 모델에서 시험한 주파수별 값과 미분을 보존합니다. float32 입력을 포함하는
 공개 호출은 기존 산술과 dtype을 유지하며, float32나 혼합 정밀도의 극단값 지원을
 추가하지 않습니다. Lorentz 응답과 ADE 계수는 바뀌지 않으며, 모든 유한 극단값과
-목적함수의 미분을 보장하지 않습니다. 정규화된 재현 예제, SI·단위 변환의 범위와
+목적함수의 미분을 증명하지 않습니다. 정규화된 재현 예제, SI·단위 변환의 범위와
 중간 연산 underflow 제한은 [영문 미분 가이드](fd-differentiation.md)를 참고하세요.
 
 기하는 예약된 지지 영역을 준 스무딩 바디만 미분됩니다.
@@ -650,19 +650,19 @@ carried 값을 검사합니다. 검사 대상 값이 잘못되면 장을 NaN으�
 `f0 > k*frequency_sigma_hz`를 검사합니다. SI 단위에서 `f0=c0/wavelength`,
 `k=sqrt(-2*log(cutoff))`입니다. 잘못된 carried band는 런타임 유효성을
 실패시키며 concrete 생성자 처리는 변하지 않습니다. Carried band에서 선언된
-모든 재료에 극점이 없으면 별도의 런타임 certificate가 모든 광원·재료의 최단
+모든 재료에 극점이 없으면 별도의 런타임 증명서가 모든 광원·재료의 최단
 cutoff-band 파장을 기존 공간 하한(등호를 포함한 8셀)과 비교합니다. Host는
-traced band를 읽지 못하므로 계획 단계 경고가 남을 수 있습니다. 선언된 극점이
+추적된 band를 읽지 못하므로 계획 단계 경고가 남을 수 있습니다. 선언된 극점이
 하나라도 있으면 이전 해상도 경로 전체를 유지하며 동적 Band 검사 공백도 남습니다.
 이 하한은 정확도·수렴이나 모든 파형 중간 연산을 보증하지 않습니다. 사용할
 파라미터 범위를 독립적으로 세분화해 확인하세요.
 [Pole-free 공간 계약](../../validation/fdtd/general-cuda.md#live-band-pole-free-spatial-resolution)을 참고하세요.
 [Carrier cutoff 계약](../../validation/fdtd/general-cuda.md#live-band-carrier-cutoff)을 참고하세요. 물리 단위 스케일과 고정 지연·대역폭 의존성은
-[제한된 펄스 Hessian 검증](../../validation/fdtd/general-cuda.md#gaussian-pulse-파장대역폭위상지연-hessian)을 참고하세요. 이산 솔버의 미분은 수렴에 대한 진술이
+[제한된 펄스 Hessian 검증](../../validation/fdtd/general-cuda.md#gaussian-pulse-wavelength-bandwidth-phase-and-delay-hessians)을 참고하세요. 이산 솔버의 미분은 수렴에 대한 진술이
 아닙니다. 유한 차분과 비교하고 순방향 계산도 함께 다듬으세요. [영문 미분 가이드](fd-differentiation.md)가
 같은 엔진의 호환(compat) 표기로 측정을 다룹니다.
 
-Torch에서 `prepared.run`은 eager autograd와 `torch.func.grad`, `vjp`, `jacrev`, `jvp`로
+Torch에서 `prepared.run`은 즉시 실행 autograd와 `torch.func.grad`, `vjp`, `jacrev`, `jvp`로
 미분되며, 그 값은 `torch.autograd.grad`와 반올림 오차 안에서 일치합니다. 시간 스텝이 장을
 제자리(in place)에서 갱신하므로 `torch.func.vmap`은 실행을 배치로 묶을 수 없습니다.
 `prepared.run`은 이를 거부하고, 실행을 vmap으로 묶는 `torch.func.jacfwd`와 `hessian`도
@@ -672,7 +672,7 @@ Torch에서 `prepared.run`은 eager autograd와 `torch.func.grad`, `vjp`, `jacre
 `jacrev`는 같은 코드와 경로 `numerics.checkpoint_steps`로 거부됩니다.
 
 JAX에서는 범위 지정 바디의 크기·반지름·중심을 `jax.grad`, `jacrev`, `jvp`, `jacfwd`, `vmap`으로
-eager 또는 `jax.jit` 안에서 미분하고 배치로 묶을 수 있습니다. 배치 결과는 실행을 하나씩 도는
+즉시 실행 또는 `jax.jit` 안에서 미분하고 배치로 묶을 수 있습니다. 배치 결과는 실행을 하나씩 도는
 Python 루프와 일치하고, `jacfwd`는 `jacrev`와 일치합니다.
 
 ## 예제: 기판 위 코팅을 닫힌 꼴과 비교
@@ -684,7 +684,7 @@ Python 루프와 일치하고, `jacfwd`는 `jacrev`와 일치합니다.
 import numpy as np
 from wavebit import Material, Units, fdtd
 
-dx = .02                                       # um; 0.1 um 코팅 = 5셀
+dx = .02                                       # um; 0.1 um coating = 5 cells
 wavelengths = (.7, .8, .9)
 problem = fdtd.Problem(
     units=Units(length="um"),
@@ -710,7 +710,7 @@ numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=dx),
                          duration=fdtd.Duration(periods=60, source="light"))
 
 report = fdtd.check(problem, numerics=numerics)
-assert report.ok and not report.issues         # 스냅된 면 없음
+assert report.ok and not report.issues         # nothing snapped
 print(report.resolved["grid_shape"], report.resolved["steps"])
 
 result = fdtd.run(problem, numerics=numerics)
@@ -718,7 +718,7 @@ R = result["r"].efficiency[:, 0, 0]
 T = result["t"].efficiency[:, 0, 0]
 
 
-def airy(wavelength, n1=2.5, n2=1.5, d=.1):  # 수직 입사, 공기 / 코팅 / 기판
+def airy(wavelength, n1=2.5, n2=1.5, d=.1):  # normal incidence, air / coating / substrate
     r01, r12 = (1 - n1) / (1 + n1), (n1 - n2) / (n1 + n2)
     t01, t12 = 2 / (1 + n1), 2 * n1 / (n1 + n2)
     phase = np.exp(2j * np.pi * n1 * d / wavelength)

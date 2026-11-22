@@ -23,8 +23,8 @@ TFSF 구성은 표준적인 것입니다(Taflove와 Hagness, *Computational Elec
 
 ## 등록한 합격 기준 (2026-10-27, 계산 전)
 
-**설정 S.** 흡수층 통과 기록(`fd-waveguide-through-pml.md`) D1의 슬래브입니다. 유전율 2.085136의
-클래딩 안에 폭 1.5 µm, 유전율 4인 코어, y는 `InvariantAxis`, x는 ±4.5 µm에서 `Open`, z는
+**설정 S.** 흡수층 통과 기록(`fd-waveguide-through-pml.md`) D1의 슬래브입니다. `epsilon = 2.085136`인
+클래딩 안에 폭 1.5 µm, `epsilon = 4`인 코어, y는 `InvariantAxis`, x는 ±4.5 µm에서 `Open`, z는
 ±4 µm에서 `Open`, 코어는 양쪽 z 면을 지나 이어지는 `SnappedSlab`, 1.55 µm에 맞춘 24칸 `PML`.
 z = -2 µm의 `ModeSource('src')`, 방향 `+z`, 모드 0(TE0), 진폭 1(미터당 와트의 제곱근), 펄스
 중심 1.55 µm, `frequency_sigma_hz = 1.5e13`, `cutoff = 1e-12`. `source='src'`, `modes=1`,
@@ -55,8 +55,8 @@ z = -2 µm의 `ModeSource('src')`, 방향 `+z`, 모드 0(TE0), 진폭 1(미터�
   같은 접합의 연속체 모드 정합 값과 비교합니다. 모드 정합은 테스트 안에 직접 씁니다. 완전 도체
   상자 안 두 슬래브의 TE 모드를 1차원 연속 연산자의 미세 유한차분 풀이로 구하고, z = 0에서
   Ey와 Hx의 연속 조건으로 잇고, 모드 수와 상자 폭에 대해 수렴시킵니다. 기준:
-  `|T - T_mm|`가 0.05 µm에서 5e-3 이하, 0.025 µm에서 2e-3 이하이고 더 고운 간격에서 더 작음.
-  `|R - R_mm|`가 0.025 µm에서 `0.2 R_mm` 이하이고 0.05 µm보다 작음.
+  0.05 µm에서 `|T - T_mm| <= 5e-3`, 0.025 µm에서 `<= 2e-3`이고 더 고운 간격에서 더 작음.
+  0.025 µm에서 `|R - R_mm| <= 0.2 R_mm`이고 0.05 µm보다 작음.
 * **S6, 백엔드.** 0.05 µm의 설정 S를 NumPy, JAX, Torch에서 실행해 `injected`, `leakage`,
   `forward(p2)`, `backward(q)`가 `|injected|` 대비 1e-12 이내로 일치.
 * **S7, 미분.** JAX와 Torch에서 0.05 µm로: 1.55 µm의 `forward_energy(p2)`를 광원 `amplitude`로,
@@ -145,7 +145,7 @@ Meep은 GPL-2.0-or-later이며 별도 프로그램으로 실행했고 소스는 
 맞추지 못한 조건은 `tests/references/golden_stage7_cross_solver.json`과 그 기록에 고정했습니다.
 `tests/references/test_stage7_cross_solver_golden.py`가 이 표와 아래의 각 문장을 그 값에 묶습니다.
 
-맞춘 것: Setup S와 S5 맞대기 접합, 같은 격자 간격(Meep 해상도 µm당 20, 40, 80), 같은 시간 간격(각
+맞춘 것: 설정 S와 S5 맞대기 접합, 같은 격자 간격(Meep 해상도 µm당 20, 40, 80), 같은 시간 간격(각
 도구에서 Courant 0.5), TE(Wavebit의 `Ey`는 Meep의 `Ez`, FDTDX의 `filter_pol="tm"`이며, FDTDX의 이름
 함정입니다). 각 도구는 자기 모드 해석기, 모드 광원, 모드 측정을 썼습니다. Meep은 `EigenModeSource`와
 `get_eigenmode_coefficients`, FDTDX는 `ModePlaneSource`와 `ModeOverlapDetector`입니다. Meep의 흡수층은
