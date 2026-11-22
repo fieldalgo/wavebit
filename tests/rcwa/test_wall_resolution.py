@@ -16,8 +16,6 @@ from wavebit.rcwa._engine.stretch import Axis, Stretch, plane_wave_matrix
 
 P, H = 400.0, 150.0
 METAL = -20 + 1.5j
-# The option is experimental and warns at each solve; the test at the end pins that.
-pytestmark = pytest.mark.filterwarnings('ignore::wavebit.rcwa.diagnostics.ExperimentalWarning')
 
 
 def _problem(material=12.25, size=(200.0, 200.0), center=None, wavelength=900.0, theta=0.0, phi=0.0,
@@ -329,16 +327,12 @@ def test_a_spacer_layer_gives_the_field_above_the_structure():
     assert np.abs(fields[0] - fields[1]).max() < 1e-9 * np.abs(fields[1]).max()
 
 
-def test_a_stretched_solve_warns_that_it_is_experimental_and_a_refusal_does_not():
+def test_a_stretched_solve_does_not_warn():
+    """The option is stable (2026-11-22): neither a solve nor a refusal warns."""
     import warnings
     from wavebit.rcwa.diagnostics import ExperimentalWarning
-    with pytest.warns(ExperimentalWarning, match='wall_resolution is experimental') as caught:
-        _run(_problem(), orders=(2, 2))
-    assert len(caught) == 1 and caught[0].filename == __file__          # on the calling line
     with warnings.catch_warnings():
         warnings.simplefilter('error', ExperimentalWarning)
-        _run(_problem(), orders=(2, 2), slope=None)                      # the default says nothing
-        with pytest.raises(UnsupportedFeatureError):                     # and a refusal raises, unwarned
-            _run(_problem(), orders=(2, 2), algorithm='etm')
-        warnings.simplefilter('ignore', ExperimentalWarning)             # the one category silences it
         _run(_problem(), orders=(2, 2))
+        with pytest.raises(UnsupportedFeatureError):
+            _run(_problem(), orders=(2, 2), algorithm='etm')

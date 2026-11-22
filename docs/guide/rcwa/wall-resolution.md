@@ -16,27 +16,12 @@ result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(12, 12), factorization
 
 The default is `None`: the cell's own coordinates, and every solve bit for bit as it is without the keyword.
 
-:::{admonition} Experimental
-:class: warning
+## How it is checked
 
-`wall_resolution` is experimental, and every solve that uses it emits `wavebit.rcwa.diagnostics.ExperimentalWarning` on the calling line.
-
-- **What sets it apart.** The unstretched solve is checked two ways: against independent implementations of the same method at the same truncation, and against finite-element fields. The stretched solve has the second check only so far.
-- **What the measurements cover.** Seven layers of axis-aligned rectangles and twelve of one circle or ellipse against finite-element fields, one wavelength each, at normal incidence. At oblique incidence and with several propagating orders it is checked for energy conservation and convergence, not against a reference.
-- **What may change.** Its values, what it accepts and its name, between releases and without the deprecation period the rest of the interface gets.
+- **Against finite-element fields.** Seven layers of axis-aligned rectangles and twelve of one circle or ellipse at normal incidence; and thirteen metal cases and three dielectric ones beyond it: oblique incidence (p and s, theta 20 and 40 deg), five propagating orders, a glass substrate, two patterned layers, and for a circle a non-square cell. On those sixteen, at order 12, `R` and `T` are within 0.41% of the references and the near field is 0.02 to 0.10 of the default solve's error, against criteria written before measuring ([the measurements](../../validation/rcwa/wall-resolution.md)). On seven of those cases the references themselves move by 0.1 to 0.4% between their two mesh levels, and the comparison is only as tight as that.
+- **Against other codes without the stretch.** On dielectric blocks, RETICOLO's Li solve raised to order 30 agrees with it to its own uncertainty; on metals that solve has not settled by order 40, which is the slowness the stretch removes.
+- **What no one has.** No other implementation of the stretched or the matched solve was found to compare with at the same truncation.
 - **How to use it.** Compare two orders before relying on a value, as with any solve.
-
-A script that has taken this in can silence the one category:
-
-```python
-import warnings
-from wavebit.rcwa import diagnostics
-
-warnings.simplefilter('ignore', diagnostics.ExperimentalWarning)
-```
-
-A scene that is refused raises and does not warn.
-:::
 
 ## What the value is
 
@@ -82,7 +67,7 @@ A stack whose patterned layers hold one circle, or one ellipse with its axes alo
 - **What it refuses**, by name with `rcwa.unsupported`: several shapes in a layer, different circles or ellipses in two layers, a circle in a stack that also holds rectangles, a turned ellipse, an ellipse that reaches the cell's edge, and a single harmonic along either axis.
 - **How the field is read.** The mesh's four lines run across the whole cell, and on them the map bends, so the component of the solve's field normal to a line jumps there even in a uniform medium; its plain sum rings. Within half a resolution unit, `period / (2 N + 1)`, of a line the reading takes that component from the normal displacement (`D` for `E`, `B` for `H`), which does not jump; beyond one and a half units it keeps the plain sum, and between the two it blends them. This is what `reconstruction='plain'` reads here; the other rules are refused, as for rectangles.
 - **What it costs.** The materials are sampled on a raster of the stretched cell, 512 by 512 pixels whose edges are the mesh's lines (more when the orders need them), and go through the tensor Li factorization. Measured at order 12 on one layer, a solve took about 1.6 times the default NVF solve's time.
-- **How close it is.** On six metal circles, three metal ellipses and three dielectric shapes at normal incidence the field is several to tens of times closer to the finite-element reference than the default solve's at the same order, and `R` at order 12 within 0.2% of the reference's on all but the weakest metal ({ref}`the measurements <wall-resolution-circles-measured>`). The 3:1 ellipse, on which the default solve's `R` is 12% off at order 12, is within 0.01%.
+- **How close it is.** On six metal circles, three metal ellipses and three dielectric shapes at normal incidence the field is several to tens of times closer to the finite-element reference than the default solve's at the same order, and `R` at order 12 within 0.2% of the reference's on all but the weakest metal ({ref}`the measurements <wall-resolution-circles-measured>`). The 3:1 ellipse, on which the default solve's `R` is 12% off at order 12, is within 0.01%. A metal circle at theta 20 deg, on glass, in a 400 by 300 nm cell and in two layers is within 0.21% in `R` and `T`.
 
 ## Reading the result
 

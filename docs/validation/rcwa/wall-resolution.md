@@ -1,6 +1,6 @@
 # The solve in stretched coordinates against finite-element fields — measurements
 
-What [`Numerics(wall_resolution=G)`](../../guide/rcwa/wall-resolution.md) was measured against, what came out, and where it has not been checked. The option is experimental: the stretched solve has no independent implementation to be compared with at the same truncation, so everything here is either a comparison with a finite-element field, which says how accurate the method is, or a property the construction has to satisfy.
+What [`Numerics(wall_resolution=G)`](../../guide/rcwa/wall-resolution.md) was measured against, what came out, and where it has not been checked. No independent implementation of the stretched or the matched solve was found to compare with at the same truncation, so everything here is a comparison with finite-element fields, which says how accurate the method is, a comparison with other codes that solve the same structures without the stretch, or a property the construction has to satisfy. The option is stable on the strength of {ref}`the finite-element table beyond normal incidence <wall-resolution-wide>` and, for rectangles, {ref}`RETICOLO's unstretched solve at high order <wall-resolution-reticolo>`.
 
 ## The method in one paragraph
 
@@ -51,7 +51,7 @@ Each of these is a test in `tests/rcwa/test_wall_resolution.py`.
 
 ## Oblique incidence, several propagating orders
 
-There is no finite-element reference here: the model above is for normal incidence at one wavelength. What can be seen is whether the stretched solve settles, and whether the unstretched one moves toward it as its order rises. The 200 nm block (or hole) again; `R` at orders 8 / 12 / 16, and for the unstretched solve also at 20.
+These cases have no finite-element reference of their own (the oblique ones here are at phi 30 deg); finite-element references at oblique incidence with phi 0, with five propagating orders, on a substrate and with two layers are {ref}`below <wall-resolution-wide>`. What can be seen here is whether the stretched solve settles, and whether the unstretched one moves toward it as its order rises. The 200 nm block (or hole) again; `R` at orders 8 / 12 / 16, and for the unstretched solve also at 20.
 
 | Case | Propagating orders | `wall_resolution=0.02` | Unstretched |
 | --- | --- | --- | --- |
@@ -169,10 +169,58 @@ Each is a test in `tests/rcwa/test_wall_resolution_matched.py`.
 
 At order 12 on one layer the matched solve took 16 to 17 seconds where the default NVF solve took 10 to 11, on four cores; at order 8, 3 seconds against 2.
 
+(wall-resolution-wide)=
+## Beyond normal incidence: oblique, several propagating orders, a substrate, two layers
+
+Thirteen metal cases and three dielectric ones against 3D finite-element fields, with criteria written before measuring. The cell is the one above (400 nm square, a 150 nm layer, 900 nm, in air; the metal is `eps` -20+1.5j, the block 200 nm, the circle of radius 100 nm), and each case changes one thing: the angle (theta 20 or 40 deg, phi 0, p and s), the wavelength (350 nm, five propagating orders), a glass substrate (n = 1.45), two identical patterned layers 100 nm apart, or a 400 by 300 nm cell. Order 12; plane errors as above, over 2304 samples of each patterned layer's mid-plane; the default solve is uncompressed Li on a block and NVF on a circle.
+
+| Case | `wall_resolution=0.02`: `R` / `T` against the reference | Default solve: `R` / `T` | Field: stretched / default (ratio) | Reference's own step (`u_F`) | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| metal block, theta 20 deg, p | -0.10 / +0.05% | -1.63 / -0.40% | 0.73 / 26.0% (0.028) | 1.5e-3 | met, weak |
+| metal block, theta 20 deg, s | -0.18 / +0.06% | -2.05 / -0.44% | 3.16 / 32.3% (0.098) | 1.4e-3 | met, weak |
+| metal block, theta 40 deg, p | -0.11 / +0.02% | -2.25 / -0.65% | 0.85 / 26.7% (0.032) | 2.0e-3 | met, weak |
+| metal block, theta 40 deg, s | -0.15 / +0.09% | -2.10 / -0.25% | 3.08 / 34.0% (0.091) | 1.3e-3 | met, weak |
+| metal block on glass | -0.41 / +0.19% | -5.44 / -0.23% | 2.33 / 39.8% (0.058) | 3.6e-3 | met, weak |
+| two metal blocks, 100 nm apart | -0.10 / +0.29% | -2.66 / +0.28% | 0.83 / 27.6% (0.030) | 1.4e-3 | met, weak |
+| metal block, 350 nm | -0.07 / +0.01% | -2.46 / -0.16% | 0.69 / 16.9% (0.041) | 5.6e-4 | met |
+| metal circle, theta 20 deg, p | +0.03 / -0.01% | -2.29 / -1.03% | 0.54 / 21.8% (0.025) | 3.9e-4 | met |
+| metal circle, theta 20 deg, s | +0.01 / -0.01% | -2.22 / -0.89% | 0.53 / 21.8% (0.024) | 7.5e-6 | met |
+| metal circle on glass | -0.21 / -0.01% | -5.97 / -1.19% | 1.88 / 24.8% (0.076) | 4.0e-3 | met, weak |
+| metal circle, 400 by 300 nm cell, p | +0.02 / -0.01% | -1.09 / -0.97% | 0.52 / 29.0% (0.018) | 2.3e-4 | met |
+| metal circle, 400 by 300 nm cell, s | 0.00 / 0.00% | -0.43 / -1.67% | 0.50 / 23.3% (0.021) | 2.8e-4 | met |
+| two metal circles, 100 nm apart | -0.02 / 0.00% | -5.11 / -2.28% | 0.62 / 22.0% (0.028) | 5.4e-4 | met |
+| dielectric block (`eps` 12.25), normal | -0.08 / 0.00% | +0.32 / -0.01% | 0.29 / 11.5% | 8.2e-4 | met |
+| the same, theta 20 deg, p | -0.10 / 0.00% | +0.38 / -0.01% | 0.30 / 11.5% | 1.1e-3 | met, weak |
+| the same, theta 20 deg, s | -0.06 / 0.00% | +0.14 / -0.01% | 0.30 / 11.4% | 7.1e-4 | met |
+
+- **The criteria**, written before measuring: on a metal, `R` and `T` within max(0.3%, 2 `u_F`) of the reference and the field at most 0.25 of the default solve's at the same order; on a dielectric, the same for `R` and `T` and the field within 1%. `u_F` is the relative change of the reference's `R` between its two finest mesh levels; where it is above 0.1% the row is marked weak, and its tolerance is wider by that much. All sixteen are met; seven are weak.
+- **Where weak comes from.** On the substrate the reference's `R` moved by 0.36 to 0.40% between its two levels, on the oblique blocks by 0.11 to 0.20%, and on the two blocks its `T` moved by 0.56% (the tolerance is set by `R`, and there `T` is at +0.29% against 0.30%). The stretched solve itself moves by at most 0.11% in `R` between orders 12 and 16 on any of the sixteen.
+- **The references.** 3D finite elements (gyptis 1.2.0, second-order edge elements) on cells reduced by the structures' mirror planes: a quarter of the cell at normal incidence, half of it at phi 0, the full height over a substrate; two mesh levels each, the finer with 0.25 to 0.69 million complex unknowns. Before any metal was read the models were checked against uniform slabs (analytic values, within 1.2e-4) and the dielectric block (RETICOLO at order 30, below: within 7.7e-5 at normal incidence, 3.6e-5 and 1.3e-4 at theta 20 deg for p and s); the criterion was 1e-3. They are kept in a private research repository; none is stored here and no test reads them.
+- **A first set of references was not good enough.** Its absorbing layer kept nearly the same coarse mesh at every level, which left an error that refinement did not remove: on the lossless dielectric block `R + T` read 0.99985, and the oblique model failed the block check. With the absorbing layer meshed at 40 nm and the air at 20 nm the check passed and every row above was measured again; the criteria were not changed.
+- **The 350 nm block by order.** The stretched solve's ten orders are within -0.15 to +0.20% of the reference's each, the default solve's within -3.5 to +1.3%.
+- **Not covered.** For circles, a shape away from the cell's centre (with the same shape in every layer this is the same structure moved, whose invariance is a test below), oblique incidence at one angle only, and no case with several propagating orders; for both, phi other than 0 and a second reference on a substrate.
+
+(wall-resolution-reticolo)=
+## Rectangles against RETICOLO's unstretched solve at high order
+
+RETICOLO V10 (Hugonin and Lalanne; Zenodo 14631951, CC BY 4.0) solves the same layers with Li's rule and no stretch (`granet = 0`, the only setting of the public version). Its orders were raised to 30 (40 on two normal-incidence cases), with both of its nestings of Li's rule, on the block cases of the table "Oblique incidence, several propagating orders" above and on the metal rectangle.
+
+- **The two codes are the same solve.** At orders 8 and 12, on seven cases and both polarizations, RETICOLO and Wavebit's unstretched `factorization='li'` agree to 7.7e-13 in `R` and `T`.
+- **Dielectric block: met.** The stretched solve at orders 12 and 16 is within max(2u, 2e-4) of RETICOLO's highest-order value in all 32 comparisons -- `R` and `T`, p and s, at normal incidence, at theta 20 deg phi 30 deg, and at 350 nm order by order -- with `u` the larger of RETICOLO's last step in order and the difference between its nestings. The stretched solve is 2e-5 to 6e-5 from it on the single-order cases, 4e-4 at 350 nm.
+- **Metal: RETICOLO does not settle.** Its unstretched solve is the one the stretch accelerates, and on the metal block at normal incidence its `R` reads 0.35049, 0.35334 and 0.35370 at orders 8, 30 and 40, still rising toward the stretched solve's 0.35546 and the finite-element 0.35615. Metal rectangles are therefore judged by the finite-element table above, not by RETICOLO.
+
+## Dielectric circles and ellipses against a second RCWA code
+
+fmmax 1.7.1 (MIT) solves five dielectric scenes -- a circle at theta 20 deg (p, s), on glass, in a 400 by 300 nm cell (p, s), in two layers, and a 130 by 80 nm ellipse at theta 20 deg (p, s) -- with up to 2000 terms; it takes the permittivity as a pixel grid. This is reported beside the criteria above, not as one of them.
+
+- **As written before measuring, not met.** Against fmmax at its most terms on a 1600-pixel grid, the matched solve's `R` at order 12 is 0.44 to 1.10% off in seven of eight rows, outside max(0.3%, 2u); `T` is within 0.03% in all eight. The default NVF solve is 0.29 to 1.13% from the same values.
+- **fmmax had not settled in its grid.** At fixed terms its `R` keeps falling roughly as one over the grid: 0.0151450, 0.0150561, 0.0150244, 0.0150098 at 800, 1600, 2400 and 3200 pixels on the circle at theta 20 deg, p -- more than the term-count uncertainty the criterion counted.
+- **Against fmmax extrapolated in the grid** (a comparison chosen after the result) the matched solve's `R` is within 0.003 to 0.19%; the 3200-pixel run landed on the extrapolation's prediction to 2e-6.
+
 ## Not measured
 
-- Any reference at oblique incidence, with several propagating orders, on a substrate, or on several patterned layers; for circles and ellipses, also any reference with a shape away from the cell's centre or in a non-square cell.
-- An independent implementation of the matched mesh: none was found to compare with.
+- A reference at phi other than 0; for circles and ellipses, a reference with a shape away from the cell's centre, at a second angle, or with several propagating orders; a second reference on a substrate. A finer finite-element level for the seven weak rows above.
+- An independent implementation of the stretched solve or the matched mesh: none was found to compare with at the same truncation.
 - Layers with more than two walls along an axis against a reference. A uniform slab through four unevenly placed walls reads the right `R` to 1e-5.
 - A second mesh level for five of the seven references.
 - Single precision; `jax.jit`, `jax.vmap` and gradients, which are refused.
