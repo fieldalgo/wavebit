@@ -1108,7 +1108,7 @@ def test_traced_values_at_a_third_order_point_are_exact(first_order):
                 assert err < 1e-12, (algo, how, rel, err)
 
 
-# The first-order case peaks at 4.8 GB alone (main e30f85c).
+# The first-order case peaks at 4.2 GB alone (4.15; main 3770848d).
 @pytest.mark.parametrize('first_order', [False, pytest.param(True, marks=pytest.mark.memory_heavy)],
                          ids=['second_order', 'first_order'])
 def test_traced_fields_at_a_third_order_point_are_exact(first_order):
@@ -1134,10 +1134,10 @@ def test_traced_fields_at_a_third_order_point_are_exact(first_order):
         assert _rel(d, dF) < 1e-11, (algo, _rel(d, dF))
 
 
-# The first-order case peaks at 7.1 GB alone (the second-order one at 1.9 GB), and CI runners
-# were shut down in it beside a second worker on 2026-11-21.
-@pytest.mark.parametrize('first_order', [False, pytest.param(True, marks=pytest.mark.memory_heavy)],
-                         ids=['second_order', 'first_order'])
+# Not memory_heavy: the first-order case peaks at 3.4 GB alone (3.42, the higher of two runs;
+# main 3770848d). Before main 54f7f4c it peaked at 7.1 GB, and CI runners were shut down in it
+# beside a second worker on 2026-11-21.
+@pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
 def test_vmapped_derivatives_at_a_third_order_point_match_cauchy_oracles(first_order):
     """The gradient of ``sum |a|**2`` in the wavelength across the offsets 0, 1e-9 and -1e-8 of
     the fy 0.5, 620.55 nm point, both ways round: ``jax.jit(jax.vmap(jax.grad))`` and

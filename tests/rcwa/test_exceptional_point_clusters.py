@@ -1133,7 +1133,7 @@ def _sum_R(s):
     return lambda w: jnp.sum(jnp.real(s.solve(wavelength=w, auto_detune=False).R))
 
 
-# Both cases peak at 4.5 GB alone (main e30f85c).
+# Both cases peak at 4.3 GB alone (4.30 ETM, 4.21 SMM; main 3770848d).
 @pytest.mark.memory_heavy
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 def test_two_clusters_a_direction_on_the_first_order_path(algo):
@@ -1275,8 +1275,9 @@ def test_derivatives_at_a_coincidence_are_the_1d_rebuild_s(name, dth, algo, firs
         assert _rel(float(tangent), ref[1]) < 1e-10
 
 
-# The first-order cases peak at 9.4 GB alone (DC612, SMM; the 2D ones at 2.6 GB), and CI
-# runners were shut down in them beside a second worker on 2026-11-21.
+# The first-order cases peak at 4.5 to 4.6 GB alone (all six measured; main 3770848d). Before
+# main 54f7f4c they peaked at 9.4 GB, and CI runners were shut down in them beside a second
+# worker on 2026-11-21.
 @pytest.mark.parametrize('first_order', [False, pytest.param(True, marks=pytest.mark.memory_heavy)],
                          ids=['2d', 'first_order'])
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
@@ -1341,8 +1342,7 @@ def test_a_coincidence_under_an_abstract_trace(name, dth, algo, first_order):
         assert np.isfinite(err) and err < 1e-11, f'{label}: {err:.1e}'
 
 
-# The first-order cases peak at 5.2 to 5.4 GB alone (all six measured; a 2D one at 2.5 GB;
-# main e30f85c).
+# The first-order cases peak at 4.8 to 5.0 GB alone (all six measured; main 3770848d).
 @pytest.mark.parametrize('first_order', [False, pytest.param(True, marks=pytest.mark.memory_heavy)],
                          ids=['2d', 'first_order'])
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])

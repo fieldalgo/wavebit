@@ -132,8 +132,8 @@ jobs:
     #
     # Since 2026-11-22 a test marked `memory_heavy` does not share the runner with a worker:
     # `run_verification.py` holds those back and runs them after the parallel phase, one at
-    # a time (its `memory` phase). Two first-order exceptional-point tests peak at 9.4 and
-    # 7.1 GB alone; beside a second worker they shut the runner down (exit 143, no failed
+    # a time (its `memory` phase). Two first-order exceptional-point tests peaked at 9.4 and
+    # 7.1 GB alone then; beside a second worker they shut the runner down (exit 143, no failed
     # test) in shards 4, 5 and 30 on 2026-11-21, on main three commits in a row.
     #
     # `--shard` assigns whole units -- files, or `shard_unit` units -- largest first to the

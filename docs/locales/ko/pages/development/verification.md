@@ -225,10 +225,10 @@ python -c "import resource, subprocess, sys; subprocess.run([sys.executable, '-m
 
 그 값이 약 4 GB, 곧 worker 둘이 나눠 쓰는 16.4 GB runner의 사분의 일을 넘으면 표시합니다.
 매개변수화한 테스트는 무거운 사례에만
-`pytest.param(..., marks=pytest.mark.memory_heavy)`로 표시합니다. 2026-11-21에는 혼자서 9.4 GB와
-7.1 GB까지 쓰는 first-order 예외점 테스트 둘을 실행하던 runner가 실패한 테스트 없이
+`pytest.param(..., marks=pytest.mark.memory_heavy)`로 표시합니다. 2026-11-21에는 당시 혼자서
+9.4 GB와 7.1 GB까지 쓰던 first-order 예외점 테스트 둘을 실행하던 runner가 실패한 테스트 없이
 종료되었습니다. main이 3개 커밋 연속 빨간색이었고, Markdown 파일 2개만 바꾼 pull request도
-shard 하나를 잃었습니다.
+shard 하나를 잃었습니다. 2026-11-22부터 그 둘의 최댓값은 4.6 GB와 3.4 GB입니다.
 
 GitHub artifact `verification-default-N`과 `verification-slow-N`에는 shard별 JSON 결과
 기록과 입력 목록, JSONL 이벤트, JUnit XML, 로그를 보관합니다. artifact마다 저장소를
