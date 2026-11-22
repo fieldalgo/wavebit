@@ -1121,7 +1121,7 @@ levels*, below). The
 first-order split, whose gate reads before its pair gate, already took the three jointly: quiet
 answers within 3.9e-14, loud ones within 1.4e-11 at the point.
 
-The digests of *Eight modes* (386 eager and 66 traced on each formulation) are identical to
+The digests of *Eight modes* (384 eager and 66 traced on each formulation) are identical to
 `18bbcbfd`: no ball of three there holds a pair beside a dependent column, and the first-order
 gate reads no pairs. Seven one-line mutations are each caught: the rule switched off, its
 threshold at 1e-6, the sine read against the pair's eigenvector alone, the pair looked up in the

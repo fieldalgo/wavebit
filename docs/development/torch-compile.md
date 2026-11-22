@@ -403,7 +403,7 @@ diagonal `fill_` becomes once functionalised), closed by
 [PR #182292](https://github.com/pytorch/pytorch/pull/182292) in `torch/_refs`, in the 2.14.0
 release notes as "Fix incorrect compiled output and gradients for overlapping-input
 `torch.diagonal_scatter` operations". Re-measured here with the snippet as written: 2.13.0 gives
-1.381 for complex128 and complex64 with grad; 2.14.0 and 2.14.1 give 0 for every dtype, on
+1.381 for complex128 and 5.709 for complex64 with grad; 2.14.0 and 2.14.1 give 0 for every dtype, on
 macOS arm64 and on CI's Linux x86-64. The floor is 2.14 since that date, so the canary asserts
 on every platform. The doors stay, for the reason above: they keep wavebit out of every future
 Inductor defect at the cost measured, and compiling wavebit's part buys nothing (§4).

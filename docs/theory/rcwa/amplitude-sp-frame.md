@@ -151,7 +151,7 @@ reported a frame error of 0.36 that the amplitudes did not have -- they were byt
 across the change. The test now checks the plane before any order, so a moved plane names
 itself instead of impersonating a sign.)
 
-| | `Re(kx) > 0` orders (41) | `Re(kx) < 0` orders (35) |
+| | `Re(kx) > 0` orders (41; the incident `(0, 0)` excluded) | `Re(kx) < 0` orders (35) |
 | --- | --- | --- |
 | `abs(E_s - r_s)` | 2.5e-15 | **5.4e-01** |
 | `abs(E_s + r_s)` | -- | 1.4e-15 |

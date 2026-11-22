@@ -486,7 +486,10 @@ identity and drops out — which is exactly why that branch had no left factor a
 
 **A magnetic TE layer therefore costs what a TM layer always cost**, one matmul and one
 inverse: measured 0.70 ms against 0.78 ms at `truncation_order=(15, 0)`, four layers. That is
-the whole arithmetic price. What this change *removes* is larger: a magnetic 1D scene had to be
+the whole arithmetic price. (The record does not say which layer each figure is. Re-timed on
+2026-11-22 at the record's `545dd4c` and at `bbb04385`, the only gap of that size is a TE layer
+without `mu` against one with it, 14% and 17%; a magnetic TE and TM layer agree within 6%. So the
+two figures are most likely TE without and with `mu`.) What this change *removes* is larger: a magnetic 1D scene had to be
 routed through the 2D path, 3.01 ms against 0.78 ms on the same problem.
 
 The conical operator is the same two lines with a `ky**2` shift and a right-multiplication

@@ -481,8 +481,8 @@ through one harness: the circle table's `contour` column is updated above (and i
 column, which this change cannot touch, reproduces the printed numbers exactly, which is what
 says the harness is the one those numbers came from); the rotated-rectangle table is left as
 printed, because that harness does not reproduce its `distance` column either, and the
-new-against-old deltas there are 3.03e-03 -> 3.11e-03 and 1.40e-03 -> 1.42e-03 at the two
-cells `contour` wins. On a
+new-against-old deltas there are 3.03e-03 -> 3.11e-03 and 1.40e-03 -> 1.42e-03 at two of the
+cells `contour` wins, N=64 and N=128 at truncation_order=10. On a
 non-percolating scene the construction reads ~20% more samples (753 -> 900 on a radius-30 disc
 in a 64 cell) for no measurable wall-time change; on a percolating one it is **several times
 faster**, because the old window handed the kd-tree three periods of every fragment:
