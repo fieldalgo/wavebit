@@ -20,7 +20,7 @@ result = rcwa.run(problem, numerics=numerics,
 
 선언은 불변이며 `.replace(...)`를 제공합니다. 새 파장, 재료 매개변수, 형상 치수나 여기(excitation)에는 새 문제 값을 만드세요. 준비된 객체는 교체한 값을 다음 입력으로 기억하지 않습니다. `prepared.run(new_problem)`에는 항상 완전한 현재 문제가 필요합니다. 결과는 이후에 다른 실행을 하더라도 자신의 관측에 필요한 상태를 유지합니다.
 
-준비 단계는 솔버에 필요한 구조적 선택을 고정합니다. 배열의 모양과 개수, 기하의 위상(topology)과 유형, 이산화, 소스/모니터 배치, 요청한 출력 구조가 여기에 해당합니다. 재사용은 준비된 계약 안에서만 허용됩니다. 모양이 같은 파장 벡터는 RCWA의 실제(live) 입력이지만, 파장 개수를 바꾸면 그 계약이 바뀝니다. FDTD 재사용은 해석된 격자와 시간 진행 구조도 검사합니다. 일반적인 즉시(eager) 평가를 지원한다고 해서 임의의 추적(traced) 값도 지원한다고 추론하지 마세요. 기본 장치 위상 정책에서는, 고정 셀 카르테시안 Li 직사각형의 크기와 중심을 제외하면, `jax.jit`나 `jax.vmap` 아래에서 추적되는 RCWA 영역 기하나 셀은 트레이스를 만들 때 거부됩니다. 위상 검사에 값이 필요하기 때문입니다. 즉시 실행되는 `jax.grad` 아래에서는 PyTorch 텐서를 읽을 때처럼 검사가 tracer의 primal 값을 읽습니다. 명시적인 `Numerics(topology_check='host')`는 실행 시 유효성 검사와 NaN 마스킹을 갖춘 CPU 콜백을 통해 스칼라 영역 기하를 허용합니다. [JAX 변환 안에서 형상 위상 검사하기](../rcwa/guarded-shape-jit.md)를 참고하세요. [자동 미분](autodiff.md#rcwa-which-inputs-differentiate-on-which-backend)도 참고하세요.
+준비 단계는 솔버에 필요한 구조적 선택을 고정합니다. 배열의 모양과 개수, 기하의 위상(topology)과 유형, 이산화, 소스/모니터 배치, 요청한 출력 구조가 여기에 해당합니다. 재사용은 준비된 계약 안에서만 허용됩니다. 모양이 같은 파장 벡터는 RCWA의 실제(live) 입력이지만, 파장 개수를 바꾸면 그 계약이 바뀝니다. FDTD 재사용은 해석된 격자와 시간 진행 구조도 검사합니다. 일반적인 즉시 실행(eager) 평가를 지원한다고 해서 임의의 추적(traced) 값도 지원한다고 추론하지 마세요. 기본 장치 위상 정책에서는, 고정 셀 카르테시안 Li 직사각형의 크기와 중심을 제외하면, `jax.jit`나 `jax.vmap` 아래에서 추적되는 RCWA 영역 기하나 셀은 트레이스를 만들 때 거부됩니다. 위상 검사에 값이 필요하기 때문입니다. 즉시 실행되는 `jax.grad` 아래에서는 PyTorch 텐서를 읽을 때처럼 검사가 추적자의 primal 값을 읽습니다. 명시적인 `Numerics(topology_check='host')`는 실행 시 유효성 검사와 NaN 마스킹을 갖춘 CPU 콜백을 통해 스칼라 영역 기하를 허용합니다. [JAX 변환 안에서 형상 위상 검사하기](../rcwa/guarded-shape-jit.md)를 참고하세요. [자동 미분](autodiff.md#rcwa-which-inputs-differentiate-on-which-backend)도 참고하세요.
 
 ## 검증은 명시적입니다
 

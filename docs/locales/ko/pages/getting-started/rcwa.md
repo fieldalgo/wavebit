@@ -55,7 +55,7 @@ print(result.transmission.order(0, 0).efficiency)
 print(result.transmission.at_wavelength_index(1).wavelengths)
 ```
 
-`R`과 `T`의 축은 `(파장, v 방향 차수, u 방향 차수)`입니다. 파장이 하나여도 파장 축은 유지됩니다. (0, 0)은 회절되지 않은 0차 성분입니다.
+`R`과 `T`의 축은 `(wavelength, order_v, order_u)`입니다. 파장이 하나여도 파장 축은 유지됩니다. (0, 0)은 회절되지 않은 0차 성분입니다.
 
 ## 3. 선택: 구조 내부의 필드 읽기
 
@@ -67,7 +67,7 @@ print(samples.values.shape)  # (3, 1, 1, 2, 6)
 print(samples.units)         # Ex..Ez: V/m, Hx..Hz: A/m, coordinates: um
 ```
 
-결과 축은 `(파장, z, y, x, 성분)`이며, 성분 순서는 `(Ex, Ey, Ez, Hx, Hy, Hz)`입니다. 전기장은 V/m, 자기장은 A/m, 좌표는 문제에서 정한 길이 단위를 사용합니다.
+결과 축은 `(wavelength, z, y, x, component)`이며, 성분 순서는 `(Ex, Ey, Ez, Hx, Hy, Hz)`입니다. 전기장은 V/m, 자기장은 A/m, 좌표는 문제에서 정한 길이 단위를 사용합니다.
 
 ## 다음으로 배우기
 

@@ -32,7 +32,7 @@ Wavebit은 아직 알파 단계이므로 general-FDTD 선언의 이름을 한 �
 | `fdtd.Dipole` | `fdtd.CurrentDipole` | C·m 단위의 쌍극자 모멘트가 아니라 A·m 단위의 전류 모멘트를 구동합니다 |
 | `fdtd.Axis1D` | `fdtd.InvariantAxis` | 구조가 변하지 않는 한 셀짜리 축입니다 |
 | `fdtd.Symmetry` | `fdtd.MirrorSymmetry` | `parity=+1` 또는 `-1`인 거울면입니다 |
-| `fdtd.Absorber` | `fdtd.ConductiveAbsorber` | `PML`과 구분되는, 등급을 둔 전도성 층입니다 |
+| `fdtd.Absorber` | `fdtd.ConductiveAbsorber` | `PML`과 구분되는, 단계형 전도성 층입니다 |
 | `fdtd.Decay` | `fdtd.DecayStop` | 정지 규칙이며 `Numerics(stopping=...)`으로 씁니다 |
 
 `InvariantAxis`에는 `algebraic` 필드가 없습니다. 옛 `Axis1D(algebraic=True)`는 받아들이는 값이
@@ -367,9 +367,9 @@ native 사례(E, H, 분극 밀도, 스냅샷, 스펙트럼, 7단계 감쇠 창)�
 | periodic `validity.checks['stable']`, `['finite']`(R만) | `['runtime_stability']`, `['numerical_finite']`(R과 T) |
 | general FDTD: 유한성 검사 없음 | 모든 모니터 출력과 최종 필드에 대한 `validity.checks['numerical_finite']` |
 | `fdtd` `report.resolved['dt_seconds']`, `provenance['dt_seconds']`, `contract['resolved_dt_seconds']` | `'time_step_seconds'`, `'time_step_seconds'`, `'resolved_time_step_seconds'` |
-| native `diagnostics['tail']`; `validity.convergence`가 그 보고 자체 | `diagnostics['decay']`; `validity.convergence == {'decay': 보고 또는 None}` |
-| periodic `diagnostics['convergence']`; `validity.convergence`가 그 보고에 `residual`을 더한 것 | `diagnostics['decay']`; `validity.convergence == {'decay': 보고 또는 None, 'residual': ...}` |
-| 감쇠 보고 안의 `tolerance`, periodic `units` 하위 매핑 | `threshold`(`DecayCheck(threshold=)`와 같음), `<양>_units` 키 |
+| native `diagnostics['tail']`; `validity.convergence`가 그 보고 자체 | `diagnostics['decay']`; `validity.convergence == {'decay': report or None}` |
+| periodic `diagnostics['convergence']`; `validity.convergence`가 그 보고에 `residual`을 더한 것 | `diagnostics['decay']`; `validity.convergence == {'decay': report or None, 'residual': ...}` |
+| 감쇠 보고 안의 `tolerance`, periodic `units` 하위 매핑 | `threshold`(`DecayCheck(threshold=)`와 같음), `<quantity>_units` 키 |
 | general FDTD의 개수 `invariant_axes`; periodic `diagnostics['invariant_y']` | 축 이름 튜플 `invariant_axes`, 없으면 `()` |
 
 `fdtd.periodic`의 `algorithm='reference'`는 안정성을 판단하지 않으므로

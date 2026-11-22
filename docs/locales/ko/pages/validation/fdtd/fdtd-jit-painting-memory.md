@@ -64,7 +64,7 @@ vCPU 4개, 15 GiB), Python 3.13.16, NumPy 2.5.4, JAX/jaxlib 0.11.0이며 전부 
 
 해상도 6 JVP의 두 스케줄된 모듈은 같은 명령을 순서만 다르게 담고 있습니다. 두 경우 모두 entry 명령 2,938개,
 큰 값 1,071개, YNN 퓨전 216개입니다. 그래서 컴파일 비용은 두 스케줄러에서 같습니다.
-프로세스는 lowering 후 0.3–0.4 GB, 미분 프로그램을 컴파일한 뒤 1.3–1.6 GB를 차지하므로
+프로세스는 낮추기(lowering) 후 0.3–0.4 GB, 미분 프로그램을 컴파일한 뒤 1.3–1.6 GB를 차지하므로
 컴파일이 1.0–1.2 GB를 더합니다. 각 jit 최대값은 대략 컴파일 후 값에 temp를 더한 값입니다.
 temp는 대략 `nx·ny`에 비례해 커집니다. 해상도 6의 셀은 4×4이고, 해상도 20의 temp는
 해상도 6의 8.8배입니다.
@@ -108,7 +108,7 @@ primal: 239.2 MiB   295 x f64[41,9,4,4,9,2]     jvp: 867.5 MiB  1070 x f64[41,9,
          17.4 MiB    43 x f64[41,9,4,4,9]             82.3 MiB   203 x f64[41,9,4,4,9]
 ```
 
-이 모양은 `[변 조각, 3×3 주기 이미지, ny, nx, 절단 구간, 가우스 노드 2개]`입니다.
+이 모양은 `[edge pieces, 3×3 periodic images, ny, nx, cut segments, two Gauss nodes]`입니다.
 `_painted_cell_materials`의 `cdf`·`weight` 창 루프와 그 뒤의 합, 즉 `scene.py` 615–630행에서
 나옵니다. 이 값들의 HLO 스택 프레임은 해당 행을 가리킵니다. 연산 이름은
 `jvp(jit(clip))/select_n`, `min`과 `max`, `jvp(jit(_where))/select_n`, `mul`, `add`, `div`입니다.

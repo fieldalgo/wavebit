@@ -7,12 +7,12 @@
 
 기본값 `Numerics(topology_check='device')`는 고정 셀의 Cartesian Li 직사각형 검사를
 허용합니다. 다른 형상의 구체적인 위상 검사는 일반적인 장치 배열 연산으로
-실행할 수 없으므로 JIT나 vmap 아래에서는 tracing 전에 거절합니다.
-Eager `jax.grad`는 구체적인 primal을 검사할 수 있습니다.
+실행할 수 없으므로 JIT나 vmap 아래에서는 추적 전에 거절합니다.
+즉시 실행 `jax.grad`는 구체적인 primal을 검사할 수 있습니다.
 
 **스칼라 재료 영역층과 평면파 하나**를 사용하는 JAX 계산에서 기존의 구체적인
 검사를 CPU에서 실행하려면 `Numerics(topology_check='host')`를 사용하세요.
-원, 타원, 직사각형과 지원되는 다각형 painting을 다루며, 선택한 엔진이 traced
+원, 타원, 직사각형과 지원되는 다각형 painting을 다루며, 선택한 엔진이 추적된
 계산을 지원하는 경우 셀과 방향 매개변수도 포함합니다. 텐서, 래스터, 결맞은
 다중 소스의 변환 지원을 추가하지 않으며, 지원되는 projector와 형상 조합도
 바꾸지 않습니다.
@@ -41,7 +41,7 @@ JAX 그래프를 유지합니다. vmap 아래에서 검사는 형상마다 순�
 특히 복잡한 painting에서 처리량을 제한할 수 있습니다. 이는 명시적인 호스트
 전송 정책이며 완전히 장치 안에서 실행된다는 주장이나 백엔드 속도 측정이 아닙니다.
 CPU JAX 실행은 회귀 테스트가 다루며, 가속기 성능은 측정하지 않았습니다.
-호스트 정책의 원과 기본 정책의 Cartesian Li 직사각형에 대해 jitted step을
+`topology_check='host'` 아래의 원과 기본 정책의 Cartesian Li 직사각형에 대해 jitted step을
 CPU에서 측정한 결과는 미분 가이드의 [백엔드 속도](../common/autodiff.md#backend-speed)에 있습니다.
 
 호스트 검사가 현재 형상을 거절하면 `result.validity.checks['shape_topology']`가
@@ -58,8 +58,8 @@ RCWA의 `result.validity.checks['numerical_finite']`는 내부 계산이 유한�
 스텝을 수용하거나 불확도를 추정해야 합니다.
 
 무효한 점 뒤에도 유효한 점은 올바르게 계산되며, 마지막 호출의 형상을 캐시하지
-않습니다. Eager 실행의 무효한 재사용은 여전히 `IncompatibleProblemError`를 내고,
-`prepared.validate(concrete_problem)`은 eager 검사 보고서를 반환합니다.
+않습니다. 즉시 실행의 무효한 재사용은 여전히 `IncompatibleProblemError`를 내고,
+`prepared.validate(concrete_problem)`은 즉시 실행 검사 보고서를 반환합니다.
 위상이 바뀌면 구체적인 입력으로 다시 준비하세요. 위상 변화에 걸친 매끄러운
 미분은 보장하지 않습니다.
 
@@ -91,7 +91,7 @@ Python 최적화 루프나 SciPy에서 직접 호출하세요. 내부에서 JAX 
 실수 스칼라 목적함수에는 `value_and_grad`, 배열 관측량에는
 `value_and_jacobian` 또는 `jacobian`을 쓰세요. 매개변수는 구체적이고 유한한
 실수 부동소수점 배열 또는 스칼라여야 합니다. `build`와 `observe`는 순수 함수이며
-JAX tracing이 가능해야 합니다. 모델 구조와 출력 shape를 유지하고, 바뀌는 모든
+JAX 추적이 가능해야 합니다. 모델 구조와 출력 shape를 유지하고, 바뀌는 모든
 입력은 외부의 가변 상태가 아닌 매개변수로 전달하세요.
 
 이 진입점은 명시적으로 `topology_check='host'`를 사용하며 평면파 하나와 스칼라

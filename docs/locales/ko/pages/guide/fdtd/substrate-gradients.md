@@ -15,9 +15,9 @@
 이는 기판 재료를 미분할 때 중요합니다. 물리적 유전율은 변할 수 있지만 흡수층의 기준은 구체적인 값으로
 남아야 하기 때문입니다. 이 항목을 생략하면 경계 매질을 따르므로, 추적(traced)되는 재료에 대해서는
 정적인 프로파일을 제공할 수 없습니다. 기준 매질이 물리적 재료를 대신하지는 않습니다.
-항목은 `Material`이거나 유전율 값 하나입니다. 늘림은 하나의 정적인 `eps * mu`에 맞춰 단계화되므로,
-`DispersiveMaterial`이나 `ConductiveMaterial` 항목은 `epsilon_inf`에 맞춰 단계화하거나 전도율을 빼고
-단계화하는 대신 거부합니다(코드 `numerics.absorber`).
+항목은 `Material`이거나 유전율 값 하나입니다. 늘림은 하나의 정적인 `eps * mu`에 맞춘 단계형이므로,
+`DispersiveMaterial`이나 `ConductiveMaterial` 항목은 `epsilon_inf`에 맞춘 단계형으로 만들거나 전도율을 빼고
+단계형으로 만드는 대신 거부합니다(코드 `numerics.absorber`).
 엔진의 안정성, PML 입사와 접합 검사는 계속 적용됩니다.
 `DiffractionMonitor` 출력을 쓰는 PlaneWave의 경우, 순수 늘림 PML 안의 추적되는 물리 매질은
 즉시 실행(eager run)과 같은 스치듯 입사 차수 규칙으로 검사하며, 스무딩 물체가 없는 장면도 마찬가지입니다.

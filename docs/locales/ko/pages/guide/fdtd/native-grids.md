@@ -27,7 +27,7 @@
 확장하지 않습니다. 양쪽 `(epsilon,mu)` 기준 매질은 각 끝과 내부 한 셀까지
 일치해야 합니다. 그곳에 활성 극이나 전도도가 없어야 하며, PML 사용 시
 z Bloch 위상은 영입니다. `fdtd.ConductiveAbsorber`는 유한한 감쇠 바닥을 갖는 기존의
-정합된 점진적 전도도 층을 선택합니다. 어느 흡수층도 반사 오차를 보장하지
+정합된 단계형 전도도 층을 선택합니다. 어느 흡수층도 반사 오차를 보장하지
 않으므로 폭, 세기, 해상도를 검사해야 합니다.
 
 `Outputs(snapshots=Snapshots(every=..., components=..., slices=...))`는 선택한
@@ -68,7 +68,7 @@ ADE 진단은 저장 에너지가 아닌 상대 노름이고 CPML 기억은 평�
 계수·광원·초기값·Bloch 위상을 새로 받습니다. 구체적인 잘못된 계수는 예외를
 발생시키고 추적 중인 잘못된 계수는 유효하지 않은 수치 결과를 만듭니다.
 NumPy, JAX, Torch는 같은 엔진을 사용합니다. 현재 실행에는 배정밀도가
-필요합니다. JAX 배열을 만들기 전에 x64를 설정하세요. JAX jit와 Torch eager
+필요합니다. JAX 배열을 만들기 전에 x64를 설정하세요. JAX jit와 Torch 즉시 실행
 AD는 지원하며 Torch 컴파일은 검증된 실행 모드가 아닙니다.
 
 Torch CUDA는 `run` 또는 `prepare`에 `backend='torch', device='cuda:0'`를

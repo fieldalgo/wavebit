@@ -188,7 +188,7 @@ best = solver.fit(initial, solver.solve, lambda result: -result.T.sum().real,
 [`../boundary-modeling.md`](../guide/rcwa/boundary-modeling.md)를 보세요.
 
 고정은 기하가 통과한 검사도 기록합니다. 거부될 층에서 만든 기록은 그 거부를 재생하며, 살아 있는
-장면이 지나갈 수 없는 문을 고정된 장면이 지나가게 두지 않습니다.
+장면이 지나갈 수 없는 입구를 고정된 장면이 지나가게 두지 않습니다.
 
 임의의 `forward`는 다른 장면을 만들거나 여러 계산을 수행할 수 있습니다. `fit`은 클로저에서 그
 장면을 추론할 수 없으므로 명시적인 준비 계약이 필요합니다.
@@ -477,7 +477,7 @@ grad 모드에서 호출하세요.
 `torch.func.grad` 밖의 `forward_ad` 듀얼도 마찬가지입니다. `torch.func.jvp`, `jacfwd`, `jvp(vmap)`
 뒤의 그 역방향 패스는 순방향 위의 역방향으로, 위에서 말한 `torch.linalg.solve` 결함의 경우입니다.
 2026-10-12까지 그것은 1D TM 격자의 필드 판독값에서 상대 0.12, 금 원판에서 0.018만큼 오류 없이
-어긋났습니다. 관문은 각 수준 자체의 플래그를 읽습니다. grad 변환 안에서 계산된 값은 입력에 의존하지
+어긋났습니다. 입구 검사는 각 수준 자체의 플래그를 읽습니다. grad 변환 안에서 계산된 값은 입력에 의존하지
 않더라도 그 수준의 래퍼를 지니므로, 래퍼의 유형만 물으면 이것들을 모두 거부했을 것입니다. 중첩된
 grad 및 jvp 변환(`hessian`, `grad(grad)`, `jvp(jvp)`, `jvp(jvp(grad))`, `vmap(hessian)`, 그리고
 두께에 대한 `torch.func.grad` 위에 유전율에 대한 `jacfwd`를 얹은 것 같은 혼합 편미분)은 연산자가
@@ -502,7 +502,7 @@ jvp 수준 아래의 접선을 읽을 수 없었기 때문입니다.
 | | 이유 |
 | --- | --- |
 | legacy `solver.reconstruct_field`에서 `thickness`에 대한 **명시적 `sample_z`** | 이 솔버 메서드는 구체적인 두께로 구간을 나누므로 추적된 두께는 거부하며, 개수는 계속 추적할 수 있습니다. 결과가 소유하는 `result.reconstruct_field`는 각 점이 자기 층 안에 머무는 동안 명시적 높이와 두께 미분을 지원합니다. [필드](../guide/rcwa/fields.md#differentiating-internal-fields)를 보세요 |
-| `torch.compile` | 지원하지만 결코 추적되지 않습니다. 모든 공개 wavebit 호출 객체는 `torch.compiler.disable` 관문이므로, wavebit은 컴파일된 호출자 안에서 즉시 실행되고 그 값과 그래디언트는 `torch.func`와 이중 역방향 주변에서도 즉시 실행 torch의 것입니다. 컴파일되는 것은 wavebit 출력에 대한 호출자 자신의 산술뿐이며, 컴파일해도 wavebit 부분은 빨라지지 않습니다. `fullgraph=True`와 `torch.export`(strict와 non-strict)는 이름을 밝혀 거부합니다. 2026-10까지는 wavebit을 그래프 밖에 두는 장치가 없어서, 기본 모드가 오류 없이 틀린 값 *과* 그래디언트를 반환했습니다. 즉시 실행의 -0.895 대신 1D TE 손실 -4.43, 0.272 대신 그 그래디언트 -0.118이었는데, Inductor(torch 2.13)가 `array_api_compat`의 복소 `eye` 대각을 그것을 읽는 커널 뒤에 썼기 때문입니다([`../torch-compile.md`](../development/torch-compile.md) §6) |
+| `torch.compile` | 지원하지만 결코 추적되지 않습니다. 모든 공개 wavebit 호출 객체는 `torch.compiler.disable` 입구이므로, wavebit은 컴파일된 호출자 안에서 즉시 실행되고 그 값과 그래디언트는 `torch.func`와 이중 역방향 주변에서도 즉시 실행 torch의 것입니다. 컴파일되는 것은 wavebit 출력에 대한 호출자 자신의 산술뿐이며, 컴파일해도 wavebit 부분은 빨라지지 않습니다. `fullgraph=True`와 `torch.export`(strict와 non-strict)는 이름을 밝혀 거부합니다. 2026-10까지는 wavebit을 그래프 밖에 두는 장치가 없어서, 기본 모드가 오류 없이 틀린 값 *과* 그래디언트를 반환했습니다. 즉시 실행의 -0.895 대신 1D TE 손실 -4.43, 0.272 대신 그 그래디언트 -0.118이었는데, Inductor(torch 2.13)가 `array_api_compat`의 복소 `eye` 대각을 그것을 읽는 커널 뒤에 썼기 때문입니다([`../torch-compile.md`](../development/torch-compile.md) §6) |
 | `torch.jit.trace` | 해결된 결과의 판독값과 `Lattice`를 포함해 모든 공개 wavebit 호출에서 이름을 밝혀 거부합니다(`NotImplementedError`, "wavebit cannot be traced by torch.jit.trace"). 이것은 값에 의존하는 모든 결정을 상수로 기록하고 `grad_fn`이 없는 출력을 반환합니다. 2026-10까지는 계산이 66개의 `TracerWarning`과 함께 추적되었고, 추적된 계산과 다른 항을 섞은 손실은 즉시 실행 torch가 0.2721483665790으로 읽는 p = 0에서 그래디언트를 오류 없이 0.0으로 읽었습니다. 해결된 결과의 `reconstruct_field`는 한 층의 식을 다른 층에서 재생했고(0.00344 대신 d/dz -0.00406), 추적된 길이의 `Lattice.hexagonal`은 상수가 되었습니다. 즉시 실행 torch나 `torch.compile`을 쓰세요 |
 | **`solve()`를 통한 `torch.func` grad 및 jvp 변환** (`torch.func.grad`, `vjp`, `jvp`, `jacrev`, `jacfwd`, `hessian`, 단독으로 또는 `vmap`과 합성) | 변환의 입력이 모드 연산자에 닿는 곳에서 이름을 밝혀 거부합니다. 그 1차 규칙의 보호 장치가 그런 수준을 2차 미분과 구별할 수 없기 때문입니다. 역방향 모드와 `forward_ad`가 모두 동작하고 `torch.func.vmap`을 통해서도 동작하는 `torch.autograd`를 쓰세요([Forward mode](#forward-mode)). 두께처럼 어떤 연산자에도 닿지 않는 매개변수는 `vmap(jacfwd)`를 포함해 그 각각에서 grad 모드를 켜든 끄든, 연산자에 붙잡힌 `requires_grad` 텐서가 있어도 정확합니다. 중첩된 grad 및 jvp 변환(`jvp(jvp)`, `hessian`, `vmap(hessian)`, 3차 이상)은 연산자가 미분을 운반하지 않는 동안 거기서 정확하며, 미분을 운반하면 거부됩니다. `torch.func.vjp`에 들어갈 때와 다른 grad 모드에서 호출한 `vjp_fn`은 그 역방향 패스가 틀릴 곳에서 이름을 밝혀 거부됩니다. 바깥의 순방향 모드 수준이 행렬을 움직이는 경우, 또는 수준 뒤에 추가된 `vmap`이 그 수준이 들어갈 때 있던 것 옆에 있는 경우입니다 |
 | **층의 모드 연산자가 두 미분 모두에서 움직이는 2차 미분** (`jax.hessian`, `jacfwd(jacrev)`, `jvp(grad)`, `create_graph=True`, PyTorch의 혼합 차수) | 이름을 밝혀 거부합니다. 모드 규칙은 1차입니다. 두께처럼 어떤 연산자도 움직이지 않는 매개변수 하나는 거부되지 않습니다([Forward mode](#forward-mode)) |

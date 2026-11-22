@@ -130,7 +130,7 @@ wavebit.Lattice.from_columns(np.column_stack((a1, a2)))
 벡터와 선언이 같으면 같다고 비교되고 해시도 같습니다.
 
 셀은 각도를 저장하지 않으므로, 미분하는 함수 *안에서* 셀을 만들면 셀의 모양이 설계 변수가 됩니다 —
-`prepared.run`을 거치면 이는 PyTorch나 즉시 `jax.grad` 미분이며, `jax.jit` 아래에서 추적한 셀은 거부합니다(코드
+`prepared.run`을 거치면 이는 PyTorch나 즉시 실행 `jax.grad` 미분이며, `jax.jit` 아래에서 추적한 셀은 거부합니다(코드
 `prepared.host_topology`). [`autodiff.md`](../common/autodiff.md)를 참조하세요.
 
 **래스터는 격자 좌표로 읽습니다.** 래스터 층의 `epsilon[j, i]`는 `u = (i + 0.5)/Nx`, `v = (j + 0.5)/Ny`에서의
@@ -189,7 +189,7 @@ mu = rcwa.sample_structure(problem, layer=0, samples=192, quantity='mu')
 살펴보기는 자동 미분 변환 바깥에서 실행하세요. 나중 영역은 엔진이 쓰는 것과 같은 렌더러를 거쳐 앞선 영역
 위에 칠해집니다. 그 곡선 칠하기 근사, 제한된 주기 이미지 표본화, 칠한 기울어진 셀에 대한 거부도 그대로
 적용됩니다. 선택한 층은 혼합 인코딩 적층 안에 있더라도 따로 그려 볼 수 있지만, 그렇다고 문제 전체가
-`rcwa.check`를 통과하거나 광학적으로 수렴했다는 보증이 되지는 않습니다.
+`rcwa.check`를 통과하거나 광학적으로 수렴했다는 증명이 되지는 않습니다.
 
 ## 장면을 객체로 넘기기
 장면은 타입이 있는 객체일 뿐 다른 것이 아닙니다. `rcwa.Stack`은 이전 인터페이스의 `Stack`이 담던 것을,

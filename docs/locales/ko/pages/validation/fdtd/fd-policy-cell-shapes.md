@@ -1,7 +1,7 @@
 # 공개 전체 셀 형상 정책 보고
 
 공개 클래스 `fdtd.SnappedSlab`과 `fdtd.SnappedBox`(이 기록을 남길 당시에는 `fdtd.Slab`과 `fdtd.Region`)는
-내부 기하 클래스의 전체 셀 채우기 의미를 그대로 유지합니다. 공개 API의 하향 변환(lowering)은 이들의 래퍼 타입을
+내부 기하 클래스의 전체 셀 채우기 의미를 그대로 유지합니다. 공개 API의 낮추기(lowering)는 이들의 래퍼 타입을
 보존합니다. 따라서 정확히 내부 클래스만 비교하면, 채우기 연산자가 바뀌지 않았는데도 이 내장 형상들이
 `custom_shape_protocol`로 잘못 분류되었습니다. 기존의 Slab/Region/Sphere 혼합 보고 회귀 테스트가 이 문제를
 `whole_cell_fill` 대 `custom_shape_protocol` 단언 실패로 드러냈습니다.

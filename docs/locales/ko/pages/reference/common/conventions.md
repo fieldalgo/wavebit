@@ -379,7 +379,7 @@ p 빛을 44.1도로, s 빛을 45.8도로 운반합니다. 금속(`-10+1i`)은 p 
 `theta = arcsin(kx/(k0*n))`, `phi = 0`입니다. 직접 지정한 `kx`/`ky`는 각도를 갖지 않으며 입사 매질이 무엇이든
 주어진 그대로 받아들여집니다. `kx = ky = 0`에서 그 s/p 기저는 방위각 0을 씁니다.
 
-**소멸파 입사**는 입사 매질의 빛선(light line) 너머의 실수 `kx = n*cosh(alpha)`를 가집니다.
+**소멸파 입사**는 입사 매질의 라이트 라인(light line) 너머의 실수 `kx = n*cosh(alpha)`를 가집니다.
 무손실 입사 매질에서 그 `kz`는 허수이므로 입사파는 법선 방향 전력을 운반하지 않고
 아무것도 그것으로 나눌 수 없습니다. `R`, `T`와 그 s/p 부분, `power_entering`,
 `absorption`은 NaN입니다. 진폭과 필드는 변경 없이 반환됩니다.
@@ -790,7 +790,7 @@ spec의 `numerics.backend` -- 는 그 외의 것(`'JAX'`, `'pytorch'`, `True`, �
 
 | 행 | 테스트 |
 | --- | --- |
-| 시간/손실, 진폭 | `tests/rcwa/test_lossy_media.py`(Airy 기준, 양쪽 흡수 매질). 수동 반공간 사이의 **이득** 박막 -- 모든 정식화와 층 알고리즘, 양쪽 입사, 그리고 매질 자신의 일 `k0 Im(eps) int |E|^2 dz`에 대한 박막의 음의 흡수 -- 는 `tests/rcwa/test_gain_film.py` |
+| 시간/손실, 진폭 | `tests/rcwa/test_lossy_media.py`(Airy 오라클, 양쪽 흡수 매질). 수동 반공간 사이의 **이득** 박막 -- 모든 정식화와 층 알고리즘, 양쪽 입사, 그리고 매질 자신의 일 `k0 Im(eps) int |E|^2 dz`에 대한 박막의 음의 흡수 -- 는 `tests/rcwa/test_gain_film.py` |
 | **재료 숫자가 어떤 물리량인지** | `tests/materials/test_material_convention_anchor.py` — 그 안의 모든 기댓값은 `eps`와 `kz`로 쓴 닫힌 형태의 프레넬/Airy 점화식에서 나오므로, 뒤집기와 함께 마이그레이션되어 우연히 일치할 수 없습니다. 그 안의 함수 하나 `_api_material`만 규약을 알며, 규약이 바뀔 때 파일의 다른 부분은 움직이면 안 됩니다. 나머지 테스트 모음은 이 행을 전혀 고정할 수 없습니다. wavebit을 import하는 스크립트로 다시 생성한 골든 값은 패키지가 지금 믿는 것과 무엇이든 일치하며, `3.5`를 다른 물리량으로 읽어도 에너지는 정확히 보존됩니다 |
 | `Material` 타입: 스칼라 약식, pytree 자식인 두 값(그래서 유전율로 미분 가능), `refractive_index_from_eps`의 가지와 부호 있는 0의 위험을 포함한 두 변환 | `tests/materials/test_material.py` |
 | `answers` 단계별로 어떤 행이 존재하는지 | `tests/api/test_answers_declaration.py` — 각 단계의 인터페이스, 공유하는 부분에서 비트 단위로 일치하는 단계들, 선언을 지목하는 거부 |
@@ -798,7 +798,7 @@ spec의 `numerics.backend` -- 는 그 외의 것(`'JAX'`, `'pytorch'`, `True`, �
 | `r_xyz` / `t_xyz` | `tests/rcwa/test_cartesian_amplitudes.py` — 모든 경로(60도 셀 포함)에서의 공식의 독립적 표기와 각 입사 변형에 대한 자신의 진폭과의 비교, `E_z`를 횡성으로 묶어 두고 양쪽 면에서 분해한 재구성 필드, 한 차수 자신의 `kx = 0`을 가로지르는 연속성, 차수의 정확한 `kx = 0`에서 모든 백엔드가 같은 벡터 하나, 세 1D 경로의 일치, 전력 항등식, `answers` 단계, `jit` / 그래디언트, 두 축을 따라 옮긴 넓힌 창에서의 `order(m, n)` |
 | 가로 방향 위상 기준(셀 중심) | `tests/rcwa/test_centre_reference.py` — 모든 경로와 양쪽 입사에서 두 필드 입구와 모든 경계 파동을 통한 통상 계산 대 `PlaneWave`, 같은 가중치의 `excitation` 대 `OrderExcitation`, 양쪽 면에서 중심에 대해 분해한 재구성 필드, `r_xyz`로 읽은 1차 Born 고정점, 네 결합 산란 블록 모두와 홀수 레이블 이동을 가로지르는 cascade, 복소수 `theta`, 그래디언트와 백엔드. 효율은 이 행도 고정할 수 없습니다. 차수별 부호는 `\|r\|^2`-불변이기 때문입니다 |
 | 차수 배치, 차수 인덱스 부호 | `tests/references/test_reticolo_golden.py`(틀리면 에너지를 보존하면서 차수가 거울 반사됨) |
-| `incidence_side`, 입사 기준 결과 | `tests/rcwa/test_backside_incidence.py`(뒤집은 적층 Airy 기준, 양쪽 절반의 상반성)와 `tests/references/test_reticolo_golden.py`의 `inc_bottom` 사례 |
+| `incidence_side`, 입사 기준 결과 | `tests/rcwa/test_backside_incidence.py`(뒤집은 적층 Airy 오라클, 양쪽 절반의 상반성)와 `tests/references/test_reticolo_golden.py`의 `inc_bottom` 사례 |
 | 결과 명명, `order()`, 위임 | `tests/api/test_result_api.py` |
 | `polarization` 쌍: `psi` 동등성, 단위 플럭스 정규화, 원형 편광 상태 | `tests/rcwa/test_polarization.py` |
 | `psi`와 `chi`는 실수, 좌표계가 원형 편광 상태에 도달, 두 좌표와 쌍이 pytree를 통해 그래디언트를 전달 | `tests/rcwa/test_polarization.py`(세 백엔드 모두에서의 거부, 그리고 고정된 숫자가 아니라 `psi` 경로의 그래디언트와 비교한 쌍의 그래디언트) |

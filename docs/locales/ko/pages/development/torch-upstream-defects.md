@@ -6,7 +6,7 @@
 
 대상:
 - `src/wavebit/_common/backend.py::linear_solve` — 미분에 민감한 모든 지점이 거치는 선형 풀이
-- `src/wavebit/_common/backend.py::eager_under_torch_compile` — wavebit을 컴파일된 그래프 밖에 두는 문
+- `src/wavebit/_common/backend.py::eager_under_torch_compile` — wavebit을 컴파일된 그래프 밖에 두는 입구
 - `src/wavebit/rcwa/_engine/factorization.py::_svd` — NVF 하한의 SVD로, `?gesvd`로 다시 시도함(결함 6)
 - `pyproject.toml` — torch 하한(`torch>=2.14`)으로, 사용자가 이 결함들 중 어느 것을 만날 수 있는지 정함
 - `tests/common/test_linear_solve_derivatives.py` — 결함 2와 4의 카나리아인 `test_pytorchs_own_rule_is_still_wrong`. 2.15 수정 전후로 어느 경로가 기본 상태에서 틀리는지 단언함
@@ -23,14 +23,14 @@ torch 결함 네 개가 wavebit을 거치면서 오류 없이 틀린 숫자를 �
 
 | # | 결함 (torch) | 2.13.0 | 2.14.1 | 2.15.0 | 2.16 nightly | 상류 | wavebit에 닿는 경우 | 우회책 | 걷어낼 수 있는 때 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | 입력이 grad를 요구할 때, Inductor가 복소 단위 행렬의 제자리 대각 쓰기를 그것을 읽는 커널 뒤에 내보냄 | 틀림 | 맞음 | 맞음 | 맞음 | [#182012](https://github.com/pytorch/pytorch/issues/182012), 2.14.0에서 [PR #182292](https://github.com/pytorch/pytorch/pull/182292)로 수정 | 어떤 풀이든 `torch.compile`(Inductor)로 감쌀 때 | 문: `eager_under_torch_compile` | 하한 ≥ 2.14(2026-10-16 완료) **그리고** 문 없이 컴파일한 wavebit이 정확하다고 측정됨(아직 측정 안 함) |
+| 1 | 입력이 grad를 요구할 때, Inductor가 복소 단위 행렬의 제자리 대각 쓰기를 그것을 읽는 커널 뒤에 내보냄 | 틀림 | 맞음 | 맞음 | 맞음 | [#182012](https://github.com/pytorch/pytorch/issues/182012), 2.14.0에서 [PR #182292](https://github.com/pytorch/pytorch/pull/182292)로 수정 | 어떤 풀이든 `torch.compile`(Inductor)로 감쌀 때 | 입구: `eager_under_torch_compile` | 하한 ≥ 2.14(2026-10-16 완료) **그리고** 입구 없이 컴파일한 wavebit이 정확하다고 측정됨(아직 측정 안 함) |
 | 2 | `linalg.solve`의 JVP를 다시 미분하면 항 하나를 잃음(여기서는 2차 미분의 절반) | 틀림 | 틀림 | 맞음 | 맞음 | [#192540](https://github.com/pytorch/pytorch/issues/192540)([PR #192667](https://github.com/pytorch/pytorch/pull/192667)로 수정); `left=False`는 [#196695](https://github.com/pytorch/pytorch/issues/196695) 열려 있음 | 다른 수준 안의 순방향 모드, 어느 풀이 지점을 거치든 | `linear_solve`가 LU로 우회 | 하한 ≥ 2.15(그러면 이 경우의 우회를 좁힐 수 있음) |
 | 3 | CPU `lu_solve`가 LU를 `LU.stride(-3)`에서 읽어, 그 축의 크기가 1이고 stride가 정규형이 아니면 틀림 | 틀림 | 틀림 | 틀림 | 틀림 | [#200599](https://github.com/pytorch/pytorch/issues/200599), 열려 있음 | 간접적으로, `vmap(jacfwd)` 아래 결함 2의 JVP를 통해(2.13–2.14) | `linear_solve`는 stride를 바꾼 LU를 `lu_solve`에 넘기지 않음 | 하한에 포함되는 릴리스에서 #200599가 수정됨 |
 | 4 | `linalg.solve`의 역전파가 `create_graph` 없이 실행되면 행렬의 순방향 접선을 버림 | 틀림 | 틀림 | 틀림 | 틀림 | [#200600](https://github.com/pytorch/pytorch/issues/200600), 열려 있음 | `forward_ad` 이원수에 `create_graph` 없는 역전파가 더해질 때(역방향 위의 순방향) | `linear_solve`가 LU로 우회 | 하한에 포함되는 릴리스에서 #200600이 수정됨 |
 
 위의 두 카나리아는 torch가 해당 결함을 고치면 일부러 실패합니다. Inductor 카나리아는 측정한 곳인 macOS
 arm64에서만 단언하고 다른 곳에서는 건너뜁니다. 따라서 torch ≥ 2.14.1에서는 macOS arm64에서 실패합니다. 이는
-문 없는 컴파일을 측정하라는 신호(1행)이지 회귀가 아닙니다.
+입구 없는 컴파일을 측정하라는 신호(1행)이지 회귀가 아닙니다.
 
 다섯 번째 결함은 틀린 숫자를 돌려주는 대신 예외를 일으키며, torch 자체의 코드도 아닙니다. CPU wheel이
 번들하는 MKL이 잘 조건화된 일부 행렬에서 분할 정복 SVD를 수렴시키지 못합니다(6절,
@@ -66,9 +66,9 @@ torch.compile(f)(q)   # on 2.13.0 differs from eager f(q) by max|diff| 60.24; 0.
 뷰에 대한 `fill_`은 함수화되면 `diagonal_scatter`가 됩니다. 2.13.0에서 wavebit을 거치면 1D TE 손실이 즉시
 실행의 -0.895 대신 -4.43으로, 그 그래디언트가 0.272 대신 -0.118로 읽혔습니다.
 
-문은 컴파일된 호출자 안에서 wavebit을 즉시 실행시킵니다([`torch-compile.md`](torch-compile.md)
-§6). 문을 걷어낼 수 있는 것은 문 *없이* wavebit을 컴파일한 결과가 하한 버전에서 정확하다고 측정된 뒤뿐입니다.
-어느 쪽이든 컴파일은 wavebit 부분에 속도를 주지 않습니다(`torch-compile.md` §4). 같은 문에서의
+입구는 컴파일된 호출자 안에서 wavebit을 즉시 실행시킵니다([`torch-compile.md`](torch-compile.md)
+§6). 입구를 걷어낼 수 있는 것은 입구 *없이* wavebit을 컴파일한 결과가 하한 버전에서 정확하다고 측정된 뒤뿐입니다.
+어느 쪽이든 컴파일은 wavebit 부분에 속도를 주지 않습니다(`torch-compile.md` §4). 같은 입구에서의
 `torch.jit.trace` 거부는 그와 상관없이 남습니다(§5).
 
 ## 2. 다시 미분한 `linalg.solve`의 JVP
@@ -145,7 +145,7 @@ wavebit에서는 conical과 2D ETM 최종 정합(`solve_1d.py::final_matching`)�
   읽었습니다;
 - 풀린 결과의 `reconstruct_field`는 한 층의 식을 다른 층에서 재생했습니다.
 
-이것이 추적의 본성이므로 어떤 torch 릴리스도 이를 바꾸지 않습니다. 모든 문이 이것을 이름으로 거부하며,
+이것이 추적의 본성이므로 어떤 torch 릴리스도 이를 바꾸지 않습니다. 모든 입구가 이것을 이름으로 거부하며,
 그 거부는 남습니다.
 
 ## 6. 번들된 MKL의 분할 정복 SVD — #202596
@@ -192,5 +192,5 @@ PR #1140(2026년 3월, 아직 어느 reference 릴리스에도 포함되지 않�
 1. `tests/common/test_linear_solve_derivatives.py`와 `tests/api/test_torch_compile.py`를 실행하세요. 카나리아가
    실패하면 torch가 그 결함을 고쳤다는 뜻입니다.
 2. 새 버전에서 상류 이슈의 재현 코드(#200599, #200600, #202596)를 다시 실행하세요.
-3. 그런 다음에야 `linear_solve`의 우회 조건을 좁히거나 문 없는 컴파일을 측정하고, `pyproject.toml`의 하한을
+3. 그런 다음에야 `linear_solve`의 우회 조건을 좁히거나 입구 없는 컴파일을 측정하고, `pyproject.toml`의 하한을
    측정한 버전으로 올리세요. 우회책은 하한이 결함이 있는 모든 버전을 배제할 때까지 남습니다.
