@@ -28,6 +28,7 @@ def event(value):
 
 def pytest_configure(config):
     config.addinivalue_line('markers', 'source_mutation: temporarily rewrites package sources; run in an isolated serial snapshot')
+    config.addinivalue_line('markers', 'memory_heavy: peaks at several GB alone; run after the workers, one test at a time')
 
 
 def shard_unit(item):
@@ -71,7 +72,11 @@ def pytest_collection_modifyitems(config, items):
                  if item.get_closest_marker('source_mutation') or
                  any(item.nodeid.startswith(prefix) for prefix in MUTATIONS)]
     units = {item.nodeid: unit for item in items if (unit := shard_unit(item)) is not None}
-    write(f'collection-{WORKER}.json', dict(nodeids=nodes, mutation_nodes=mutations, shard_units=units))
+    # A source mutation already runs alone, in its snapshot; it is not listed twice.
+    memory = [item.nodeid for item in items
+              if item.get_closest_marker('memory_heavy') and item.nodeid not in mutations]
+    write(f'collection-{WORKER}.json', dict(nodeids=nodes, mutation_nodes=mutations, shard_units=units,
+                                            memory_nodes=memory))
     expected = CONTRACT.get('expected')
     if expected is not None and nodes != expected:
         raise pytest.UsageError('Collection changed between verification phases; no partial reuse is allowed.')
@@ -86,6 +91,8 @@ def pytest_collection_modifyitems(config, items):
             config.hook.pytest_deselected(items=rejected)
         if not CONTRACT.get('snapshot') and selected.intersection(mutations):
             raise pytest.UsageError('Source mutation tests must run in an isolated snapshot.')
+        if not CONTRACT.get('memory') and selected.intersection(memory):
+            raise pytest.UsageError('Memory-heavy tests must run in the serial memory phase.')
 
 
 def pytest_collectreport(report):

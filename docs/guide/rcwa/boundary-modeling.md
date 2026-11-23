@@ -210,23 +210,34 @@ that overlaps two blocks of the same material; the step at the routing tolerance
 change across it is 8.0e-10 for a change of 2e-8 in overlap, 9.5e-10 rotated, and a hundred
 times smaller for a change a hundred times smaller). A painted layer is built exactly as before, and `'per_shape'`, the default, names what the path has always done.
 
-It is experimental, a run that uses it emits `ExperimentalWarning`, and three things stand
+It is experimental, a run that uses it emits `ExperimentalWarning`, and two things stand
 between it and a default:
 
-- **It steps where two regions come into contact.** The default is continuous there; under
-  `'interfaces'` the two boxes above, moved from a gap of `1e-8` of the period to an overlap of
-  `1e-8`, step `T` by 2.6e-4 (4.0e-4 rotated). The likely cause, not yet confirmed, is that
-  the two interfaces meeting there -- box and background, background and box -- become one,
-  weighted by a much smaller contrast.
-- **It has no independent reference yet.** On axis-aligned rectangles it was compared, order
-  for order, with Li's rules, the established factorization there: it was nearer to them than
-  the default at most of orders 3 to 9 (for
-  example 1.2e-3 against 1.3e-3 at order 5 on the tiles, 2.1e-4 against 1.3e-3 at order 7 on
-  two boxes apart), and not at every one.
+- **It is not shown to be more accurate, and has no independent reference yet.** Against
+  converged values the two fields err by like amounts at a given order. On the tiles above,
+  against Li's rules at order 17 (settled to 2e-4 by then), its errors at orders 3, 5, 7 and 9
+  are 1.3e-2, 6.8e-4, 1.5e-3 and 4.5e-4, and the default's 1.0e-2, 5.9e-4, 2.9e-3 and 5.4e-4.
+  On a circle of radius 0.25 of the period, a 0.53 x 0.3 rectangle rotated by 0.3 rad, and a
+  circle and a rotated rectangle apart, against the value the two fields reach together at
+  order 17 (to 2e-5, 3.7e-4 and 9e-5), the default is the nearer at every order from 5 to 15
+  on the last, and each is the nearer at some of them on the other two. What differs is the
+  manner: there `T` moved one way at every step from order 5 to 17 under `'interfaces'` (by
+  2.8e-4 falling to 1.1e-5 on the circle), where under the default it changed direction on all
+  three (by +4.7e-4 and then -1.3e-3 over the rotated rectangle's last two steps). The
+  distance to Li's rules *at the same order*, which this section quoted until 2026-11-21, does
+  not measure accuracy: Li's own result at orders 3 to 9 is 6e-4 to 1.7e-2 from its converged
+  value.
 - **A layer of circles or ellipses costs far more.** A curve on the boundary route is a polygon
   of `boundary.POLYGON_VERTICES` (256) edges: one circle of radius 0.25 of the period took 2.5
   to 3 minutes per solve at orders 3 to 9, where the closed form took 1 to 20 s (warm solves on
   a four-core Linux machine running other work).
+
+Until 2026-11-18 a third stood there: it stepped where two regions come into contact. The two
+boxes above, moved from a gap of `1e-8` of the period to an overlap of `1e-8`, stepped `T` by
+2.6e-4 (4.0e-4 rotated), because the two interfaces of the closing gap became one weighted by a
+much smaller contrast. They are now blended toward that interface (see *Closing a gap is
+continuous* below), and the same move changes `T` by 3.5e-9 (3.9e-9 rotated), a hundred times
+less for a move a hundred times smaller, as the default does.
 
 It is read only by regions under `factorization='nvf'` with `nvf_projector='linear'`; on a
 raster, under `'li'` or `'laurent'`, with `nvf_projector='circular'` or with a tensor material,
@@ -281,6 +292,8 @@ admits: fixed-cell Cartesian Li rectangles by default, the other scalar shapes w
 **The current scalar painted field integrates interface normal dyads.** A positive distance kernel weights each physical interval continuously, with zero kernel and first derivative at its finite support radius. Straight subdivision is additive, and a disappearing interval loses its mass away from its endpoint. Material contrast can vanish continuously; on a smooth interface the pole recovers its normal. The normalized projector can have rank two away from interfaces. This replaces the sample-spacing switch average; `shape_nvf_grid_size` controls sampling, not the kernel width.
 
 On the documented overlapping rectangle/ellipse, the two 41-point JAX derivative integrals agree with the transmission change to 0.180% and 0.116% at orders (4, 4) and normal grid 1024, within the unchanged 1% criterion. Small one-sided slope kinks at finite polygon facets remain. This is not a global C1 guarantee or a convergence result for every geometry. See [the integral and its validation](../../validation/rcwa/normal-field-known-limits.md), section 1c. Tensor shapes keep their previous nearest extension, and the explicit circular projector keeps its analytic construction.
+
+**Closing a gap is continuous.** Two intervals that bound a sliver of one region, such as a gap between two shapes, a shape meeting its own periodic image or a slot in one shape, become one interval when the sliver closes. Below a separation of 2**-10 of the longest reduced basis vector, about one sample of the default normal grid, their weights are blended toward that interval's. Total transmission no longer steps at contact: measured steps of 1.3e-5 to 4.0e-4 fell to about 5e-12 at a gap of 1e-8 nm, the size of Laurent's. Results for slivers at least that wide are unchanged bit for bit; narrower ones change by up to the former step. A sliver crossing that width changes the frozen plan, so a prepared calculation reports stale geometry there, as at contact. Tensor shapes and the circular projector do not use this blend. See [known limits, section 1d](../../validation/rcwa/normal-field-known-limits.md).
 
 ### It carried a position gradient the parametric path could not — and no longer does
 

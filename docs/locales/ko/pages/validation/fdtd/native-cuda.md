@@ -15,7 +15,7 @@ Targets:
 - `studies/fdtd/native_cuda/profile_native_cuda.py`
 
 기존 공개 `wavebit.fdtd.native` 엔진으로 아래 사례의 Torch CUDA 배정밀도
-실행과 eager 역방향 미분을 검증했습니다. 범위를 한정한 장치 검증
+실행과 즉시 실행(eager) 역방향 미분을 검증했습니다. 범위를 한정한 장치 검증
 결과입니다. 일반 `wavebit.fdtd` 장면 API는
 [별도의 제한된 CUDA 검증](general-cuda.md)을 참고하세요. [GPU의 JAX](#gpu의-jax)는 해당 절의 사례만 확인했습니다. 단정밀도, 컴파일 실행, 주기 구조의 포괄적인
 CUDA 정확도는 이 문서의 검증 범위에 포함되지 않습니다.
@@ -185,7 +185,7 @@ CPU Torch는 스레드 하나를 사용합니다. 역방향 행은 순방향 실
 시간에는 실행 입력 구성, `native.run`의 준비·시간 진행·결과 구성과
 목적함수 계산이 포함됩니다. 역방향 행에는 backward도 포함됩니다. 최초
 고정 전류 밀도 텐서 할당·전송, 스칼라의 호스트 복사, JSON 기록, 워밍업은
-제외합니다. 커널만의 시간이 아니라 eager 호출 전체 비용이며
+제외합니다. 커널만의 시간이 아니라 즉시 실행 호출 전체 비용이며
 `torch.compile`은 사용하지 않습니다. 순방향은 Torch gradient mode를 끄고,
 역방향은 켭니다. CPU/CUDA 16행 모두 매 반복의 유한값, CPU/GPU 목적함수·
 기울기 일치, 정확한 이차 광원 기울기 검사를 통과했습니다(상대 `2e-12`).

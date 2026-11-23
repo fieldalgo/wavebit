@@ -17,9 +17,9 @@ problem = fdtd.Problem(units=Units(length='um'), scene=fdtd.Scene(
 numerics = fdtd.Numerics(grid=fdtd.UniformGrid(spacing=.05), duration=fdtd.Duration(steps=1))
 modes = fdtd.solve_modes(problem, numerics=numerics, plane=fdtd.Plane(z=0.),
                          wavelength=1.0, count=2)
-modes[0].effective_index        # 격자 자체의 분산으로 계산한 beta c / omega
-modes[0].E['Ex'], modes[0].H['Hy']   # 각 성분의 Yee 점에서 V/m, A/m
-modes.axes, modes.coordinates['Ex']  # ('y', 'x')와 그 점들의 좌표
+modes[0].effective_index        # beta c / omega on the grid's own dispersion
+modes[0].E['Ex'], modes[0].H['Hy']   # V/m and A/m on each component's Yee points
+modes.axes, modes.coordinates['Ex']  # ('y', 'x') and the coordinates of those points
 ```
 
 ## 입력
@@ -71,9 +71,9 @@ modes.axes, modes.coordinates['Ex']  # ('y', 'x')와 그 점들의 좌표
 
 각 거부는 코드를 지닌 구조화된 오류입니다.
 
-- `mode.material`: 창 안의 전도성·분산 매질, 또는 장면 어딘가의 결합 평활(constitutive)
+- `mode.material`: 창 안의 전도성·분산 매질, 또는 장면 어딘가의 결합 스무딩(constitutive)
   재료나 `discretization='stencil'`. 칸 맞춤 물체(`SnappedBox`, `SnappedSlab`)와 돌리지
-  않은 평활 `Box` 면은 대각 매질로 내려가므로 받습니다. `Cylinder`, `Prism`, `Sphere`,
+  않은 스무딩 `Box` 면은 대각 매질로 낮춰지므로 받습니다. `Cylinder`, `Prism`, `Sphere`,
   돌린 `Box`는 성분을 결합하므로 받지 않습니다.
 - `mode.nonuniform`: 면에서 축을 따라 매질이 바뀜.
 - `mode.traced`: 재료·파장·범위 지정 기하 안의 JAX tracer나 기울기를 지닌 Torch 텐서.
@@ -88,9 +88,9 @@ modes.axes, modes.coordinates['Ex']  # ('y', 'x')와 그 점들의 좌표
 outputs = fdtd.Outputs(monitors=(
     fdtd.ModeMonitor('out', plane=fdtd.Plane(z=3.), wavelengths=(1.5, 1.55), modes=2),))
 spectrum = fdtd.run(problem.replace(outputs=outputs), numerics=numerics)['out']
-spectrum.forward_energy, spectrum.backward_energy   # (파장, 모드), J/Hz
-spectrum.forward, spectrum.backward                  # 복소 진폭, sqrt(J/Hz)
-spectrum.effective_index, spectrum.modes[0][0]       # 사영에 쓴 모드
+spectrum.forward_energy, spectrum.backward_energy   # (wavelengths, modes), J/Hz
+spectrum.forward, spectrum.backward                  # complex amplitudes, sqrt(J/Hz)
+spectrum.effective_index, spectrum.modes[0][0]       # the modes it projected on
 ```
 
 측정기는 각 파장에서 `solve_modes`와 똑같이 면의 모드를 풀고, 실행의 푸리에 변환 장을 그
@@ -121,9 +121,9 @@ continuation=('z-', 'z+'))`, 또는 슬래브가 뻗어 있는 축의 면을 지
 source = fdtd.ModeSource('src', plane=fdtd.Plane(z=-2.), direction='+z', mode=0,
                          pulse=fdtd.GaussianPulse(wavelength=1.55, frequency_sigma_hz=1.5e13))
 monitor = fdtd.ModeMonitor('t', plane=fdtd.Plane(z=2.), wavelengths=(1.55,), source='src')
-# ... 실행 ...
+# ... run ...
 t = result['t']
-t.forward_energy[:, 0] / t.injected_energy   # TE0 전력 투과율
+t.forward_energy[:, 0] / t.injected_energy   # the TE0 power transmission
 ```
 
 `ModeSource`는 펄스 중심 파장에서 `plane` 위에 푼 `solve_modes`의 `mode`번 모드를

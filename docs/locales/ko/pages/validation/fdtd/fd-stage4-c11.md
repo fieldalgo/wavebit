@@ -32,7 +32,7 @@
 대비 12, 주기당 16/32/48칸에서 대각 규칙의 맞춤 차수는 14.036, 26.565, 45도에서 0.999,
 1.012, 0.864입니다. 자기수반(self-adjoint) 전체 텐서 비교기는 첫 각도에서 0.929이고 나머지
 두 각도에서는 단조롭지 않습니다(서술적 맞춤값 0.387, -2.452). 기록의 판정: 표본으로 잰
-텐서 대안들은 차수의 일반적 개선을 확립하지 못한다. **S1은 아니라고 말합니다.**
+텐서 대안들은 차수의 일반적 개선을 확립하지 못합니다. **S1은 아니라고 말합니다.**
 
 **S2, 2차원 Mie 원기둥, TM 다음 TE** (`studies/fdtd/subpixel_mie_cylinder/`,
 [기록](fd-mie-validation.md#measured-cylinder-results)).
@@ -69,7 +69,7 @@
 규칙의 "작성하지 않음" 갈래는 S1 **과** S2가 모두 아니라고 해야 합니다. S2가 그렇지 않으므로
 **C11은 등록한 규칙으로 닫히지 않습니다.** 함께 등록한 반대 갈래(5단계에서 자기수반 구현과
 비에르미트성 관문으로 칸을 엶)는 일부가 일찍 실현되었습니다.
-`src/wavebit/fdtd/_prepare/constitutive.py`와 커널의 구성 항은 매끈한 물체 주변의 작은
+`src/wavebit/fdtd/_prepare/constitutive.py`와 커널의 구성 항은 스무딩 바디 주변의 작은
 영역에서 D와 B를 적분하고 공통 마디에 수반(adjoint) 교차 계수를 더합니다
 ([제품 구성 결합](fd-mie-validation.md#production-constitutive-coupling-and-energy)).
 이 실현은 C11 초안이 피하려던 D/B 상태 필드를 가진다는 점에서 다르고, **등방성** 매질만
@@ -81,7 +81,7 @@
 ## 소유자 결정에 빠진 것
 
 1. **범위.** C11을 (a) C3 시기의 교차 결합으로 실현된 것으로 닫을지, (b) 아직 거부되는
-   것, 곧 매끈한 칸 안의 **이방성 재료**(`checks.check_smoothed`의 4번 문)로 범위를 다시
+   것, 곧 스무딩한 칸 안의 **이방성 재료**(`checks.check_smoothed`의 4번 입구)로 범위를 다시
    잡을지. (b)를 잰 측정은 없습니다. S1과 S2 모두 등방성 매질을 썼습니다.
 2. **고대비 원기둥.** 제품 교차항을 쓴 복셀 경로는 TE 유전율 12 원기둥에서 여전히 1.8선에
    못 미칩니다(1.603). 다른 대각 밖 구현이 통과할지는 측정되지 않았습니다. 확장 스텐실은
@@ -107,11 +107,11 @@
 
 | 시험 | 단언하는 것 | 등록한 관문과 비교 |
 | --- | --- | --- |
-| `tests/fdtd/test_fd_constitutive.py::test_finite_box_operator_is_adjoint_and_encloses_its_exact_eigenvalues` (E와 H) | 무작위 비균질 3x2x2x3 시험 자료에서 제품 `cross_action(..., bounded=True)`가, 독립 이웃 색인으로 만든 명시적 대칭 조밀 행렬을 **무작위 벡터 하나**에 곱한 값과 절대 3e-14 안에서 같음; 포함 구간이 그 행렬의 모든 고윳값을 감쌈 | 제품 연산자이고 허용치도 1e-12보다 훨씬 작지만, 행렬-벡터 곱 하나를 대칭 기준과 비교할 뿐 연산자를 만들어 그 비대칭을 단언하지는 않음 |
+| `tests/fdtd/test_fd_constitutive.py::test_finite_box_operator_is_adjoint_and_encloses_its_exact_eigenvalues` (E와 H) | 무작위 비균질 3x2x2x3 픽스처에서 제품 `cross_action(..., bounded=True)`가, 독립 이웃 색인으로 만든 명시적 대칭 조밀 행렬을 **무작위 벡터 하나**에 곱한 값과 절대 3e-14 안에서 같음; 포함 구간이 그 행렬의 모든 고윳값을 감쌈 | 제품 연산자이고 허용치도 1e-12보다 훨씬 작지만, 행렬-벡터 곱 하나를 대칭 기준과 비교할 뿐 연산자를 만들어 그 비대칭을 단언하지는 않음 |
 | `tests/fdtd/test_fd_constitutive_study.py::test_inhomogeneous_cross_action_is_self_adjoint` | 무작위 비균질 계수와 필드에서 `|<u, A v> - <A u, v>| < 3e-14 |u| |v|` | 등록한 형태이고 세기도 1e-12보다 훨씬 강하지만, 제품 커널의 유계(bounded) 판이 아니라 연구 비교기의 주기 `cross_action`(`studies/fdtd/subpixel_constitutive/`)에 대한 것 |
 | `tests/fdtd/test_fd_constitutive.py::test_closed_electric_and_magnetic_coupling_conserves_energy` | 전기·자기 결합이 있는 닫힌 공동이 모든 백엔드에서 에너지를 상대 폭 3e-13 안으로 유지 | 자기수반 연산자의 결과이지 연산자에 대한 단언은 아님 |
-| `tests/fdtd/test_fd_constitutive.py::test_production_cross_operator_is_symmetric_below_the_registered_gate` (E와 H), 2026-11-06 추가 | 무작위 비균질 3x4x5x6 시험 자료 세 개에서 단위 벡터로 만든 제품 `cross_action(..., bounded=True)`의 조밀 행렬이 `max|A - A^T| / max|A| < 1e-12`를 만족(측정값 0.0) | **등록한 관문, 제품 연산자에 대해** |
-| `tests/fdtd/test_fd_constitutive.py::test_planned_cross_coefficients_satisfy_the_adjoint_identity` (numpy, jax, jit, torch), 2026-11-06 추가 | `fd.lower`가 매끈한 구에 대해 쓰는 E·H 계수에서 `|<u, A v> - <A u, v>| / (max|K| |u| |v|) < 1e-12`(측정값 최대 6.64e-19) | **등록한 관문, 계획된 제품 계수에 대해, 모든 실행 경로에서** |
+| `tests/fdtd/test_fd_constitutive.py::test_production_cross_operator_is_symmetric_below_the_registered_gate` (E와 H), 2026-11-06 추가 | 무작위 비균질 3x4x5x6 픽스처 세 개에서 단위 벡터로 만든 제품 `cross_action(..., bounded=True)`의 조밀 행렬이 `max|A - A^T| / max|A| < 1e-12`를 만족(측정값 0.0) | **등록한 관문, 제품 연산자에 대해** |
+| `tests/fdtd/test_fd_constitutive.py::test_planned_cross_coefficients_satisfy_the_adjoint_identity` (numpy, jax, jit, torch), 2026-11-06 추가 | `fd.lower`가 스무딩한 구에 대해 쓰는 E·H 계수에서 `|<u, A v> - <A u, v>| / (max|K| |u| |v|) < 1e-12`(측정값 최대 6.64e-19) | **등록한 관문, 계획된 제품 계수에 대해, 모든 실행 경로에서** |
 
 **이 결정 전에는 등록한 관문을 쓰인 그대로 단언하는 시험이 없었습니다**: 제품 연산자의
 비에르미트성 척도가 1e-12 미만이라는 단언. 앞의 세 행은 가장 가깝지만 그것을 단언하지 않습니다.
@@ -128,5 +128,5 @@
   `discretisation='stencil'`은 홀로 있는 `fd.Sphere`만 받고 `Cylinder`는 거부합니다
   (`StencilShapeRefused`). 그래서 스텐실을 쓰라는 안내는 오늘 구에만 해당하며, 고대비 원기둥에는
   1.8선을 통과하는 공개 경로가 없습니다.
-* **매끈한 칸 안의 이방성 재료**는 계속 거부됩니다(`checks.check_smoothed`의 4번 문). 이를 잰
+* **스무딩한 칸 안의 이방성 재료**는 계속 거부됩니다(`checks.check_smoothed`의 4번 입구). 이를 잰
   측정은 없습니다.

@@ -219,8 +219,8 @@ import하지 않습니다.
 ## 자동 검사
 
 ```sh
-python tools/check_licenses.py                    # 설치된 모든 배포 패키지
-python tools/check_licenses.py --reachable-only   # Wavebit 의존성이 닿는 것만
+python tools/check_licenses.py                    # every installed distribution
+python tools/check_licenses.py --reachable-only   # only what Wavebit's requirements reach
 ```
 
 검사는 `importlib.metadata`로 설치 메타데이터를 읽습니다. 설치된 패키지에 검토 항목이

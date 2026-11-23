@@ -25,7 +25,7 @@ Python 3.12.14, NumPy 2.5.1, JAX/jaxlib 0.11.0, Torch 2.13.0+cpu.
 상자가 이 voxel 전체를 포함하므로, 두 곡면의 교집합을 근사하지 않고도 세 CSG 답을
 구 자체의 채움에서 알 수 있습니다.
 
-| 양 | NumPy / eager JAX | 원래의 jit 컴파일된 CSG |
+| 양 | NumPy / 즉시 실행(eager) JAX | 원래의 jit 컴파일된 CSG |
 |---|---:|---:|
 | 자식 구 채움 | 0.460806344307509 | -200.940388564916 |
 | 상자와의 합집합 | 1 | -199.940388564916 |
@@ -95,7 +95,7 @@ rest = _root((k - t) * (k + t), xp)
 
 ## 측정한 관문과 변이
 
-새 관문은 NumPy, eager JAX, jax.jit, Torch에서 Sphere, Union, Intersection, Difference에 대해
+새 관문은 NumPy, 즉시 실행 JAX, jax.jit, Torch에서 Sphere, Union, Intersection, Difference에 대해
 32개 격자 원점을 모두 평가합니다: 격자 평가 512회이며, 각각 voxel 4096개입니다. 모든 결과는
 float64 여부, 유한성, 채움 범위, 백엔드 간 일치, 법선 모멘트 범위와 대각합(trace), 정확한 CSG 포함 법칙을
 검사합니다. 구는 추가로 모든 백엔드의 모든 원점에서 `4*pi*R^3/3`을 재현해야 합니다.
@@ -122,7 +122,7 @@ float64 여부, 유한성, 채움 범위, 백엔드 간 일치, 법선 모멘트
    `python -m pytest tests/fdtd/test_fd_sphere_clip_jit.py -k across_grid_origins -q`를 실행했습니다.
    네 백엔드 경우 모두 해석적 부피 단언에서 실패했습니다: exit 1, 4 failed,
    1 deselected. 범위 검사와, 똑같이 변이된 NumPy 기준과의 일치 검사는 여전히
-   통과했습니다. 공유 구현과의 일치만으로는 판정 기준(oracle)이 되지 않습니다.
+   통과했습니다. 공유 구현과의 일치만으로는 오라클이 되지 않습니다.
 
 추가로 잘못된 원시함수 변이(`z**3 / 3` 대신 `z**3 / 2`)도 네 백엔드 경우 모두 채움 범위에서
 실패했습니다. 다른 전이 높이들을 인수분해한 뒤 쐐기(wedge)의 인수분해하지 않은 `k2 - t*t`만

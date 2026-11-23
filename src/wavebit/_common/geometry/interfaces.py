@@ -21,14 +21,52 @@ class Interval(namedtuple('Interval', 'edge lower upper left right centroid_sign
     __slots__ = ()
 
 
-class InterfacePlan(namedtuple('InterfacePlan', 'pieces images groups')):
+class InterfacePlan(namedtuple('InterfacePlan', 'pieces images groups facing',
+                               defaults=((),))):
     """Pure topology: intervals, bounded reduced-basis images, and indices per image.
 
     An interval's centroid_sign selects one oriented representative of each exterior
     interval of the unwrapped union; that area contour includes periodic abutting
     faces. It is separate from the material-jump mask used by the normal field.
+
+    ``facing`` lists ``(p, q, m, n)``: pieces ``p`` and ``q`` (``q`` translated by the
+    reduced-basis image ``(m, n)``) bound one sliver of a single region, on the right side
+    of both, and lie within :func:`facing_gap` of each other over their common extent.
+    Closing that sliver turns the two intervals into one; see :func:`facing_contrasts`.
     """
     __slots__ = ()
+
+
+#: The facing-gap scale as a fraction of the longest reduced basis vector: about one
+#: sample of the default normal grid (1024 per axis). A sliver this thin or thinner has its
+#: two bounding intervals blended toward the single interval its closing leaves.
+FACING_GAP_FRACTION = 2.0 ** -10
+
+
+def facing_gap(xp, basis, dtype=None):
+    """The width below which two facing intervals are blended: :data:`FACING_GAP_FRACTION`
+    of the longest reduced basis vector. ``basis`` holds the vectors as columns."""
+    first = basis[0][0] * basis[0][0] + basis[1][0] * basis[1][0]
+    second = basis[0][1] * basis[0][1] + basis[1][1] * basis[1][1]
+    first, second = xp.asarray(first, dtype=dtype), xp.asarray(second, dtype=dtype)
+    return FACING_GAP_FRACTION * xp.sqrt(xp.maximum(first, second))
+
+
+def facing_contrasts(xp, regions, background, plan, dtype):
+    """Contrast between the two outer materials of each facing pair in ``plan.facing``.
+
+    A sliver of region Y between X and Z closes into one X|Z interval. That interval's
+    contrast is what the two bounding X|Y and Y|Z intervals tend to as the sliver closes.
+    """
+    cdtype = xp.complex128 if dtype == xp.float64 else xp.complex64
+    values = xp.stack([xp.asarray(as_material(m).epsilon, dtype=cdtype)
+                       for m, _ in regions] + [xp.asarray(as_material(background).epsilon,
+                                                        dtype=cdtype)])
+    left = xp.asarray([plan.pieces[p].left for p, _, _, _ in plan.facing], dtype=xp.int64)
+    right = xp.asarray([plan.pieces[q].left for _, q, _, _ in plan.facing], dtype=xp.int64)
+    a, b = values[left], values[right]
+    scale = xp.abs(a) + xp.abs(b)
+    return xp.abs(a-b) / xp.where(scale > 0., scale, xp.ones_like(scale))
 
 
 def interface_contrasts(xp, regions, background, plan, dtype):
@@ -78,7 +116,7 @@ def plan_interfaces(regions, lattice, transform):
     fa, fz = a @ inv.T, z @ inv.T
     fmin, fmax = np.minimum(fa, fz), np.maximum(fa, fz)
     ftol = tol * np.linalg.norm(inv, axis=1)
-    pieces, fractions = [], []
+    pieces, fractions, spans = [], [], []
     for i in range(len(a)):
         if lengths[i] <= tol:
             continue
@@ -153,6 +191,7 @@ def plan_interfaces(regions, lattice, transform):
                                    left[0] if left else len(regions),
                                    right[0] if right else len(regions), centroid_sign))
             fractions.append((hi - lo) * (e[i] @ inv.T))
+            spans.append((a[i] + lo * e[i], a[i] + hi * e[i]))
     reach = np.max(np.abs(e @ inv.T), axis=0)
     radius = [1 + int(math.ceil(float(v))) for v in reach]
     images = tuple((m, n) for m in range(-radius[0], radius[0] + 1)
@@ -181,7 +220,81 @@ def plan_interfaces(regions, lattice, transform):
         if ids:
             selected.append(image)
             groups.append(ids)
-    return InterfacePlan(tuple(pieces), tuple(selected), tuple(groups))
+    facing = _plan_facing(pieces, spans, basis, inv, tol)
+    return InterfacePlan(tuple(pieces), tuple(selected), tuple(groups), facing)
+
+
+def _plan_facing(pieces, spans, basis, inv, tol):
+    """Pairs of intervals that bound a sliver of one region thinner than :func:`facing_gap`.
+
+    Both intervals carry the sliver's region on their right, run in opposite directions and
+    overlap when projected on each other. The separation is the largest distance from an
+    end of either whole interval to the other's line (:func:`_facing_separation`), so a pair
+    that is not parallel enters only once both intervals lie within the gap of each other. The plan holds no
+    coordinates; replay recomputes the extents and the separation from traced vertices.
+    """
+    if not pieces:
+        return ()
+    gap = float(facing_gap(np, basis))
+    s = np.asarray([span[0] for span in spans])
+    z = np.asarray([span[1] for span in spans])
+    d = z - s
+    length = np.linalg.norm(d, axis=1)
+    unit = d / np.where(length > 0, length, 1.)[:, None]
+    left = np.asarray([piece.left for piece in pieces])
+    right = np.asarray([piece.right for piece in pieces])
+    usable = (length > tol) & (left != right)
+    fs, fz = s @ inv.T, z @ inv.T
+    fmin, fmax = np.minimum(fs, fz), np.maximum(fs, fz)
+    freach = gap * np.linalg.norm(inv, axis=1) + tol * np.linalg.norm(inv, axis=1)
+    facing = []
+    for p in np.flatnonzero(usable):
+        q = np.arange(p + 1, len(pieces))
+        q = q[usable[q] & (right[q] == right[p]) & (unit[q] @ unit[p] < 0.)]
+        if not len(q):
+            continue
+        # An integer image brings q within the gap only if these bounds admit one.
+        lower = np.ceil(fmin[p] - fmax[q] - freach)
+        upper = np.floor(fmax[p] - fmin[q] + freach)
+        for j in q[np.all(lower <= upper, axis=1)]:
+            lo = np.ceil(fmin[p] - fmax[j] - freach).astype(int)
+            hi = np.floor(fmax[p] - fmin[j] + freach).astype(int)
+            for m in range(int(lo[0]), int(hi[0]) + 1):
+                for n in range(int(lo[1]), int(hi[1]) + 1):
+                    shift = basis @ np.array([m, n])
+                    if _facing_separation(s[p], z[p], s[j] + shift, z[j] + shift, tol) < gap:
+                        facing.append((int(p), int(j), m, n))
+    return tuple(facing)
+
+
+def _facing_separation(s0, z0, s1, z1, tol):
+    """Separation of two facing intervals, or infinity when they bound no sliver.
+
+    The common extent of each interval is the part covered by the other's projection; both
+    must be longer than ``tol``, and the ends of each common extent must lie on the other
+    interval's right. The separation is the largest distance from an end of either *whole*
+    interval to the other's line. Measured over the common extent alone, a short piece that
+    leaves a crossing point beside a longer one would read as a thin sliver while its length,
+    not the gap, shrinks; a vanishing interval already loses its weight continuously, and
+    only a closing gap needs the blend.
+    """
+    frames = []
+    for start, end, other_start, other_end in ((s0, z0, s1, z1), (s1, z1, s0, z0)):
+        length = math.hypot(*(end - start))
+        t = (end - start) / length
+        u = sorted(((other_start - start) @ t, (other_end - start) @ t))
+        lo, hi = max(0., u[0]), min(length, u[1])
+        if hi - lo <= tol:
+            return math.inf
+        frames.append((start + lo * t, start + hi * t, start, end, np.array([t[1], -t[0]])))
+    facing = [float((x - other[2]) @ other[4])
+              for own, other in ((frames[0], frames[1]), (frames[1], frames[0]))
+              for x in own[:2]]
+    if min(facing) < -tol:
+        return math.inf
+    return max(abs(float((x - other[2]) @ other[4]))
+               for own, other in ((frames[0], frames[1]), (frames[1], frames[0]))
+               for x in own[2:4])
 
 
 def replay_interfaces(xp, regions, background, lattice, transform, plan, material_values=None):

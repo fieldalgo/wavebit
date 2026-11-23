@@ -362,6 +362,8 @@ Line integration makes straight subdivision additive and makes a disappearing in
 
 The radial kernel and its first derivative vanish at R. Existing periodic image bounds include every interval within that support, so changing an image record does not truncate a nonzero contribution. An exact bounding-box exclusion avoids evaluating zero contributions. JAX uses a fixed-capacity gather and falls back to the full sum when it is exceeded; this does not limit the number of physical interfaces. Independent adaptive quadrature, periodic translation, straight subdivision, the support boundary and JAX value/shape-derivative comparisons exercise these rules in `tests/rcwa/test_integrated_normal.py`.
 
+On NumPy the field is evaluated from live pairs only, with the same values bit for bit. Samples are taken in 8 x 8 tiles, whose boxes keep fewer intervals than runs of consecutive samples; within a tile only the (sample, interval) pairs inside the support are evaluated, each branch only where it is selected; and each row's sums rebuild NumPy's own pairwise summation tree around the live pairs, since a zero added to a partial sum changes nothing. Whether the installed NumPy still sums that way is checked once per interval count against `numpy.sum`; on a mismatch the dense evaluation runs. The repeat and continuation test that precedes it compares only endpoint-interval pairs whose boxes can meet. On two painted circles (radii 150 and 120 nm on a 600 nm cell, 8864 imaged intervals) a solve at the default grid 1024 took 236 to 248 s before and 95 to 102 s after at orders (3, 3) to (9, 9) on one Linux core, with byte-identical R and T arrays, and peak memory rose by 24 to 142 MB. The facing sub-intervals of a sliver below the blend width share each row's minimum and are summed in their own reduction, as in the dense evaluation; `tests/rcwa/test_integrated_normal_live_pairs.py` compares both against the dense evaluation with `array_equal`. JAX and PyTorch keep the dense evaluation.
+
 A reproducible scene uses a 700 nm square cell, air above, epsilon 2.25 below, and a 300 nm layer with background epsilon 1. Paint a rectangle of size (420, 210) nm, centre (-60, 0) nm, angle 0.3 rad, epsilon 12.25, then an ellipse of radii (160, 100) nm, centre (90, 40) nm, angle -0.4 rad, epsilon 4. Use wavelength 900 nm, theta 0.2 rad, phi 0.3 rad, p polarisation and orders (4, 4). The tested plan changes are rectangle angle 0.30354672169878616 rad and ellipse centre x = 91.87187983049787 nm.
 
 On normal grid 1024, Linux and float64, the transmission differences at offsets +/-1e-8 are 2.27e-10 for angle and 4.83e-13 for centre position. At +/-1e-10 they fall to 2.31e-12 and 2.04e-14, respectively. The JAX one-sided angle derivatives are 0.01132924 and 0.01137746; the centre derivatives are -2.419739e-5 and -2.428738e-5. Small slope kinks, about 0.43% and 0.37%, remain at these polygon-facet events. A projector-coefficient offset ladder from 1e-6 to 1e-10 converges to distinct one-sided slopes. Removing the finite value steps does not make the discretised objective globally C1; full-window derivative integration and resolution convergence remain separate checks.
@@ -369,6 +371,51 @@ On normal grid 1024, Linux and float64, the transmission differences at offsets 
 With the same default grid and orders, 41-point Simpson integration of JAX derivatives across rectangle angle 0.3 +/- 0.02 rad gives 4.100232252e-4 against a transmission change of 4.107640908e-4 (0.180% relative error). Across ellipse centre x = 90 +/- 5 nm it gives -2.075338644e-4 against -2.072941870e-4 (0.116%). Both changes exceed 1e-4 and both errors meet the unchanged 1% criterion. Eleven points around angle 0.313 +/- 1e-5 rad have monotone transmission, one plan transition without alternating labels, and a largest-to-smallest derivative ratio of 1.00291. These measurements use Python 3.12, NumPy 2.5.1 and JAX 0.11.0 on Linux.
 
 The two public regression cases require transmission differences below 1e-9 across offsets of +/-1e-8, followed by proportional decay at +/-1e-10, on normal grid 64. The independent exact-pixel Li comparison retains its original 2e-2 tolerance and improvement over Laurent. Tensor shape fields retain the nearest extension. The new scalar extension changes finite-order results, so convergence must be checked for each scene. Reprepare after a topology change; this repair does not promise differentiability through physical contact or eliminate polygon and normal-grid discretisation error.
+
+### 1d. A closing sliver: facing intervals blended toward contact (2026-11-18)
+
+Until 2026-11-18 the boundary integral of §1c stepped when a sliver of one region closed: a gap between two shapes, a shape meeting its own periodic image, or a slot in one shape. While the sliver was open, its two bounding intervals X|Y and Y|Z were weighted `contrast**4` each. At contact the plan replaced them by one X|Z interval with its own contrast. For epsilon 4 and 9 boxes in air the pair's weight fell at once from 0.6**4 + 0.8**4 = 0.54 to 0.385**4 = 0.022. The normalised field therefore changed wherever that pair carried weight, by up to 0.66 in a diagonal projector entry. Laurent's rule builds no normal field and stayed continuous; contact to overlap was already continuous.
+
+The cause was checked directly. At a gap of 1e-8 nm, replacing only the two facing weights by half of the closed interval's weight each made the sampled field agree with the contact field to 6.0e-9. The transmission difference fell from 2.58e-4 to 5.2e-12. Nothing else in the layer changed at contact.
+
+The planner now records facing pairs. Both intervals have the same region on their right, run in opposite directions, overlap in projection and are separated by less than `ell`, which is 2**-10 of the longest reduced basis vector (about one sample of the default normal grid of 1024). The separation is the largest distance from an end of either whole interval to the other's line, so a pair that is not parallel enters only when both intervals lie within `ell` of each other. Measured over the common extent alone, a short piece leaving a crossing point beside a longer one read as a thin sliver while its length, not a gap, shrank: on 2026-11-21 that made a frozen plan stale under a plain move of a shape (`tests/rcwa/test_frozen_geometry.py`). A vanishing interval already loses its weight continuously, so only a closing gap needs the blend. Over its common extent each interval is weighted `s*contrast**4 + (1 - s)*c_XZ**4/2`. Here `c_XZ` is the live contrast of the two outer materials and `s` is the C2 smootherstep of the separation divided by `ell`, zero at contact and one at `ell`. The difference from the interval's own weight is added on that sub-interval; straight subdivision is additive, so this is the split the contact plan makes. At contact the two halves add to the single interval's weight. Across a slot in one shape X and Z agree, and the closed weight is zero.
+
+A pair whose separation reaches `ell` carries no correction and its sub-intervals are left out. A layer whose slivers are all at least `ell` wide therefore gives the same field and the same results bit for bit. Crossing `ell` changes the frozen plan, so a prepared calculation reports stale geometry there, as it does at contact; the correction is zero at `ell`, so replanning does not move the result. The tensor shapes' nearest extension and the explicit circular projector do not use this blend. A painted overlap thinner than the planner resolves is still refused, as before.
+
+Measured on Linux with Python 3.13, NumPy 2.5.5 and JAX 0.12.0, against main `aa7a462` before the change. The scene has a 600 nm square cell, a 240 nm layer with background epsilon 1, substrate epsilon 2.25, wavelength 840 nm, theta 0.25 rad, phi 0.4 rad, p polarisation and orders (5, 5) on the default normal grid. Two polygon boxes of epsilon 4 (painted first) and 9 face each other across a gap g along the x axis, or along an axis turned by 0.3 rad. The boxes are 180 nm squares; the partial case uses a 120 x 270 nm second box shifted 60 nm along the shared edge. Each entry is T(g = h) - T(g = 0):
+
+| scene | h | before | after | Laurent |
+| --- | ---: | ---: | ---: | ---: |
+| boxes | 1e-8 | 2.581e-4 | 5.1e-12 | 2.9e-12 |
+| boxes | 1e-10 | 2.581e-4 | 6.5e-14 | 5.7e-14 |
+| turned boxes | 1e-8 | 3.994e-4 | 5.8e-12 | 3.5e-12 |
+| turned boxes | 1e-10 | 3.994e-4 | 5.6e-14 | 5.4e-14 |
+| partial | 1e-8 | -1.103e-4 | 3.3e-12 | 3.4e-12 |
+| partial | 1e-10 | -1.103e-4 | 5.7e-14 | 6.3e-14 |
+| turned partial | 1e-8 | 1.259e-5 | 1.6e-12 | 1.5e-12 |
+| turned partial | 1e-10 | 1.259e-5 | 3.5e-14 | 1.6e-14 |
+
+At normal grid 64 and orders (3, 3), a 180 nm high box of epsilon 4 meeting its own periodic image beside an epsilon 9 disc stepped by 1.62e-4 before and 4.5e-13 after (h = 1e-8). A square of epsilon 4 with a slot of width 1e-8 nm differed from the filled square by 2.01e-4 before and 2.6e-12 after. Under `shape_normal_method='interfaces'`, two 0.3-period `rcwa.Rectangle` boxes of epsilon 4 and 9 in the scene above, moved from a gap of 1e-8 of the period to an overlap of 1e-8, changed transmission by 2.581e-4 before and 3.490e-9 after (3.994e-4 and 3.946e-9 turned by 0.3 rad); at 1e-10 of the period the change after is 3.49e-11 and 3.94e-11. The default `'per_shape'` is unchanged (6.444e-9 and 4.916e-9).
+
+Results change only below `ell`, here 0.586 nm. Total transmission of the two axis-aligned scenes above, before and after, at gap g:
+
+| g / ell | boxes before | boxes after | change | partial before | partial after | change |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 0.989148276359 | 0.989148276359 | 0 | 0.985051598667 | 0.985051598667 | 0 |
+| 0.10 | 0.989436787071 | 0.989189483148 | -2.47e-4 | 0.984948840901 | 0.985057311434 | +1.08e-4 |
+| 0.25 | 0.989481148111 | 0.989295784336 | -1.85e-4 | 0.984959956490 | 0.985013726360 | +5.38e-5 |
+| 0.50 | 0.989552003212 | 0.989466455436 | -8.55e-5 | 0.984977804153 | 0.984990511952 | +1.27e-5 |
+| 0.75 | 0.989619236113 | 0.989603125154 | -1.61e-5 | 0.984994953238 | 0.984997208562 | +2.26e-6 |
+| 0.90 | 0.989658009023 | 0.989656710256 | -1.30e-6 | 0.985004910671 | 0.985005108569 | +1.98e-7 |
+| 1, 1.5, 2, 4 | | | 0 | | | 0 |
+
+Two 256-vertex polygon circles of radius 100 nm and epsilon 4 and 9, 0.1 nm apart, plan four facing pairs; their transmission at orders (3, 3) and grid 256 moved from 0.950802146661 to 0.950738213356 (-6.4e-5). The same circle 0.1 nm above a polygon box plans none and is unchanged (0.655153214189). Planning a layer of three polygonised circles over a box, 1463 intervals, took 0.159 s instead of 0.123 s.
+
+JAX differentiates through the blend. For the turned boxes at grid 256 and orders (3, 3), the derivative of transmission with respect to the gap at g/ell = 0.2, 0.5 and 0.8 agrees with central differences to 3.0e-8, 8.1e-9 and 4.7e-9. Across the whole blend window, from 1e-6 `ell` to 2 `ell`, 41-point Simpson integration of the JAX derivative gives 9.281430601e-4 against a transmission change of 9.281129448e-4 (0.003%), within the 1% criterion of §1c.
+
+The §1c acceptance scene plans no facing pair at any of its 41 angle points, 41 centre points or 11 points around 0.313 rad, so it runs the unchanged arithmetic.
+
+`tests/rcwa/test_integrated_normal.py` requires, at normal grid 64 and orders (3, 3), a transmission difference below 1e-9 at h = 1e-8 with proportional decay at 1e-10 for the boxes, turned boxes, partial and own-image cases, and a slot that meets its filled square to 1e-9. Before the change these differences were 4.3e-4, 5.7e-4, 6.0e-4, 1.6e-4 and 2.0e-4. Field-level tests check the plan at the gap, bit-identity at `ell`, agreement with the contact field, and a JAX derivative through the blend.
 
 ## 2. A face the fold cannot merge is refused, not built — FIXED (2026-09-06)
 
@@ -1338,7 +1385,7 @@ has no gradient. The normal there is whatever `_hypot_safe` leaves, and a one-ul
 arbitrarily. Every backend reads the same value unnudged. This is a degeneracy of one instance,
 not a tie between two, and it is not changed here.
 
-## 9. The cases, A to L, as of 2026-09-11
+## 9. The cases, A to L, as of 2026-09-11; rows updated through 2026-10-01
 
 The letters are the design's. "Exact" means the field equals the geometry's on the interface
 set; a band error is against `overlap.interfaces_of` over 1.5 pixels at N = 512, and the gate a
@@ -1407,8 +1454,8 @@ What does work, in order of how little it asks you to trust:
 The piece field carries its own harness: `tests/rcwa/test_gamma_field.py::test_the_mutant_is_killed`
 applies each mutant to the source (`gamma_instruments.mutated`, which says DID-NOT-APPLY and
 NO-OP out loud and restores by md5), reloads, and asserts that the named instrument fails —
-the flush substitution, the pair substitution, the tie and its axis, one face family's image
-list (killed by the L box and its transpose through the oracle band), the coverage union, and
+the flush substitution, the pair substitution, the tie and its axis, the image lists of the u
+and of the v face family (killed by the L box and its transpose through the oracle band), the coverage union, and
 the blend exponent. The second half added its own: the seam sign forced opposed (killed by the
 K scene turned with its cell, whose seam axis the tie's `(1, 0)` fallback is 17 deg from -- a
 mutant of the record's sign, which the seam contrast retired on 2026-09-11, §8e; the three sign
@@ -1426,7 +1473,7 @@ against and `engine` imported by name, so a reload would leave two classes of th
 process. Fourteen then; the verifiers' round added eight more -- the self substitution keyed by
 instance alone (the double-covered face), the arc ring dropped and the ring picking by the
 algebraic distance (the ellipse that leaves its cell), the sign window always open, the sign
-keyed on either piece and the run window built from the partner's half-length (the A|B|C
+keyed on the p piece, the sign keyed on the q piece and the run window built from the partner's half-length (the A|B|C
 scene and the column above the K seam's end), and the cross-pair substitution removed (the
 off-centre stacked bars, exact) -- twenty-two, all killed, none DID-NOT-APPLY. The reduced basis
 (§8c) added two: the replay folding on the basis as given (killed by the 693 circle on the

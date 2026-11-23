@@ -531,6 +531,8 @@ def genuine_derivatives():
     return value, da
 
 
+# Not memory_heavy: the first-order cases peak at 3.8 GB alone (3.80 ETM, 3.70 SMM, the higher
+# of two runs; main 3770848d). Before main 54f7f4c they peaked at 7.6 GB.
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
 @pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
 def test_genuinely_2d_ep_derivatives_match_cauchy_oracles(first_order, algo, genuine_derivatives):
@@ -752,8 +754,10 @@ def genuine_fields():
                 _circle(lambda z: field(0.3, z), wl, 0.5, 32, derivative=True))
 
 
+# The first-order cases peak at 4.5 GB alone (4.46 ETM, 4.42 SMM; main 3770848d).
 @pytest.mark.parametrize('algo', ['ETM', 'SMM'])
-@pytest.mark.parametrize('first_order', [False, True], ids=['second_order', 'first_order'])
+@pytest.mark.parametrize('first_order', [False, pytest.param(True, marks=pytest.mark.memory_heavy)],
+                         ids=['second_order', 'first_order'])
 def test_a_genuinely_2d_ep_field_matches_cauchy_oracles(first_order, algo, genuine_fields):
     """The field at a genuinely 2D EP against :func:`genuine_fields`: NumPy (silent, the pair
     rebuilt) and ``jax.jit`` values to 1e-12 of ``max|F|``; ``jax.jacfwd`` in theta and the

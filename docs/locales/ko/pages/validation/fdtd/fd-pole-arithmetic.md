@@ -6,7 +6,7 @@ Lorentz 또는 Drude 극점 하나, 그리고 시간 간격 2개로 이루어집
 
 정규화 값이 `1e200`이 되도록 유한한 SI 주파수를 고릅니다. Lorentz 감쇠, Lorentz 세기 또는
 Drude 감쇠 중 하나는 미분 대상으로 남겨 둡니다. 수정 전에는 매개변수 하나라도 추적(trace)되면
-극점 전체의 즉시(eager) 검사를 건너뛰었기 때문에, 구체값 주파수를 제곱할 때 생기는 Python
+극점 전체의 즉시 실행(eager) 검사를 건너뛰었기 때문에, 구체값 주파수를 제곱할 때 생기는 Python
 `OverflowError`가 그대로 빠져나갔습니다. 이 세 경우, JAX `jit` 또는 Torch 역방향 모드 운반체,
 그리고 `check`, `prepare`, `run`, `Prepared.validate` 또는 `Prepared.run`의 30가지 조합 모두에서
 이 현상이 재현되었습니다.
@@ -17,7 +17,7 @@ Drude 감쇠 중 하나는 미분 대상으로 남겨 둡니다. 수정 전에�
 점화식은 자체 허용 규칙을 유지합니다. 일반 크기의 대조 사례 6개는 점화식 구동항과 그 해석적
 매개변수 미분을 검사하며, 필드 수렴 허용 오차는 새로 도입하지 않습니다. 추가로 공개
 `Prepared.run` 대조 사례 2개는 Drude 주파수 자체를 운반합니다. 정규화 주파수 `2`에서는 유한한
-0이 아닌 필드와 유효한 상태가 유지되고, `1e200`에서는 즉시 계획 단계의 예외 없이 JAX와 Torch
+0이 아닌 필드와 유효한 상태가 유지되고, `1e200`에서는 즉시 실행 계획 단계의 예외 없이 JAX와 Torch
 모두에서 유효하지 않은 런타임 상태와 전부 NaN인 필드가 나옵니다.
 
 ARM macOS에서 따로 나타난 기준선 실패는, 비트캐스트한 세기를 정수로 직접 0과 비교하는 검사가
@@ -37,14 +37,14 @@ macOS ARM64, Python 3.12.9, NumPy 2.5.1, SciPy 1.18.0, JAX 0.11.0, Torch 2.14.1�
 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 PYTHONPATH=src python -m pytest -q tests/fdtd/test_mixed_pole_arithmetic.py   tests/fdtd/test_selected_pole_arithmetic.py   tests/fdtd/test_material_finite_guard.py tests/fdtd/test_large_damping.py
 ```
 
-실제 제품 코드 변형은 새 프로세스에서 시험했고 바이트 단위로 그대로 복원했습니다.
+실제 제품 코드 변이는 새 프로세스에서 시험했고 바이트 단위로 그대로 복원했습니다.
 
-| 변형 | 예상되는 검출 |
+| 변이 | 예상되는 검출 |
 |---|---|
 | 예전의 극점 전체 추적 건너뛰기 복원 | 공개 거부 사례 30개 모두 단언 실패 |
 | 일반 점화식 구동항을 두 배로 | 해석적 값/접선 대조 사례 6개 모두 단언 실패 |
 | 런타임(live) 구동항 가드 우회 | 비정규 세기 사례 6개 모두 단언 실패 |
-| 추적된 계수의 유한성을 즉시 판정 | 공개 런타임(live) 주파수 사례 2개 모두 단언 실패 |
+| 추적된 계수의 유한성을 즉시 실행에서 판정 | 공개 런타임(live) 주파수 사례 2개 모두 단언 실패 |
 
 작은 사례의 독립 미분은 `drive = strength * dt**2 / (1 + gamma * dt / 2)`에서 얻으며, 여기서
 Drude 세기는 `omega_p**2`입니다. 구현의 미분을 기대값으로 사용하지 않습니다.

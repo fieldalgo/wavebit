@@ -141,7 +141,8 @@ arc near the axis:
 `D` sits on the jog and nowhere else. Along a flat run the distance field rises in one direction
 only, so the cross difference is 0; at the one-pixel jog it rises equally both ways and the cell
 takes `{1,1}`. Near the axis, runs are long and jogs rare -- 32 of 256 band cells within 12 deg
-of the axis, 12.5%, matching the 12% of pixels past 30 deg reported above -- so those few sit 45
+of the axis, 12.5%, matching the 12% of band pixels more than 30 deg off (112 of 972 at `N=256`,
+re-measured on 2026-11-22 at 7f406fc70) -- so those few sit 45
 deg away from every neighbour. Near the diagonal every cell is a jog, `{1,1}` is the rule rather
 than the exception, and 45 deg is the right answer, which is why the mean is excellent there and
 the rare non-jog cell becomes the outlier instead.

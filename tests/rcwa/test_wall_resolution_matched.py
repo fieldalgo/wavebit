@@ -19,7 +19,6 @@ from wavebit.rcwa._engine.stretch import Matched
 
 P, H = 400.0, 150.0
 METAL = -20 + 1.5j
-pytestmark = pytest.mark.filterwarnings('ignore::wavebit.rcwa.diagnostics.ExperimentalWarning')
 
 
 def _layer(geometry, material, thickness=H, background=None):
@@ -322,11 +321,13 @@ def test_an_ellipse_reaching_the_cell_edge_is_refused():
     assert code == 'rcwa.unsupported' and 'does not fit inside a cell' in message
 
 
-def test_a_matched_solve_warns_that_it_is_experimental():
+def test_a_matched_solve_does_not_warn():
+    """The option is stable (2026-11-22) for circles and ellipses as for rectangles."""
+    import warnings
     from wavebit.rcwa.diagnostics import ExperimentalWarning
-    with pytest.warns(ExperimentalWarning, match='wall_resolution is experimental') as caught:
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', ExperimentalWarning)
         _run(_problem(), orders=(2, 2))
-    assert len(caught) == 1 and caught[0].filename == __file__
 
 
 def test_the_result_refuses_what_a_matched_solve_does_not_hold():

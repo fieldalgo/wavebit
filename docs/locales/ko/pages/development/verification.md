@@ -50,7 +50,7 @@ python tools/run_verification.py --profile research --workers 2
 `quick`은 설치 메타데이터·데이터, 공개 API, 재료 단위, import, Job 직렬화 왕복,
 Fresnel 응답, FDTD 갱신을 확인하는 작은 검사 묶음입니다. 실행 확인용이며
 물리적 수렴을 입증하지 않습니다. `full`은 **research를 제외한 모든 테스트를
-slow 테스트까지 포함해** 실행합니다. `research`는 research로 표시된 테스트만
+slow 테스트까지 포함해** 실행합니다. `research`는 `research`로 표시된 테스트만
 실행하며 그 안의 slow 사례도 포함합니다. 이 도구는 명시적인 marker 선택을
 사용합니다. 일반적인 `pytest tests`는 기존 기본 정책대로 research를 선택에서
 제외하고 slow 테스트를 건너뜁니다.
@@ -157,9 +157,9 @@ torch 의존성의 일부 버전만 제공하고, docs extra와 패키징 도구
 CI 환경을 로컬에서 재현하려면 새 가상 환경에서 실행합니다.
 
 ```shell
-python tools/ci_constraints.py install tests            # 기록된 버전
-python tools/ci_constraints.py install tests --latest   # 최신 릴리스
-python tools/ci_constraints.py freeze tests             # 설치된 버전 기록
+python tools/ci_constraints.py install tests            # the recorded versions
+python tools/ci_constraints.py install tests --latest   # the newest releases
+python tools/ci_constraints.py freeze tests             # record what is installed
 ```
 
 ## CI는 두 실행 범위를 shard로 나눠 실행
@@ -190,7 +190,7 @@ shard는 profile 안의 선택이며 다른 profile이 아닙니다. 모든 shar
 shard를 만듭니다. 단위는 테스트 파일이며, `shard_unit` 표시가 붙은 테스트만 예외입니다.
 인자 없는 `@pytest.mark.shard_unit`은 그 사례 하나하나를 파일의 나머지와 다른 shard에서
 실행할 수 있게 하고, `shard_unit(per='test')`는 테스트 함수 하나를 그 매개변수 사례 전체와 함께
-한 단위로 만듭니다(파일 전체는 `pytestmark`로 지정). `shard_unit('이름')`은 한 파일에서 같은 이름을
+한 단위로 만듭니다(파일 전체는 `pytestmark`로 지정). `shard_unit('name')`은 한 파일에서 같은 이름을
 단 사례를 함께 묶으며, 캐시나 module fixture를 공유하는 사례에 씁니다. 사례에 가장 가까운 표시가
 우선하므로 이름 묶음이 파일 전체 표시보다 앞섭니다. import 때 프로세스 전역 상태를 바꾸는
 파일도 어느 쪽이든 안전합니다. shard마다 별도 프로세스이고, shard 안에서는 `--dist loadfile`이
@@ -211,6 +211,24 @@ run 39098232669의 두 시도 모두 shard 3의 runner가 약 95 %에서 종료�
 1,200초(일반)·2,400초(slow) 그대로이고, job 제한은 shard당 120분입니다. 실측 시간을 배분에 사용하지만
 실제 경과 시간은 수집, 컴파일, worker 스케줄링에도 영향을 받습니다. 각 shard 안에서 소스를 수정하는 사례는 공유 체크아웃의 병렬 실행
 대신 도구가 만든 별도 스냅샷에서 순차 실행합니다.
+
+혼자서 runner 메모리의 대부분을 쓰는 테스트에는 `memory_heavy` 표시를 붙입니다. 도구는 그런
+테스트를 worker에게 주지 않고, 병렬 단계가 끝나 메모리를 돌려준 뒤 셋째 단계 `memory`에서
+실행합니다. 프로세스 하나, worker 없음, 한 번에 테스트 하나입니다. 이 테스트들은 자기 shard에
+그대로 남고, shard 단위와 시간표의 행도 그대로이며, 다른 테스트처럼 이어서 실행(resume)됩니다.
+이 표시는 짐작이 아니라 측정한 최댓값에 붙입니다. 테스트를 혼자 실행해 최대 상주 메모리를
+읽습니다(Linux에서는 킬로바이트이며, 아래 명령이 변환합니다).
+
+```shell
+python -c "import resource, subprocess, sys; subprocess.run([sys.executable, '-m', 'pytest', '-q', sys.argv[1]]); print(round(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 2**20, 2), 'GB')" "tests/rcwa/test_file.py::test_name[case]"
+```
+
+그 값이 약 4 GB, 곧 worker 둘이 나눠 쓰는 16.4 GB runner의 사분의 일을 넘으면 표시합니다.
+매개변수화한 테스트는 무거운 사례에만
+`pytest.param(..., marks=pytest.mark.memory_heavy)`로 표시합니다. 2026-11-21에는 당시 혼자서
+9.4 GB와 7.1 GB까지 쓰던 first-order 예외점 테스트 둘을 실행하던 runner가 실패한 테스트 없이
+종료되었습니다. main이 3개 커밋 연속 빨간색이었고, Markdown 파일 2개만 바꾼 pull request도
+shard 하나를 잃었습니다. 2026-11-22부터 그 둘의 최댓값은 4.6 GB와 3.4 GB입니다.
 
 GitHub artifact `verification-default-N`과 `verification-slow-N`에는 shard별 JSON 결과
 기록과 입력 목록, JSONL 이벤트, JUnit XML, 로그를 보관합니다. artifact마다 저장소를
@@ -259,7 +277,7 @@ python tools/run_distribution_smoke.py
 패키지 데이터와 선택적인 plotting 기능까지 확인합니다.
 
 시간표는 `tools/ci_shard_timings.json`에 고정하며, 단위(파일, 또는 receipt가 기록한 `shard_unit` 단위 이름:
-사례의 node id나 `FILE::@이름`)별 setup/call/teardown 합계를
+사례의 node id나 `FILE::@name`)별 setup/call/teardown 합계를
 현재 사례 수에 맞춰 추정합니다. 표에 행이 없는 단위는 그 파일의 사례당 평균을, 새 파일은 해당 범위의 사례당 평균 비용(최소 1초)을
 사용합니다. 시간표는 resume fingerprint와 shard 간 일치 검사에 포함됩니다.
 시간표 없이 실행하면 기존 사례 수 기준 배분을 사용합니다.

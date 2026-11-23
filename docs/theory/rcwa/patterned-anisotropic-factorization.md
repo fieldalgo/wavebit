@@ -176,7 +176,9 @@ invariant under the axis swap and would have passed while wrong.
   residual there — so that combination measures the harness, not this code.
 - **Agreement with the scalar NVF** where they overlap. Not by converging in truncation_order — measured, that
   gap sits near 1.3e-5 and does not fall, which is fine: two vector formulations differ at any
-  finite truncation, and 1.3e-5 is an order tighter than fmmax's own 1.8e-4 on the same structure.
+  finite truncation, and 1.3e-5 is an order tighter than the 1.6e-4 to 4.3e-4 between fmmax's own
+  `FFT` and `JONES_DIRECT` on the same structure over that range (truncation_order 14 to 6; re-measured
+  on 2026-11-22 with fmmax 1.7.1, which gives no 1.8e-4 at any of these orders).
   What is forced is the *contrast* limit, and there the gap falls 17x faster than the reflectance
   it lives on.
 
@@ -275,9 +277,11 @@ wl=655 / psi=30 the crossover sits near 48° and the peak is 1.94 at 66°, and a
 2.84 at 54°. The closed-form error is also far flatter in angle — the DFT arm's grows with incidence
 because that is what `Kx epz_i Kx` does to it.
 
-Below the crossover near 38° the DFT does lead, by about 5%. That is the honest half of the median
-above, and it is worth 2.5e-6 absolute against the 7.5e-5 the closed form is worth at 54° — a factor
-of 30, in the regime the slot was built for.
+Below the crossover near 38° the DFT does lead, by up to 6.5% (the 30° row). That is the honest
+half of the median above, and it is worth 2.5e-6 absolute against the 7.5e-5 the closed form is worth
+at 54° — a factor of 30, in the regime the slot was built for. (Re-measured on 2026-11-22 at the
+record's `70b0993` and at `bbb04385`, where every row above reproduces to 0.4%: the lead grows from
+1% at normal incidence to 6.5% at 30° and closes by 38°.)
 
 Raster convergence at theta=54°, same pillar:
 

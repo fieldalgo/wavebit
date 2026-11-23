@@ -73,7 +73,7 @@ python tools/run_verification.py --profile quick
 `environment.yml`은 study에 필요한 도구를 포함한 전체 개발 환경을 만듭니다.
 
 ```shell
-conda env create -f environment.yml    # 저장소 루트에서 실행
+conda env create -f environment.yml    # run from the repo root
 conda activate wavebit
 ```
 

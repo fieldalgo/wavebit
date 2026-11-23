@@ -60,7 +60,8 @@ The two branches fail in different ways, which is the whole reason a crossover e
 
 - **The series is limited by cancellation, not truncation.** Its largest intermediate term
   dwarfs the result once `x` grows, so past `x ≈ 12` it loses digits no term count can restore.
-  Measured: 30 terms and 80 terms give the *same* 4.8e-13 at `x ≤ 12`.
+  Measured: 30 terms and 80 terms give the *same* worst case over `x ≤ 12`, 4.8e-13 (at
+  `x = 12` itself both give 2.5e-13).
 - **The asymptotic expansion is divergent.** Past its optimal order the error grows again. At
   `x ≥ 12.5` it improves out to 12 terms and worsens after.
 
@@ -100,6 +101,14 @@ double, 7.0 in single.**
 Single precision is still ~4x short of what the native routine gave it, and ~17x short of
 float32 epsilon (1.2e-07). That is accepted rather than hidden — 32-bit is documented as
 hazardous — but 2.1e-06 and 2.7e-04 are different kinds of answer.
+
+In the precision table the float64 code is the same in the last two rows, so 1.1e-12 and 5.6e-13
+are one error read on two samplings of the interval. Its worst case is the series' round-off just
+below 12.5, and it moves with the grid: re-measured on 2026-11-22 with the code of `a26f82f`
+(torch 2.15.0, jax 0.12.0.1) on eight grids of 1000 to 20001 points on `(0, 95]`, 4.6e-13 to
+1.3e-12 on PyTorch and 4.8e-13 to 9.6e-13 on JAX, the float32 hybrid 2.6e-06 to 4.4e-06 and the
+float32 builtin 3.7e-07 to 5.0e-07. Every such figure on this page -- the TL;DR's, the scan's
+6.99e-13, the range table's 1.0e-12, the switch table's -- is one such sampling.
 
 ## No `abs(x)`
 
@@ -200,6 +209,9 @@ wavebit.get_j1_implementation()
 | **`'auto'`** *(default)* | **9.0e-13** | **4.6e-07** | hybrid |
 | `'hybrid'` | 9.0e-13 | 3.6e-06 | hybrid |
 | `'native'` | 4.1e-07 | 4.6e-07 | hybrid |
+
+A sampling of its own, hence 9.0e-13, 3.6e-06 and 4.6e-07 here against the figures above (see
+the note closing "The crossover depends on the precision").
 
 - **`'auto'`** takes the accurate one for the precision in hand — the hybrid at 64-bit, the
   framework's own below it. It is not a tie-break: neither implementation wins at both, so the
