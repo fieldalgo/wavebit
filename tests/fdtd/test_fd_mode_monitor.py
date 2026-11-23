@@ -1,6 +1,6 @@
 """``fdtd.ModeMonitor``: modal amplitudes of a run's fields, against exact and conserved answers.
 
-The criteria are MM1-MM5 of ``docs/validation/fdtd/fd-waveguide-modes.md``, registered before
+The criteria are MM1-MM5 of ``docs/validation/fdtd/fdtd-waveguide-modes.md``, registered before
 the monitor was first run; every limit here is quoted from there.
 """
 import math

@@ -305,7 +305,7 @@ class FarField:
     returns all three Cartesian components. ``intensity`` includes them all.
     Recorded-field derivatives are preserved on every backend. The Yee background
     and angles must be concrete; its positive isotropic background and convex
-    frequency band are checked before time stepping. See docs/validation/fdtd/fd-lattice-radiation.md.
+    frequency band are checked before time stepping. See docs/validation/fdtd/fdtd-lattice-radiation.md.
 
     **Open scenes only**: every face absorbing, the box in a uniform background with nothing
     of the scene outside it (the free-space Green's function is the whole model), and no

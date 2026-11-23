@@ -119,7 +119,7 @@ def test_the_operator_builds_with_no_study_and_is_the_same_to_the_bit():
     importable **bit for bit**, on both the 2-D and the 3-D fixture, as is the triplet baseline
     alone. The comparison is what says nothing falls back when the checkout is missing: a route
     that answered some other way there would still build, and would differ. (The two ARPACK
-    report scalars are held out for the reason ``docs/design/fd-symmetric-stencil.md`` records:
+    report scalars are held out for the reason ``docs/design/fdtd-symmetric-stencil.md`` records:
     ``eigsh`` draws its own starting vector, and two runs of one unchanged tree already
     disagree on them.)
 

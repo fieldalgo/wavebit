@@ -1048,9 +1048,9 @@ RCWA 전력과 비교하지 않으며, 비교에는 각 방법이 선언하거�
 | 명시적이고 기록되는 정책으로서의 디튜닝 (§8) | 구현됨: `rcwa.Numerics(detuning=None)`이 기본값이며 요청한 점을 풂 | `src/wavebit/rcwa/numerics.py` |
 | `fdtd.Problem`, `Scene`, `Domain`, `Boundaries`, `Structure`, `PlaneWave`, `GaussianPulse`, `Outputs`, `Record`, `Numerics`, `UniformGrid`, `Duration`, `PML`, PML은 물리 영역 바깥 (§6) | 구현됨; CPU와 배정밀도만 (§13) | `src/wavebit/fdtd/` |
 | FDTD 감쇠 기반 종료, 비균일 격자, GPU (§6) | 구현되지 않았고 노출하지 않음 | -- |
-| FDTD 이산 도파관 모드(`solve_modes`)와 `ModeMonitor` (7단계) | 구현됨 | [검증](../validation/fdtd/fd-waveguide-modes.md) |
-| FDTD `ModeSource`, 한 방향 모드 발사 (7단계) | 구현됨 | [검증](../validation/fdtd/fd-mode-source.md) |
-| FDTD `GaussianBeam`, 한 방향으로 발사하는 집속 빔 (7단계) | 구현됨 | [검증](../validation/fdtd/fd-gaussian-beam.md) |
+| FDTD 이산 도파관 모드(`solve_modes`)와 `ModeMonitor` (7단계) | 구현됨 | [검증](../validation/fdtd/fdtd-waveguide-modes.md) |
+| FDTD `ModeSource`, 한 방향 모드 발사 (7단계) | 구현됨 | [검증](../validation/fdtd/fdtd-mode-source.md) |
+| FDTD `GaussianBeam`, 한 방향으로 발사하는 집속 빔 (7단계) | 구현됨 | [검증](../validation/fdtd/fdtd-gaussian-beam.md) |
 | `fdtd.Numerics.geometry_ranges` (§7) | 구현됨 | `src/wavebit/fdtd/_numerics.py` |
 | 바깥 변환 아래에서 호스트 전용 위상 결정을 거부 (§7) | 구현됨: 고정 셀 데카르트 Li 직사각형의 크기/중심은 JIT/vmap 아래에서 배열 값의 모서리 순서 보호 장치를 씀. 다른 스칼라 영역 형상은 검사되는 CPU 콜백을 위해 `topology_check='host'`를 명시적으로 선택할 수 있음. 기본 장치 정책은 `jax.jit`이나 `jax.vmap` 아래에서 이를 거부함(`prepared.host_topology`); 즉시 실행 `jax.grad` tracer의 primal 값은 PyTorch 텐서처럼 검사함 | `src/wavebit/rcwa/_lifecycle.py` |
 | 모든 결과의 `outputs`, `validity`, `diagnostics`, `provenance`; `order(m, n)`을 가진 `DiffractionOrders`, `FieldSamples`, `SpectralFieldSamples`, `RawDiffractionSpectrum`, `TimeSeries` (§8) | 구현됨 | `src/wavebit/observations/` |

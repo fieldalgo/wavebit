@@ -5,7 +5,7 @@ voxel, because :func:`coefficients.mix` takes two phases and one surface and com
 there. This module answers such a pair where every quantity the answer needs is either exact or
 the rule already used for one body, and returns an explanatory string -- which keeps door 5's
 refusal -- everywhere else. The acceptance it is held to was registered before it was written:
-``docs/validation/fdtd/fd-polytope-clip.md``, "Registered acceptance".
+``docs/validation/fdtd/fdtd-polytope-clip.md``, "Registered acceptance".
 
 **The media of a voxel.** For the pair ``A`` (listed first) and ``B`` (listed later, so it wins
 where the two overlap) the voxel holds
@@ -342,7 +342,7 @@ def geometry(body_a, body_b, points, dx, tol):
 
     # Two curved surfaces in one voxel: the registered arm-D gate (the S7 dimer of two
     # dielectric spheres) failed its criterion (b), so the clip does not answer them
-    # (docs/validation/fdtd/fd-polytope-clip.md, "Results").
+    # (docs/validation/fdtd/fdtd-polytope-clip.md, "Results").
     curved = (_curved(body_a) & ~flat_a) & (_curved(body_b) & ~flat_b)
     if curved.any():
         return ('two curved surfaces in one voxel, which the registered dimer gate did not '
@@ -681,6 +681,6 @@ def notes(scene, plan):
             f'are flat, {axis} beside an unturned Box face): exact per-medium fills and one '
             'projection over both interfaces, exact for parallel planar layers.')
     return [(SubpixelAccuracyWarning, ' '.join(lines) + ' See '
-             'docs/validation/fdtd/fd-polytope-clip.md for what was measured; it is not an error '
+             'docs/validation/fdtd/fdtd-polytope-clip.md for what was measured; it is not an error '
              'bound for this scene.')]
 

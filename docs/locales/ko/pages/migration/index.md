@@ -48,7 +48,7 @@ W/m, 교차 셀에서는 W입니다.
 JIT 아래에서 형상을 바꿀 때는 지원되는 장치 측 보호 장치나 명시적
 [`topology_check='host'`](../guide/rcwa/guarded-shape-jit.md)를 씁니다. 수치적 위상 검사는 계속
 켜져 있습니다. 일반 FDTD는 [종료 규칙과 흡수층](../guide/fdtd/stopping-and-absorbers.md)과 명시적
-[기판 연속](../guide/fdtd/fd-differentiation.md)을 제공합니다. 사용자 정의 `Shape` 메서드는 격자
+[기판 연속](../guide/fdtd/fdtd-differentiation.md)을 제공합니다. 사용자 정의 `Shape` 메서드는 격자
 길이를 Problem의 단위로 받으며, 선언된 인스턴스 속성은 준비 결과를 재사용할 수 있도록 모두
 정적입니다. 사용자 정의 지지 영역은 Open 패딩에서 떨어져 있어야 하고, 사용자 정의 객체는 이식 가능한
 Job 태그가 아닙니다. 구현되지 않았던 모드 소스/모드 모니터/가우시안 빔 자리 표시자는 동작하는 일반

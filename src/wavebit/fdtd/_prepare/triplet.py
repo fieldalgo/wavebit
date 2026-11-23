@@ -21,7 +21,7 @@ and a one-line docstring each on :func:`sphere_maps` and :func:`circle_maps`, th
 inside a body is that ``sphere_maps`` calls :meth:`~wavebit.fdtd._shapes.Sphere.exact_edge_fill`
 and :meth:`~wavebit.fdtd._shapes.Sphere.exact_face_fill` itself, which is all the study's
 ``edge_fraction`` and ``face_fraction`` wrappers did. What was measured to say no number moved
-is in ``docs/design/fd-symmetric-stencil.md``, "The seam, closed".
+is in ``docs/design/fdtd-symmetric-stencil.md``, "The seam, closed".
 
 **NumPy on the host for the public route; a namespace for the research drivers.** The stencil
 calls these once per plan with NumPy float64 arrays. :func:`triplet_map`, :func:`sphere_maps`

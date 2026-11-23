@@ -1827,6 +1827,671 @@
       "tracked": true,
       "sha256": "a8eb4b1656832a7ef1c1202cafa7de5cbefe0ab5ae9487f6db22e71aec1419cc",
       "reason": "Existing canonical English source; no scientific rewriting implied by relocation."
+    },
+    {
+      "source": "docs/design/fd-symmetric-stencil.md",
+      "target": "docs/design/fdtd-symmetric-stencil.md",
+      "category": "design",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "42c02dc76052d86242abc2734b5baeb163a7b92aae62e34a3e9367eefa972244",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/guide/fdtd/fd-constitutive-absorber.md",
+      "target": "docs/guide/fdtd/fdtd-constitutive-absorber.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "bc0eca1f27512b49e7eff31dee0e59e790323905def8e9c8e1765a09e8fcb8b7",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/guide/fdtd/fd-differentiation.md",
+      "target": "docs/guide/fdtd/fdtd-differentiation.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "d34876da5663f22c2e43c1d6f8a8b7a0c868ce1524231b80522785595c5d05ec",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/guide/fdtd/fd-metasurface.md",
+      "target": "docs/guide/fdtd/fdtd-metasurface.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "1ab5bbf78cd1940ea216e4c06caff194f5ecba3d9437382b6106d25581b13f03",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/guide/fdtd/fd-radiation.md",
+      "target": "docs/guide/fdtd/fdtd-radiation.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "762771a6f8abd0c1ef38266c6f377743773895f151a324e94ac3879076d766aa",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/locales/ko/pages/design/fd-symmetric-stencil.md",
+      "target": "docs/locales/ko/pages/design/fdtd-symmetric-stencil.md",
+      "category": "design",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "4d8697f823bf513eee4abe8356bf3ec6044fd4d2764f138409c4e8868e1f2162",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/guide/fdtd/fd-constitutive-absorber.md",
+      "target": "docs/locales/ko/pages/guide/fdtd/fdtd-constitutive-absorber.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "10aa3e27fd9836c0d2d7a7f81a11874bc1188e4a6c3fbdc4a36cbc2391b716fb",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/guide/fdtd/fd-differentiation.md",
+      "target": "docs/locales/ko/pages/guide/fdtd/fdtd-differentiation.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "254dbaceb3438b6d16fbdef968e0278ec0a7322ccca892ddbc97f0c997a9858b",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/guide/fdtd/fd-metasurface.md",
+      "target": "docs/locales/ko/pages/guide/fdtd/fdtd-metasurface.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "dba4cf65320b0c8ac56c60db0b2122eac15a3da7cf3934ee6d94e041c8e82607",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/guide/fdtd/fd-radiation.md",
+      "target": "docs/locales/ko/pages/guide/fdtd/fdtd-radiation.md",
+      "category": "guide/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "76250c49a738d7fa55f0b55767aaedf4f0a79467f99fe7e9bb0883846538fa4c",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-conductive-contact.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-conductive-contact.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "49bff18c9987d451bd0f5ba45af59767ab9427811435be4afedd8a2ac07e64cb",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-conductive-film.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-conductive-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "3e050dfaf2db2861fd064e665bdeee5de32c5518a25753938d0625fc234af97f",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-conductive-stack.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-conductive-stack.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "b861e51f04f8c220c0034176707cb613487b272fa7e0fa88c29cb4481898d2f6",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-constitutive-absorber.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-constitutive-absorber.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "86aca89e056df91e4948b846e7a1afe9ec93f014bce02c1ce076704ab81cb1cb",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-debye-film.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-debye-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "8654218b6eb70364e8657a612d926e4eb92a0a38baa8d23fb51182de8c7a05dd",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-debye-stack.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-debye-stack.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "54bae3efa777e56294bfa9943b502f9662875160ab5cfb4b23e6eaecd3902c3c",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-debye-sum-film.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-debye-sum-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c57b8627b2e7688cb308c8a86abbd92beafcffcbd6ae041f613e416cd68259e4",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-decay-stopping.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-decay-stopping.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "55b4e6ed418e940cd3504fb78e305b51a3f34038fc3376b21b14537523dc9ec9",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-gaussian-beam.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-gaussian-beam.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "1b1adcd84172b5760839066f6374917e8cdbc57c003f01d99458b3ff6287cc5c",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-hybrid-film.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-hybrid-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "7ff1e934ec20537a7f220f95220bf7138ee78aea9ae6d2e1ea41155835308e06",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-lattice-radiation.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-lattice-radiation.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "0f7a60e7b3934354c779a8afef56dce8c0fee9d9d32031ce6665f937aadbcfc0",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-metasurface-validation.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-metasurface-validation.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "05fd8893a23bce541d72dcf47b5b0ee53e85512b1ac3c3a3e6f16e3ee5f6d431",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-mie-validation.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-mie-validation.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "a92b9daf932d16c9b786a25fb3c5d4eac71a2f309b28630bbeef814f88d08291",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-mode-source.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-mode-source.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "0bd5e40c0bdf651da7c472a6ccad8d28558bdb97095bdfdaf6ca8c279a60660c",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-oscillator-stack.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-oscillator-stack.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "5aba0dddfa992575f8157b6bde7e946bd6b737509d00fefc79c5e4eb92749dfe",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-oscillator-sum-film.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-oscillator-sum-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "052c04998c3d9eb671f7bf2b0555477e745f80eeea2d8d863557828c3385f0b3",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-planewave-acceptance.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-planewave-acceptance.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "7d2231541fd39e97e2d292d1988b652defea10f4517aeb9518faf05686b1ae8a",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-pole-arithmetic.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-pole-arithmetic.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "cc615c9da0bc285a7d931765b881ecc02d9a62265887f684d0dd09b051f8f46b",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-policy-cell-shapes.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-policy-cell-shapes.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "47946d6a32a8a9da52943601ea5f9edf29951bdec67eee810633448f8659ee10",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-polytope-clip.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-polytope-clip.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "5f9ec83354cb122e9d483e4e7b56be35018a27cdcadf2343e994ff6b761385f2",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-public-numerics-refusals.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-public-numerics-refusals.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "852b532aa98a521c53a9b45c1b7d8613742e700aa76f272e1ac191570939db4f",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-single-pole-film.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-single-pole-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c149af518bba86141b6e43ddbfb15e220f98fbd1b652039524859db60bc4b135",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-source-decay.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-source-decay.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "895c84dc511ae985d2affb58ae4312309ad8376bbae3d39c14a0a56b528123f8",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-sphere-clip-jit.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-sphere-clip-jit.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "2a372402140ab38ed2971c6dcacda1b1e08eebf4a79123211e9b7a44586fc4fd",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-stage4-c11.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-stage4-c11.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "5d03cf9490430622b8c03faff02ad79eb47fa3c70bfbcabc8994429da77ca4c9",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-stage4-report.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-stage4-report.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "2d4391881de447f0023f3de546c05e291cd6e505c77b1dee9b2b936e1c8b8ad5",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-subpixel-occupancy.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-subpixel-occupancy.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "36e3ed8b73283761426be99b6ebe81e13ba3c18aace2cb4f732adccc1e61bc09",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-two-debye-film.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-two-debye-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "fb43c2b713e817e96701c5a204bb2e1584269942ce20b8bd6e619dbe56e16ac7",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-waveguide-modes.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-waveguide-modes.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "92d087426ab4af0328a797a89cb677dc97f65313b9735a507673ae4eb4bbf867",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/locales/ko/pages/validation/fdtd/fd-waveguide-through-pml.md",
+      "target": "docs/locales/ko/pages/validation/fdtd/fdtd-waveguide-through-pml.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "15ae3c9947073ec712c41e9cd50f0152256ada1845d1e13ba9e7d098e34684d9",
+      "reason": "Korean overlay of the renamed page; it follows its English page."
+    },
+    {
+      "source": "docs/validation/fdtd/fd-conductive-contact.md",
+      "target": "docs/validation/fdtd/fdtd-conductive-contact.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "19ae8ec51c664239ca3635564e066f733b826ee9e6b3b4e65aad9a9f163411e4",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-conductive-film.md",
+      "target": "docs/validation/fdtd/fdtd-conductive-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "f1c88da3f481287c98cb33d60b3d36801651cf085c727abff57e1e0d2b5a92d7",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-conductive-stack.md",
+      "target": "docs/validation/fdtd/fdtd-conductive-stack.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "96b905a94cf473abc16f2aabb9e439916c612f2f24048f68006d10549a88f46a",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-constitutive-absorber.md",
+      "target": "docs/validation/fdtd/fdtd-constitutive-absorber.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "20325568438d1689ea91c9c9dc716cdb79238b451ab06d2f4e5e745d99f86e50",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-debye-film.md",
+      "target": "docs/validation/fdtd/fdtd-debye-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "bc48d62e2cf0237c2388b314468d12ad37ca7521263b1d631220ffd460166f79",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-debye-stack.md",
+      "target": "docs/validation/fdtd/fdtd-debye-stack.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "decda7091dc890fd8771c14b852157a04acd54ce43675c2d6d3ab8e74f5c0445",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-debye-sum-film.md",
+      "target": "docs/validation/fdtd/fdtd-debye-sum-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "0aa0fdaadbc215447488794d65c0fbf40d93702520e4a1f11b564177832c236c",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-decay-stopping.md",
+      "target": "docs/validation/fdtd/fdtd-decay-stopping.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c0369934fec482f61f8ac1f06e4e1d1701b184e9619958cebbdc5356b64888d6",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-gaussian-beam.md",
+      "target": "docs/validation/fdtd/fdtd-gaussian-beam.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "5e9740f8bdf4820afff83172652c4eb76c128223d580a21087d3c7b1f6918bf5",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-hybrid-film.md",
+      "target": "docs/validation/fdtd/fdtd-hybrid-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "3d30545953efa31f8852fa5fc81b2dddff0a8af4ea7c2c5dc2ea6a35091fd8c6",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-lattice-radiation.md",
+      "target": "docs/validation/fdtd/fdtd-lattice-radiation.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "8abb23322f12756882a5b1d04434660853e4907b45497e1ad6ee4db412f075b5",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-metasurface-validation.md",
+      "target": "docs/validation/fdtd/fdtd-metasurface-validation.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "6c355e9552a4a86c4cdb92137ae85c7761e2cb3d2543bc039e3dcc2222619ca9",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-mie-validation.md",
+      "target": "docs/validation/fdtd/fdtd-mie-validation.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "18d841d9557aed6c8f87c52d48df541132b9a34960b34987e9ce25fb585bf13d",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-mode-source.md",
+      "target": "docs/validation/fdtd/fdtd-mode-source.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "04331a98bb52e4642ac4b8d8c197f0ec3230f415481dc19242d2466483c95844",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-oscillator-stack.md",
+      "target": "docs/validation/fdtd/fdtd-oscillator-stack.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "bc34972f8141f6317e4b91ff342828bb2440e1f544a4ca51179979dc15f95b31",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-oscillator-sum-film.md",
+      "target": "docs/validation/fdtd/fdtd-oscillator-sum-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "d05cbf2bc9c6aae63c6d8b34bafefddf245a789969d7b6765eea88a1a5334db6",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-planewave-acceptance.md",
+      "target": "docs/validation/fdtd/fdtd-planewave-acceptance.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "b78757b468282cbcb1176f0a4e65026ce85fdb3ad4c20cbe5686877e71d17555",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-pole-arithmetic.md",
+      "target": "docs/validation/fdtd/fdtd-pole-arithmetic.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "c756334a6bd66ca7ba0700f65cfe150fd7f1ec6c73c61c8dee955fce5211b492",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-policy-cell-shapes.md",
+      "target": "docs/validation/fdtd/fdtd-policy-cell-shapes.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "0e92d40b95ee1979cc7e75cc3375d5d9a38f13536a3c4ec54ea758a5446a8c69",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-polytope-clip.md",
+      "target": "docs/validation/fdtd/fdtd-polytope-clip.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "47f4f9e84e246def2ba556c93aa593b3e5ab4b05bfbef53e56144d016c830bbc",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-public-numerics-refusals.md",
+      "target": "docs/validation/fdtd/fdtd-public-numerics-refusals.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "07fa43b4d25e93aa8ef4b3a822d8e82784db68023e05d236af20ae47c5ee2000",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-single-pole-film.md",
+      "target": "docs/validation/fdtd/fdtd-single-pole-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "19027c7feea3c8c3f7745c2318c40faf81a6f79102a6eaa5615c3f5f1d73a8c1",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-source-decay.md",
+      "target": "docs/validation/fdtd/fdtd-source-decay.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "f7c63c9e59d0edc680a5a58700f54bf1bad73f32504796d6f07f84a0464ac035",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-sphere-clip-jit.md",
+      "target": "docs/validation/fdtd/fdtd-sphere-clip-jit.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "ca4f9c02279276bd00ddec60fb9c86a46b20cc973c3c84f4401efa3172baa91a",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-stage4-c11.md",
+      "target": "docs/validation/fdtd/fdtd-stage4-c11.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "7f0161b55e6e9b74c7868f85727d602751a6541e2a9138a053d1944170fc233a",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-stage4-report.md",
+      "target": "docs/validation/fdtd/fdtd-stage4-report.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "bc7d3fb2a24cff3a7c2e337c1e1943fb94f8062ef5890cbcfa7c1bfa54d4c6d3",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-subpixel-occupancy.md",
+      "target": "docs/validation/fdtd/fdtd-subpixel-occupancy.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "20167d142b47b07c77623551456e8001e6cff273b585d66a49a82dee9c5de58f",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-two-debye-film.md",
+      "target": "docs/validation/fdtd/fdtd-two-debye-film.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "ba4542b17f4588927a61d0863d6195d9e7da0085a407ebf5212c1ae67ed673eb",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-waveguide-modes.md",
+      "target": "docs/validation/fdtd/fdtd-waveguide-modes.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "28aec7583ee9c2615863c55f058ce982eba3e2b7c7cb4d0720350c5f4fc1c2ee",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
+    },
+    {
+      "source": "docs/validation/fdtd/fd-waveguide-through-pml.md",
+      "target": "docs/validation/fdtd/fdtd-waveguide-through-pml.md",
+      "category": "validation/fdtd",
+      "immutable": false,
+      "tracked": true,
+      "sha256": "f40060918a6782890e680b9b9517e27eaf4c695774799006f8c179ecaa91d68b",
+      "reason": "Renamed from the fd- prefix of the former src/wavebit/fd package to fdtd-, the package and the other FDTD pages' name; content unchanged by the rename. The site keeps a redirect at the old address.",
+      "redirect": true
     }
   ]
 }

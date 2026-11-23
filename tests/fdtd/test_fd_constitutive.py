@@ -2,7 +2,7 @@
 
 The Fourier symbol and self-adjoint identity do not read the implementation's
 interpolation. Closed cavities test the full step, including D/B time levels.
-Tolerance provenance and actual source-mutant results: docs/validation/fdtd/fd-mie-validation.md.
+Tolerance provenance and actual source-mutant results: docs/validation/fdtd/fdtd-mie-validation.md.
 """
 import warnings
 

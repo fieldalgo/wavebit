@@ -891,7 +891,7 @@ def main(number):
         full = command_pair(validation, 'full', files+['tests/api/test_docs_contract.py'], workers=5)
         slow = command_pair(validation, 'slow', files, extra=['--run-slow', '-m', 'slow'], workers=5)
         old_nodes = previous['full']['node_status']
-        docs_node = 'tests/api/test_docs_contract.py::test_every_target_a_document_names_exists[fd-conductive-stack.md]'
+        docs_node = 'tests/api/test_docs_contract.py::test_every_target_a_document_names_exists[fdtd-conductive-stack.md]'
         require(not set(old_nodes).intersection(new['node_status']) and docs_node not in old_nodes,
                 'New node collides with predecessor.')
         require(set(full['node_status']) == set(old_nodes)|set(new['node_status'])|{docs_node},

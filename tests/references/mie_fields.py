@@ -22,7 +22,7 @@ def exterior_scattered(points, eps=1.1, radius=.25, center=(0.,0.,0.), extra_ord
 
     Vacuum wavelength is one; the sphere is isotropic and nonmagnetic. All
     points must be strictly exterior. This host-only oracle is never called
-    in the FDTD scan. Its tested scope is documented in fd-mie-validation.md.
+    in the FDTD scan. Its tested scope is documented in fdtd-mie-validation.md.
     """
     points, center = np.asarray(points, dtype=float), np.asarray(center, dtype=float)
     if (points.ndim < 1 or points.shape[-1] != 3 or center.shape != (3,)

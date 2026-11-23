@@ -1,6 +1,6 @@
 """C7: a periodic metasurface cell through the public path, its frame, its campaign and RCWA.
 
-The campaign is ``studies/cross_solver/metasurface/fdtd_metasurface_rcwa.py`` (``docs/validation/fdtd/fd-metasurface-validation.md``):
+The campaign is ``studies/cross_solver/metasurface/fdtd_metasurface_rcwa.py`` (``docs/validation/fdtd/fdtd-metasurface-validation.md``):
 three pillar-on-substrate cells under oblique and conical plane waves, every propagating order
 against ``wavebit.rcwa``. These tests hold what the comparison rests on and what it measured.
 """

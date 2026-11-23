@@ -50,7 +50,7 @@ Their independent references, tolerances and scientific assertions remain in pla
 Changing shapes under JIT uses the supported device guards or explicit
 [`topology_check='host'`](../guide/rcwa/guarded-shape-jit.md). Numerical topology checks remain active.
 General FDTD exposes [stopping/absorbers](../guide/fdtd/stopping-and-absorbers.md) and explicit
-[substrate continuation](../guide/fdtd/fd-differentiation.md). Custom `Shape` methods receive grid
+[substrate continuation](../guide/fdtd/fdtd-differentiation.md). Custom `Shape` methods receive grid
 lengths in the Problem's unit; all declared instance attributes are static for prepared reuse.
 Custom support must stay clear of Open padding, and custom objects are not portable Job tags.
 Unimplemented mode-source/mode-monitor/Gaussian-beam placeholders were never working general-FDTD solvers.

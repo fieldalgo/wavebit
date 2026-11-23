@@ -1,6 +1,6 @@
 """Stage 4's C5: how few cells across a smoothed body may be.
 
-Study S2b (``studies/fdtd/subpixel_cells_across/fdtd_subpixel_cells_across.py``, ``docs/validation/fdtd/fd-subpixel-occupancy.md``) set
+Study S2b (``studies/fdtd/subpixel_cells_across/fdtd_subpixel_cells_across.py``, ``docs/validation/fdtd/fdtd-subpixel-occupancy.md``) set
 the numbers: under 4 cells across its smallest extent a smoothed body is refused, 4 to 8 warns.
 The fill cannot see it -- every public body's fill is exact at any size -- so the door reads
 ``Shape.min_extent`` over the axes a body is bounded along, and a layer (uniform along two

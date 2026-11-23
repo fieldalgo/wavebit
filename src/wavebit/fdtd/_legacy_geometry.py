@@ -470,7 +470,7 @@ class Structure:
     :class:`Slab` or :class:`Region` remains refused. Junction media must be isotropic,
     lossless, non-dispersive and non-magnetic. Split measured second order on the flat-film
     anchor, but the rim order on one pillar scene remains unresolved; the report states
-    this limitation. See ``docs/validation/fdtd/fd-subpixel-occupancy.md``, The junction.
+    this limitation. See ``docs/validation/fdtd/fdtd-subpixel-occupancy.md``, The junction.
 
     **``discretisation=``: which material discretisation this structure gets.** ``'voxel'``,
     the default and every scene's behaviour until stage 4's C3, is *not* the name of a rule --
@@ -478,7 +478,7 @@ class Structure:
     cell-snapped shape and the diagonal Farjadpour/Kottke mix plus the constitutive cross terms
     for a smoothed one. What the two have in common, and what the word names, is that every
     coefficient is a function of one component's **own voxel**. ``'stencil'`` asks instead for
-    the symmetric extended-stencil operator ``docs/design/fd-symmetric-stencil.md`` derives: the exact
+    the symmetric extended-stencil operator ``docs/design/fdtd-symmetric-stencil.md`` derives: the exact
     edge and dual-face interface constraints, solved once on the host, whose rows couple each
     edge to every edge within two cells. It is opt-in, it is prepared at ``fd.plan`` time and
     never inside a trace, and ``fd.check`` prints it.
@@ -486,7 +486,7 @@ class Structure:
     **``memory_bound=``** (bytes, only beside ``discretisation='stencil'``) raises the host
     memory a preparation may be predicted to take before it is refused. The default admits the
     research sphere at its three placements at 40 and 56 cells per wavelength with a stated
-    margin (``docs/design/fd-symmetric-stencil.md``); a larger value is an explicit decision to trust
+    margin (``docs/design/fdtd-symmetric-stencil.md``); a larger value is an explicit decision to trust
     the prediction past the sizes it was measured at.
 
     **Why here, and not the ``smoothing=`` the module docstring refuses.** That paragraph turns
@@ -532,7 +532,7 @@ class Structure:
                 f'Numerics(discretization={self.discretisation!r}): the two spellings are '
                 f'{DEFAULT!r} -- the rule this structure\'s shape already names, which is what '
                 f'every scene has had -- and {STENCIL!r}, the symmetric extended-stencil '
-                f'operator of docs/design/fd-symmetric-stencil.md. A value nobody reads is silently '
+                f'operator of docs/design/fdtd-symmetric-stencil.md. A value nobody reads is silently '
                 f'ignored, so a third one is refused here rather than falling back to the '
                 f'default: the two converge at different orders and a scene that got the one '
                 f'it did not ask for would read as a physics result.')
@@ -814,10 +814,10 @@ class Sphere(Shape):
        one interface memory per member and checks all members. It does not
        admit touching films or stacks of different declared pole families.
        General conductive bodies, lossy junctions,
-       lossy hosts and curved dispersive interfaces remain refused. See ``docs/validation/fdtd/fd-conductive-film.md``,
-       ``docs/validation/fdtd/fd-single-pole-film.md``, ``docs/validation/fdtd/fd-debye-film.md``,
-       ``docs/validation/fdtd/fd-two-debye-film.md``, ``docs/validation/fdtd/fd-debye-sum-film.md`` and
-       ``docs/validation/fdtd/fd-oscillator-sum-film.md`` and ``docs/validation/fdtd/fd-hybrid-film.md`` for the exact
+       lossy hosts and curved dispersive interfaces remain refused. See ``docs/validation/fdtd/fdtd-conductive-film.md``,
+       ``docs/validation/fdtd/fdtd-single-pole-film.md``, ``docs/validation/fdtd/fdtd-debye-film.md``,
+       ``docs/validation/fdtd/fdtd-two-debye-film.md``, ``docs/validation/fdtd/fdtd-debye-sum-film.md`` and
+       ``docs/validation/fdtd/fdtd-oscillator-sum-film.md`` and ``docs/validation/fdtd/fdtd-hybrid-film.md`` for the exact
        contracts and validation status.
     2. **No wrapping face.** A sphere that reaches a ``Periodic`` or ``Bloch`` face is refused
        because resolving its wrapped part means summing the geometry over the image ring, and
@@ -1393,7 +1393,7 @@ class Cylinder(_Extruded):
     (``src/wavebit/fdtd/_shapes/_bodies.py::Cylinder`` measured it). Its fill is the exact
     disc-rectangle clip times the axial overlap; its surface moment is the tangent plane's,
     which on the rim -- where the side meets a cap -- is off by up to half (0.40-0.52 in ``w``
-    at 4 to 16 cells per radius; ``docs/validation/fdtd/fd-subpixel-occupancy.md``, S7, counts those voxels).
+    at 4 to 16 cells per radius; ``docs/validation/fdtd/fdtd-subpixel-occupancy.md``, S7, counts those voxels).
     With ``range=((x0, x1), (y0, y1), (z0, z1))`` the whole cylinder must stay
     in a static box. Radius, height and centre may then be differentiated through
     ``fd.run`` or ``fd.lower`` using a concrete prebuilt plan, under the isolated-body

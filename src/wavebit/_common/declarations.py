@@ -51,7 +51,7 @@ def torch_carried(v):
     ``torch.func`` do not. Measured through public ``fd.run(scene, 'torch')`` on Torch 2.13
     (2026-09-25), ``fd.Sphere(radius=)`` on ``b24a708``: ``torch.func.jvp`` gave a derivative
     of exactly 0.0 and a ``forward_ad`` dual no tangent at all, where the central differences
-    are 1.97e-7 (stencil) and 1.84e-7 (voxel) (``docs/design/fd-symmetric-stencil.md``, third
+    are 1.97e-7 (stencil) and 1.84e-7 (voxel) (``docs/design/fdtd-symmetric-stencil.md``, third
     review).
 
     **First, can a tangent be seen here at all?** Not while a ``torch.func`` interpreter that

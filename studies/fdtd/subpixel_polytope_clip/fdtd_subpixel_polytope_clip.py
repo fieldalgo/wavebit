@@ -1,7 +1,7 @@
 """Stage 4, C10 -- does the polytope clip converge where it writes? (registered Gate 2)
 
 The scenes, grids and pass rules are registered in
-``docs/validation/fdtd/fd-polytope-clip.md`` ("Registered acceptance", and "Amendment 1",
+``docs/validation/fdtd/fdtd-polytope-clip.md`` ("Registered acceptance", and "Amendment 1",
 both committed before any run of this script measured a field). This file computes; that page
 records what the numbers decided.
 

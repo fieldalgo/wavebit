@@ -1,7 +1,7 @@
 """Stage 4, C10 -- two smoothed surfaces in one voxel, against oracles that are not the clip.
 
 The acceptance this file holds was registered before the clip was written
-(``docs/validation/fdtd/fd-polytope-clip.md``, "Registered acceptance", gates 1 and 4); every
+(``docs/validation/fdtd/fdtd-polytope-clip.md``, "Registered acceptance", gates 1 and 4); every
 tolerance below is the registered one and is quoted beside its assertion.
 
 **The oracles, and why each is independent of what it judges**

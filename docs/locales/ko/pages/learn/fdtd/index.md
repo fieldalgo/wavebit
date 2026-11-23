@@ -20,8 +20,8 @@ FDTD는 전기장과 자기장을 시간에 따라 진행시킵니다. 쓸모 �
 
 ## 5. 재료와 그래디언트 더하기
 
-전도성 매질이나 분산 매질을 지정하기 전에 [구성 응답과 흡수층](../../guide/fdtd/fd-constitutive-absorber.md)을 읽으세요. 그다음 [미분 가이드](../../guide/fdtd/fd-differentiation.md)를 따르세요. 연속 입력을 미분하는 동안에는 이산적인 배치 선택을 고정하고, 미분을 유한 차분과 비교하고, 미분뿐 아니라 순방향 계산도 세밀하게 하세요.
+전도성 매질이나 분산 매질을 지정하기 전에 [구성 응답과 흡수층](../../guide/fdtd/fdtd-constitutive-absorber.md)을 읽으세요. 그다음 [미분 가이드](../../guide/fdtd/fdtd-differentiation.md)를 따르세요. 연속 입력을 미분하는 동안에는 이산적인 배치 선택을 고정하고, 미분을 유한 차분과 비교하고, 미분뿐 아니라 순방향 계산도 세밀하게 하세요.
 
 ## 6. 응용 예 고르기
 
-[복사](../../guide/fdtd/fd-radiation.md), [메타표면](../../guide/fdtd/fd-metasurface.md), 또는 [다층 최적화 연구](../../validation/fdtd/fdtd-multilayer-optimization.md)로 이어 가세요. 각 문서의 지원·수렴 진술은 시험한 구성에만 해당합니다.
+[복사](../../guide/fdtd/fdtd-radiation.md), [메타표면](../../guide/fdtd/fdtd-metasurface.md), 또는 [다층 최적화 연구](../../validation/fdtd/fdtd-multilayer-optimization.md)로 이어 가세요. 각 문서의 지원·수렴 진술은 시험한 구성에만 해당합니다.

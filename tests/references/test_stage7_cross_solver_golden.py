@@ -8,8 +8,8 @@ could and could not be matched, and that each ran in its own process from inputs
 physical units (no Wavebit object reached either tool).
 
 These values are **evidence, not acceptance**: no stage-7 verdict depends on them. This module
-holds two things. First, the comparison tables in ``docs/validation/fdtd/fd-mode-source.md``
-and ``fd-gaussian-beam.md`` (English and Korean) print exactly these values, so a document
+holds two things. First, the comparison tables in ``docs/validation/fdtd/fdtd-mode-source.md``
+and ``fdtd-gaussian-beam.md`` (English and Korean) print exactly these values, so a document
 cannot drift from the numbers it quotes. Second, each sentence those sections draw from the
 comparison is asserted against the values, so a later regeneration that changes a conclusion
 fails here instead of leaving a stale sentence.
@@ -24,9 +24,9 @@ import re
 from tools.repository_paths import repository_path
 
 GOLDEN = 'tests/references/golden_stage7_cross_solver.json'
-EXACT_TE0 = 1.9562181937830228          # fd-waveguide-modes.md, M3
-T_MM, R_MM = 0.955057091104045, 3.328675845426776e-4   # continuum mode matching (fd-mode-source.md S5)
-FOCAL_EXACT = 1.3739765060772822        # exact angular spectrum (fd-gaussian-beam.md G3)
+EXACT_TE0 = 1.9562181937830228          # fdtd-waveguide-modes.md, M3
+T_MM, R_MM = 0.955057091104045, 3.328675845426776e-4   # continuum mode matching (fdtd-mode-source.md S5)
+FOCAL_EXACT = 1.3739765060772822        # exact angular spectrum (fdtd-gaussian-beam.md G3)
 CENTRE = 1                              # index of 1.55 um (guide) and 1.0 um (beam)
 
 
@@ -119,8 +119,8 @@ def _table(path, heading):
 
 
 DOCS = {
-    'guide': (guide_rows, 'docs/validation/fdtd/fd-mode-source.md', 'docs/locales/ko/pages/validation/fdtd/fd-mode-source.md'),
-    'beam': (beam_rows, 'docs/validation/fdtd/fd-gaussian-beam.md', 'docs/locales/ko/pages/validation/fdtd/fd-gaussian-beam.md'),
+    'guide': (guide_rows, 'docs/validation/fdtd/fdtd-mode-source.md', 'docs/locales/ko/pages/validation/fdtd/fdtd-mode-source.md'),
+    'beam': (beam_rows, 'docs/validation/fdtd/fdtd-gaussian-beam.md', 'docs/locales/ko/pages/validation/fdtd/fdtd-gaussian-beam.md'),
 }
 HEADING = {'en': '## Comparison with Meep and FDTDX', 'ko': '## Meep·FDTDX와의 비교'}
 
@@ -195,7 +195,7 @@ def test_the_meep_beam_is_wider_at_every_resolution():
 
 
 def test_the_wavebit_gouy_phase_is_closest_and_converges():
-    """The support decision in fd-gaussian-beam.md: the G2 difference is below both tools'
+    """The support decision in fdtd-gaussian-beam.md: the G2 difference is below both tools'
     at both spacings and falls at second order; Meep's does not fall."""
     g = _golden()
     for k in ('0.05', '0.025'):

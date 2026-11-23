@@ -1,6 +1,6 @@
 """A focused Gaussian beam.
 
-Criteria G1-G8 of ``docs/validation/fdtd/fd-gaussian-beam.md``, registered before the beam was
+Criteria G1-G8 of ``docs/validation/fdtd/fdtd-gaussian-beam.md``, registered before the beam was
 first run; every limit here is quoted from there. The oracles are continuum angular spectra
 computed here, independently of the grid.
 """
@@ -416,7 +416,7 @@ def test_g7_derivatives_are_unchanged_by_checkpoint_segments():
     7 steps over this run -- gives each G7 derivative of the ordinary scan to 1e-12 relative,
     on JAX and on Torch CPU (the acceptance of ``docs/validation/fdtd/checkpointing.md``).
     The source's amplitude, phase and delay reach the step through the waveform table, which
-    a Torch segment must take as an input to return their gradients (fd-gaussian-beam.md)."""
+    a Torch segment must take as an input to return their gradients (fdtd-gaussian-beam.md)."""
     _quiet()
     import jax
     import torch

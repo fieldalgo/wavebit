@@ -1,6 +1,6 @@
 """The symmetric extended-stencil material operator, and the preparation a scene asks for.
 
-This is the operator ``docs/design/fd-symmetric-stencil.md`` derives and measures. A structure asks
+This is the operator ``docs/design/fdtd-symmetric-stencil.md`` derives and measures. A structure asks
 for it by name -- ``fd.Structure(shape, material, discretisation='stencil')`` -- and
 :func:`prepare` assembles it **once, eagerly, on the host**, at plan time, for that structure
 alone. A structure that does not ask, and every scene that holds none that do, is untouched:
@@ -402,7 +402,7 @@ PAIRS_PER_ACTIVE_ROW = 46.0
 #: i.e. :func:`_assemble` -- over the process's working set just before it starts. Measured
 #: 2026-09-25, each in its own process through ``fd.plan`` with OMP/OPENBLAS/MKL_NUM_THREADS=2,
 #: from ``GetProcessMemoryInfo``'s ``PeakWorkingSetSize`` (the probe is recorded in
-#: ``docs/design/fd-symmetric-stencil.md``):
+#: ``docs/design/fdtd-symmetric-stencil.md``):
 #:
 #:     scene                         placement      cells  unknowns   peak MB  bytes/unknown
 #:     test fixture, ball .14, 2.25  origin            18    76,353        77        1,009.7
@@ -798,7 +798,7 @@ def _refuse_scope(scene, plan, structures, asked):
     non-magnetic ``fd.Sphere`` of plain numbers (:func:`_refuse_structure`), the **only** structure,
     in a **vacuum** background, in a real ``float64`` run with neither an initial E nor an
     initial H, whose region meets no wall. Its line-by-line map is in
-    ``docs/design/fd-symmetric-stencil.md``.
+    ``docs/design/fdtd-symmetric-stencil.md``.
     """
     for index in asked:
         _refuse_structure(structures[index], index)
@@ -975,7 +975,7 @@ def _refuse_memory(structure, index, args):
             f'discretization={STENCIL!r}, memory_bound=<bytes>). The default admits the '
             f'research sphere at its three placements at 40 and 56 cells with a 4.5% margin '
             f'(the largest preparation measured is {MEASURED_UNKNOWNS:,} unknowns, '
-            f'docs/design/fd-symmetric-stencil.md). The bytes per unknown is the largest of seven '
+            f'docs/design/fdtd-symmetric-stencil.md). The bytes per unknown is the largest of seven '
             f'measured peaks, and at 56 cells two sub-cell placements of one sphere read 3,276 '
             f'and 2,655 of them, so it is not tight anywhere; past 56 cells nobody has measured '
             f'whether it is low or high.')
@@ -1097,7 +1097,7 @@ def _refuse_cfl(scene, plan, spectral_upper_bound):
             f'The rate goes as the square of the courant number, so fd.Run(courant=...) below '
             f'{_courant_limit(scene.run.courant, rate)} passes this door. It is read from the '
             f'prepared operator itself and so comes after the preparation (minutes at 40 and '
-            f'56 cells, docs/design/fd-symmetric-stencil.md), not before it.')
+            f'56 cells, docs/design/fdtd-symmetric-stencil.md), not before it.')
 
 
 def _courant_limit(courant, rate):

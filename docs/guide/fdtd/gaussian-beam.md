@@ -28,7 +28,7 @@ in the resolved transverse axis only.
 The plane is a one-sided total-field/scattered-field sheet, as for `ModeSource` (see
 [Waveguide modes](waveguide-modes.md)). At the centre wavelength it launches exactly the
 beam, one way. Away from it, each plane wave's profile and half-cell phase are the centre's,
-and a little of the beam goes backward. The [validation record](../../validation/fdtd/fd-gaussian-beam.md)
+and a little of the beam goes backward. The [validation record](../../validation/fdtd/fdtd-gaussian-beam.md)
 measures that part against its exact prediction.
 
 ## Accuracy on a finite grid
@@ -36,7 +36,7 @@ measures that part against its exact prediction.
 The beam is exact for the grid, not for the continuum. The grid's plane waves travel at a
 phase velocity that depends on their direction, so the phase a beam gathers through its focus
 (its Gouy phase) differs a little from the continuum beam's. In the
-[validation record](../../validation/fdtd/fd-gaussian-beam.md) (vacuum, wavelength 1 µm,
+[validation record](../../validation/fdtd/fdtd-gaussian-beam.md) (vacuum, wavelength 1 µm,
 waist 1.5 µm) it differs by at most 2.2e-3 rad within 3 µm of the focus at a spacing of
 0.05 µm (20 cells per wavelength), and by 5.4e-4 rad at 0.025 µm: the error falls at second
 order. Converge the spacing for any result that depends on the phase along the beam. The
@@ -71,4 +71,4 @@ storing them, on JAX and on Torch, on a CPU as well as on CUDA, so that a run of
 stores about `L * K` states. It needs a fixed `Duration`, not a `DecayStop`. The
 [checkpointing record](../../validation/fdtd/checkpointing.md) gives the schedule and its
 measured memory; through it, this source's derivatives equal the ordinary scan's to 1e-12
-([validation record](../../validation/fdtd/fd-gaussian-beam.md)).
+([validation record](../../validation/fdtd/fdtd-gaussian-beam.md)).

@@ -45,5 +45,5 @@ warnings remain visible. The regression suite also compares full E and SI H
 against an independently declared normalized scene, checks nm/µm invariance,
 and compares geometry and material derivatives with fresh finite differences.
 
-See [differentiation](fd-differentiation.md) for the detailed retained engine
+See [differentiation](fdtd-differentiation.md) for the detailed retained engine
 admission rules and their historical evidence.

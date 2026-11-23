@@ -2,7 +2,7 @@
 
 공간, 시간, 재료, 경계에 관한 연구입니다. 각 보고서는 측정한 구성과 남은 한계를 밝힙니다.
 
-현재 공개 API: [입사파 보조 격자를 포함한 자동 종료](fd-source-decay.md),
+현재 공개 API: [입사파 보조 격자를 포함한 자동 종료](fdtd-source-decay.md),
 [Native Yee 격자의 CUDA 검증](native-cuda.md), 그리고 이와 별도의 근거로
 [범위를 한정한 일반 장면 CUDA 실행](general-cuda.md)과
 [JAX·Torch 역방향 미분의 메모리 상한](checkpointing.md).
@@ -19,32 +19,32 @@
 인용한 소스 다이제스트는 소스 트리가 `src/wavebit/fdtd/`로 옮겨지기 전에 그 실행들이 트리를
 해시한 방식을 말합니다.
 
-- [섞인 재료 매개변수와 극점 산술 거부](fd-pole-arithmetic.md)
-- [한 칸에 지나가는 두 스무딩한 표면: 다면체 자르기 (4단계, C10)](fd-polytope-clip.md)
-- [대각 밖 구성 칸 (4단계, C11): 등록한 관문의 결과](fd-stage4-c11.md)
-- [4단계 보고: 모양과 정확도 (C0-C12)](fd-stage4-report.md)
-- [C8: 유전체 안의 전도성 박막 하나](fd-conductive-film.md)
-- [C8: 떨어져 있는 평행 전도성 박막들](fd-conductive-stack.md)
-- [C8: 정확히 맞닿은 두 전도성 박막](fd-conductive-contact.md)
-- [교환 가능한 결합 유전체의 정합 흡수](fd-constitutive-absorber.md)
-- [C8: 유전체 안의 Debye 박막 하나](fd-debye-film.md)
-- [C8: 떨어져 있는 Debye 박막들](fd-debye-stack.md)
-- [C8: 박막 하나 안의 유한한 Debye 합](fd-debye-sum-film.md)
-- [과도 응답 뒤의 자동 종료](fd-decay-stopping.md)
-- [C8: Debye와 Drude/Lorentz가 섞인 박막](fd-hybrid-film.md)
-- [Yee 격자와 일관된 복사](fd-lattice-radiation.md)
-- [RCWA와 비교한 주기 메타표면 (4단계, C7)](fd-metasurface-validation.md)
-- [Mie 기준과 곡면 계면 정확도 관문](fd-mie-validation.md)
-- [C8: 떨어져 있는 단일 진동자 박막들](fd-oscillator-stack.md)
-- [C8: 박막 하나 안의 유한한 Drude/Lorentz 합](fd-oscillator-sum-film.md)
-- [C8: 유전체 안의 Drude 또는 Lorentz 박막 하나](fd-single-pole-film.md)
-- [JIT 경계를 가로지르는 구 자르기](fd-sphere-clip-jit.md)
-- [스무딩한 점유율과 기울어진 계면 측정](fd-subpixel-occupancy.md)
-- [C8: Debye 극점 두 개를 가진 박막 하나](fd-two-debye-film.md)
-- [이산 Yee 계의 도파관 모드 (7단계)](fd-waveguide-modes.md)
-- [흡수층을 지나는 칸 맞춤 도파관 (7단계)](fd-waveguide-through-pml.md)
-- [한쪽으로만 내보내는 도파관 모드 광원 (7단계)](fd-mode-source.md)
-- [집속 가우시안 빔 (7단계)](fd-gaussian-beam.md)
+- [섞인 재료 매개변수와 극점 산술 거부](fdtd-pole-arithmetic.md)
+- [한 칸에 지나가는 두 스무딩한 표면: 다면체 자르기 (4단계, C10)](fdtd-polytope-clip.md)
+- [대각 밖 구성 칸 (4단계, C11): 등록한 관문의 결과](fdtd-stage4-c11.md)
+- [4단계 보고: 모양과 정확도 (C0-C12)](fdtd-stage4-report.md)
+- [C8: 유전체 안의 전도성 박막 하나](fdtd-conductive-film.md)
+- [C8: 떨어져 있는 평행 전도성 박막들](fdtd-conductive-stack.md)
+- [C8: 정확히 맞닿은 두 전도성 박막](fdtd-conductive-contact.md)
+- [교환 가능한 결합 유전체의 정합 흡수](fdtd-constitutive-absorber.md)
+- [C8: 유전체 안의 Debye 박막 하나](fdtd-debye-film.md)
+- [C8: 떨어져 있는 Debye 박막들](fdtd-debye-stack.md)
+- [C8: 박막 하나 안의 유한한 Debye 합](fdtd-debye-sum-film.md)
+- [과도 응답 뒤의 자동 종료](fdtd-decay-stopping.md)
+- [C8: Debye와 Drude/Lorentz가 섞인 박막](fdtd-hybrid-film.md)
+- [Yee 격자와 일관된 복사](fdtd-lattice-radiation.md)
+- [RCWA와 비교한 주기 메타표면 (4단계, C7)](fdtd-metasurface-validation.md)
+- [Mie 기준과 곡면 계면 정확도 관문](fdtd-mie-validation.md)
+- [C8: 떨어져 있는 단일 진동자 박막들](fdtd-oscillator-stack.md)
+- [C8: 박막 하나 안의 유한한 Drude/Lorentz 합](fdtd-oscillator-sum-film.md)
+- [C8: 유전체 안의 Drude 또는 Lorentz 박막 하나](fdtd-single-pole-film.md)
+- [JIT 경계를 가로지르는 구 자르기](fdtd-sphere-clip-jit.md)
+- [스무딩한 점유율과 기울어진 계면 측정](fdtd-subpixel-occupancy.md)
+- [C8: Debye 극점 두 개를 가진 박막 하나](fdtd-two-debye-film.md)
+- [이산 Yee 계의 도파관 모드 (7단계)](fdtd-waveguide-modes.md)
+- [흡수층을 지나는 칸 맞춤 도파관 (7단계)](fdtd-waveguide-through-pml.md)
+- [한쪽으로만 내보내는 도파관 모드 광원 (7단계)](fdtd-mode-source.md)
+- [집속 가우시안 빔 (7단계)](fdtd-gaussian-beam.md)
 - [수반법, 이산 미분과 물리적 정확도](fdtd-adjoint-validation.md)
 - [Bragg 공진기의 시간·공간 수렴](fdtd-bragg-cavity.md)
 - [원형 FDTD 형상과 지름 미분](fdtd-circle-gradients.md)

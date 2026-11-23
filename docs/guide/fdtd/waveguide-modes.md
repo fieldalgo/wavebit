@@ -116,7 +116,7 @@ The plane must cross a uniform section of the guide, with the window, faces and 
 `solve_modes`. A structure that reaches the plane must be concrete. Other structures may
 carry traced values, so the energies differentiate through, say, a scatterer between source
 and monitor (measured against central differences in the
-[validation record](../../validation/fdtd/fd-waveguide-modes.md)). Across an `Open` face the
+[validation record](../../validation/fdtd/fdtd-waveguide-modes.md)). Across an `Open` face the
 window stops one cell inside the physical edge, for the monitor and for `solve_modes` alike;
 the monitor reads no absorbing cells.
 
@@ -124,7 +124,7 @@ A guide that runs out through an `Open` face is written with a cell-snapped core
 continues through it: `fdtd.Structure('core', shape=fdtd.SnappedBox(size=(1., .5, 10.)),
 material=..., continuation=('z-', 'z+'))`, or a `SnappedSlab` with the faces of the axes it
 runs along. The guided mode then enters the absorbing layer without meeting an end face; its
-measured reflection is in the [validation record](../../validation/fdtd/fd-waveguide-through-pml.md).
+measured reflection is in the [validation record](../../validation/fdtd/fdtd-waveguide-through-pml.md).
 A smoothed core is refused at an `Open` face.
 
 ## Launching a mode: `ModeSource`
@@ -173,12 +173,12 @@ storing them, on JAX and on Torch, on a CPU as well as on CUDA, so that a run of
 stores about `L * K` states. It needs a fixed `Duration`, not a `DecayStop`. The
 [checkpointing record](../../validation/fdtd/checkpointing.md) gives the schedule and its
 measured memory; through it, this source's derivatives equal the ordinary scan's to 1e-12
-([validation record](../../validation/fdtd/fd-mode-source.md)).
+([validation record](../../validation/fdtd/fdtd-mode-source.md)).
 
 ## Accuracy
 
 The registered checks and their measured results are in the
-[validation record](../../validation/fdtd/fd-waveguide-modes.md). In short: a uniform medium
+[validation record](../../validation/fdtd/fdtd-waveguide-modes.md). In short: a uniform medium
 gives its own index and the closed-form Yee dispersion to 1e-12; a hollow metal guide gives
 the discrete closed form to about 1e-12; a symmetric slab converges to the exact TE and TM
 dispersion at second order; the published dielectric-corner benchmark is reached at second

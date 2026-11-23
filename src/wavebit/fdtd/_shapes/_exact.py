@@ -194,7 +194,7 @@ def _root(v, xp):
     -0.3005275396021332), a sphere inside a jitted CSG returned -200.9404 instead of 0.4608063.
     Changing ONLY the inactive radicand from 1 to 4 or 0.25 changed that wrong answer to
     -186.0971 or -203.4363. With factored radicands all three give the same physical answer.
-    See ``tests/fdtd/test_fd_sphere_clip_jit.py`` and ``docs/validation/fdtd/fd-sphere-clip-jit.md`` for the sweep,
+    See ``tests/fdtd/test_fd_sphere_clip_jit.py`` and ``docs/validation/fdtd/fdtd-sphere-clip-jit.md`` for the sweep,
     the causal diagnostic, and the restored-formula mutants. Keep the derivative guard here;
     replacing its inactive value by zero merely hides the forward defect and restores NaN AD.
     """
@@ -285,7 +285,7 @@ def _ball_corner(a, b, c, radius, xp):
     regime that is empty there contributed half of a derivative it does not have. Measured on
     a ball of radius .22 at ``dx = .1``: per-voxel centre derivatives up to 2.2 against a
     central difference of 0.41, and the energy derivative of a sphere centred on a half-node
-    plane read 28.7 (JAX) against 20.5 (``docs/validation/fdtd/fd-subpixel-occupancy.md``, the centre tie).
+    plane read 28.7 (JAX) against 20.5 (``docs/validation/fdtd/fdtd-subpixel-occupancy.md``, the centre tie).
     A regime that is present has a positive limit, so ``min(limit, 0)`` picks ``c`` without a
     tie and its derivative, one, is the true one.
     """

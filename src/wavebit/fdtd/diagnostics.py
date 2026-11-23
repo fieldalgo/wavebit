@@ -17,7 +17,7 @@ class RadiationApproximationWarning(UserWarning):
 
     The weak-sphere optical residual was 52.05/26.38/12.91 percent at
     20/28/40 cells per wavelength. This is a measured example, not a bound
-    for an arbitrary scene. See docs/validation/fdtd/fd-lattice-radiation.md.
+    for an arbitrary scene. See docs/validation/fdtd/fdtd-lattice-radiation.md.
     """
 
 
@@ -28,7 +28,7 @@ class SubpixelAccuracyWarning(UserWarning):
     coupling. Production validation over material contrasts remains separate.
     A benchmark result is not an error estimate for an arbitrary scene; exact
     voxel volume alone does not guarantee electromagnetic convergence.
-    See docs/validation/fdtd/fd-mie-validation.md.
+    See docs/validation/fdtd/fdtd-mie-validation.md.
     """
 
 

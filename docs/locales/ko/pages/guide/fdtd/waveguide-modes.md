@@ -105,14 +105,14 @@ spectrum.effective_index, spectrum.modes[0][0]       # the modes it projected on
 면은 도파관의 균일한 구간을 가로질러야 하며, 창·면·거부는 `solve_modes`와 같습니다. 면에
 닿는 구조는 구체값이어야 합니다. 다른 구조는 추적된 값을 지닐 수 있으므로, 예를 들어 광원과
 측정기 사이의 산란체를 통해 에너지를 미분할 수 있습니다(중앙 차분과의 비교는
-[검증 기록](../../validation/fdtd/fd-waveguide-modes.md)). `Open` 면을 가로지르면 창은 측정기와
+[검증 기록](../../validation/fdtd/fdtd-waveguide-modes.md)). `Open` 면을 가로지르면 창은 측정기와
 `solve_modes` 모두 물리 가장자리에서 한 칸 안쪽에서 멈추고, 측정기는 흡수층 칸을 읽지 않습니다.
 
 `Open` 면 밖으로 빠져나가는 도파관은 그 면을 지나 이어지는 셀 맞춤 코어로 씁니다:
 `fdtd.Structure('core', shape=fdtd.SnappedBox(size=(1., .5, 10.)), material=...,
 continuation=('z-', 'z+'))`, 또는 슬래브가 뻗어 있는 축의 면을 지정한 `SnappedSlab`입니다. 그러면
 도파 모드는 끝면을 만나지 않고 흡수층에 들어갑니다. 측정한 반사는
-[검증 기록](../../validation/fdtd/fd-waveguide-through-pml.md)에 있습니다. 스무딩 코어는 `Open`
+[검증 기록](../../validation/fdtd/fdtd-waveguide-through-pml.md)에 있습니다. 스무딩 코어는 `Open`
 면에서 거절됩니다.
 
 ## 모드 내보내기: `ModeSource`
@@ -157,11 +157,11 @@ JAX와 Torch 백엔드에서 광원의 `amplitude`, `phase`, `delay_seconds`나 
 있습니다. `K**L` 스텝 실행은 약 `L * K`개 상태만 저장합니다. 고정 `Duration`이 필요하며
 `DecayStop`과는 함께 쓸 수 없습니다. 구간 일정과 측정한 메모리는
 [체크포인트 기록](../../validation/fdtd/checkpointing.md)에 있고, 이를 거쳐도 이 광원의 미분은
-일반 실행의 값과 1e-12까지 같습니다([검증 기록](../../validation/fdtd/fd-mode-source.md)).
+일반 실행의 값과 1e-12까지 같습니다([검증 기록](../../validation/fdtd/fdtd-mode-source.md)).
 
 ## 정확도
 
-등록한 검사와 측정 결과는 [검증 기록](../../validation/fdtd/fd-waveguide-modes.md)에
+등록한 검사와 측정 결과는 [검증 기록](../../validation/fdtd/fdtd-waveguide-modes.md)에
 있습니다. 요약하면, 균일 매질은 자기 굴절률과 Yee 분산의 닫힌 식을 1e-12까지 주고,
 속이 빈 금속 도파관은 이산 닫힌 식을 1e-12 정도까지 줍니다. 대칭 평판은 정확한 TE·TM
 분산에 2차로 수렴하고, 출판된 유전체 모서리 기준값에도 2차로 다가가며, 풀어낸 모드를

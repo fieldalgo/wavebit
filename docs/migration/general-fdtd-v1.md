@@ -79,7 +79,7 @@ on the backend that ran; the time coordinate is a NumPy array. The final `E` and
 return a `Report`; it is not a time integration. Pass a concrete plan to
 `fd.run(..., plan=plan)` to reuse it. Build a new plan when changing a concrete
 scene; differentiated runs follow the narrower plan-reuse rules in
-[Differentiating the general engine](../guide/fdtd/fd-differentiation.md). The completed result
+[Differentiating the general engine](../guide/fdtd/fdtd-differentiation.md). The completed result
 also carries `result.plan`, `result.report`, `result.sources` and
 `result.diagnostics`.
 
@@ -119,7 +119,7 @@ reductions add work every step, so early termination need not be faster.
 PlaneWave/TFSF sources, automatic differentiation, enclosing JAX transforms
 and non-CPU execution are refused for this option. Ordinary fixed-duration
 runs retain their existing contracts. See the [stopping measurement and
-limitations](../validation/fdtd/fd-decay-stopping.md).
+limitations](../validation/fdtd/fdtd-decay-stopping.md).
 
 ## Units, coordinates and backends
 
@@ -137,7 +137,7 @@ NumPy is the default. The three CPU backends are tested; request `device='cpu'`
 when selecting JAX or Torch to keep that placement explicit. GPU correctness and
 performance are not established by these CPU records. The plan uses `float64`,
 or `complex128` for Bloch or `Axis1D` faces. JAX and Torch support the documented
-[derivative scope](../guide/fdtd/fd-differentiation.md); choosing a differentiable backend does
+[derivative scope](../guide/fdtd/fdtd-differentiation.md); choosing a differentiable backend does
 not make every geometry or material parameter admissible.
 
 The report's `bytes_per_state` is the logical payload of the main-grid E/H
@@ -152,16 +152,16 @@ report entries; summing those entries still does not include every runtime cost.
 
 | Use | Current contract and further reading |
 | --- | --- |
-| Sources and readings | `Dipole`, `PlaneWave` and axis-directed `TFSF`; point `Record`, spectral `Field`/`Flux`, periodic `Diffraction`, and open-domain `FarField`. See [metasurfaces](../guide/fdtd/fd-metasurface.md) and [radiation](../guide/fdtd/fd-radiation.md) for normalization and boundary restrictions. |
+| Sources and readings | `Dipole`, `PlaneWave` and axis-directed `TFSF`; point `Record`, spectral `Field`/`Flux`, periodic `Diffraction`, and open-domain `FarField`. See [metasurfaces](../guide/fdtd/fdtd-metasurface.md) and [radiation](../guide/fdtd/fdtd-radiation.md) for normalization and boundary restrictions. |
 | Boundaries | `PEC`, `PMC`, `Periodic`, `Bloch`, `Axis1D`, `Symmetry`, `PML` and `Absorber`, subject to material matching, source clearance and geometry checks. Absorbing layers occupy cells inside the domain. |
-| Coupled dielectric geometry through absorption | A bounded lossless extrusion can extend through one matched `Absorber` axis when the discrete coupling commutes with its damping profile. Concrete CPU runs use electric Dipoles and fixed duration; PML and automatic stopping are outside this route. See [the contract](../guide/fdtd/fd-constitutive-absorber.md). |
+| Coupled dielectric geometry through absorption | A bounded lossless extrusion can extend through one matched `Absorber` axis when the discrete coupling commutes with its damping profile. Concrete CPU runs use electric Dipoles and fixed duration; PML and automatic stopping are outside this route. See [the contract](../guide/fdtd/fdtd-constitutive-absorber.md). |
 | Cell-snapped material regions | `Slab` and `Region`; real scalar/diagonal `Material`, conductivity through `Conductor`, and passive Drude/Lorentz/Debye models through `Dispersive`, subject to the planning checks. `fd.eps_at` evaluates a pole model at a vacuum wavelength. |
-| Smoothed dielectric shapes | `Sphere`, `Box`, `Cylinder` and `Prism` have bounded isotropic lossless material, separation and boundary contracts; only specific flush junctions are admitted. Unless it is uniform across a face (a substrate running out through it) or the face is a `Symmetry` plane, a smoothed shape must stay inside the domain and keep its surface at least half a cell clear of each high (`+`) wall; the refusal says which of the two it broke. See [smoothed occupancy](../validation/fdtd/fd-subpixel-occupancy.md). `discretisation='stencil'` has a separate [isolated-sphere contract](../design/fd-symmetric-stencil.md). |
-| Smoothed lossy or dispersive films | One concrete, unturned, unranged `Box` in a plain isotropic non-magnetic host, spanning exactly two axes with the required overhang and clearing absorbers along its finite thickness. Conductors, finite Debye sums, finite Drude/Lorentz sums and mixed families each have their own restrictions: [conductive](../validation/fdtd/fd-conductive-film.md), [Debye](../validation/fdtd/fd-debye-sum-film.md), [oscillator](../validation/fdtd/fd-oscillator-sum-film.md), [mixed-family](../validation/fdtd/fd-hybrid-film.md). |
-| Separated conductive films | Two or more concrete, unturned, unranged voxel `Box` structures, all with `Conductor` materials (including `sigma=0`), in one plain positive isotropic lossless non-magnetic `Material` host. All films share a normal axis and their padded grid supports are pairwise disjoint. Initial fields, traced geometry/material/band values, overlapping supports and stacks mixing declared pole families are refused. See [conductive stacks](../validation/fdtd/fd-conductive-stack.md). |
-| Touching conductive films | Exactly two such films whose faces coincide exactly, each at least one cell thick, share one passive union memory. There is no contact tolerance; three-material cells, lossy hosts, initial fields and tracing are refused. Wave accuracy is not accepted ([#51](https://github.com/fieldalgo/wavebit/issues/51)). See [touching films](../validation/fdtd/fd-conductive-contact.md). |
-| Separated Debye films | Two or more disjoint parallel voxel Box films, each with one, two or a finite sum of passive Debye poles, in the same plain lossless nonmagnetic host. Declared slots and singleton reductions are retained. Fixed duration only; initial fields, traced inputs, overlapping padded supports and mixed-family stacks are refused. See [Debye stacks](../validation/fdtd/fd-debye-stack.md). |
-| Separated single-oscillator films | Two or more parallel voxel `Box` films, each with exactly one passive `Drude` or `Lorentz` pole in the same plain lossless isotropic nonmagnetic host. Different films may use different oscillator kinds. Supports must be disjoint; duration is fixed. Initial fields, derivatives, within-film sums, Debye members and `Decay` are refused. See [the bounded contract and validation status](../validation/fdtd/fd-oscillator-stack.md). |
+| Smoothed dielectric shapes | `Sphere`, `Box`, `Cylinder` and `Prism` have bounded isotropic lossless material, separation and boundary contracts; only specific flush junctions are admitted. Unless it is uniform across a face (a substrate running out through it) or the face is a `Symmetry` plane, a smoothed shape must stay inside the domain and keep its surface at least half a cell clear of each high (`+`) wall; the refusal says which of the two it broke. See [smoothed occupancy](../validation/fdtd/fdtd-subpixel-occupancy.md). `discretisation='stencil'` has a separate [isolated-sphere contract](../design/fdtd-symmetric-stencil.md). |
+| Smoothed lossy or dispersive films | One concrete, unturned, unranged `Box` in a plain isotropic non-magnetic host, spanning exactly two axes with the required overhang and clearing absorbers along its finite thickness. Conductors, finite Debye sums, finite Drude/Lorentz sums and mixed families each have their own restrictions: [conductive](../validation/fdtd/fdtd-conductive-film.md), [Debye](../validation/fdtd/fdtd-debye-sum-film.md), [oscillator](../validation/fdtd/fdtd-oscillator-sum-film.md), [mixed-family](../validation/fdtd/fdtd-hybrid-film.md). |
+| Separated conductive films | Two or more concrete, unturned, unranged voxel `Box` structures, all with `Conductor` materials (including `sigma=0`), in one plain positive isotropic lossless non-magnetic `Material` host. All films share a normal axis and their padded grid supports are pairwise disjoint. Initial fields, traced geometry/material/band values, overlapping supports and stacks mixing declared pole families are refused. See [conductive stacks](../validation/fdtd/fdtd-conductive-stack.md). |
+| Touching conductive films | Exactly two such films whose faces coincide exactly, each at least one cell thick, share one passive union memory. There is no contact tolerance; three-material cells, lossy hosts, initial fields and tracing are refused. Wave accuracy is not accepted ([#51](https://github.com/fieldalgo/wavebit/issues/51)). See [touching films](../validation/fdtd/fdtd-conductive-contact.md). |
+| Separated Debye films | Two or more disjoint parallel voxel Box films, each with one, two or a finite sum of passive Debye poles, in the same plain lossless nonmagnetic host. Declared slots and singleton reductions are retained. Fixed duration only; initial fields, traced inputs, overlapping padded supports and mixed-family stacks are refused. See [Debye stacks](../validation/fdtd/fdtd-debye-stack.md). |
+| Separated single-oscillator films | Two or more parallel voxel `Box` films, each with exactly one passive `Drude` or `Lorentz` pole in the same plain lossless isotropic nonmagnetic host. Different films may use different oscillator kinds. Supports must be disjoint; duration is fixed. Initial fields, derivatives, within-film sums, Debye members and `Decay` are refused. See [the bounded contract and validation status](../validation/fdtd/fdtd-oscillator-stack.md). |
 
 Declare a conductive stack with the ordinary `Scene(structures=(...))` tuple;
 there is no separate stack constructor. Each film must span the same two
@@ -192,7 +192,7 @@ this engine. Exported placeholder names can still refuse construction.
 
 A successful plan or stable run is not an accuracy certificate. Refine space,
 duration and absorbing boundaries independently for the quantity you need, and
-read the warnings. The [C7 metasurface comparison](../validation/fdtd/fd-metasurface-validation.md)
+read the warnings. The [C7 metasurface comparison](../validation/fdtd/fdtd-metasurface-validation.md)
 remains unpassed, including the unresolved cause of M3's slow convergence.
 The bounded film work does not complete general C8 smoothing; its validation
 records retain mixed and noise-unresolved cases. A rule derived for a bulk mesh
