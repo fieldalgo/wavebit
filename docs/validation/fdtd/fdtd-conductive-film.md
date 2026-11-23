@@ -352,7 +352,10 @@ bringing the recorded coverage to 615 files. The original manifest
 exits and unchanged source identities; the added-file check is in
 `fdtd_conductive_film_ruff_recovery_validation.json`.
 The corrected production module and new confirmation adapter also passed
-`--no-cache`, bringing the cumulative inventory to 616 files. Their log,
+`--no-cache`, bringing the cumulative inventory to 616 files: the module,
+`src/wavebit/fdtd/_prepare/conductive_film.py` today, was already one of the 614, since it came
+with the first implementation that every check on this page follows, so the adapter is the one
+new file. Their log,
 current source hashes and inventory are recorded in
 `fdtd_conductive_film_ruff_final_source_validation.json`. All three Ruff manifests
 are archived outside the repository.

@@ -458,6 +458,12 @@ remain in the report and include the large ratios discussed below.
 | rotated-box / v | 30 | Ez / Hy | 9.019–9.037% | 20.815–21.783% | 10.602–18.242% | 14.737–20.547% |
 | rotated-box / v | 40 | Ez / Hy | 8.991–8.996% | 20.931–21.656% | 10.533–18.856% | 14.616–19.916% |
 
+The cylinder / u row's 9.031–9.031% is a range, not a slip: unrounded it is 9.0311–9.0315%, the
+two placements apart by 0.0004 points. Re-run on 2026-11-23 on main `910eb795` (NumPy 2.5.5) with
+the study's own `config`, `solve` and `compare_pair`, the cylinder / u and cylinder / v rows at 30
+cells per wavelength reproduce to every printed digit. The campaign ran at `b4ed5cdb`, whose
+arrays are archived; whether these are bit-identical to them is not checked.
+
 The source-polarized whole electric traces differ by about 8.82–9.19%, and their
 magnetic partners by 16.20–21.93%. These finite-length differences do not disappear
 on the sampled finer grids. No order is fitted: the two finite domains are being

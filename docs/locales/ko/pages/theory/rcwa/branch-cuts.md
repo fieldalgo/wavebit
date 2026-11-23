@@ -319,6 +319,11 @@ flip = xp.where(xp.abs(xp.real(v)) > _FLAT, xp.real(v) < 0, xp.imag(v) < 0)
 예외를 내면 그 값은 추적자(tracer)였고 검사할 것이 없었던 것입니다. `jax.jit(jax.grad(...))`는
 `test_the_check_does_not_break_tracing`에 고정되어 있습니다.
 
+1.80, 4.12, 5.68이 어느 경우와 어느 라이브러리 버전에서 나왔는지는 기록에 없습니다. 2026-11-23에 이 값을
+기록한 커밋 `c67a2cc39`에서 NumPy 2.5.5, JAX 0.12.0.1, PyTorch 2.15.0으로 위 컷오프 표의 복소 각도 경우
+(truncation_order=30, TE, 0차)를 다시 돌리면 `|R|`이 NumPy 3.65, JAX 3.99, PyTorch 5.22입니다. 이 점의
+complex64 반올림은 라이브러리 버전에 따라 움직이므로, 세 값은 실패의 한 표본이지 재현할 값이 아닙니다.
+
 비용은 해당 층의 `eig`와 따로 떼어 비교하여 측정했습니다(truncation_order=60):
 
 | | 검사 1회 | `eig(2N)` | 비중 |

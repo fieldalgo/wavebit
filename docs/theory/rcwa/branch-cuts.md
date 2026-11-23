@@ -339,6 +339,13 @@ in the caller's own namespace and only the scalar is read; when that read raises
 a tracer and there was nothing to inspect. `jax.jit(jax.grad(...))` is pinned in
 `test_the_check_does_not_break_tracing`.
 
+The record does not say which case or library versions gave 1.80, 4.12 and 5.68. Re-run on
+2026-11-23 at the commit that recorded them, `c67a2cc39`, with NumPy 2.5.5, JAX 0.12.0.1 and
+PyTorch 2.15.0, the complex-angle case of the cutoff table above (truncation_order=30, TE, the
+zeroth order) gives `|R|` = 3.65 on NumPy, 3.99 on JAX and 5.22 on PyTorch. complex64 round-off
+at this point moves with the library versions, so the three figures are one sample of the
+failure, not values to reproduce.
+
 Cost, measured in isolation against the `eig` of the layer it belongs to (truncation_order=60):
 
 | | one check | `eig(2N)` | share |
