@@ -296,7 +296,9 @@ exit 0으로 끝났습니다. 이후의 복구 유틸리티도 exit 0으로 통�
 정체성이 남아 있으며, 추가 파일 검사는
 `fdtd_conductive_film_ruff_recovery_validation.json`에 있습니다.
 수정된 제품 모듈과 새 확인 어댑터도
-`--no-cache`로 통과해, 누적 목록이 616개 파일이 되었습니다. 그 로그, 현재 소스 해시, 목록은
+`--no-cache`로 통과해, 누적 목록이 616개 파일이 되었습니다. 그 모듈(지금의
+`src/wavebit/fdtd/_prepare/conductive_film.py`)은 이 쪽의 모든 검사보다 앞선 첫 구현과 함께 들어왔으므로
+이미 614개 안에 있었고, 새 파일은 어댑터 하나입니다. 그 로그, 현재 소스 해시, 목록은
 `fdtd_conductive_film_ruff_final_source_validation.json`에 기록되어 있습니다. 세 Ruff 매니페스트는 모두
 저장소 밖에 보관되어 있습니다.
 FD 다이제스트는 캠페인의 다이제스트와 마찬가지로, 해시하는 하위 트리에 대한 정렬된 각 상대 경로와 LF로
