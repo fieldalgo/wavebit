@@ -1,0 +1,201 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_gyptis_wide",
+  "physics": "rcwa",
+  "comparison": "different-discretization",
+  "role": "external oracle for wall_resolution beyond normal incidence: 3D finite-element R, T and mid-plane fields of a metal block (P1), a metal circle (C1) and a dielectric block at oblique incidence, over a substrate, in two layers and at a shorter wavelength; the pre-registered criteria of the widened table are asserted against them",
+  "references": [
+    {
+      "tool": "gyptis",
+      "version": "1.2.0",
+      "build": "FEniCS (dolfin) 2019.1.0, gmsh 4.15.2, PETSc/petsc4py 3.26.1, MUMPS 5.8.2 (conda-forge), one thread, out of core",
+      "modified": {
+        "value": false,
+        "description": "used through its public Python API; the package itself was not changed"
+      },
+      "spdx": "MIT",
+      "source": "https://pypi.org/project/gyptis/",
+      "install": {
+        "kind": "conda",
+        "command": null
+      },
+      "settings": "Maxwell3DPeriodic on symmetry-reduced cells: at normal incidence a quarter of the cell (x mirrors perfect electric, y mirrors perfect magnetic walls), half the height split into parts even and odd in z (two solves); at phi 0 the whole period in x (Bloch periodic) and half of it in y, z split the same way; over a substrate the quarter cell at full height, one solve with the analytic air/substrate field as the background. s at normal incidence is p on the cell turned by 90 deg. Second-order edge (Nedelec) elements, 400 nm of air and 900 nm of perfectly matched layer above and below. R and T by projecting the periodic part of the scattered field on each diffraction order over an air (or substrate) slab. Relative residuals of the direct solves 3.8e-13 to 5.4e-12. Before the metal cases were read the models were checked against uniform slabs (analytic, within 1.2e-4) and the dielectric block (RETICOLO at order 30, within 1.3e-4); the criterion was 1e-3. The stored phasors are in gyptis's time convention, the conjugate of Wavebit's; the consumer maps them as sign * conj(E), sign -1 for p and +1 for s",
+      "discretization": "tetrahedral meshes graded toward the walls and edges, two levels per case (coarser/finer: R1p oz 50313/104197 cells; R1s oz 50313/104197 cells; R2p oz 50313/104197 cells; R2s oz 50313/104197 cells; R4p nsub 51111/105016 cells; R5p nz 40624/94343 cells; R6p nz 25920/53070 cells; C1ap oz 42600/79280 cells; C1as oz 42600/79280 cells; C1bp nsub 43873/80706 cells; C1cp nz 19082/37746 cells; C1cs nz 19100/37495 cells; C1dp nz 33088/69597 cells; blk_d_n nz 25920/53070 cells; blk_d_o20p oz 50313/104197 cells; blk_d_o20s oz 50313/104197 cells), the finer with 0.25 to 0.69 million complex unknowns per solve and a smallest edge of about 1.5 nm; the product side is a Fourier truncation of the same cell",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "private research repository",
+    "sha256": "77fd1380410ae8f7b672041195625ef3ad2c785216d9ead3d3bf1ed3be88d21b",
+    "command": "python fem_sym.py <case> <level> with the mesh rule v2, levels 0 and 1, for each of the sixteen cases; then R and T of the newest record per case and level, and the finer level's plane fields reduced to their in-plane components in single precision",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-11-22",
+  "environment": {
+    "python": "3.13.18",
+    "numpy": "2.5.5",
+    "threads": 1
+  },
+  "cost": {
+    "wall_seconds": 12687,
+    "max_rss_gb": 8.29,
+    "note": "the finer level only, sixteen cases; the machine shared its CPU with other work, so the time is not a cost measurement"
+  },
+  "inputs": {
+    "cells": {
+      "period_nm": "400 x 400, except C1cp and C1cs: 400 (x) by 300 (y)",
+      "layer_thickness_nm": 150.0,
+      "shapes": "a 200 x 200 nm block (R*, blk_*) or a circle of radius 100 nm (C1*), centred in the cell",
+      "shape_epsilon": "-20+1.5j for R* and C1* (Wavebit's convention, loss a positive imaginary part; the runs take its conjugate), 12.25 for blk_*",
+      "background_epsilon": 1.0,
+      "superstrate_epsilon": 1.0,
+      "substrate_epsilon": "1.45**2 for R4p and C1bp, 1.0 otherwise",
+      "two_layers": "R5p and C1dp: two identical patterned layers with a 100 nm air gap between them"
+    },
+    "incidence": {
+      "wavelength_nm": "900, except R6p: 350",
+      "theta_deg": "20 for R1*, C1a*, blk_d_o20*; 40 for R2*; 0 otherwise; phi 0 (plane of incidence xz)",
+      "polarization": "the case name's last letter (p or s); blk_d_n is p",
+      "source": "a plane wave from the top"
+    },
+    "cases": [
+      "R1p",
+      "R1s",
+      "R2p",
+      "R2s",
+      "R4p",
+      "R5p",
+      "R6p",
+      "C1ap",
+      "C1as",
+      "C1bp",
+      "C1cp",
+      "C1cs",
+      "C1dp",
+      "blk_d_n",
+      "blk_d_o20p",
+      "blk_d_o20s"
+    ],
+    "values": {
+      "R, T": "total reflectance and transmittance on the finer mesh level (level 1)",
+      "R_coarse, T_coarse": "the same on the coarser level (level 0)",
+      "u_F": "|R - R_coarse| / R",
+      "E_<case>": "in-plane (Ex, Ey) on each patterned layer's mid-plane, E[plane, j, i, component] at (x[i], y[j]); complex64; gyptis's convention, normalised so the incident wave has phase 0 at the stack's top and x = 0",
+      "x_<case>, y_<case>": "48 points each, ((i + 0.37)/48 - 1/2) * Px and ((j + 0.41)/48 - 1/2) * Py",
+      "depth_<case>": "each plane's depth below the stack's top, top layer first"
+    },
+    "mesh_rule": "v2 of 2026-11-22: PML 40 nm and air 20 nm elements at every level, refinement at the true edges and on the shapes' walls, top and bottom faces; the two levels differ only in the wall and edge sizes"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": "u_F, the relative R change between the two levels, is 7.5e-6 to 4.0e-3 (above 1e-3, which the criteria call weak, for R1p, R1s, R2p, R2s, R4p, R5p, C1bp and blk_d_o20p); it is stored with the values",
+    "failed_or_discarded": null,
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_gyptis_wide.npz",
+    "format": "npz",
+    "file_sha256": "efafa8dab55e005e8e24c324fa6c65eb8968a69d21af64ea832ddccccf8cefa8",
+    "arrays": [
+      "E_C1ap",
+      "E_C1as",
+      "E_C1bp",
+      "E_C1cp",
+      "E_C1cs",
+      "E_C1dp",
+      "E_R1p",
+      "E_R1s",
+      "E_R2p",
+      "E_R2s",
+      "E_R4p",
+      "E_R5p",
+      "E_R6p",
+      "E_blk_d_n",
+      "E_blk_d_o20p",
+      "E_blk_d_o20s",
+      "R",
+      "R_coarse",
+      "T",
+      "T_coarse",
+      "case",
+      "depth_C1ap",
+      "depth_C1as",
+      "depth_C1bp",
+      "depth_C1cp",
+      "depth_C1cs",
+      "depth_C1dp",
+      "depth_R1p",
+      "depth_R1s",
+      "depth_R2p",
+      "depth_R2s",
+      "depth_R4p",
+      "depth_R5p",
+      "depth_R6p",
+      "depth_blk_d_n",
+      "depth_blk_d_o20p",
+      "depth_blk_d_o20s",
+      "u_F",
+      "x_C1ap",
+      "x_C1as",
+      "x_C1bp",
+      "x_C1cp",
+      "x_C1cs",
+      "x_C1dp",
+      "x_R1p",
+      "x_R1s",
+      "x_R2p",
+      "x_R2s",
+      "x_R4p",
+      "x_R5p",
+      "x_R6p",
+      "x_blk_d_n",
+      "x_blk_d_o20p",
+      "x_blk_d_o20s",
+      "y_C1ap",
+      "y_C1as",
+      "y_C1bp",
+      "y_C1cp",
+      "y_C1cs",
+      "y_C1dp",
+      "y_R1p",
+      "y_R1s",
+      "y_R2p",
+      "y_R2s",
+      "y_R4p",
+      "y_R5p",
+      "y_R6p",
+      "y_blk_d_n",
+      "y_blk_d_o20p",
+      "y_blk_d_o20s"
+    ]
+  },
+  "values_sha256": "e7eef7f9be3df2d1709eca1a103aaac7e86fb58347ddfdb32071bf20016b8ded",
+  "content_sha256": "dd2e030290b3671e815693f8853aeb3ce02fec9c7e3d05fbe14caad3c399c745",
+  "consumers": [
+    "tests/references/test_gyptis_wide_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[0]": "the run script, its results file and the run logs, read on 2026-11-23",
+    "references[0].independence": "the finite-element script imports numpy, dolfin, gmsh, gyptis and a NumPy-only case table"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "references[0].install.command": "the method notes name the conda-forge environment and its versions, not the command that built it",
+    "generator.product_commit": "the generator does not load the product and records no commit",
+    "generator.clean_tree": "the generator does not load the product and records no commit",
+    "outcomes.matched": "what the comparison found is in the consumer test",
+    "outcomes.not_matched": "what the comparison found is in the consumer test",
+    "outcomes.failed_or_discarded": "what the comparison found is in the consumer test",
+    "outcomes.not_run": "what the comparison found is in the consumer test"
+  }
+}
