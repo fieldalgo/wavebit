@@ -1,6 +1,6 @@
 """A cell-snapped waveguide core continued through an absorbing layer.
 
-Criteria D1-D3 of ``docs/validation/fdtd/fd-waveguide-through-pml.md``, registered before the
+Criteria D1-D3 of ``docs/validation/fdtd/fdtd-waveguide-through-pml.md``, registered before the
 door was first run; every limit here is quoted from there.
 """
 import warnings

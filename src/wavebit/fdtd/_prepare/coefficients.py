@@ -179,8 +179,8 @@ def mix(xp, held, value, fill, w):
     onto the real axis. Neither establishes a general verdict on every possible full-tensor
     scheme. This function keeps the diagonal part. The constitutive term now adds adjoint
     cross coefficients from ``src/wavebit/fdtd/_prepare/constitutive.py``; the controlled sphere study measured
-    order 2.023 with them against 1.714 without them. See ``docs/validation/fdtd/fd-mie-validation.md`` and
-    ``docs/validation/fdtd/fd-subpixel-occupancy.md`` for the distinct instruments and their limits.
+    order 2.023 with them against 1.714 without them. See ``docs/validation/fdtd/fdtd-mie-validation.md`` and
+    ``docs/validation/fdtd/fdtd-subpixel-occupancy.md`` for the distinct instruments and their limits.
     """
     harmonic = fill / value + (1.0 - fill) / held
     arithmetic = fill * value + (1.0 - fill) * held

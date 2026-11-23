@@ -24,6 +24,8 @@ and a hook stripped them; here they resolve to links, and `intersphinx` carries 
 numpy, jax and torch.
 """
 from datetime import date
+import html
+import json
 import pathlib
 import posixpath
 import sys
@@ -153,8 +155,40 @@ def _language_links(app, pagename, templatename, context, doctree):
         })
 
 
+def _renamed_page_redirects(app, exception):
+    """Leave a page at each renamed document's old address that sends the reader on.
+
+    The rows marked ``redirect`` in ``development/document-relocations.json`` name the moves a
+    published address may still point at (the ``fd-`` pages renamed ``fdtd-`` on 2026-11-23).
+    Each old address gets a page that forwards there, keeping the ``#section`` part.
+    """
+    if exception is not None or app.builder.name != 'html':
+        return
+    ledger = pathlib.Path(app.srcdir) / 'development/document-relocations.json'
+    moves = [m for m in json.loads(ledger.read_text(encoding='utf-8'))['moves'] if m.get('redirect')]
+    moved = '이 문서는 다음 주소로 옮겨졌습니다:' if app.config.language == 'ko' else 'This page has moved to'
+    for move in moves:
+        old, new = (m.removeprefix('docs/').removesuffix('.md') for m in (move['source'], move['target']))
+        if new not in app.env.found_docs or old in app.env.found_docs:
+            raise ValueError(f'redirect {old} -> {new}: the target must be a page and the source must not')
+        href = posixpath.relpath(app.builder.get_target_uri(new), posixpath.dirname(old) or '.')
+        page = pathlib.Path(app.outdir, old + app.builder.out_suffix)
+        page.parent.mkdir(parents=True, exist_ok=True)
+        attr = html.escape(href, quote=True)
+        page.write_text(
+            '<!DOCTYPE html>\n'
+            f'<html lang="{app.config.language}"><head><meta charset="utf-8">'
+            f'<title>{html.escape(new.rsplit("/", 1)[-1])}</title>'
+            f'<link rel="canonical" href="{attr}">'
+            f'<meta http-equiv="refresh" content="0; url={attr}">'
+            f'<script>location.replace({json.dumps(href)} + location.hash)</script>'
+            f'</head><body><p>{moved} <a href="{attr}">{html.escape(href)}</a></p></body></html>\n',
+            encoding='utf-8')
+
+
 def setup(app):
     # Opt in only when both language trees will be present in the same artifact.
     app.add_config_value('wavebit_bilingual', False, 'html', types=[bool])
     app.connect('html-page-context', _language_links)
+    app.connect('build-finished', _renamed_page_redirects)
     return {'parallel_read_safe': True, 'parallel_write_safe': True}

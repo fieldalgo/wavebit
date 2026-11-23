@@ -1,7 +1,7 @@
 """The scene text that asks for the extended-stencil material discretisation, and its doors.
 
 What this file gates is the *routing*, not the physics. The operator's numbers are the
-research study's and are measured in ``docs/design/fd-symmetric-stencil.md`` and
+research study's and are measured in ``docs/design/fdtd-symmetric-stencil.md`` and
 ``tests/fdtd/test_fd_symmetric_stencil.py``; what is new here is that a public scene can reach
 them, that reaching them costs the default nothing, and that every scene the operator cannot
 be prepared for is **refused by name** rather than quietly given the other rule.
@@ -284,7 +284,7 @@ def test_two_processes_agree_on_a_prepared_skeleton():
     interpreters, whatever the hash seed and the addresses -- which is what the freezers'
     two-freeze check and ``fd.run``'s skeleton comparison need. What it does **not** prove:
     that the operator is independent of the thread count. It is not, and a plan prepared at
-    another count is a different plan (``docs/design/fd-symmetric-stencil.md``).
+    another count is a different plan (``docs/design/fdtd-symmetric-stencil.md``).
     """
     import os
     root = str(repository_root())
@@ -624,7 +624,7 @@ def test_the_default_bound_admits_the_resolutions_the_orders_were_measured_at():
 
     The scenes are the research driver's own -- ``studies/fdtd/subpixel_mie_sphere/fdtd_subpixel_mie_sphere.py``'s
     ``sphere_scene``, the epsilon-12, radius/wavelength .25 ball -- at the resolutions whose
-    preparation peak was measured (``docs/design/fd-symmetric-stencil.md``), asked for through the
+    preparation peak was measured (``docs/design/fdtd-symmetric-stencil.md``), asked for through the
     public selector. Every door, the memory door included, has to pass; nothing is solved.
     """
     mie = pytest.importorskip('studies.fdtd.subpixel_mie_sphere.fdtd_subpixel_mie_sphere')

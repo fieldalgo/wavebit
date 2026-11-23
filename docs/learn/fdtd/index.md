@@ -20,8 +20,8 @@ Field samples, Fourier amplitudes and integrated power answer different question
 
 ## 5. Add materials and gradients
 
-Read [constitutive response and absorbers](../../guide/fdtd/fd-constitutive-absorber.md) before assigning conductive or dispersive media. Then use the [differentiation guide](../../guide/fdtd/fd-differentiation.md): keep discrete layout choices fixed while differentiating continuous inputs, compare a derivative with a finite difference, and refine the forward solve as well as the derivative.
+Read [constitutive response and absorbers](../../guide/fdtd/fdtd-constitutive-absorber.md) before assigning conductive or dispersive media. Then use the [differentiation guide](../../guide/fdtd/fdtd-differentiation.md): keep discrete layout choices fixed while differentiating continuous inputs, compare a derivative with a finite difference, and refine the forward solve as well as the derivative.
 
 ## 6. Choose a worked application
 
-Continue with [radiation](../../guide/fdtd/fd-radiation.md), [metasurfaces](../../guide/fdtd/fd-metasurface.md), or the [multilayer optimization study](../../validation/fdtd/fdtd-multilayer-optimization.md). Their support and convergence statements are specific to the tested configurations.
+Continue with [radiation](../../guide/fdtd/fdtd-radiation.md), [metasurfaces](../../guide/fdtd/fdtd-metasurface.md), or the [multilayer optimization study](../../validation/fdtd/fdtd-multilayer-optimization.md). Their support and convergence statements are specific to the tested configurations.

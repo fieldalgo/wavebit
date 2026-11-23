@@ -149,14 +149,14 @@ lifted operator's stability, 8 cells per wavelength and the grazing rule (a subs
 filling a PML may be traced). A medium filling a stabilized PML layer the grazing rule
 judges, the background of a scene with a PML matched to it, a PlaneWave or TFSF source or a
 lattice FarField, conductivities and pole parameters stay concrete there. See
-``docs/guide/fdtd/fd-differentiation.md``.
+``docs/guide/fdtd/fdtd-differentiation.md``.
 Every source (Dipole, PlaneWave, TFSF) and monitor (Record, Field, Flux, Diffraction,
 FarField) is admitted; the two cell layers where a PlaneWave or TFSF normalisation or a
 Diffraction plane reads its one plain medium must lie outside every traced body's reserved
 support. All reserved halos must clear the domain boundaries and absorbers. Runtime guards
 check every body's actual sizes, containment, polygon simplicity/orientation and
 constitutive stability; they do not establish continuum convergence. See the C6 sections
-of ``docs/validation/fdtd/fd-subpixel-occupancy.md``.
+of ``docs/validation/fdtd/fdtd-subpixel-occupancy.md``.
 
 A Cylinder or unturned Box standing flush on a smoothed, unturned Box face uses
 ``Structure(junction='split')`` by default: it layers the substrate below the
@@ -164,7 +164,7 @@ pillar/background mixture. The standing body may instead request ``'staircase'``
 (the medium at each point) or ``'refuse'``. Materials must be isotropic, lossless,
 non-dispersive and non-magnetic; the junction rim must clear the substrate's edges.
 ``check`` prints the choice, its voxel counts and measured accuracy limitations.
-See ``docs/validation/fdtd/fd-subpixel-occupancy.md``, The junction. A ranged standing body may be traced
+See ``docs/validation/fdtd/fdtd-subpixel-occupancy.md``, The junction. A ranged standing body may be traced
 under ``'split'`` -- the metasurface pillar's radius, sizes, height and transverse centre --
 while its substrate stays concrete and unranged: the junction's points are recomputed from
 the live geometry, the substrate's face must cover the reserved halo and junction rows to
@@ -197,7 +197,7 @@ cells require an induced passive Debye memory even when the two real
 permittivities are equal. This does not admit curved conductors, lossy junctions,
 general dispersive interface smoothing or conductive shape/material differentiation.
 The implementation and its physical-validation record are documented in
-``docs/validation/fdtd/fd-conductive-film.md``.
+``docs/validation/fdtd/fdtd-conductive-film.md``.
 
 A finite stack of two or more such ``Conductor`` films is also admitted when
 every member has the same normal axis and their padded grid supports are
@@ -207,7 +207,7 @@ complete ordered stack is part of the prepared plan identity. The plain host,
 concrete geometry/material/band values, absorber clearance and no-initial-field
 restrictions remain. Every member has a bulk spectral and local relaxation-rate
 check. Touching films and stacks mixing declared pole families are outside this
-scope. See ``docs/validation/fdtd/fd-conductive-stack.md`` for the validation record.
+scope. See ``docs/validation/fdtd/fdtd-conductive-stack.md`` for the validation record.
 
 The next C8 scope admits the same concrete isolated film geometry with
 ``Dispersive(eps_inf=..., poles=(Drude(...),))`` or one ``Lorentz`` pole instead.
@@ -217,7 +217,7 @@ Only passive parameters and a lossless isotropic non-magnetic host are admitted.
 The source band must be concrete; a conservative bound checks its entire positive
 frequency interval, including interior Lorentz resonances, and every requested
 monitor wavelength is checked separately for phase and skin resolution. These are
-bulk mesh floors, not error bounds. See ``docs/validation/fdtd/fd-single-pole-film.md`` for its
+bulk mesh floors, not error bounds. See ``docs/validation/fdtd/fdtd-single-pole-film.md`` for its
 validation status. Multiple poles, curved dispersive bodies,
 lossy junctions and geometry/material/band differentiation remain outside this scope. C8 as a whole is
 not complete, and C7 remains unpassed.
@@ -231,14 +231,14 @@ the bulk and actual mixed-cell relaxation rates, which can exceed the bulk
 value. Concrete positive source bands and every requested wavelength receive
 a bulk spectral-resolution check. Zero strength is allowed; geometry, material
 and source-band differentiation and multiple poles remain outside this scope.
-See ``docs/validation/fdtd/fd-debye-film.md`` for the bounded contract and validation record.
+See ``docs/validation/fdtd/fdtd-debye-film.md`` for the bounded contract and validation record.
 
 An isolated film may also contain exactly two passive Debye poles. Its normal
 mixture is reduced to two local passive relaxations; equal times and zero
 strengths collapse without dropping the reserved memory slots. The time-step
 policy includes the sum of both local rates before taking the spatial maximum.
 All geometry, host and differentiation restrictions of the single-Debye film
-remain. See ``docs/validation/fdtd/fd-two-debye-film.md`` for its validation record.
+remain. See ``docs/validation/fdtd/fdtd-two-debye-film.md`` for its validation record.
 
 A finite passive Debye sum with three or more declared poles uses the same
 isolated film contract with one reserved memory slot per declared pole. The
@@ -246,14 +246,14 @@ normal mixture is reduced as a whole, retaining positive modes and collapsing
 only exact equal times or zero increments. The existing one- and two-pole
 routes retain their calculations. Mixed pole families, curved interfaces,
 dispersive hosts and differentiation remain outside this extension.
-See ``docs/validation/fdtd/fd-debye-sum-film.md`` for numerical admission and validation limits.
+See ``docs/validation/fdtd/fdtd-debye-sum-film.md`` for numerical admission and validation limits.
 
 Two or more separated parallel Debye films may share one plain lossless host.
 Their padded supports must be disjoint; each member retains the existing
 one-, two- or finite-sum reduction and its declared memory slots. The policy
 checks every member and takes the maximum member material rate. Initial
 fields, traced inputs, overlapping padded supports, mixed-family stacks and automatic
-stopping are refused. See docs/validation/fdtd/fd-debye-stack.md for this bounded contract
+stopping are refused. See docs/validation/fdtd/fdtd-debye-stack.md for this bounded contract
 and its validation status.
 
 Separated parallel films may also contain exactly one passive Drude or Lorentz
@@ -264,7 +264,7 @@ supports. The material policy takes the maximum complete member rate and the
 bulk mesh check includes every member's interior Lorentz resonances. Inactive
 Lorentz frequencies retain the singleton's finite-range and conservative
 stability rules. Fixed duration is required; initial fields, traced inputs and
-Decay are refused. See ``docs/validation/fdtd/fd-oscillator-stack.md`` for the bounded contract
+Decay are refused. See ``docs/validation/fdtd/fdtd-oscillator-stack.md`` for the bounded contract
 and current numerical validation status; general C8 remains incomplete.
 
 A finite sum of two or more passive Drude/Lorentz poles, with unequal damping,
@@ -274,7 +274,7 @@ their sum, with the corresponding cross term in the energy observer. A
 conservative whole-band bulk bound includes every active interior resonance.
 Mixed Debye/oscillator families, lossy hosts, curved interfaces and
 differentiation remain outside this extension. See
-``docs/validation/fdtd/fd-oscillator-sum-film.md`` for its contract and validation status.
+``docs/validation/fdtd/fdtd-oscillator-sum-film.md`` for its contract and validation status.
 
 A concrete isolated film may additionally declare a mixture of passive Debye
 and Drude/Lorentz poles. Its hybrid term preserves the bilinear Debye and
@@ -283,7 +283,7 @@ It carries four arrays per declared pole and uses an integer-time passive
 storage distinct from the single-family observers. The stability policy
 uses physical high-frequency permittivity and retains a conservative Debye
 penalty. No lossy host, curved interface, junction or differentiation support
-is implied. See ``docs/validation/fdtd/fd-hybrid-film.md`` for the precise admitted scope and
+is implied. See ``docs/validation/fdtd/fdtd-hybrid-film.md`` for the precise admitted scope and
 validation record; the general C8 work remains incomplete.
 
 Stage 4's C3 adds a second material discretisation, **opt in and per structure**::
@@ -291,7 +291,7 @@ Stage 4's C3 adds a second material discretisation, **opt in and per structure**
     fd.Structure(fd.Sphere(radius=0.2), glass, discretisation='stencil')
 
 ``'voxel'`` is the default and is every scene's behaviour above, to the bit; ``'stencil'``
-asks instead for the symmetric extended-stencil operator ``docs/design/fd-symmetric-stencil.md``
+asks instead for the symmetric extended-stencil operator ``docs/design/fdtd-symmetric-stencil.md``
 derives -- exact edge and dual-face interface constraints, solved once on the host at
 ``fd.plan`` time and never inside a trace, whose rows couple each edge to every edge within
 two cells. ``check`` prints it. It has its own doors and not one of them falls back to the
@@ -306,9 +306,9 @@ already carries rather than solving it again.
 
 Smoothed scenes emit ``SubpixelAccuracyWarning`` during planning, also shown by ``check``,
 with the benchmark behind the structure's discretisation. ``'stencil'`` passes C3 (the
-epsilon-12 sphere converges at order 2.244; ``docs/design/fd-symmetric-stencil.md``); the default
+epsilon-12 sphere converges at order 2.244; ``docs/design/fdtd-symmetric-stencil.md``); the default
 ``'voxel'`` rule passes every sphere arm and still fails the C3 cylinder
-(``docs/validation/fdtd/fd-mie-validation.md``). Exact volume and matching backends do not establish a
+(``docs/validation/fdtd/fdtd-mie-validation.md``). Exact volume and matching backends do not establish a
 second-order electromagnetic result for any other body.
 
 ``Run(decay=Decay(threshold=..., window=...))`` optionally stops concrete CPU forward

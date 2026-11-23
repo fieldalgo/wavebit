@@ -1,0 +1,441 @@
+# Differentiating the general FDTD engine
+
+:::{note}
+This page retains the earlier engine declarations and their measured admission rules. The pillar scene now has a [complete current-API example](substrate-gradients.md), using an explicit smoothed substrate continuation through the bottom open face. The current module runs the same engine and checks; [In the current module](#in-the-current-module) maps the declarations below.
+:::
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
+
+`wavebit.compat.legacy.fd` ran on NumPy, JAX and PyTorch, and on the last two a run was
+differentiable: material values, a body's shape and position, a source's amplitude, phase,
+delay and band, and the Bloch phase can all be leaves of `jax.grad` or Torch autograd. This
+page says how to set that up, what may be traced, and what the run does when a traced value
+leaves the region it can certify. The measurements behind it are the C6 sections at the end of
+[`fdtd-subpixel-occupancy.md`](../../validation/fdtd/fdtd-subpixel-occupancy.md), the last of them "Traced
+material values beside traced geometry".
+:::
+
+## The one rule: plan concrete, run traced
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
+
+A run is `fd.plan` (static, on the host: the grid, the boundaries, every refusal) followed
+by `fd.lower` and the time stepping (the arrays a gradient flows through). Build the plan
+**once, from plain numbers** -- `plan = fd.plan(scene)` -- and pass it to every traced run
+as `fd.run(traced_scene, 'torch', plan=plan)`, or `'jax'`.
+
+The plan certifies what it can only check on numbers -- the smoothed operator's stability,
+how the junction under a pillar is laid out, which orders the absorbers can take -- at the
+values it was built from. The traced run reuses it, reads the live values, and checks the
+ones that can move at run time (see [When the result is NaN](#when-the-result-is-nan)). On
+JAX the plan is also what makes the compiled stepping program reusable: one compile per
+plan, however many values you try.
+:::
+
+### In the current module
+
+`wavebit.fdtd` keeps the rule under its own names. The plan is
+`prepared = fdtd.prepare(problem, numerics=numerics, backend='torch')` (or `'jax'`), built
+from plain numbers, and the traced run is `prepared.run(traced_problem)`, through which the
+gradient flows. A body's reserved cells are `fdtd.Numerics(geometry_ranges={'pillar': RANGE})`,
+keyed by the structure's name, instead of `range=`; a material leaf is `Material(epsilon=...)`;
+the transmitted zero order is `result['T'].efficiency[0, 0, 0]`; and a run a runtime check
+rejected has `result.validity.checks['runtime_stability']` false. A traced `Bloch` phase or
+`InvariantAxis` `k` is not live in a prepared calculation yet: `prepared.run` refuses it as a static
+field.
+
+## A pillar's radius, height and index together
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
+
+A metasurface cell: a glass substrate (a smoothed `fd.Box` running through the bottom PML)
+and a cylindrical pillar standing flush on it, under a normal plane wave. The pillar's
+radius, height and permittivity are the design variables; the objective is the transmitted
+zero order. The scene and its plan, on any backend:
+
+```python
+# Historical engine declaration; see substrate-gradients.md for the physical API.
+from wavebit.compat.legacy import fd
+
+PLANE = -0.2375                                   # the substrate's top face
+GLASS = fd.Material(eps=2.1)
+RANGE = ((-.145, .145), (-.145, .145), (PLANE - .001, PLANE + .401))
+
+
+def cell(radius, height, eps):
+    pw = fd.PlaneWave('pw', z=.45, direction='-z', polarization='s',
+                      band=fd.Band(wavelength=1., df=.15))
+    pillar = fd.Cylinder(radius=radius, height=height, axis='z',
+                         center=(.011, -.007, PLANE + height / 2), range=RANGE)
+    return fd.Scene(
+        domain=fd.Domain(size=(.6, .6, 2.1), center=(0., 0., .05)),
+        boundaries=fd.Boundaries(**fd.Bloch.from_source(pw), z=(
+            fd.PML(cells=8, wavelength=1., background=GLASS, allow_thin=True),
+            fd.PML(cells=8, wavelength=1., allow_thin=True))),
+        resolution=fd.Resolution(dx=.05), run=fd.Run(steps=600, courant=.5),
+        sources=(pw,),
+        structures=(fd.Structure(fd.Box(size=(10., 10., 2.), center=(0., 0., PLANE - 1.)), GLASS),
+                    fd.Structure(pillar, fd.Material(eps=eps))),
+        monitors=(fd.Diffraction('T', z=-.55, side='transmit', wavelengths=(1.,), orders=0),))
+
+
+plan = fd.plan(cell(.12, .3, 2.25))
+```
+
+With PyTorch:
+
+```python
+import torch                                      # earlier interface, as above
+
+leaves = [torch.tensor(v, dtype=torch.float64, requires_grad=True) for v in (.12, .3, 2.25)]
+result = fd.run(cell(*leaves), 'torch', plan=plan)
+T = result['T'].orders.incident.T[0, 0, 0]
+T.backward()
+print(float(T), [float(v.grad) for v in leaves])
+```
+
+With JAX; enable 64-bit numbers before making any array:
+
+```python
+import jax                                        # earlier interface, as above
+jax.config.update('jax_enable_x64', True)
+import jax.numpy as jnp
+
+
+def transmitted(v):
+    result = fd.run(cell(v[0], v[1], v[2]), 'jax', plan=plan)
+    return result['T'].orders.incident.T[0, 0, 0]
+
+
+print(jax.grad(transmitted)(jnp.array([.12, .3, 2.25])))
+```
+
+Both print the same gradient (radius `0.1933`, height `-0.0818`, eps `0.00625`).
+
+Three things in that scene are what make the shape traceable:
+
+* **`range=`** reserves the cells the pillar may occupy anywhere in the sweep. Every size
+  and position the run is asked about must keep the whole body inside it.
+* **The height moves with the centre**: the centre is `PLANE + height / 2`, so the base
+  stays on the substrate's face. A pillar whose base leaves the face is not the pillar the
+  plan's junction was built for.
+* **The substrate's shape stays concrete.** Its permittivity may be traced as well -- pass
+  `fd.Material(eps=...)` with a leaf to the first structure -- although it fills the bottom
+  PML: the rule that keeps a PML from being asked to absorb an order leaving too steeply is
+  held at run time (see below).
+:::
+
+## An inactive Lorentz term in the analytic response
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
+
+For finite inputs, `fd.Lorentz(..., strength=0).eps_term(omega)` contributes zero,
+including at its undamped resonance. `fd.eps_at` inherits this convention when it
+sums the poles: an exactly inactive oscillator contributes no susceptibility, so
+its otherwise indeterminate `0 / 0` is removed before evaluating the denominator.
+This shortcut requires a concrete, exactly zero strength; it is not a tolerance
+that removes small nonzero strengths. The current `wavebit.materials.Lorentz.epsilon_term` implements the same inactive-pole convention with SI rates and strength; invalid traced parameters still produce NaN.
+
+A strength being differentiated may have a value of zero without being inactive.
+Away from resonance, for `D = omega_0**2 - omega**2 - 1j*gamma*omega`, its derivative
+is `d(eps_term)/d(strength) = 1/D`. That dependence is retained for traced strengths,
+including forward-mode tangents; a zero value alone must not detach it. Conversely,
+with a concrete inactive strength, derivatives with respect to finite frequency,
+resonance and damping remain zero. The undamped resonance of an active or
+strength-traced oscillator remains singular; this convention supplies no finite
+regularization or derivative there.
+
+This is the analytic material response. It does not change the time-domain pole
+recurrence, its stability policy, or which material and geometry derivatives a
+planned `fd.run` admits.
+:::
+
+## What may be traced
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
+
+| Leaf | Where | Notes |
+| --- | --- | --- |
+| `eps`, `mu` of a plain `fd.Material` | any structure, the background | One scalar each (`eps=x`, not `eps=(x, y, z)`). Not a material filling a stabilized PML layer (`PML(stabilize=...)`) along a PlaneWave's axis in a scene with a Diffraction monitor. With traced geometry or beside a Sphere, Cylinder, Prism or turned Box: not the background when a PML is matched to it or the scene has a PlaneWave or TFSF source or a `FarField(propagation='yee')`. A flush junction's media -- the pillar, its face, the background -- name no `mu`, traced or not (only electric junctions are measured). |
+| `sigma` of `fd.Conductor`, pole parameters of `fd.Dispersive` | structures | Refused with traced geometry or beside a Sphere, Cylinder, Prism or turned Box when run with `fd.run`, where they have no certificate. |
+| `radius`, `center` | `fd.Sphere(range=...)` | |
+| `radius`, `height`, `center` | `fd.Cylinder(range=...)` | `axis` stays static. |
+| `size`, `center` | `fd.Box(range=...)` | `angle` and `axis` stay static. |
+| `vertices`, `height`, `center` | `fd.Prism(range=...)` | The vertex count, `angle` and `axis` stay static. |
+| amplitude, phase, delay, `Band(wavelength=, df=)` | sources | A traced band skips the plan's cells-per-wavelength check. |
+| Bloch phase or `k` | `fd.Bloch`, `fd.Axis1D` | |
+
+Several ranged bodies may be traced in one scene when their reserved ranges, each widened by
+one interpolation cell, do not share a cell; a structure without a range must stay a cell
+clear of every traced body's widened range, except the substrate a traced pillar stands on.
+A ranged body's material must be isotropic and lossless (`fd.Material`, one number for each
+of `eps` and `mu`). A partner's material -- a film, a block, the face a concrete pillar
+stands on -- may be traced too, within the rules above.
+
+A smoothed structure with **concrete** geometry may have its `eps` or `mu` traced too, with
+the same rule: plan from concrete values, pass `plan=`. For a Sphere, Cylinder, Prism or
+turned Box -- bodies whose smoothing couples field components -- `plan=None` is refused,
+because the plan's stability certificate needs numbers; an unturned Box and the cell-snapped
+`Slab` and `Region` plan a traced value as they always have.
+:::
+
+## When the result is NaN
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
+
+A traced value can reach a value the plan would have refused. The run then does not raise --
+under `jax.grad` there is nothing to raise on -- but returns `nan` fields, results and
+gradients, and `result.diagnostics['stable']` reads `False`. The runtime checks:
+
+| Check | Fails when | The concrete path's refusal |
+| --- | --- | --- |
+| Range | a traced body leaves its `range=` or falls under four cells across | "cells across" |
+| Base on the face | a traced pillar's base leaves the substrate's face (beyond round-off) | not flush |
+| Positivity | a traced `eps` or `mu` is not positive (or is `nan`) | `Material(eps=...)` |
+| Time step | the smallest index puts `dt` past the stability bound | "stability bound" |
+| Lifted operator | a star of the smoothed operator is not positive definite at its lift | constitutive certificate |
+| Resolution | a traced medium falls below 8 cells per wavelength at the band's shortest or any `Diffraction` wavelength; the report wavelength also refuses a metal with less than one cell per skin depth | "cells per wavelength" or "skin depth" |
+| Grazing order | a traced medium filling a PML layer along a PlaneWave's axis lets an order a `Diffraction` monitor asks for leave at an exit angle the layer does not accept | "Grazing order refused" |
+| Grazing at a traced `k` | a traced Bloch `k` or phase, or a traced Axis1D `k`, lets a `Diffraction` order or the PlaneWave's own incidence leave a pure-stretch PML at an exit angle the layer does not accept | "Grazing order refused" |
+
+A traced transverse `k` lowered through a plan is the run's `k`: the PlaneWave's column is
+driven with the face's live value, so sweeping `k` through one plan sweeps the incidence. The
+grazing rule is then counted at that live `k`. Next to a stabilized PML face, whose rule also
+reads the face's exact return on the host, a traced `k` is refused by name.
+
+The grazing check runs for every traced plain material in a judged PML layer, including
+cell-snapped Slabs and scenes without smoothed bodies. A fixed PML reference medium fixes
+the stretch profile, not the physical index used to judge outgoing orders. The resolution check runs for every traced material, including conductor and pole
+parameters on the admitted concrete geometry. It reads the same complex index as the eager
+check: choose the axis with largest `abs(eps(w) * mu)`, then the passive square root.
+Dispersion is evaluated at the wavelength, rather than using `eps_inf` as the index.
+Conductivity contributes only in the existing eager conductive-film scope; this does not
+expand which conductor geometries may be differentiated. Metal-like media (`Re(n) < abs(Im(n))`)
+use skin depth at the report wavelength instead of the eight-cell rule. With no sources,
+that wavelength comes from `Resolution(wavelength=)` or the first planned PML wavelength;
+with neither, eager and runtime checks both have no wavelength to judge. The report also
+keeps the eager exemption for a source-free homogeneous vacuum; a Diffraction wavelength
+still has its separate eight-cell check.
+
+For a plain `fd.Material`, the check includes a traced `eps` on a Slab, a Region or an
+unturned Box with concrete geometry, where the plan can only warn that it could not count the cells. At `dx = 0.05` and the band above
+(shortest wavelength 0.642), the floor admits `eps * mu` up to
+`(0.642 / (8 * 0.05))**2 = 2.58`: a pillar index past 1.6 needs a finer grid. In the same
+cell (period 0.6, 8-cell PMLs) the substrate's first diffracted orders begin to propagate
+at wavelength 0.95 once its `eps` passes `(0.95 / 0.6)**2 = 2.507`, just above the
+horizon, which no PML absorbs: from there the run is `nan`, as the concrete scene is refused. If an optimizer's step returns `nan`, step back
+and bound the variable; the run's report (`result.report.warnings`) names the checks a
+traced value is held to.
+:::
+
+## What is refused, and why
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
+
+These are refused by name when the scene is run, because no runtime check could stand in
+for them. The stabilized-PML row applies even without smoothed bodies; its exact-return
+survey has no runtime derivative check. The other rows apply with traced geometry or beside
+a Sphere, Cylinder, Prism or turned Box
+(a direct `fd.lower` of concrete geometry skips the conductivity row, and reads a seed only to compare how `mu` was named):
+
+| Refused | Why | What to do |
+| --- | --- | --- |
+| A traced `eps` or `mu` given per axis | the smoothed operator is built for one isotropic number | trace one scalar |
+| A traced background where a PML is matched to it (no `background=` of its own), or with a PlaneWave or TFSF source or a lattice `FarField` | the PML match, the plane-wave source's transverse wavevector, the grazing survey and the far-field map are built from it once | beside a PlaneWave, TFSF or lattice `FarField`, keep the background concrete and differentiate a structure's material instead: no PML setting lifts it. A matched PML alone is lifted by a concrete reference on every face (`background=`; publicly, `PML(reference_media=...)` with an entry for every Open face) |
+| A traced material filling a stabilized PML layer the grazing rule judges | on a stabilized face the rule reads the face's exact return, on the host only | keep it concrete, or the face a pure stretch |
+| A traced material beside a smoothed region on a `Symmetry` plane | the mirror check reads the plan's contrast, which may be zero | keep the region a cell off the mirror |
+| A traced medium at a `Diffraction` plane with `orders=None` | the propagating orders cannot be counted for a traced index | give `orders=` |
+| A body with traced geometry as the face a pillar stands on | the junction is differentiated through its standing body only | keep the face's geometry concrete |
+| A traced conductivity or pole parameter | no certificate | keep it concrete |
+| A traced value where `plan=` was built without that material, or naming `mu` differently | the plan was certified for another medium | plan from the same scene at concrete values |
+:::
+
+## How accurate is the derivative
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
+
+The derivative is that of the discrete solver, exactly. On the probe's version of the cell
+above (`studies/fdtd/traced_material/fdtd_traced_material_probe.py`: three wavelengths, T and R, the centre's x
+as a fourth leaf), JAX and Torch agree to `3e-15`, and both agree with central differences
+of the concrete NumPy solver -- each perturbed geometry planned on its own -- to `9e-8` for
+the shape and `4e-9` for the pillar's permittivity at a step of `3e-6`, `1e-9` for the
+substrate's. Two caveats:
+
+* **The discrete solver is piecewise smooth.** At a few isolated geometries a voxel's
+  classification switches (a cylinder's nearest face changes from its wall to its cap, a
+  cap sits exactly on a grid plane), and the value jumps by about `1e-5` of `T`. The
+  gradient is right on either side; a finite difference that straddles the jump is not.
+  Just outside a cylinder's cap rim the gradient is also steep without being wrong. The
+  rim's moment is the tangent plane's, whose normal turns through 90 degrees within the
+  distance `delta` to the rim, so the slope grows as `1/delta`: measured as
+  `0.33 / delta` for one rim voxel (`dx = 0.25`), 3e4 at `delta = 1e-5` and above 1e15
+  within a few ulp. JAX and Torch match a central difference with step `delta / 100`.
+  A tie-break or a few-ulp blend cannot remove it, because both leave the values outside
+  their band, and those values fix the slope there. Only an exact rim moment would.
+  `tests/fdtd/test_fd_shapes.py::test_the_cap_rims_steep_gradient_is_the_planes_own_derivative`
+  pins the slope, the finite values at the tie, and the tie going to the cap normal.
+* **A derivative is not a convergence statement.** The cell above uses thin PMLs and a
+  short run to be quick, and there the lossless cell's `T + R` misses 1 by about `5e-4`.
+  With 24-cell PMLs, a `.05` band and 6000 steps it is 1 to `1.1e-6`, and the
+  derivatives keep `dT + dR = 0` to `5e-5` of `dT` for the pillar's permittivity and
+  `6e-5` for the radius. The substrate's permittivity shows `dT + dR` of about `5e-5`
+  (0.2% of its small `dT`): the residual `T + R - 1` itself ripples at the `1e-6` level as
+  the thick substrate's optical path changes, and that is its slope. Check your own
+  observable under refinement before trusting its optimum.
+:::
+
+## Which backend
+
+:::{admonition} Earlier interface
+:class: earlier-interface
+
+Earlier interface, retired with `wavebit.compat` on 2026-10-15: the names and defaults below are not the current API, and its code runs only on a historical checkout.
+
+JAX compiles the run once per plan (about 50 s for the probe's cell on one CPU thread) and
+is then fast to repeat; Torch runs eagerly (about 7 s for the same two-output Jacobian) and
+suits a few evaluations. NumPy is not differentiable, but a concrete NumPy run is the
+reference to compare a gradient against: plan each perturbed scene on its own, since a
+pillar's junction layout belongs to its geometry.
+
+The focused regression is `python -m pytest tests/fdtd/test_material_resolution_guard.py`.
+It straddles the eager thresholds for plain, conductive, Debye and Drude materials in
+source-free scenes (including a concrete inactive Lorentz pole at resonance), compares
+admitted lowering coefficients and their derivatives with
+concrete finite differences, and checks JAX jit, Torch, rule wavelengths and the PML
+fallback. The guard is constant to autodiff; it does not alter admitted coefficients.
+
+The guard regressions also compare eager decisions at the inclusive boundaries and their
+nearest representable neighbours. They cover a homogeneous vacuum with a Diffraction
+wavelength equal to, shorter than, or longer than the report wavelength; anisotropic
+absolute-index selection and first-component ties; inactive concrete versus carried zero
+Lorentz strengths at resonance; and active Lorentz coefficient derivatives away from
+resonance. Fallback tests retain the first planned PML wavelength (not the shortest),
+Resolution precedence over PML, source-band precedence over both, and multiplication by
+an existing zero, finite or NaN guard. These checks do not change the physical thresholds.
+
+
+Traced material values retain the constructors' finite-value requirement, including
+conductivity and every pole parameter even when a Lorentz strength is concretely zero.
+Positive infinity is not an admissible positive parameter: it poisons the material guard
+just as NaN, negative values, or a forbidden zero do. Conductivity, damping and oscillator
+strength still admit zero; permittivity, permeability, frequencies and Debye relaxation
+time remain strictly positive. No clipping or upper physical cutoff is introduced.
+Finite extreme inputs pass this range door; this alone does not certify the CFL bound,
+resolution, or recurrence arithmetic at extreme finite scales; an inactive analytic response does
+not excuse an invalid parameter declaration. This is covered by
+`tests/fdtd/test_material_finite_guard.py`, including admitted coefficient derivatives.
+
+For very large finite Drude/Lorentz damping, ADE coefficients use an algebraically
+rescaled denominator before `gamma / dt` can overflow. Multiplying numerator and
+denominator by `dt` gives `D = 1/dt + gamma/2`, with coefficients
+`(2/dt - omega_0**2*dt)/D`, `(1/dt - gamma/2)/D`, and `strength*dt/D`.
+The implementation also rescales by exact powers of two to keep reciprocals normal.
+The Lorentz optical response divides its denominator by damping before forming
+`gamma*omega` when that product would overflow. Float64 Drude susceptibility rescales
+earlier, before the inverse-denominator products used by frequency autodiff enter
+the subnormal range, even when the original response is finite. Ordinary-size
+inputs retain their original arithmetic.
+JAX optimization barriers retain these intermediate scalings without changing XLA flags.
+No material parameter is clipped and no physical upper limit on damping is introduced;
+this rescaling does not certify derivatives at every extreme combination of finite inputs.
+
+For these second-order poles, a nonzero ADE drive below the smallest normal float64
+value cannot be preserved on the
+supported JAX CPU path, which flushes subnormals to zero. Such a drive, or a nonfinite ADE
+coefficient, is refused eagerly as `PoleArithmeticRefused`; a traced crossing poisons the
+existing runtime guard. This machine representability door is shared with NumPy and Torch,
+so an active oscillator cannot silently disappear on only one backend. It is not an optical
+convergence tolerance. A concrete zero strength remains allowed, and its analytic strength
+tangent is retained. A traced parameter does not suppress a host arithmetic exception in a
+concrete operand: for example, an unrepresentable concrete `omega_0**2` beside a traced
+Lorentz damping is still reported as `PoleArithmeticRefused` by the public lifecycle.
+Representability that depends on a live parameter continues to use runtime invalidity,
+including Torch; planning does not detach the parameter to certify it. The JAX zero-strength
+check folds the two integer magnitude words before comparing with zero. This preserves
+the nonzero classification in the observed ARM CPU compiled regression; other platforms
+and compiler versions require their own verification.
+See [the arithmetic regression record](../../validation/fdtd/fdtd-pole-arithmetic.md). As with any float64 calculation, derivatives that themselves fall
+outside the dtype's representable range are not certified. Intermediate derivative
+operations can also underflow when the final analytic derivative is representable.
+The following normalized Drude example retains both the small imaginary response
+and its frequency derivative, without scaling the differentiation objective:
+
+```python
+import torch
+from wavebit.materials._time_domain import Drude  # the solvers' private model
+
+omega = torch.tensor(1., dtype=torch.float64, requires_grad=True)
+chi = Drude(omega_p=1e50, gamma=1e308).eps_term(omega).imag
+frequency_derivative, = torch.autograd.grad(chi, omega)
+print(chi.detach().item(), frequency_derivative.item())  # 1e-208, -1e-208
+```
+
+This example uses the solvers' private normalized-unit model and its rates, not the SI
+rates of the shared public material declarations. Float64 public `wavebit.materials.Drude.epsilon_term` uses
+the same evaluator with SI frequencies. Public SI evaluation and conversion to
+normalized FDTD rates are tested separately; the normalized example's exact
+`gamma=1e308` is not obtained by converting a finite SI gamma with the available
+unit choices. Public calls containing a float32 frequency or pole parameter retain
+their previous arithmetic and dtype, including mixed-dtype promotion; this repair
+does not extend extreme-value support to float32 or mixed precision.
+
+`tests/materials/test_drude_frequency_scaling.py` compares the unscaled imaginary
+response and forward/reverse frequency derivatives against an independent
+100-digit Decimal formula, including ordinary inputs and float64 neighbours of
+both arithmetic switches. It also checks public SI evaluation, FDTD unit conversion,
+material evaluation at a wavelength, and public float32 compatibility. Lorentz
+response, zero-strength handling and ADE coefficients are unchanged by this Drude
+response repair. These checks do not certify all combinations of extreme finite
+frequencies, pole parameters or differentiation objectives: a finite response and
+a representable final derivative do not guarantee representable intermediate
+arithmetic. Check the derivative needed by an optimization against an independent
+analytic expression or a representable finite difference in that regime.
+
+The arithmetic check follows the recurrence selected by the plan. Spatial film
+terms use their own coefficient and CFL checks; they do not evaluate the unused
+scalar pole recurrence. In particular, a concrete inactive hybrid-film slot may
+have an extreme finite resonance or relaxation time without forming its unused
+square or inverse. The slot remains allocated, and active slots in the same film
+still undergo the existing representability and stability checks. This does not
+remove the ordinary single-pole Lorentz resonance contribution to the CFL bound,
+or classify a carried zero strength or a nonzero subnormal as an inactive slot.
+Finite/sign declaration checks remain in force for every parameter.
+`tests/fdtd/test_selected_pole_arithmetic.py` covers public preparation, inactive
+slots beside active families, active extreme refusals, and the ordinary live
+strength tangent at both signed zeros.
+
+`tests/fdtd/test_large_damping.py` compares branch neighbours and zero/nonzero strengths
+with independent Decimal arithmetic, checks finite optical susceptibility, compares a
+small physical `check`/`prepare`/live-run scene, and exercises both sides of the drive
+representability door and admitted value/strength derivatives.
+
+A carried optical frequency uses backend scalar operands for the damping threshold.
+The inactive ordinary response keeps nonzero damping so an unselected Lorentz
+resonance cannot contaminate the selected response's frequency derivative with NaN.
+`tests/fdtd/test_damping_response_review.py` checks concrete/carried agreement
+and the analytic frequency tangent at a large-damping resonance.
+:::

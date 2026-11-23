@@ -78,7 +78,7 @@ print(result.report.bytes_per_state)
 `fd.check(scene)`은 독립적으로 장면을 계획하고 NumPy로 낮추어 `Report`를 출력하고
 반환합니다. 시간 적분은 아닙니다. 계획을 재사용하려면 구체적인 계획을
 `fd.run(..., plan=plan)`에 넘기세요. 구체적인 장면을 바꾸면 새 계획을 만드세요.
-미분하는 실행은 [일반 엔진 미분하기](../guide/fdtd/fd-differentiation.md)의 더 좁은
+미분하는 실행은 [일반 엔진 미분하기](../guide/fdtd/fdtd-differentiation.md)의 더 좁은
 계획 재사용 규칙을 따릅니다. 완료된 결과에는
 `result.plan`, `result.report`, `result.sources`, `result.diagnostics`도 담겨 있습니다.
 
@@ -116,7 +116,7 @@ print(result.diagnostics['stopping']['reason'])  # 'decay' or 'cap'
 
 PlaneWave/TFSF 소스, 자동 미분, 바깥을 감싸는 JAX 변환, CPU가 아닌 실행에서는 이
 옵션을 거부합니다. 일반적인 고정 길이 실행은 기존 계약을 유지합니다. [종료 측정과
-한계](../validation/fdtd/fd-decay-stopping.md)를 보세요.
+한계](../validation/fdtd/fdtd-decay-stopping.md)를 보세요.
 
 ## 단위, 좌표, 백엔드
 
@@ -134,7 +134,7 @@ PlaneWave/TFSF 소스, 자동 미분, 바깥을 감싸는 JAX 변환, CPU가 아
 배치를 명시적으로 유지하도록 `device='cpu'`를 요청하세요. 이 CPU 기록으로 GPU의
 정확성과 성능이 입증되지는 않습니다. 계획은 `float64`를 쓰고, Bloch나 `Axis1D` 면에는
 `complex128`을 씁니다. JAX와 Torch는 문서화된
-[미분 범위](../guide/fdtd/fd-differentiation.md)를 지원합니다. 미분 가능한 백엔드를 고른다고
+[미분 범위](../guide/fdtd/fdtd-differentiation.md)를 지원합니다. 미분 가능한 백엔드를 고른다고
 모든 기하나 재료 매개변수가 허용되는 것은 아닙니다.
 
 리포트의 `bytes_per_state`는 주 격자 E/H 배열, CPML 이력, 재료 메모리의 논리적 데이터
@@ -148,16 +148,16 @@ PlaneWave/TFSF 소스, 자동 미분, 바깥을 감싸는 JAX 변환, CPU가 아
 
 | 용도 | 현재 계약과 더 읽을거리 |
 | --- | --- |
-| 소스와 관측값 | `Dipole`, `PlaneWave`, 축 방향 `TFSF`; 점 `Record`, 스펙트럼 `Field`/`Flux`, 주기 `Diffraction`, 열린 영역 `FarField`. 정규화와 경계 제한은 [메타표면](../guide/fdtd/fd-metasurface.md)과 [복사](../guide/fdtd/fd-radiation.md)를 보세요. |
+| 소스와 관측값 | `Dipole`, `PlaneWave`, 축 방향 `TFSF`; 점 `Record`, 스펙트럼 `Field`/`Flux`, 주기 `Diffraction`, 열린 영역 `FarField`. 정규화와 경계 제한은 [메타표면](../guide/fdtd/fdtd-metasurface.md)과 [복사](../guide/fdtd/fdtd-radiation.md)를 보세요. |
 | 경계 | `PEC`, `PMC`, `Periodic`, `Bloch`, `Axis1D`, `Symmetry`, `PML`, `Absorber`이며, 재료 정합, 소스 이격, 기하 검사를 따릅니다. 흡수층은 영역 안의 셀을 차지합니다. |
-| 흡수층을 관통하는 결합 유전체 기하 | 이산 결합이 감쇠 프로파일과 교환 가능할 때, 유계인 무손실 압출 형상이 정합된 `Absorber` 축 하나를 관통해 뻗을 수 있습니다. 구체적인 CPU 실행은 전기 Dipole과 고정 길이를 쓰며, PML과 자동 종료는 이 경로의 범위 밖입니다. [계약](../guide/fdtd/fd-constitutive-absorber.md)을 보세요. |
+| 흡수층을 관통하는 결합 유전체 기하 | 이산 결합이 감쇠 프로파일과 교환 가능할 때, 유계인 무손실 압출 형상이 정합된 `Absorber` 축 하나를 관통해 뻗을 수 있습니다. 구체적인 CPU 실행은 전기 Dipole과 고정 길이를 쓰며, PML과 자동 종료는 이 경로의 범위 밖입니다. [계약](../guide/fdtd/fdtd-constitutive-absorber.md)을 보세요. |
 | 셀 스냅 재료 영역 | `Slab`과 `Region`; 실수 스칼라/대각 `Material`, `Conductor`를 통한 전도도, `Dispersive`를 통한 수동 Drude/Lorentz/Debye 모델이며, 계획 검사를 따릅니다. `fd.eps_at`은 극점 모델을 진공 파장에서 계산합니다. |
-| 스무딩 유전체 형상 | `Sphere`, `Box`, `Cylinder`, `Prism`은 유계인 등방성 무손실 재료, 이격, 경계 계약을 가지며, 특정한 맞닿은 접합만 허용됩니다. 면을 가로질러 균일하거나(그 면을 통해 빠져나가는 기판) 면이 `Symmetry` 평면인 경우가 아니면, 스무딩 형상은 영역 안에 있어야 하고 표면이 각 높은 쪽(`+`) 벽에서 적어도 반 셀 떨어져 있어야 합니다. 거부 메시지가 둘 중 무엇을 어겼는지 알려 줍니다. [스무딩 점유율](../validation/fdtd/fd-subpixel-occupancy.md)을 보세요. `discretisation='stencil'`에는 별도의 [고립된 구 계약](../design/fd-symmetric-stencil.md)이 있습니다. |
-| 스무딩 손실/분산 필름 | 평범한 등방성 비자성 호스트 안의, 회전하지 않고 범위를 지정하지 않은 구체적인 `Box` 하나이며, 정확히 두 축에 걸쳐 필요한 돌출을 갖고 유한한 두께 방향으로 흡수층에서 떨어져 있어야 합니다. 도체, 유한 Debye 합, 유한 Drude/Lorentz 합, 혼합 계열에는 각자의 제한이 있습니다: [전도성](../validation/fdtd/fd-conductive-film.md), [Debye](../validation/fdtd/fd-debye-sum-film.md), [진동자](../validation/fdtd/fd-oscillator-sum-film.md), [혼합 계열](../validation/fdtd/fd-hybrid-film.md). |
-| 분리된 전도성 필름 | 회전하지 않고 범위를 지정하지 않은 구체적인 voxel `Box` 구조물 둘 이상이며, 모두 `Conductor` 재료(`sigma=0` 포함)를 쓰고, 하나의 평범한 양의 등방성 무손실 비자성 `Material` 호스트 안에 있습니다. 모든 필름은 법선 축을 공유하고, 패딩을 더한 격자 지지 영역은 쌍마다 서로 겹치지 않습니다. 초기 필드, 추적된 기하/재료/대역 값, 겹치는 지지 영역, 선언된 극점 계열을 섞는 적층은 거부합니다. [전도성 적층](../validation/fdtd/fd-conductive-stack.md)을 보세요. |
-| 맞닿은 전도성 필름 | 면이 정확히 일치하고 각각 두께가 적어도 한 셀인 그런 필름 정확히 둘이, 하나의 수동 합집합 메모리를 공유합니다. 접촉 허용 오차는 없으며, 세 재료가 만나는 셀, 손실 호스트, 초기 필드, 추적은 거부합니다. 파동 정확도는 받아들여지지 않았습니다([#51](https://github.com/fieldalgo/wavebit/issues/51)). [맞닿은 필름](../validation/fdtd/fd-conductive-contact.md)을 보세요. |
-| 분리된 Debye 필름 | 서로 겹치지 않는 평행한 voxel Box 필름 둘 이상이며, 각각 수동 Debye 극점 하나, 둘 또는 유한한 합을 갖고 같은 평범한 무손실 비자성 호스트 안에 있습니다. 선언된 슬롯과 단일 항 축약은 유지됩니다. 고정 길이만 지원하며, 초기 필드, 추적된 입력, 겹치는 패딩 지지 영역, 혼합 계열 적층은 거부합니다. [Debye 적층](../validation/fdtd/fd-debye-stack.md)을 보세요. |
-| 분리된 단일 진동자 필름 | 평행한 voxel `Box` 필름 둘 이상이며, 각각 정확히 하나의 수동 `Drude` 또는 `Lorentz` 극점을 갖고 같은 평범한 무손실 등방성 비자성 호스트 안에 있습니다. 필름마다 다른 진동자 종류를 쓸 수 있습니다. 지지 영역은 서로 겹치지 않아야 하고, 실행 길이는 고정입니다. 초기 필드, 미분, 필름 안의 합, Debye 구성원, `Decay`는 거부합니다. [유계 계약과 검증 상태](../validation/fdtd/fd-oscillator-stack.md)를 보세요. |
+| 스무딩 유전체 형상 | `Sphere`, `Box`, `Cylinder`, `Prism`은 유계인 등방성 무손실 재료, 이격, 경계 계약을 가지며, 특정한 맞닿은 접합만 허용됩니다. 면을 가로질러 균일하거나(그 면을 통해 빠져나가는 기판) 면이 `Symmetry` 평면인 경우가 아니면, 스무딩 형상은 영역 안에 있어야 하고 표면이 각 높은 쪽(`+`) 벽에서 적어도 반 셀 떨어져 있어야 합니다. 거부 메시지가 둘 중 무엇을 어겼는지 알려 줍니다. [스무딩 점유율](../validation/fdtd/fdtd-subpixel-occupancy.md)을 보세요. `discretisation='stencil'`에는 별도의 [고립된 구 계약](../design/fdtd-symmetric-stencil.md)이 있습니다. |
+| 스무딩 손실/분산 필름 | 평범한 등방성 비자성 호스트 안의, 회전하지 않고 범위를 지정하지 않은 구체적인 `Box` 하나이며, 정확히 두 축에 걸쳐 필요한 돌출을 갖고 유한한 두께 방향으로 흡수층에서 떨어져 있어야 합니다. 도체, 유한 Debye 합, 유한 Drude/Lorentz 합, 혼합 계열에는 각자의 제한이 있습니다: [전도성](../validation/fdtd/fdtd-conductive-film.md), [Debye](../validation/fdtd/fdtd-debye-sum-film.md), [진동자](../validation/fdtd/fdtd-oscillator-sum-film.md), [혼합 계열](../validation/fdtd/fdtd-hybrid-film.md). |
+| 분리된 전도성 필름 | 회전하지 않고 범위를 지정하지 않은 구체적인 voxel `Box` 구조물 둘 이상이며, 모두 `Conductor` 재료(`sigma=0` 포함)를 쓰고, 하나의 평범한 양의 등방성 무손실 비자성 `Material` 호스트 안에 있습니다. 모든 필름은 법선 축을 공유하고, 패딩을 더한 격자 지지 영역은 쌍마다 서로 겹치지 않습니다. 초기 필드, 추적된 기하/재료/대역 값, 겹치는 지지 영역, 선언된 극점 계열을 섞는 적층은 거부합니다. [전도성 적층](../validation/fdtd/fdtd-conductive-stack.md)을 보세요. |
+| 맞닿은 전도성 필름 | 면이 정확히 일치하고 각각 두께가 적어도 한 셀인 그런 필름 정확히 둘이, 하나의 수동 합집합 메모리를 공유합니다. 접촉 허용 오차는 없으며, 세 재료가 만나는 셀, 손실 호스트, 초기 필드, 추적은 거부합니다. 파동 정확도는 받아들여지지 않았습니다([#51](https://github.com/fieldalgo/wavebit/issues/51)). [맞닿은 필름](../validation/fdtd/fdtd-conductive-contact.md)을 보세요. |
+| 분리된 Debye 필름 | 서로 겹치지 않는 평행한 voxel Box 필름 둘 이상이며, 각각 수동 Debye 극점 하나, 둘 또는 유한한 합을 갖고 같은 평범한 무손실 비자성 호스트 안에 있습니다. 선언된 슬롯과 단일 항 축약은 유지됩니다. 고정 길이만 지원하며, 초기 필드, 추적된 입력, 겹치는 패딩 지지 영역, 혼합 계열 적층은 거부합니다. [Debye 적층](../validation/fdtd/fdtd-debye-stack.md)을 보세요. |
+| 분리된 단일 진동자 필름 | 평행한 voxel `Box` 필름 둘 이상이며, 각각 정확히 하나의 수동 `Drude` 또는 `Lorentz` 극점을 갖고 같은 평범한 무손실 등방성 비자성 호스트 안에 있습니다. 필름마다 다른 진동자 종류를 쓸 수 있습니다. 지지 영역은 서로 겹치지 않아야 하고, 실행 길이는 고정입니다. 초기 필드, 미분, 필름 안의 합, Debye 구성원, `Decay`는 거부합니다. [유계 계약과 검증 상태](../validation/fdtd/fdtd-oscillator-stack.md)를 보세요. |
 
 전도성 적층은 평범한 `Scene(structures=(...))` 튜플로 선언합니다. 별도의 적층 생성자는
 없습니다. 각 필름은 같은 두 가로 축에 걸쳐야 하고 양쪽에 적어도 한 셀의 돌출이 있어야
@@ -183,7 +183,7 @@ Lorentz 공명을 포함하지만, 최종 관측값 오차의 한계는 아닙�
 
 계획이 성공하거나 실행이 안정적이라고 정확도가 보증되지는 않습니다. 필요한 양에 맞춰
 공간, 실행 길이, 흡수 경계를 각각 독립적으로 세분하고, 경고를 읽으세요.
-[C7 메타표면 비교](../validation/fdtd/fd-metasurface-validation.md)는 M3의 느린 수렴에 대한
+[C7 메타표면 비교](../validation/fdtd/fdtd-metasurface-validation.md)는 M3의 느린 수렴에 대한
 원인 미해결 문제를 포함해 여전히 통과하지 못했습니다.
 유계 필름 작업이 일반 C8 스무딩을 완성하지는 않으며, 그 검증 기록에는 혼합된 사례와
 잡음으로 판정되지 않은 사례가 남아 있습니다. 벌크 메시 척도에 대해 유도한 규칙이 모든

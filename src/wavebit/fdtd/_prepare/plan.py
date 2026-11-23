@@ -121,7 +121,7 @@ def _digest(v):
     written out by :func:`_encode`. It is for a static field whose *content* has to move the
     skeleton but whose size makes writing it into the hash input absurd: a prepared material
     map's index and value arrays are tens of megabytes (measured 50,911,380 bytes of active
-    rows on the 56-cell research sphere, ``docs/design/fd-symmetric-stencil.md``), and they are
+    rows on the 56-cell research sphere, ``docs/design/fdtd-symmetric-stencil.md``), and they are
     static -- assembled once on the host, never traced, never differentiated.
 
     The dtype and the shape go in beside the bytes, so that two arrays sharing a buffer but

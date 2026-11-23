@@ -2,7 +2,7 @@
 
 Production integration: ``fd.Structure(junction='split')`` now implements the selected
 rule without this harness's patches. ``studies/cross_solver/junction/fdtd_junction_production.py`` validates
-the added exact node-plane ties; see ``docs/validation/fdtd/fd-subpixel-occupancy.md``, The junction.
+the added exact node-plane ties; see ``docs/validation/fdtd/fdtd-subpixel-occupancy.md``, The junction.
 The historical question, registered gates and recorded rows below remain unchanged.
 
 **The question.** Door 5 (``src/wavebit/fdtd/_prepare/checks.py``) refuses a smoothed pillar standing

@@ -433,7 +433,7 @@ def check_smoothed(scene, grid):
     overlap, a union of one material, a third
     structure in a written voxel, a lossy, magnetic or anisotropic medium, the stencil, and a
     pair the junction recognises but refuses keep this refusal, with the clip's reason
-    appended. ``docs/validation/fdtd/fd-polytope-clip.md`` holds the registered gates.
+    appended. ``docs/validation/fdtd/fdtd-polytope-clip.md`` holds the registered gates.
 
     **6. No smoothed surface in a voxel a cell-snapped face cuts** (C4). A snapped shape gives
     whole cells, so the three components whose Yee point lies on one of its faces have a voxel
@@ -654,7 +654,7 @@ def check_smoothed(scene, grid):
                     f'it. Give the smoothed shape and everything sharing its cells a scalar '
                     f'{what}=, or say the anisotropic medium with the cell-snapped fdtd.SnappedBox, '
                     f'whose material is not mixed at all. The tensor form is stage 5\'s, and '
-                    f'study S1 found no robust order it buys (docs/validation/fdtd/fd-subpixel-occupancy.md), '
+                    f'study S1 found no robust order it buys (docs/validation/fdtd/fdtd-subpixel-occupancy.md), '
                     f'so nothing schedules it.')
     import wavebit.fdtd._prepare.clip as clip
     import wavebit.fdtd._prepare.junction as junction
@@ -713,7 +713,7 @@ def check_smoothed(scene, grid):
                 f'leaves: no single body and no canonical dimer reaches three media in a '
                 f'voxel. {why}C10 answers a pair whose shared volume is exact in every such '
                 f'voxel (proved apart, both flat there, or one an unturned Box face) '
-                f'(docs/validation/fdtd/fd-polytope-clip.md). '
+                f'(docs/validation/fdtd/fdtd-polytope-clip.md). '
                 f'No junction rule covers this pair: {record}. The junction rules '
                 f"(Structure(junction=), default 'split') cover a Cylinder or an unturned "
                 f'Box standing flush on a smoothed, unturned Box face.')
@@ -1511,7 +1511,7 @@ def _clipping_notes(scene, plan):
 
 #: Cells across a smoothed body's smallest bounded extent below which it is refused, and below
 #: which it warns. Set by study S2b (``studies/fdtd/subpixel_cells_across/fdtd_subpixel_cells_across.py``,
-#: ``docs/validation/fdtd/fd-subpixel-occupancy.md``): at 2 cells an eps-12 sphere's polarizability is 9.6% to
+#: ``docs/validation/fdtd/fdtd-subpixel-occupancy.md``): at 2 cells an eps-12 sphere's polarizability is 9.6% to
 #: 43% high over five placements and it scatters 123% too much; at 4 every body tried at eps 12
 #: is within 9.2%, and the sphere at eps 4 within 2.90%; at 8, every body within 2.63%.
 CELLS_ACROSS_REFUSED, CELLS_ACROSS_WARNED = 4, 8
@@ -2284,7 +2284,7 @@ def _lift_notes(scene, plan, lifted=None):
              f'way) so that the smoothed operator is positive definite: at this contrast the '
              f'default rule falls below the floor there. The run is stable by construction '
              f'(src/wavebit/fdtd/_prepare/stars.py); the effect on accuracy is measured in '
-             f'docs/validation/fdtd/fd-subpixel-occupancy.md, "The star lift".')]
+             f'docs/validation/fdtd/fdtd-subpixel-occupancy.md, "The star lift".')]
 
 
 def _radiation_notes(scene):
@@ -2303,7 +2303,7 @@ def _radiation_notes(scene):
         'residuals 52.05%/26.38%/12.91% at 20/28/40 cells per wavelength. '
         'These are examples, not an error bound for this scene. Use propagation="yee" '
         'for the validated lattice radiation map within its supported frequency band; '
-        'keep continuum only when its approximation is intended. See docs/validation/fdtd/fd-lattice-radiation.md.')]
+        'keep continuum only when its approximation is intended. See docs/validation/fdtd/fdtd-lattice-radiation.md.')]
 
 
 def _smoothed_notes(scene, plan, rows=None):
@@ -2337,7 +2337,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'local DC conductivity and induced Debye relaxation. Only concrete '
                     'axis-aligned films in a lossless host, outside absorbers, are admitted. '
                     'Validate spatial, time and boundary convergence separately. '
-                    'See docs/validation/fdtd/fd-conductive-contact.md.'))
+                    'See docs/validation/fdtd/fdtd-conductive-contact.md.'))
     elif stack is not None:
         out.append((SubpixelAccuracyWarning,
                     f'The conductive stack has {len(stack.films)} films normal to '
@@ -2346,7 +2346,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'parallel Conductor films in a plain lossless dielectric; touching '
                     'films, other pole families and junctions are outside it. Validate '
                     'observables under refinement and check duration and absorbers '
-                    'separately. See docs/validation/fdtd/fd-conductive-stack.md.'))
+                    'separately. See docs/validation/fdtd/fdtd-conductive-stack.md.'))
     if film is not None:
         out.append((SubpixelAccuracyWarning,
                     'The conductive film uses an induced Debye memory at normal mixed '
@@ -2355,7 +2355,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'conductors, declared dispersive poles and junctions are not supported. '
                     'An exact local material response alone does not establish spatial '
                     'convergence. Validate the observables under refinement and check run '
-                    'duration separately. See docs/validation/fdtd/fd-conductive-film.md.'))
+                    'duration separately. See docs/validation/fdtd/fdtd-conductive-film.md.'))
     from wavebit.fdtd._prepare.debye_stack import descriptor as debye_stack_descriptor
     relaxation_stack = debye_stack_descriptor(scene, plan.grid)
     if relaxation_stack is not None:
@@ -2367,7 +2367,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'lossless dielectric. Touching films, mixed pole families, initial '
                     'fields, tracing and DecayStop are outside this bounded scope. Validate '
                     'observables under refinement and check duration and absorbers '
-                    'separately. See docs/validation/fdtd/fd-debye-stack.md.'))
+                    'separately. See docs/validation/fdtd/fdtd-debye-stack.md.'))
     from wavebit.fdtd._prepare.oscillator_stack import descriptor as oscillator_stack_descriptor
     resonant_stack = oscillator_stack_descriptor(scene, plan.grid)
     if resonant_stack is not None:
@@ -2379,7 +2379,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'response is unchanged. This bounded scope excludes within-film '
                     'sums, Debye poles, touching films, initial fields, tracing and DecayStop. '
                     'Validate observables under refinement and check duration and '
-                    'absorbers separately. See docs/validation/fdtd/fd-oscillator-stack.md.'))
+                    'absorbers separately. See docs/validation/fdtd/fdtd-oscillator-stack.md.'))
     from wavebit.fdtd._prepare.single_pole_film import descriptor as single_pole_descriptor
     dispersive_film = single_pole_descriptor(scene, plan.grid)
     if dispersive_film is not None:
@@ -2389,7 +2389,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'scope is one concrete axis-aligned film in a lossless dielectric. '
                     'The source-band mesh bound certifies bulk material scales only; '
                     'validate observables under refinement and check run duration '
-                    'separately. See docs/validation/fdtd/fd-single-pole-film.md.'))
+                    'separately. See docs/validation/fdtd/fdtd-single-pole-film.md.'))
     from wavebit.fdtd._prepare.debye_film import descriptor as debye_descriptor
     relaxation_film = debye_descriptor(scene, plan.grid)
     if relaxation_film is not None:
@@ -2399,7 +2399,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'scope is one concrete axis-aligned film in a plain dielectric. '
                     'The source-band mesh bound certifies bulk scales only; validate '
                     'observables under refinement and check run duration and absorbers '
-                    'separately. See docs/validation/fdtd/fd-debye-film.md.'))
+                    'separately. See docs/validation/fdtd/fdtd-debye-film.md.'))
     from wavebit.fdtd._prepare.two_debye_film import descriptor as two_debye_descriptor
     two_relaxation_film = two_debye_descriptor(scene, plan.grid)
     if two_relaxation_film is not None:
@@ -2409,7 +2409,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'bounded C8 scope is one concrete axis-aligned film in a plain '
                     'dielectric. Validate observables under refinement and check '
                     'duration and absorbers separately. The spectral guard covers '
-                    'bulk scales only. See docs/validation/fdtd/fd-two-debye-film.md.'))
+                    'bulk scales only. See docs/validation/fdtd/fdtd-two-debye-film.md.'))
     from wavebit.fdtd._prepare.debye_sum_film import descriptor as debye_sum_descriptor
     sum_relaxation_film = debye_sum_descriptor(scene, plan.grid)
     if sum_relaxation_film is not None:
@@ -2419,7 +2419,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'This bounded C8 scope is one concrete axis-aligned film in a '
                     'plain dielectric. Validate observables under refinement and '
                     'check duration and absorbers separately. The spectral guard '
-                    'covers bulk scales only. See docs/validation/fdtd/fd-debye-sum-film.md.'))
+                    'covers bulk scales only. See docs/validation/fdtd/fdtd-debye-sum-film.md.'))
     from wavebit.fdtd._prepare.oscillator_sum_film import descriptor as oscillator_sum_descriptor
     sum_oscillator_film = oscillator_sum_descriptor(scene, plan.grid)
     if sum_oscillator_film is not None:
@@ -2430,7 +2430,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'C8 scope is one concrete axis-aligned film in a plain dielectric. '
                     'Validate observables under refinement and check duration and '
                     'absorbers separately. The spectral guard covers bulk scales only. '
-                    'See docs/validation/fdtd/fd-oscillator-sum-film.md.'))
+                    'See docs/validation/fdtd/fdtd-oscillator-sum-film.md.'))
     from wavebit.fdtd._prepare.hybrid_film import descriptor as hybrid_descriptor
     hybrid = hybrid_descriptor(scene, plan.grid)
     if hybrid is not None:
@@ -2440,7 +2440,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     'This bounded C8 scope is one concrete axis-aligned film in a '
                     'plain dielectric. Validate observables under refinement and '
                     'check duration and absorbers separately. The spectral guard '
-                    'covers bulk scales only. See docs/validation/fdtd/fd-hybrid-film.md.'))
+                    'covers bulk scales only. See docs/validation/fdtd/fdtd-hybrid-film.md.'))
     if (len(asked) < len(smoothed) and film is None and stack is None and dispersive_film is None
             and relaxation_stack is None and resonant_stack is None and relaxation_film is None
             and two_relaxation_film is None
@@ -2456,12 +2456,12 @@ def _smoothed_notes(scene, plan, rows=None):
                     'wavelength, three placements). Production validation across contrasts is '
                     'incomplete. This benchmark is not an error bound for this scene. Validate '
                     'its observables under refinement; exact voxel volume alone does not '
-                    'guarantee electromagnetic accuracy. See docs/validation/fdtd/fd-mie-validation.md; this '
+                    'guarantee electromagnetic accuracy. See docs/validation/fdtd/fdtd-mie-validation.md; this '
                     'rule has not passed the stage-4 Mie gate, which '
                     "discretization='stencil' passed (C3)."))
     if asked:
         # The voxel rule's sentence above is not this structure's: its E is the prepared
-        # operator's. The orders are the research sweeps' (docs/design/fd-symmetric-stencil.md,
+        # operator's. The orders are the research sweeps' (docs/design/fdtd-symmetric-stencil.md,
         # "Glass and weak sphere refinement": 2.063617 at eps=2.25, 2.057240 at eps=1.1; "C3:
         # the high-index sphere, and the verdict": 2.2442819 at eps=12, -4.082356% at 80).
         where = ', '.join(f'structures[{index}]' for index in asked)
@@ -2474,7 +2474,7 @@ def _smoothed_notes(scene, plan, rows=None):
                     '(epsilon=2.25) and 2.057 at epsilon=1.1 (20/28/40). On glass and weak '
                     'spheres at those grids its error is larger than with the default rule. These '
                     'benchmarks are not an error bound for this scene. Validate its observables '
-                    'under refinement. See docs/design/fd-symmetric-stencil.md.'))
+                    'under refinement. See docs/design/fdtd-symmetric-stencil.md.'))
     report = Approximations()
     proxy_stats, proxy_by_index = {}, {}
     magnetic = _background(scene).is_magnetic or any(
@@ -2984,7 +2984,7 @@ def _proximity_notes(scene, plan):
                 # A public Structure declared it runs on through this face -- a cell-snapped
                 # waveguide core, say, whose layer stays matched to the background. It has no
                 # gap to keep and cannot move off the face; the reflection that costs is
-                # measured in docs/validation/fdtd/fd-waveguide-through-pml.md.
+                # measured in docs/validation/fdtd/fdtd-waveguide-through-pml.md.
                 continue
             lo = grid.low[fa] + k0 * grid.dx
             hi = grid.low[fa] + k1 * grid.dx

@@ -104,7 +104,7 @@ def test_sphere_maps_give_each_slot_its_own_fraction():
 
     Closing the ``studies/`` seam (2026-09-26) measured this unpinned: with ``sphere_maps``
     filling the face slot from the edge fraction, only the two radius-derivative checks among
-    the fast cases went red (``docs/design/fd-symmetric-stencil.md``, "The seam, closed"). Here each
+    the fast cases went red (``docs/design/fdtd-symmetric-stencil.md``, "The seam, closed"). Here each
     slot is judged on its own, at all eight triplets and every component, against oracles that
     share no code with the maps: the chord written out by hand for the edge, and
     :func:`independent_face`'s adaptive integration for the face. The points sit on the

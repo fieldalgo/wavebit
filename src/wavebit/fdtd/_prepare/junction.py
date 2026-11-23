@@ -537,5 +537,5 @@ def notes(scene, plan):
                      'first order (0.98-1.02 on the flat film); coarse-grid cancellation '
                      "can make its total error look smaller. 'split' is the default. ")
         lines.append(text + 'These measurements are not an error bound for this scene; '
-                     'see docs/validation/fdtd/fd-subpixel-occupancy.md, The junction.')
+                     'see docs/validation/fdtd/fdtd-subpixel-occupancy.md, The junction.')
     return [(SubpixelAccuracyWarning, ' '.join(lines))]

@@ -173,7 +173,7 @@ refining `dx`.
 
 Even on a cell boundary a snapped face is not exact for every component. The tangential electric
 field on the face's node plane takes the material over its whole surrounding cell, so for that
-field a `SnappedSlab` sits half a cell low as a whole ([G5 in smoothed occupancy](../../validation/fdtd/fd-subpixel-occupancy.md)).
+field a `SnappedSlab` sits half a cell low as a whole ([G5 in smoothed occupancy](../../validation/fdtd/fdtd-subpixel-occupancy.md)).
 Moving a layer as a whole changes the phases of `r` and `t` measured at the declared planes, not
 the efficiencies; when phases must match another solver, a smoothed `Box` layer puts its faces
 where they were declared.
@@ -246,7 +246,7 @@ whole, lossy, dispersive, magnetic or anisotropic media, `discretization="stenci
 ranged (differentiated) geometry on either body. Material values of the pair may be traced.
 `check` lists each pair as `clip with structures[j]` in the body block, and the run's
 `SubpixelAccuracyWarning` names it. What this was measured to do is in
-[the polytope clip](../../validation/fdtd/fd-polytope-clip.md).
+[the polytope clip](../../validation/fdtd/fdtd-polytope-clip.md).
 
 The global `Numerics.junction` policy is read only by the standing body of each
 supported flush pair, using the engine's role selection after substrate continuation.
@@ -313,8 +313,8 @@ gate in general; every run with a smoothed body emits `SubpixelAccuracyWarning` 
 alternative `discretization="stencil"` passed that gate for a sphere (order 2.24 for an
 `ε = 12` sphere) but applies to `Sphere` only, takes plain numbers (no derivatives), and needs a
 `PlaneWave` or `TFSF` source. The measurements are in
-[the Mie validation](../../validation/fdtd/fd-mie-validation.md) and
-[smoothed occupancy](../../validation/fdtd/fd-subpixel-occupancy.md).
+[the Mie validation](../../validation/fdtd/fdtd-mie-validation.md) and
+[smoothed occupancy](../../validation/fdtd/fdtd-subpixel-occupancy.md).
 
 The scene-wide `Numerics(discretization="stencil")` selector is forwarded only to
 smoothed bodies. `SnappedSlab` and `SnappedBox` retain their whole-cell fills. `Box`, `Cylinder`,
@@ -570,7 +570,7 @@ emits them as Python warnings from `wavebit.fdtd.diagnostics`.
 | --- | --- |
 | `CoarseMeshWarning` | 8 to 12 cells per wavelength in a medium, or a smoothed body 4 to 8 cells across |
 | `SubpixelAccuracyWarning` | the scene has a smoothed body; the default rule's accuracy gate is incomplete |
-| `AbsorberProximityWarning` | a structure lies within half a wavelength (in its own medium) of an absorbing face, whose PML is matched to the medium that reaches the face rather than to the structure's near field. A `SnappedSlab` that continues into the absorber, or a `Box` whose `Structure` declares `continuation` through that face (a substrate), does not warn there: its PML is matched to it. Nor does a `SnappedBox` core declared to continue through the face: its layer stays matched to the background, and the reflection that costs is measured in [the waveguide-through-PML record](../../validation/fdtd/fd-waveguide-through-pml.md). |
+| `AbsorberProximityWarning` | a structure lies within half a wavelength (in its own medium) of an absorbing face, whose PML is matched to the medium that reaches the face rather than to the structure's near field. A `SnappedSlab` that continues into the absorber, or a `Box` whose `Structure` declares `continuation` through that face (a substrate), does not warn there: its PML is matched to it. Nor does a `SnappedBox` core declared to continue through the face: its layer stays matched to the background, and the reflection that costs is measured in [the waveguide-through-PML record](../../validation/fdtd/fdtd-waveguide-through-pml.md). |
 | `GeometryClippedWarning` | a structure reaches past a `PEC` or `PMC` wall and loses that part |
 | `UnsettledFieldWarning` | a monitored region still held field at the end; its spectrum includes the truncation — run longer |
 | `GrowingFieldWarning` | the field still grows after every source ended; a longer run makes it worse. Usually a bound mode next to a PML: set `PML(stabilizing_loss=...)` to the value the message quotes |
@@ -681,7 +681,7 @@ values and tangents in both the public SI model and the normalized FDTD model.
 Public calls carrying float32 retain their previous arithmetic and dtype; this
 adds no extreme-value support for float32 or mixed precision. It does not change
 Lorentz response or ADE coefficients, or certify every extreme finite input and
-objective. See [the differentiation guide](fd-differentiation.md) for a normalized
+objective. See [the differentiation guide](fdtd-differentiation.md) for a normalized
 example, SI/unit-conversion scope and intermediate-underflow limitations.
 
 Geometry is differentiable only for smoothed bodies given a reserved support,
@@ -710,7 +710,7 @@ See the [carrier cutoff contract](../../validation/fdtd/general-cuda.md#live-ban
 and [bounded pulse Hessian qualification](../../validation/fdtd/general-cuda.md#gaussian-pulse-wavelength-bandwidth-phase-and-delay-hessians)
 for physical scaling and the fixed-delay/bandwidth dependence.
 A derivative of the discrete solver is not a statement about convergence; compare it with a
-finite difference and refine the forward solve as well. The [differentiation guide](fd-differentiation.md)
+finite difference and refine the forward solve as well. The [differentiation guide](fdtd-differentiation.md)
 covers the measurements, using the compatibility spelling of the same engine.
 
 On Torch, `prepared.run` differentiates under eager autograd and under `torch.func.grad`,
@@ -809,7 +809,7 @@ coating of 0.105 µm instead, the same scene would warn `geometry.cell_snapped` 
   core that declares `Structure(continuation=('z-', 'z+'))` (any one axis) and reaches those
   physical faces. The core is extended through the padding with its cross-section unchanged, so
   every layer of the PML sees the same medium; its measured guided-mode reflection is in the
-  [validation record](../../validation/fdtd/fd-waveguide-through-pml.md). A smoothed core
+  [validation record](../../validation/fdtd/fdtd-waveguide-through-pml.md). A smoothed core
   narrower than the cross-section — a `Box`, `Cylinder`, `Prism` or `Sphere` — is still refused
   at an `Open()` face, and so is a smoothed body that ends so close to the face that its
   smoothed edge reaches the layer, or a continued core that touches an `Open()` face of another
@@ -822,16 +822,16 @@ for the protocol and [stopping/absorbers](stopping-and-absorbers.md) for numeric
 ## Further reading
 
 - [Domains, sources and observations](general-fdtd.md) — the declaration API with a short example.
-- [Smoothed occupancy](../../validation/fdtd/fd-subpixel-occupancy.md) and [the Mie validation](../../validation/fdtd/fd-mie-validation.md)
+- [Smoothed occupancy](../../validation/fdtd/fdtd-subpixel-occupancy.md) and [the Mie validation](../../validation/fdtd/fdtd-mie-validation.md)
   — how smoothing is measured, including the half-cell placement of a snapped slab's face.
-- [A periodic metasurface against RCWA](../../validation/fdtd/fd-metasurface-validation.md) — what agrees with
+- [A periodic metasurface against RCWA](../../validation/fdtd/fdtd-metasurface-validation.md) — what agrees with
   RCWA and at what convergence order.
-- [The polytope clip](../../validation/fdtd/fd-polytope-clip.md) — two smoothed bodies in one cell, and
+- [The polytope clip](../../validation/fdtd/fdtd-polytope-clip.md) — two smoothed bodies in one cell, and
   what was measured.
-- [The stage 4 report](../../validation/fdtd/fd-stage4-report.md) — the status of every stage-4 commit,
+- [The stage 4 report](../../validation/fdtd/fdtd-stage4-report.md) — the status of every stage-4 commit,
   including the gates not passed.
-- [Radiation consistent with the Yee lattice](../../validation/fdtd/fd-lattice-radiation.md) — the far-field transform.
-- The film studies (for example [one Drude or Lorentz film](../../validation/fdtd/fd-single-pole-film.md)) — the bounded
+- [Radiation consistent with the Yee lattice](../../validation/fdtd/fdtd-lattice-radiation.md) — the far-field transform.
+- The film studies (for example [one Drude or Lorentz film](../../validation/fdtd/fdtd-single-pole-film.md)) — the bounded
   scopes for lossy and dispersive layers.
 - [Learning FDTD](../../learn/fdtd/index.md) — the order in which to establish a trustworthy result.
 

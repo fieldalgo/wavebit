@@ -47,8 +47,8 @@ of the medium filling the layer: `exp(-3)`, about 0.05, in vacuum and about 0.01
 `n = 1.5`. Adding cells does not remove that attenuation floor. It is not equivalent to PML, and it does not accept
 PML reference-media, frequency-shift or reflection-target controls. Study reflection
 and resolution for the actual scene; see the retained
-[absorber evidence](../../validation/fdtd/fd-constitutive-absorber.md) and
-[stopping validation](../../validation/fdtd/fd-decay-stopping.md).
+[absorber evidence](../../validation/fdtd/fdtd-constitutive-absorber.md) and
+[stopping validation](../../validation/fdtd/fdtd-decay-stopping.md).
 
 That 0.05 is an amplitude, and it is coherent with the scene's own reflections: a
 reflectance or transmittance moves at first order, by up to about `2 × 0.05 × |r|` per
@@ -99,7 +99,7 @@ preparation: the layer then stays at that wavelength for every run, as it would 
 `fdtd.run` with the same numerics.
 
 For current PlaneWave/TFSF coverage and the limits of the tested time windows, see
-[source-column stopping validation](../../validation/fdtd/fd-source-decay.md).
+[source-column stopping validation](../../validation/fdtd/fdtd-source-decay.md).
 
 Both policies serialize through current `Job` files. The public regression checks
 stopping against an independent uniform-conductor recurrence, exact executed-prefix

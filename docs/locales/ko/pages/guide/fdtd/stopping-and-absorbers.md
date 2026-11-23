@@ -45,8 +45,8 @@ CPML 및 지원하는 재료 기억을 각각 감시합니다. 누적 광원 이
 약 0.05이고 `n = 1.5`에서는 약 0.011입니다. 셀 수를 늘려도 이 감쇠 바닥은 사라지지 않습니다.
 PML과 같지 않으며, PML의 기준 매질·주파수 이동·목표 반사율 설정을 받지 않습니다. 실제
 장면의 반사와 해상도를 따로 검토하세요. 보존된
-[흡수층 근거](../../validation/fdtd/fd-constitutive-absorber.md)와
-[자동 종료 검증](../../validation/fdtd/fd-decay-stopping.md)을 참고하세요.
+[흡수층 근거](../../validation/fdtd/fdtd-constitutive-absorber.md)와
+[자동 종료 검증](../../validation/fdtd/fdtd-decay-stopping.md)을 참고하세요.
 
 이 0.05는 진폭이며 장면 자체의 반사와 결맞음으로 간섭합니다. 따라서 반사율·투과율은
 전력 값 2.5e-3이 아니라 1차로, 면마다 최대 약 `2 × 0.05 × |r|`만큼 달라집니다. 이런 면
@@ -93,7 +93,7 @@ PML은 전도성·분산성 배경에 정합할 수 없으므로, 그런 배경�
 실행에서 그 파장에 머물며, 같은 수치 설정의 새 `fdtd.run`과 같습니다.
 
 현재 PlaneWave/TFSF 지원 범위와 시험한 시간 창의 한계는
-[광원 보조 격자 자동 종료 검증](../../validation/fdtd/fd-source-decay.md)을 보세요.
+[광원 보조 격자 자동 종료 검증](../../validation/fdtd/fdtd-source-decay.md)을 보세요.
 
 두 정책은 현재 `Job` 파일로 직렬화됩니다. 공개 회귀 검증은 자동 종료를 독립적인 균일
 도체 점화식과 비교하고, 세 CPU 백엔드 모두에서 실행한 앞부분 구간의 필드와 시간 신호가

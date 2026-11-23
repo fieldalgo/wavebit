@@ -25,14 +25,14 @@ beam = fdtd.GaussianBeam('b', plane=fdtd.Plane(z=-4.), direction='+z', waist=1.5
 
 면은 `ModeSource`와 같은 한쪽 전체장/산란장(TFSF) 시트입니다([도파관 모드](waveguide-modes.md)
 참고). 중심 파장에서는 빔을 정확히 한쪽으로만 내보냅니다. 중심에서 벗어나면 평면파마다 단면과
-반 칸 위상이 중심의 것이어서 빔이 뒤로도 조금 나갑니다. [검증 기록](../../validation/fdtd/fd-gaussian-beam.md)이
+반 칸 위상이 중심의 것이어서 빔이 뒤로도 조금 나갑니다. [검증 기록](../../validation/fdtd/fdtd-gaussian-beam.md)이
 그 부분을 정확한 예측과 비교해 잽니다.
 
 ## 유한 격자에서의 정확도
 
 빔은 연속체가 아니라 격자에 대해 정확합니다. 격자의 평면파는 방향에 따라 위상 속도가 조금씩
 다르므로, 빔이 초점을 지나며 얻는 위상(구이 위상)이 연속체 빔과 조금 다릅니다.
-[검증 기록](../../validation/fdtd/fd-gaussian-beam.md)(진공, 파장 1 µm, 허리 1.5 µm)에서 그 차이는 초점에서
+[검증 기록](../../validation/fdtd/fdtd-gaussian-beam.md)(진공, 파장 1 µm, 허리 1.5 µm)에서 그 차이는 초점에서
 3 µm 안쪽에서 격자 간격 0.05 µm(파장당 20칸)일 때 최대 2.2e-3 rad이고, 0.025 µm일 때 5.4e-4 rad입니다.
 오차는 2차로 줄어듭니다. 빔을 따라가는 위상에 기대는 결과는 격자 간격 수렴을 확인하세요. 초점면 허리,
 전력, 뒤쪽 복사는 예측과 훨씬 더 가깝게 맞습니다.
@@ -63,4 +63,4 @@ JAX와 Torch 백엔드에서 빔의 `amplitude`, `phase`, `delay_seconds`나 다
 있습니다. `K**L` 스텝 실행은 약 `L * K`개 상태만 저장합니다. 고정 `Duration`이 필요하며
 `DecayStop`과는 함께 쓸 수 없습니다. 구간 일정과 측정한 메모리는
 [체크포인트 기록](../../validation/fdtd/checkpointing.md)에 있고, 이를 거쳐도 이 빔의 미분은
-일반 실행의 값과 1e-12까지 같습니다([검증 기록](../../validation/fdtd/fd-gaussian-beam.md)).
+일반 실행의 값과 1e-12까지 같습니다([검증 기록](../../validation/fdtd/fdtd-gaussian-beam.md)).

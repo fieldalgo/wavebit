@@ -1,6 +1,6 @@
 """C2 integration: actual CSG reports, compiled coefficients, and preparation-time doors.
 
-Mutants are applied as source edits and restored; docs/validation/fdtd/fd-subpixel-occupancy.md records
+Mutants are applied as source edits and restored; docs/validation/fdtd/fdtd-subpixel-occupancy.md records
 their exit codes. The existing mixing, component-location and gradient gates are in
 test_fd_occupancy.py; this file covers what the isolated branch could not see.
 """

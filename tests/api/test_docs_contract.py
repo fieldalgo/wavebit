@@ -657,6 +657,18 @@ def _relocation_metadata(root=ROOT):
     return maps, records
 
 
+def test_every_redirect_leaves_a_retired_page_address_for_a_present_page():
+    """The site forwards each ``redirect`` row's old address (docs/conf.py); both ends must hold."""
+    files = tree(ROOT)
+    moves = json.loads((ROOT / 'docs/development/document-relocations.json').read_text(encoding='utf-8'))['moves']
+    rows = [m for m in moves if m.get('redirect')]
+    assert len(rows) == 35
+    for row in rows:
+        assert row['source'].startswith('docs/') and not row['source'].startswith('docs/locales/'), row
+        assert row['source'].endswith('.md') and row['target'].endswith('.md'), row
+        assert row['target'] in files and row['source'] not in files, row
+
+
 def _citation_candidates(path, citing, root=ROOT):
     """Resolve live citations directly and immutable evidence through exact ledgers.
 

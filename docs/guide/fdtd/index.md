@@ -3,16 +3,16 @@
 Start with the [current FDTD problem API](general-fdtd.md), [how the solver models a problem](model.md) and the [runnable pulse example](../../getting-started/fdtd.md). The physical native-grid and periodic-stack guides cover the other formulations. Historical research guides retain their measured scope and pinned source versions.
 
 What the general engine's smoothed geometry supports today, and what stage 4 left open, is in the
-[stage 4 report](../../validation/fdtd/fd-stage4-report.md).
+[stage 4 report](../../validation/fdtd/fdtd-stage4-report.md).
 
 - [Physical native Yee grids](native-grids.md)
 - [Physical periodic-stack problems](periodic-problems.md)
 - [Automatic stopping and graded absorbing padding](stopping-and-absorbers.md)
-- [Coupled dielectric geometry in a matched absorber](fd-constitutive-absorber.md)
+- [Coupled dielectric geometry in a matched absorber](fdtd-constitutive-absorber.md)
 - [Smoothed substrate continuation and physical gradients](substrate-gradients.md)
-- [Differentiating the general FDTD engine](fd-differentiation.md)
-- [Periodic metasurfaces with the general FDTD engine](fd-metasurface.md)
-- [Far-field radiation in the general FDTD engine](fd-radiation.md)
+- [Differentiating the general FDTD engine](fdtd-differentiation.md)
+- [Periodic metasurfaces with the general FDTD engine](fdtd-metasurface.md)
+- [Far-field radiation in the general FDTD engine](fdtd-radiation.md)
 - [FDTD research-alpha scope](fdtd-alpha.md)
 - [FDTD — the time-domain solve beside the RCWA one](fdtd.md)
 - [Current FDTD domains, sources and observations](general-fdtd.md)

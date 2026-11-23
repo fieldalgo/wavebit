@@ -103,14 +103,14 @@ subtrees:
       - file: guide/fdtd/index
         subtrees:
         - entries:
-          - file: guide/fdtd/fd-constitutive-absorber
-          - file: guide/fdtd/fd-differentiation
+          - file: guide/fdtd/fdtd-constitutive-absorber
+          - file: guide/fdtd/fdtd-differentiation
           - file: guide/fdtd/native-grids
           - file: guide/fdtd/periodic-problems
           - file: guide/fdtd/stopping-and-absorbers
           - file: guide/fdtd/substrate-gradients
-          - file: guide/fdtd/fd-metasurface
-          - file: guide/fdtd/fd-radiation
+          - file: guide/fdtd/fdtd-metasurface
+          - file: guide/fdtd/fdtd-radiation
           - file: guide/fdtd/fdtd-alpha
           - file: guide/fdtd/fdtd
           - file: guide/fdtd/general-fdtd
@@ -235,39 +235,39 @@ subtrees:
           - file: validation/fdtd/index
             subtrees:
             - entries:
-              - file: validation/fdtd/fd-conductive-film
-              - file: validation/fdtd/fd-conductive-stack
-              - file: validation/fdtd/fd-conductive-contact
-              - file: validation/fdtd/fd-constitutive-absorber
-              - file: validation/fdtd/fd-debye-film
-              - file: validation/fdtd/fd-debye-stack
-              - file: validation/fdtd/fd-debye-sum-film
-              - file: validation/fdtd/fd-decay-stopping
-              - file: validation/fdtd/fd-planewave-acceptance
-              - file: validation/fdtd/fd-source-decay
+              - file: validation/fdtd/fdtd-conductive-film
+              - file: validation/fdtd/fdtd-conductive-stack
+              - file: validation/fdtd/fdtd-conductive-contact
+              - file: validation/fdtd/fdtd-constitutive-absorber
+              - file: validation/fdtd/fdtd-debye-film
+              - file: validation/fdtd/fdtd-debye-stack
+              - file: validation/fdtd/fdtd-debye-sum-film
+              - file: validation/fdtd/fdtd-decay-stopping
+              - file: validation/fdtd/fdtd-planewave-acceptance
+              - file: validation/fdtd/fdtd-source-decay
               - file: validation/fdtd/native-cuda
               - file: validation/fdtd/general-cuda
               - file: validation/fdtd/checkpointing
-              - file: validation/fdtd/fd-hybrid-film
-              - file: validation/fdtd/fd-lattice-radiation
-              - file: validation/fdtd/fd-metasurface-validation
-              - file: validation/fdtd/fd-mie-validation
-              - file: validation/fdtd/fd-oscillator-stack
-              - file: validation/fdtd/fd-oscillator-sum-film
-              - file: validation/fdtd/fd-pole-arithmetic
-              - file: validation/fdtd/fd-polytope-clip
-              - file: validation/fdtd/fd-stage4-c11
-              - file: validation/fdtd/fd-stage4-report
-              - file: validation/fdtd/fd-single-pole-film
-              - file: validation/fdtd/fd-sphere-clip-jit
-              - file: validation/fdtd/fd-policy-cell-shapes
-              - file: validation/fdtd/fd-public-numerics-refusals
-              - file: validation/fdtd/fd-subpixel-occupancy
-              - file: validation/fdtd/fd-two-debye-film
-              - file: validation/fdtd/fd-waveguide-modes
-              - file: validation/fdtd/fd-waveguide-through-pml
-              - file: validation/fdtd/fd-mode-source
-              - file: validation/fdtd/fd-gaussian-beam
+              - file: validation/fdtd/fdtd-hybrid-film
+              - file: validation/fdtd/fdtd-lattice-radiation
+              - file: validation/fdtd/fdtd-metasurface-validation
+              - file: validation/fdtd/fdtd-mie-validation
+              - file: validation/fdtd/fdtd-oscillator-stack
+              - file: validation/fdtd/fdtd-oscillator-sum-film
+              - file: validation/fdtd/fdtd-pole-arithmetic
+              - file: validation/fdtd/fdtd-polytope-clip
+              - file: validation/fdtd/fdtd-stage4-c11
+              - file: validation/fdtd/fdtd-stage4-report
+              - file: validation/fdtd/fdtd-single-pole-film
+              - file: validation/fdtd/fdtd-sphere-clip-jit
+              - file: validation/fdtd/fdtd-policy-cell-shapes
+              - file: validation/fdtd/fdtd-public-numerics-refusals
+              - file: validation/fdtd/fdtd-subpixel-occupancy
+              - file: validation/fdtd/fdtd-two-debye-film
+              - file: validation/fdtd/fdtd-waveguide-modes
+              - file: validation/fdtd/fdtd-waveguide-through-pml
+              - file: validation/fdtd/fdtd-mode-source
+              - file: validation/fdtd/fdtd-gaussian-beam
               - file: validation/fdtd/fdtd-adjoint-validation
               - file: validation/fdtd/fdtd-bragg-cavity
               - file: validation/fdtd/fdtd-circle-gradients
@@ -317,7 +317,7 @@ subtrees:
       - file: design/index
         subtrees:
         - entries:
-          - file: design/fd-symmetric-stencil
+          - file: design/fdtd-symmetric-stencil
           - file: design/unified-api
       - file: migration/index
         subtrees:

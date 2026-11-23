@@ -1229,7 +1229,7 @@ def test_two_smoothed_surfaces_in_one_voxel_are_refused():
 
     # two balls that touch, and two that overlap: both are still refused. C10's clip does not
     # answer two curved surfaces in one voxel -- its registered dimer gate failed
-    # (docs/validation/fdtd/fd-polytope-clip.md) -- and says so.
+    # (docs/validation/fdtd/fdtd-polytope-clip.md) -- and says so.
     for gap in (0.0, -0.1):
         touching = _grid_scene((
             fd.Structure(fd.Sphere(radius=0.15, center=(-0.15 - gap / 2, 0.0, 0.0)), 4.0),

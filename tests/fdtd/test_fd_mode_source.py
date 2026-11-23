@@ -1,6 +1,6 @@
 """A one-way waveguide mode source.
 
-Criteria S1-S8 of ``docs/validation/fdtd/fd-mode-source.md``, registered before the source was
+Criteria S1-S8 of ``docs/validation/fdtd/fdtd-mode-source.md``, registered before the source was
 first run; every limit here is quoted from there.
 """
 import cmath
@@ -399,7 +399,7 @@ def test_s7_derivatives_are_unchanged_by_checkpoint_segments():
     7 steps over this run -- gives each S7 derivative of the ordinary scan to 1e-12 relative,
     on JAX and on Torch CPU (the acceptance of ``docs/validation/fdtd/checkpointing.md``).
     The source's amplitude, phase and delay reach the step through the waveform table, which
-    a Torch segment must take as an input to return their gradients (fd-mode-source.md)."""
+    a Torch segment must take as an input to return their gradients (fdtd-mode-source.md)."""
     _quiet()
     import jax
     import torch

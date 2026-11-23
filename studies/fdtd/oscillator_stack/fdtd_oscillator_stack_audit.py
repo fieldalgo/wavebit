@@ -1011,7 +1011,7 @@ def main(number, parents_path, open_parent):
                             extra=('-m', 'not slow'), workers=validation['workers'])
         slow = command_pair(validation, 'slow', files, extra=['--run-slow', '-m', 'slow'], workers=validation['workers'])
         old_nodes = previous['full']['node_status']
-        docs_node = 'tests/api/test_docs_contract.py::test_every_target_a_document_names_exists[fd-oscillator-stack.md]'
+        docs_node = 'tests/api/test_docs_contract.py::test_every_target_a_document_names_exists[fdtd-oscillator-stack.md]'
         require(not set(old_nodes).intersection(new['node_status']) and docs_node not in old_nodes,
                 'New node collides with predecessor.')
         require(set(full['node_status']) == set(old_nodes)|set(new['node_status'])|{docs_node},

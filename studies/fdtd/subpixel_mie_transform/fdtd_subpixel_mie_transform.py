@@ -4,7 +4,7 @@ No FDTD step, material coefficient or incident-field normalization is used.
 The production box layout and radiation transform consume exact exterior
 fields at their own Yee points. A diagnostic collocated-H arm isolates the
 two-plane H average. It supplies unavailable exact values, not an algorithm
-that can be applied to a computed field. See docs/validation/fdtd/fd-mie-validation.md.
+that can be applied to a computed field. See docs/validation/fdtd/fdtd-mie-validation.md.
 """
 
 import sys as _repository_sys

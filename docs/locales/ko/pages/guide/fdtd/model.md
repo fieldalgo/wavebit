@@ -167,7 +167,7 @@ requested interface 0.317 ----------------------^  runs at 0.325
 
 셀 경계 위에 있는 스냅 면도 모든 성분에 대해 정확하지는 않습니다. 면이 놓인 노드 평면 위의
 접선 방향 전기장은 그 주변 셀 전체에 걸쳐 재료를 받기 때문에, 그 장에게는 `SnappedSlab`이 통째로 반
-셀 아래에 있는 것처럼 보입니다([smoothed occupancy의 G5](../../validation/fdtd/fd-subpixel-occupancy.md)).
+셀 아래에 있는 것처럼 보입니다([smoothed occupancy의 G5](../../validation/fdtd/fdtd-subpixel-occupancy.md)).
 층 전체가 움직이면 선언한 평면에서 잰 `r`, `t`의 위상이 바뀌지만 효율은 바뀌지 않습니다. 다른
 솔버와 위상까지 맞춰야 한다면, 스무딩된 `Box` 층은 면을 선언한 위치에 둡니다.
 
@@ -234,7 +234,7 @@ flush 접합(서로 겹치는 두 면,
 경우는 예외), 손실·분산·자성·이방성 매질, `discretization="stencil"`, 그리고 두 바디 중 하나에
 걸린 범위 지정(미분) 형상입니다. 쌍의 재료 값은 추적된 값이어도 됩니다. `check`는 바디 블록에 각
 쌍을 `clip with structures[j]`로 보여 주고, 실행의 `SubpixelAccuracyWarning`도 그 쌍을 적습니다.
-측정한 결과는 [다면체 자르기](../../validation/fdtd/fd-polytope-clip.md)에 있습니다.
+측정한 결과는 [다면체 자르기](../../validation/fdtd/fdtd-polytope-clip.md)에 있습니다.
 
 전역 `Numerics.junction` 설정은 기판 continuation을 적용한 뒤 엔진이 판별한 각 지원
 flush 접합의 standing body(기둥)에만 전달됩니다. 기판과 관계없는 구조는 나열 순서와
@@ -294,8 +294,8 @@ Result의 정책 기록을 변경하지 않습니다.
 모든 실행이 이를 알리는 `SubpixelAccuracyWarning`을 냅니다. 대안인 `discretization="stencil"`은
 구에 대해 그 관문을 통과했지만(`ε = 12` 구에서 2.24차) `Sphere`에만 적용되고, 일반 숫자만 받으며
 (미분 불가), `PlaneWave`나 `TFSF` 소스가 필요합니다. 측정은
-[Mie 검증](../../validation/fdtd/fd-mie-validation.md)과
-[smoothed occupancy](../../validation/fdtd/fd-subpixel-occupancy.md)에 있습니다.
+[Mie 검증](../../validation/fdtd/fdtd-mie-validation.md)과
+[smoothed occupancy](../../validation/fdtd/fdtd-subpixel-occupancy.md)에 있습니다.
 
 장면 전체의 `Numerics(discretization="stencil")` 설정은 스무딩 본체에만 전달됩니다.
 `SnappedSlab`과 `SnappedBox`는 whole-cell fill을 유지합니다. `Box`, `Cylinder`, `Prism` 등
@@ -529,7 +529,7 @@ s 편광과 정확한 수직 입사는 hard 전기장 구동을 유지합니다.
 | --- | --- |
 | `CoarseMeshWarning` | 매질 안에서 파장당 8~12셀, 또는 폭이 4~8셀인 스무딩 바디 |
 | `SubpixelAccuracyWarning` | 장면에 스무딩 바디가 있습니다. 기본 규칙의 정확도 관문은 아직 완료되지 않았습니다 |
-| `AbsorberProximityWarning` | 구조물이 흡수 면에서 (그 매질 안의) 반 파장 이내에 있습니다. 그 면의 PML은 구조물의 근접장이 아니라 그 면에 닿는 매질에 맞춰져 있습니다. 흡수층 안으로 이어지는 `SnappedSlab`이나, `Structure`가 그 면으로 `continuation`을 선언한 `Box`(기판)에는 그 면에서 나오지 않습니다. 그 PML이 그 구조물에 맞춰지기 때문입니다. 그 면으로 이어진다고 선언한 `SnappedBox` 코어에도 나오지 않습니다. 그 층은 배경에 맞춰진 채로 남고, 그에 따른 반사는 [흡수층을 지나는 도파로 기록](../../validation/fdtd/fd-waveguide-through-pml.md)에 측정되어 있습니다. |
+| `AbsorberProximityWarning` | 구조물이 흡수 면에서 (그 매질 안의) 반 파장 이내에 있습니다. 그 면의 PML은 구조물의 근접장이 아니라 그 면에 닿는 매질에 맞춰져 있습니다. 흡수층 안으로 이어지는 `SnappedSlab`이나, `Structure`가 그 면으로 `continuation`을 선언한 `Box`(기판)에는 그 면에서 나오지 않습니다. 그 PML이 그 구조물에 맞춰지기 때문입니다. 그 면으로 이어진다고 선언한 `SnappedBox` 코어에도 나오지 않습니다. 그 층은 배경에 맞춰진 채로 남고, 그에 따른 반사는 [흡수층을 지나는 도파로 기록](../../validation/fdtd/fdtd-waveguide-through-pml.md)에 측정되어 있습니다. |
 | `GeometryClippedWarning` | 구조물이 `PEC`나 `PMC` 벽 너머로 뻗어 그 부분을 잃습니다 |
 | `UnsettledFieldWarning` | 모니터 영역에 실행 끝까지 장이 남아 있었습니다. 그 스펙트럼에는 잘림이 섞여 있습니다. 더 오래 실행하세요 |
 | `GrowingFieldWarning` | 모든 소스가 끝난 뒤에도 장이 자랍니다. 더 오래 실행하면 더 나빠집니다. 대개 PML 옆의 속박 모드이니, 메시지가 알려 주는 값으로 `PML(stabilizing_loss=...)`를 정하세요 |
@@ -634,7 +634,7 @@ FDTD 모델에서 시험한 주파수별 값과 미분을 보존합니다. float
 공개 호출은 기존 산술과 dtype을 유지하며, float32나 혼합 정밀도의 극단값 지원을
 추가하지 않습니다. Lorentz 응답과 ADE 계수는 바뀌지 않으며, 모든 유한 극단값과
 목적함수의 미분을 증명하지 않습니다. 정규화된 재현 예제, SI·단위 변환의 범위와
-중간 연산 underflow 제한은 [영문 미분 가이드](fd-differentiation.md)를 참고하세요.
+중간 연산 underflow 제한은 [영문 미분 가이드](fdtd-differentiation.md)를 참고하세요.
 
 기하는 예약된 지지 영역을 준 스무딩 바디만 미분됩니다.
 `Numerics(geometry_ranges={"name": ((x0, x1), (y0, y1), (z0, z1))})`로 주며, 바디가 취하는 모든
@@ -659,7 +659,7 @@ cutoff-band 파장을 기존 공간 하한(등호를 포함한 8셀)과 비교�
 [Pole-free 공간 계약](../../validation/fdtd/general-cuda.md#live-band-pole-free-spatial-resolution)을 참고하세요.
 [Carrier cutoff 계약](../../validation/fdtd/general-cuda.md#live-band-carrier-cutoff)을 참고하세요. 물리 단위 스케일과 고정 지연·대역폭 의존성은
 [제한된 펄스 Hessian 검증](../../validation/fdtd/general-cuda.md#gaussian-pulse-wavelength-bandwidth-phase-and-delay-hessians)을 참고하세요. 이산 솔버의 미분은 수렴에 대한 진술이
-아닙니다. 유한 차분과 비교하고 순방향 계산도 함께 다듬으세요. [영문 미분 가이드](fd-differentiation.md)가
+아닙니다. 유한 차분과 비교하고 순방향 계산도 함께 다듬으세요. [영문 미분 가이드](fdtd-differentiation.md)가
 같은 엔진의 호환(compat) 표기로 측정을 다룹니다.
 
 Torch에서 `prepared.run`은 즉시 실행 autograd와 `torch.func.grad`, `vjp`, `jacrev`, `jvp`로
@@ -748,7 +748,7 @@ for w, r, t in zip(wavelengths, R, T):
 - 모드 광원, 모드 모니터, 모드 솔버는 [도파관 모드](waveguide-modes.md)에, 가우시안 빔은
   [가우시안 빔](gaussian-beam.md)에 설명되어 있습니다.
 - 손실·분산 스무딩 바디는 평평한 필름으로 제한됩니다.
-- **흡수층 안으로 이어질 수 있는 코어는 셀에 맞춘 코어뿐입니다.** `Open()` 면의 PML 안으로 이어지는 것은 배경, 그 축을 가로지르는 `SnappedSlab`(또는 `Structure(continuation=...)`을 선언하면 슬래브가 뻗어 있는 축의 면으로), `Structure.continuation`을 선언하고 가로 방향 양쪽 면을 한 셀 넘게 지나가는 회전하지 않은 `Box`(기판. [영문 스무딩 기판 가이드](substrate-gradients.md) 참고), 그리고 `Structure(continuation=('z-', 'z+'))`(어느 한 축)를 선언하고 그 물리 면까지 닿는 `SnappedBox` 코어입니다. 코어는 단면을 그대로 유지한 채 패딩 안으로 연장되므로 PML의 모든 층이 같은 매질을 봅니다. 측정한 도파 모드 반사는 [검증 기록](../../validation/fdtd/fd-waveguide-through-pml.md)에 있습니다. 단면보다 좁은 스무딩 코어(`Box`, `Cylinder`, `Prism`, `Sphere`)는 여전히 `Open()` 면에서 거절되고, 면 가까이에서 끝나 스무딩된 가장자리가 흡수층에 닿는 스무딩 바디, 그리고 다른 축의 `Open()` 면에 닿는 연장 코어도 거절됩니다.
+- **흡수층 안으로 이어질 수 있는 코어는 셀에 맞춘 코어뿐입니다.** `Open()` 면의 PML 안으로 이어지는 것은 배경, 그 축을 가로지르는 `SnappedSlab`(또는 `Structure(continuation=...)`을 선언하면 슬래브가 뻗어 있는 축의 면으로), `Structure.continuation`을 선언하고 가로 방향 양쪽 면을 한 셀 넘게 지나가는 회전하지 않은 `Box`(기판. [영문 스무딩 기판 가이드](substrate-gradients.md) 참고), 그리고 `Structure(continuation=('z-', 'z+'))`(어느 한 축)를 선언하고 그 물리 면까지 닿는 `SnappedBox` 코어입니다. 코어는 단면을 그대로 유지한 채 패딩 안으로 연장되므로 PML의 모든 층이 같은 매질을 봅니다. 측정한 도파 모드 반사는 [검증 기록](../../validation/fdtd/fdtd-waveguide-through-pml.md)에 있습니다. 단면보다 좁은 스무딩 코어(`Box`, `Cylinder`, `Prism`, `Sphere`)는 여전히 `Open()` 면에서 거절되고, 면 가까이에서 끝나 스무딩된 가장자리가 흡수층에 닿는 스무딩 바디, 그리고 다른 축의 `Open()` 면에 닿는 연장 코어도 거절됩니다.
 
 사용자 정의 고정 도형은 `fdtd.Shape`를 구현하며, prepared 재사용 시 선언한 인스턴스 상태를 검사합니다.
 도형의 셀 support는 Open 패딩에 닿지 않아야 합니다. 프로토콜은 [마이그레이션 가이드](../../migration/index.md)를,
@@ -757,15 +757,15 @@ for w, r, t in zip(wavelengths, R, T):
 ## 더 읽을거리
 
 - [도메인, 소스, 관측](general-fdtd.md) — 짧은 예제가 있는 선언 API.
-- [Smoothed occupancy](../../validation/fdtd/fd-subpixel-occupancy.md)와 [Mie 검증](../../validation/fdtd/fd-mie-validation.md)
+- [Smoothed occupancy](../../validation/fdtd/fdtd-subpixel-occupancy.md)와 [Mie 검증](../../validation/fdtd/fdtd-mie-validation.md)
   — 스냅된 슬랩 면의 반 셀 위치를 포함해, 스무딩을 어떻게 측정하는지.
-- [RCWA와 비교한 주기 메타표면](../../validation/fdtd/fd-metasurface-validation.md) — RCWA와 무엇이
+- [RCWA와 비교한 주기 메타표면](../../validation/fdtd/fdtd-metasurface-validation.md) — RCWA와 무엇이
   맞고 어떤 수렴 차수로 맞는지.
-- [다면체 자르기](../../validation/fdtd/fd-polytope-clip.md) — 한 셀 안의 두 스무딩 바디와 측정한 것.
-- [4단계 보고](../../validation/fdtd/fd-stage4-report.md) — 통과하지 못한 관문을 포함해 4단계 각
+- [다면체 자르기](../../validation/fdtd/fdtd-polytope-clip.md) — 한 셀 안의 두 스무딩 바디와 측정한 것.
+- [4단계 보고](../../validation/fdtd/fdtd-stage4-report.md) — 통과하지 못한 관문을 포함해 4단계 각
   커밋의 상태.
-- [Yee 격자와 일관된 복사](../../validation/fdtd/fd-lattice-radiation.md) — 원거리장 변환.
-- 필름 연구(예: [Drude 또는 Lorentz 필름 하나](../../validation/fdtd/fd-single-pole-film.md)) — 손실·분산
+- [Yee 격자와 일관된 복사](../../validation/fdtd/fdtd-lattice-radiation.md) — 원거리장 변환.
+- 필름 연구(예: [Drude 또는 Lorentz 필름 하나](../../validation/fdtd/fdtd-single-pole-film.md)) — 손실·분산
   층의 제한된 범위.
 - [FDTD 배우기](../../learn/fdtd/index.md) — 믿을 수 있는 결과를 세우는 순서.
 

@@ -7,7 +7,7 @@ The NumPy reference is also held by analytic total volume and exact CSG containm
 the independent disc-quadrature oracle remains in test_fd_shapes.py.
 
 Mutants are real source edits, run and restored; the commands and measured failures live
-in docs/validation/fdtd/fd-sphere-clip-jit.md. Restoring the old squared radicands kills the JIT rows and
+in docs/validation/fdtd/fdtd-sphere-clip-jit.md. Restoring the old squared radicands kills the JIT rows and
 the sentinel test. Scaling every sphere volume to 99 percent kills every backend
 through the analytic-volume assertion, even if the common NumPy reference is also mutated.
 """

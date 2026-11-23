@@ -37,7 +37,7 @@ is frozen again gets a `regeneration` entry with its reason in the same reviewed
 M1 p behavior against the same stored RCWA values. These are regression
 records from this project, not fresh outside-solver oracles. The original file,
 1e-10 replay tolerance and physical criteria remain unchanged. See the
-[qualification and guarded export procedure](../../docs/validation/fdtd/fd-planewave-acceptance.md#source-specific-m1-regression-qualification-2026-10-22).
+[qualification and guarded export procedure](../../docs/validation/fdtd/fdtd-planewave-acceptance.md#source-specific-m1-regression-qualification-2026-10-22).
 
 ## What the permittivity flip did to this directory (2026-08-20)
 
@@ -71,17 +71,17 @@ changed; its generator's docstring says which S4 build reproduces the fields bit
 [`lattice.py`](lattice.py) supplies pointwise discrete reciprocity, an independent
 Fourier-pole Green integral, and radiation predicted from the actual source's
 analytic cubic stamp and raw drive. It does not call the production surface
-transform. [Derivation and witnesses](../../docs/validation/fdtd/fd-lattice-radiation.md).
+transform. [Derivation and witnesses](../../docs/validation/fdtd/fdtd-lattice-radiation.md).
 
 The analytic sphere and cylinder reference in [`mie.py`](mie.py) requires only
 NumPy and SciPy. Its published coefficient pins, independent radial wave equation,
-energy and angular checks are described in [Mie validation](../../docs/validation/fdtd/fd-mie-validation.md).
+energy and angular checks are described in [Mie validation](../../docs/validation/fdtd/fdtd-mie-validation.md).
 
 [`mie_fields.py`](mie_fields.py) adds exact exterior E/H for the diagnostic
 radiation study. Both Maxwell curls, concentric-sphere power, complex far limits,
 translation and an independent surface integral validate its component series.
 Its measured truncation scope and source-mutant witnesses are documented in
-[the exact-near-field section](../../docs/validation/fdtd/fd-mie-validation.md#exact-mie-near-fields-through-the-radiation-transform).
+[the exact-near-field section](../../docs/validation/fdtd/fdtd-mie-validation.md#exact-mie-near-fields-through-the-radiation-transform).
 It does not import the FDTD engine or depend on a captured FDTD answer.
 
 [`gen_star_lift_oracle.py`](gen_star_lift_oracle.py) freezes the FDTD star lift's diagonal
@@ -90,7 +90,7 @@ change, with its first and second derivatives along two directions, on four smal
 docstring, imports nothing from wavebit, and works at 50 digits: explicit 6x6 stars, bisection to
 `2**-150`, an eigensolver certificate and central differences. It needs mpmath, which wavebit does
 not depend on; `test_fd_star_lift.py` compares JAX, `jax.jit` and Torch's nested derivatives with
-the committed numbers. [The star lift](../../docs/validation/fdtd/fd-subpixel-occupancy.md#the-star-lift-the-smoothed-operator-positive-by-construction-2026-09-27).
+the committed numbers. [The star lift](../../docs/validation/fdtd/fdtd-subpixel-occupancy.md#the-star-lift-the-smoothed-operator-positive-by-construction-2026-09-27).
 
 | Oracle | Reaches | Generator needs | Golden |
 | --- | --- | --- | --- |
@@ -139,7 +139,7 @@ the committed numbers. [The star lift](../../docs/validation/fdtd/fd-subpixel-oc
 | **Meep** + **FDTDX**, **CPML and electric ADE** | four dispersive slab models at two resolutions, a low-loss mixed metal, and FDTDX two-pole updates with the oscillator-strength derivative | the same interpreters; frozen by `interface/freeze_grid_material_references.py` | `golden_native_material_external.npz`, `golden_low_loss_metal_meep.json`, `test_native_material_external.py`, `interface/validate_grid_dispersive.py`, `interface/validate_grid_fdtdx_ade.py` |
 | **FDTDX**, **complex Bloch boundaries** | three-axis phase advance, real and imaginary E/H, and the material derivative | FDTDX interpreter; `interface/freeze_grid_references.py --kind bloch` | `golden_native_bloch_external.npz`, `test_native_bloch_external.py`, `interface/validate_grid_fdtdx_bloch.py` |
 | **Meep**, **bottom-incident scene** | two-layer complex r/t with the source physically below the stack | Meep interpreter, public API only | `golden_scene_bottom_meep.json`, `test_scene_bottom_meep.py`, `interface/validate_scene_bottom_meep.py` |
-| **Meep** + **FDTDX**, **stage-7 modes and beams** | the slab mode index (reported and propagated), the one-way mode launch, the butt joint against mode matching, a core run into the absorber, and the Gaussian beam's width, Gouy phase and back-radiation, beside Wavebit's own numbers. Evidence printed in `docs/validation/fdtd/fd-mode-source.md` and `fd-gaussian-beam.md`, not acceptance | separate Meep 1.35.0 and FDTDX 0.6.3 processes from inputs in physical units; public APIs only | `golden_stage7_cross_solver.json`, `test_stage7_cross_solver_golden.py` |
+| **Meep** + **FDTDX**, **stage-7 modes and beams** | the slab mode index (reported and propagated), the one-way mode launch, the butt joint against mode matching, a core run into the absorber, and the Gaussian beam's width, Gouy phase and back-radiation, beside Wavebit's own numbers. Evidence printed in `docs/validation/fdtd/fdtd-mode-source.md` and `fdtd-gaussian-beam.md`, not acceptance | separate Meep 1.35.0 and FDTDX 0.6.3 processes from inputs in physical units; public APIs only | `golden_stage7_cross_solver.json`, `test_stage7_cross_solver_golden.py` |
 
 One more oracle lives outside this directory: the Berreman 4x4 in
 `tests/rcwa/test_anisotropic_berreman.py` is an independent *formulation* — not RCWA at all — but our
@@ -308,7 +308,7 @@ the centre-normalized differentiated-current launch. Their 300/500-step inputs,
 keys, shapes and `1e-12` comparison budget are unchanged. Independent prescribed-input
 source tests, existing accuracy/convergence and derivative tests, and the
 43-record qualified scattering campaign support the change; see
-[the acceptance evidence](../../docs/validation/fdtd/fd-planewave-acceptance.md).
+[the acceptance evidence](../../docs/validation/fdtd/fdtd-planewave-acceptance.md).
 The short goldens themselves remain drift detectors.
 
 Fresh captures reproduced byte for byte twice on each of NumPy, JAX CPU and

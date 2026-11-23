@@ -1,6 +1,6 @@
 """``fdtd.solve_modes``: modes of the discrete Yee system against independent answers.
 
-The criteria are the ones registered in ``docs/validation/fdtd/fd-waveguide-modes.md`` before
+The criteria are the ones registered in ``docs/validation/fdtd/fdtd-waveguide-modes.md`` before
 the solver was first run (M1-M6); every limit here is quoted from there. The oracles are
 closed forms (the Yee dispersion of a uniform medium, the hollow metal guide on the grid), the
 exact TE/TM dispersion relations of a symmetric slab, and the published dielectric-corner

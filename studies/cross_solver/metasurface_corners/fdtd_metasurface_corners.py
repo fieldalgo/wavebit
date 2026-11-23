@@ -1,6 +1,6 @@
 """Does C7's epsilon-12 box converge below second order because of its corners?
 
-**The question.** C7 (``studies/cross_solver/metasurface/fdtd_metasurface_rcwa.py``, ``docs/validation/fdtd/fd-metasurface-validation.md``)
+**The question.** C7 (``studies/cross_solver/metasurface/fdtd_metasurface_rcwa.py``, ``docs/validation/fdtd/fdtd-metasurface-validation.md``)
 found its epsilon-12 box under conical incidence (M3) agreeing with RCWA in every cell but
 converging at orders 1.51 to 1.75. Subpixel smoothing is second order at a flat interface, but a
 sharp dielectric corner carries a field singularity, ``E ~ r^(nu - 1)``, and the smoothing error of

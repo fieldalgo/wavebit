@@ -177,7 +177,7 @@ class FarFieldResult:
     the lattice dispersion, reciprocal staggered fields and Green curvature.
     Then the phase is ``k_star dot r``, angles specify the outgoing ray, and
     ``vector`` retains all three Cartesian components. ``intensity`` uses
-    the full vector and discrete flux weight. See docs/validation/fdtd/fd-lattice-radiation.md.
+    the full vector and discrete flux weight. See docs/validation/fdtd/fdtd-lattice-radiation.md.
     Recorded fields remain differentiable; Yee background and angles must be
     concrete host inputs.
     """

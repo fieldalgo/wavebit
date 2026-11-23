@@ -1,7 +1,7 @@
 """Public Sphere scattering and independent Mie/power/optical closures.
 
 This is an accuracy study, not evidence that C3 already passes. Defaults are
-the design fixture; numerical control results are in docs/validation/fdtd/fd-mie-validation.md.
+the design fixture; numerical control results are in docs/validation/fdtd/fdtd-mie-validation.md.
 """
 
 import sys as _repository_sys

@@ -694,7 +694,7 @@ def _face_parts(d, n, dx, axis, xp):
     fixed here because it is the *routed* form: every ``occupancy`` of every scene goes through
     it, and the same select there moves coefficients the frozen archives pin, which is a
     measurement and a regeneration rather than a minor. Recorded with its number in
-    ``docs/validation/fdtd/fd-subpixel-occupancy.md``.
+    ``docs/validation/fdtd/fdtd-subpixel-occupancy.md``.
     """
     u, v = _OTHER[axis]
     a_u, a_v = xp.abs(n[..., u]) * dx, xp.abs(n[..., v]) * dx

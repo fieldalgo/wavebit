@@ -3,7 +3,7 @@
 A mode here is a solution of the **kernel's own** update equations, not of the continuum
 Maxwell equations, so that a mode injected into a run or projected out of one is exact on the
 grid. The derivation, the registered acceptance criteria and the measured results are in
-``docs/validation/fdtd/fd-waveguide-modes.md``; the manual is ``docs/guide/fdtd/waveguide-modes.md``.
+``docs/validation/fdtd/fdtd-waveguide-modes.md``; the manual is ``docs/guide/fdtd/waveguide-modes.md``.
 
 **The discrete eigenproblem.** With ``c = eps0 = mu0 = 1`` and ``H`` stored as ``Z0 H``
 (``src/wavebit/fdtd/_kernel/step.py``), a time-harmonic run ``exp(-i omega t)`` satisfies, for phasors taken at

@@ -6,7 +6,7 @@ checks are the production implementations. Written before public Cylinder landed
 the custom shape is placed into an empty scene's prepared plan. Its periodic
 invariant axis and declared-material resolution are NOT public-scene checks.
 Result reporting uses that same empty-scene context; public refusals stay intact.
-See docs/validation/fdtd/fd-mie-validation.md for the measurements and limitations.
+See docs/validation/fdtd/fdtd-mie-validation.md for the measurements and limitations.
 """
 
 import sys as _repository_sys

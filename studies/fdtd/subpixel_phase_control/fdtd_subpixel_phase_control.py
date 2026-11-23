@@ -3,7 +3,7 @@
 The mixed surface flux follows by expanding the discrete Poynting product for
 F_total = F_incident + F_scattered. It is a surface extinction diagnostic, not a
 corrected continuum far-field amplitude. No fitted wave number is substituted.
-See docs/validation/fdtd/fd-mie-validation.md for the derivation, measurements and limitations.
+See docs/validation/fdtd/fdtd-mie-validation.md for the derivation, measurements and limitations.
 """
 
 import sys as _repository_sys

@@ -162,7 +162,7 @@ class GaussianBeam:
 
     The beam is exact for the grid, not the continuum: the grid's plane waves travel at a
     direction-dependent phase velocity, so its Gouy phase differs a little from the continuum
-    beam's. In the validation record (``docs/validation/fdtd/fd-gaussian-beam.md``, vacuum,
+    beam's. In the validation record (``docs/validation/fdtd/fdtd-gaussian-beam.md``, vacuum,
     waist 1.5 wavelengths) that difference is at most 2.2e-3 rad within 3 wavelengths of the
     focus at 20 cells per wavelength, and falls at second order. Converge the spacing for any
     result that depends on the phase along the beam.

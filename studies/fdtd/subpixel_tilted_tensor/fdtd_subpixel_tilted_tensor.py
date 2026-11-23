@@ -4,7 +4,7 @@ Run from the repository root. The JSON records every grid, signed error, eigenpa
 residual and spectral endpoint; the printed table includes order and fit scatter.
 Homogeneous controls measure dispersion in a different medium: they are comparisons,
 not rigorous error floors, and are never subtracted from the interface errors.
-See docs/validation/fdtd/fd-subpixel-occupancy.md for the measurements and their limits.
+See docs/validation/fdtd/fdtd-subpixel-occupancy.md for the measurements and their limits.
 
 The operator and transfer-matrix construction follow the existing S1 study. This
 version removes its fixed image window, uses a general eigensolver without discarding
