@@ -19,7 +19,7 @@ The default is `None`: the cell's own coordinates, and every solve bit for bit a
 ## How it is checked
 
 - **Against finite-element fields.** Seven layers of axis-aligned rectangles and twelve of one circle or ellipse at normal incidence; and thirteen metal cases and three dielectric ones beyond it: oblique incidence (p and s, theta 20 and 40 deg), five propagating orders, a glass substrate, two patterned layers, and for a circle a non-square cell. On those sixteen, at order 12, `R` and `T` are within 0.41% of the references and the near field is 0.02 to 0.10 of the default solve's error, against criteria written before measuring ([the measurements](../../validation/rcwa/wall-resolution.md)). On seven of those cases the references themselves move by 0.1 to 0.4% between their two mesh levels, and the comparison is only as tight as that.
-- **Against other codes without the stretch.** On dielectric blocks, RETICOLO's Li solve raised to order 30 agrees with it to its own uncertainty; on metals that solve has not settled by order 40, which is the slowness the stretch removes.
+- **Against other codes without the stretch.** On dielectric blocks the unstretched Li solve, run in RETICOLO to order 30, agrees with it to that solve's own uncertainty. On metals the unstretched Li solve -- RETICOLO's and Wavebit's alike -- has not settled by order 40; that slowness is what the stretch removes.
 - **What no one has.** No other implementation of the stretched or the matched solve was found to compare with at the same truncation.
 - **How to use it.** Compare two orders before relying on a value, as with any solve.
 
