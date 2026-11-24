@@ -356,7 +356,7 @@ steps on their polygonal pieces.
 
 Two defects affected overlapping polygonised curves. A short shared facet could be labelled as an exterior boundary because normalising its edge amplified endpoint rounding. The planner now tests transverse extent on the shorter edge and line displacement against the longer edge, with the existing spatial tolerance. Around rectangle angle 0.313 rad, this removes the alternating rectangle/background and rectangle/ellipse labels.
 
-The previous scalar average also gave each interval a finite distance-based vote as its length vanished. The scalar painted route now integrates positive normal dyads over the actual material interfaces. For interval i, its weight is `contrast_i**4 * integral (1/r**2 - 1/R**2)**2 ds` over points with `r < R`, where r is distance from the sample and R is half the longest diagonal of the reduced cell. Divide the weighted sum of dyads by the total weight. The field is positive semidefinite with unit trace; it need not have rank one away from an interface.
+The previous scalar average also gave each interval a finite distance-based vote as its length vanished. The scalar painted route now integrates positive normal dyads over the actual material interfaces. For interval i, its weight is `contrast_i**4 * integral (1/r**2 - 1/R**2)**2 ds` over points with `r < R`, where r is distance from the sample and R is half the longest diagonal of the reduced cell (a property of how the cell is written: a supercell of the same structure has a larger R and a different field, §10). Divide the weighted sum of dyads by the total weight. The field is positive semidefinite with unit trace; it need not have rank one away from an interface.
 
 Line integration makes straight subdivision additive and makes a disappearing interval contribute zero away from its endpoint. At an exact interface sample the inverse-distance pole selects its line normal; an endpoint owns half the pole so splitting at a sampled junction is also invariant. Corners and genuine material junctions need not have a unique physical normal. No finite interval-length cutoff is introduced.
 
@@ -1515,8 +1515,8 @@ indistinguishable from a passing test unless the harness says so out loud.
 ## 10. Copies of one shape in a supercell are a different description (2026-11-24)
 
 Measured 2026-11-24 on one CPU host (four logical cores of an Intel Xeon at 2.10 GHz in a shared
-cloud container), NumPy, float64. The instrument and its printed output are in
-`studies/rcwa/supercell_normal_field/`.
+cloud container; the `'interfaces'` causes at 2.30 GHz), NumPy, float64. The instrument and its
+printed output are in `studies/rcwa/supercell_normal_field/`.
 
 **What.** The closed-form field (`shape_normal_method='per_shape'`, the default) treats the
 periodic images of one shape and different shapes differently. For one shape it takes the normal
@@ -1576,6 +1576,46 @@ The gap in T is the size of each cell's own distance from the reference, changes
 from 1.5e-4 to 5.3e-6. The phase gap stays between 9e-4 and 7.3e-3 rad over this range. The
 reference is the primitive cell itself, so this shows a common limit, not its value.
 
+**Under `'interfaces'`.** The boundary-integral field of §1c neither picks nor blends shapes, yet
+two of its inputs are read off the cell rather than the structure. Its kernel radius R is half the
+longest diagonal of the reduced cell: 303.109 nm for the primitive cell, 630.971 nm for the
+supercell, whose reduced basis is `(4*a1 + 2*a2, a2)`. Its sample grid is `shape_nvf_grid_size`
+per side of the cell, so the supercell takes a quarter of the samples per primitive period along
+`a1`. `--part cause` solves each cell with neither, one or both of the other cell's inputs, and
+compares the projector coefficients each solve builds at the primitive orders. R(1) and R(4) are
+the radii of the primitive cell and the supercell, and grid / 4 is (1024, 256), the supercell's
+density along `a1`. Each row is the difference from the primitive cell as it runs by default; *coefficient* is the largest difference
+over the three projector grids, with that of the constant term in brackets.
+
+At M = 3:
+
+| arm | T | phase | coefficient |
+| --- | --- | --- | --- |
+| supercell | +3.739e-7 | -6.129e-4 | 1.1e-2 (4.3e-7) |
+| primitive, R(4) | +3.582e-7 | -6.116e-4 | 1.1e-2 (1.5e-14) |
+| primitive, grid / 4 | +1.573e-8 | -1.359e-6 | 5.5e-7 (4.3e-7) |
+| primitive, R(4), grid / 4 | +3.739e-7 | -6.129e-4 | 1.1e-2 (4.3e-7) |
+| supercell, R(1) | +1.573e-8 | -1.359e-6 | 5.5e-7 (4.3e-7) |
+
+At M = 4, with the coefficient column as at M = 3 to the digits shown:
+
+| arm | T | phase |
+| --- | --- | --- |
+| supercell | +3.165e-7 | +5.486e-5 |
+| primitive, R(4) | +3.052e-7 | +5.604e-5 |
+| primitive, grid / 4 | +1.133e-8 | -1.184e-6 |
+| primitive, R(4), grid / 4 | +3.165e-7 | +5.486e-5 |
+| supercell, R(1) | +1.133e-8 | -1.184e-6 |
+
+Given both of the supercell's inputs, the primitive cell reproduces the supercell to 1.3e-14 in T,
+9e-14 in the zero-order amplitude and 6e-17 in the projector coefficients; given the primitive
+cell's R, the supercell reproduces the primitive cell on the coarser grid to 5.6e-14, 3.5e-13 and
+3e-17. With these two inputs matched nothing else differs between the cells. The radius carries 96%
+of the difference in T and nearly all of the phase: the wider kernel moves projector coefficients
+by up to 1.1e-2 and leaves the constant term alone. The grid carries the rest, mostly through the
+constant term. The two add, to 2e-11 in T. Each arm took 18 to 523 s here; the run takes
+about 40 minutes.
+
 **How to tell.** Any comparison, under the default NVF, between descriptions of one structure that
 split it into a different number of shapes per period: a supercell against its primitive cell, as
 in the anchor of [the deflector study](deflector-supercell.md), or copies of a shape against one
@@ -1584,13 +1624,18 @@ shape with its images. The difference is at the truncation error, so it looks li
 **What to do.** Compare at matched descriptions, or at orders where both have converged. When the
 comparison itself is the point, `factorization='laurent'` makes the two cells agree exactly, at
 the cost of its slower convergence on high-contrast boundaries.
-`shape_normal_method='interfaces'` narrows the gap but does not close it on these circles, and it
-is experimental and slow on curved shapes (about eight minutes per pair of solves here).
+`shape_normal_method='interfaces'` narrows the gap but does not close it on these circles, since its
+kernel radius and sample grid follow the cell, and it is experimental and slow on curved shapes
+(about eight minutes per pair of solves here). No public setting matches the radius between cells.
 
 **Status.** Open. The answers are not wrong; they are two truncations of one limit. Whether the
 closed form should blend a shape's own images the way it blends different shapes, which would make
 its field independent of the description and would also change every closed-form answer at the
-truncation level, is a design question this entry does not decide.
+truncation level, is a design question this entry does not decide. So is whether the
+`'interfaces'` kernel radius should be a length of the structure rather than of the cell it is
+written in: that would make that field independent of the description too, and would change every
+`'interfaces'` answer at the same level. The grid part comes from sampling each cell on its own grid; how it falls with the grid size
+is not measured here.
 
 ## Explicit Cartesian alternative for rectangular contacts
 
