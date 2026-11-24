@@ -216,7 +216,9 @@ copies of it in an `(N*a1, a2)` supercell get different fields between the pilla
 differ at the truncation error and converge to one value: for four TiO2 pillars at orders 3 and 4,
 `T` by 3.3e-5 and 7.1e-5 and the zero-order phase by 0.012 and 0.007 rad, where Laurent's rule
 gives the two cells the same answer to rounding. `'interfaces'` narrows the gap to 3.7e-7 and 3.2e-7
-in `T` but does not close it on these circles ([known limits §10](../../validation/rcwa/normal-field-known-limits.md)).
+in `T` but does not close it on these circles: its kernel radius and sample grid are read off the
+cell, so the supercell gets a wider kernel and coarser sampling per pillar
+([known limits §10](../../validation/rcwa/normal-field-known-limits.md)).
 
 It is experimental, a run that uses it emits `ExperimentalWarning`, and two things stand
 between it and a default:

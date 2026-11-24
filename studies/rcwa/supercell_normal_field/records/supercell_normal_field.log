@@ -47,3 +47,36 @@ interfaces: N = 4 against the primitive cell, shape_normal_method="interfaces" (
     M   T(N=4) - T(1)   phase(N=4) - phase(1) (rad)   time (s)
     3   +3.739e-07      -6.129e-04                   499.8
     4   +3.165e-07      +5.486e-05                   491.7
+
+python 3.12.3  Linux x86_64  logical CPUs 4
+cpu Intel(R) Xeon(R) Processor @ 2.30GHz
+wavebit 0.0.5  numpy 2.5.5  scipy 1.18.1
+thread settings library defaults
+
+cause: N = 4 against the primitive cell, shape_normal_method="interfaces" (experimental)
+    columns: T, zero-order phase (rad), |zero-order amplitude|, largest projector coefficient
+    and its DC term, each as a difference; coefficients compared at the primitive orders
+
+  M = 3: kernel radius R 303.109 nm (primitive), 630.971 nm (supercell); normal grid (1024, 1024) in both
+    arm minus the primitive cell             T           phase       |amplitude|  coefficient (DC)       time (s)
+    supercell                               +3.7390e-07  -6.1290e-04  4.99e-04     1.09e-02 (4.3e-07)      497.9
+    primitive, supercell R                  +3.5816e-07  -6.1155e-04  4.98e-04     1.09e-02 (1.5e-14)      523.0
+    primitive, grid / 4                     +1.5727e-08  -1.3590e-06  1.11e-06     5.49e-07 (4.3e-07)       23.6
+    primitive, supercell R, grid / 4        +3.7390e-07  -6.1290e-04  4.99e-04     1.09e-02 (4.3e-07)      123.7
+    supercell, primitive R                  +1.5727e-08  -1.3590e-06  1.11e-06     5.49e-07 (4.3e-07)       95.7
+    closure                                                  T          |amplitude|  coefficient
+    supercell minus primitive given both supercell inputs    -7.7e-15   4.1e-14      5.6e-17
+    supercell with primitive R minus primitive on grid / 4   -1.3e-15   3.9e-14      3.1e-17
+    share of the T difference: R alone 95.8%, grid alone 4.2%, interaction +1.9e-11
+
+  M = 4: kernel radius R 303.109 nm (primitive), 630.971 nm (supercell); normal grid (1024, 1024) in both
+    arm minus the primitive cell             T           phase       |amplitude|  coefficient (DC)       time (s)
+    supercell                               +3.1655e-07  +5.4858e-05  4.47e-05     1.09e-02 (4.3e-07)      511.9
+    primitive, supercell R                  +3.0522e-07  +5.6041e-05  4.56e-05     1.09e-02 (1.5e-14)      463.3
+    primitive, grid / 4                     +1.1334e-08  -1.1843e-06  9.64e-07     5.49e-07 (4.3e-07)       17.5
+    primitive, supercell R, grid / 4        +3.1655e-07  +5.4858e-05  4.47e-05     1.09e-02 (4.3e-07)      110.0
+    supercell, primitive R                  +1.1334e-08  -1.1843e-06  9.64e-07     5.49e-07 (4.3e-07)       87.6
+    closure                                                  T          |amplitude|  coefficient
+    supercell minus primitive given both supercell inputs    -1.3e-14   8.9e-14      5.6e-17
+    supercell with primitive R minus primitive on grid / 4   +5.6e-14   3.5e-13      3.1e-17
+    share of the T difference: R alone 96.4%, grid alone 3.6%, interaction -7.1e-12
