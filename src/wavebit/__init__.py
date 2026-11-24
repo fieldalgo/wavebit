@@ -6,7 +6,7 @@ Importing this package never enables a backend or changes global precision.
 """
 __version__ = '0.0.5'
 
-from . import materials, rcwa, fdtd
+from . import materials, rcwa, fdtd, ellipsometry
 from .materials import (Material, MaterialResponse, ConductiveMaterial, DispersiveMaterial,
                         TabulatedMaterial, Drude, Lorentz, Debye, eps_from_refractive_index,
                         refractive_index_from_eps)
@@ -21,7 +21,7 @@ from .errors import (WavebitError, ValidationError, UnsupportedFeatureError, Inc
 from .jobs import Job, run
 from ._common.periodic import layer_thicknesses
 
-__all__ = ['materials', 'rcwa', 'fdtd', 'Material', 'MaterialResponse', 'ConductiveMaterial',
+__all__ = ['materials', 'rcwa', 'fdtd', 'ellipsometry', 'Material', 'MaterialResponse', 'ConductiveMaterial',
            'DispersiveMaterial', 'TabulatedMaterial', 'Drude', 'Lorentz', 'Debye',
            'eps_from_refractive_index', 'refractive_index_from_eps', 'Units', 'Lattice',
            'Execution', 'CheckReport', 'Backend', 'DiffractionOrders', 'FieldSamples',
