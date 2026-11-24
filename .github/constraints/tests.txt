@@ -22,7 +22,7 @@ networkx==3.7
 numpy==2.5.5
 opt-einsum==3.4.0
 optax==0.2.9
-packaging==26.3
+packaging==26.4
 pillow==13.0.0
 pluggy==1.7.0
 pygments==2.21.0
