@@ -23,9 +23,10 @@ The parts, in the order of the argument:
   cause       what is left under ``'interfaces'``: two inputs of its normal field are read off the
               cell rather than the structure, the kernel radius R (half the longest diagonal of the
               reduced cell) and the sample grid (``shape_nvf_grid_size`` per side of the cell, so the
-              supercell takes 1/N of the samples per primitive period along a1). Each solve is run
-              with neither, one or both of the other cell's inputs, at M = 3 and 4, and the projector
-              coefficients each solve builds are compared at the primitive orders (about an hour).
+              supercell takes 1/N of the samples per primitive period along a1). The primitive cell is
+              solved with neither, one or both of the supercell's inputs and the supercell with the
+              primitive cell's R, at M = 3 and 4, and the projector coefficients each solve builds are
+              compared at the primitive orders (about 40 minutes on four cores at 2.30 GHz).
 
 Run from the repository root:
 
@@ -271,7 +272,8 @@ def _arm(count, order, radius=None, grid_divisor=1):
 
 
 def _difference(a, b):
-    """T, zero-order phase (rad), zero-order amplitude, largest projector coefficient and its DC."""
+    """Differences of T, zero-order phase (rad) and zero-order amplitude; the largest difference over
+    the three projector coefficient arrays, and the largest difference of their constant (DC) terms."""
     centre = tuple((size-1)//2 for size in a['coefficients'][0].shape)
     largest = max(float(np.abs(x-y).max()) for x, y in zip(a['coefficients'], b['coefficients']))
     dc = max(float(abs(x[centre]-y[centre])) for x, y in zip(a['coefficients'], b['coefficients']))
