@@ -536,12 +536,13 @@ keep passing.
 - `fourier_coefficients` has exactly one value here and `factorization` one default, and this
   path resolves them rather than reading them: `('integrated', 'nvf')`, the closed-form shape
   Fourier transform in the NVF 5-matrix form. Leaving either unset is not a request and gets
-  that build. Naming `'sampled'` raises `NotImplementedError` instead of being silently
-  substituted, which is what it used to be: a parametric shape has no samples to take a
+  that build. Naming `'sampled'` is refused -- `UnsupportedFeatureError`, code
+  `rcwa.unsupported`, the engine's `NotImplementedError` at the public door -- instead of being
+  silently substituted, which is what it used to be: a parametric shape has no samples to take a
   discrete series of. `factorization='li'` is built only on axis-aligned rectangles in an
   axis-aligned rectangular cell, whose edges give Li's nested 1D rules an axis to run along
   (see *Cartesian rectangles with explicit Li factorization* above); on any other shape it
-  raises `NotImplementedError`.
+  is refused the same way.
   For a pure-Laurent comparison, pass `factorization='laurent'`: it takes the same closed-form
   `[[eps]]` this path builds for NVF -- a painted layer's from its resolved polygons -- and drops
   the normal field, so every product is closed with the direct rule

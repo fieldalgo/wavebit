@@ -484,11 +484,12 @@ truncation_order=16이 아닌 외부 기준이 있습니다. 해석적 결과는
 - 여기서 `fourier_coefficients`는 값이 정확히 하나이고 `factorization`은 기본값이 하나이며, 이 경로는
   그것들을 읽는 것이 아니라 결정합니다: `('integrated', 'nvf')`, 즉 NVF 5행렬 형태의 닫힌 형식 형상
   푸리에 변환입니다. 둘 중 어느 것을 설정하지 않아도 요청이 아니며 그 구성을 받습니다. `'sampled'`를
-  지정하면 예전처럼 조용히 대체되지 않고 `NotImplementedError`가 발생합니다. 파라메트릭 형상에는 이산
+  지정하면 예전처럼 조용히 대체되지 않고 거부됩니다 -- `UnsupportedFeatureError`, 코드
+  `rcwa.unsupported`, 엔진의 `NotImplementedError`가 공개 API에서 갖는 모습입니다. 파라메트릭 형상에는 이산
   급수를 구할 샘플이 없기 때문입니다. `factorization='li'`는 축에 나란한 사각 셀 안의 축에 나란한
   직사각형에서만 만들어집니다. 그 가장자리가 Li의 중첩 1D 규칙이 따라 달릴 축을 주기 때문입니다(위의
   *Cartesian rectangles with explicit Li factorization* 참고). 다른 어떤 형상에서든
-  `NotImplementedError`를 일으킵니다.
+  같은 방식으로 거부됩니다.
   순수 Laurent 비교를 원하면 `factorization='laurent'`를 넘기세요. 이 경로가 NVF를 위해 만드는 것과 같은
   닫힌 형식 `[[eps]]` — 칠한 층이라면 분해된 다각형에서 만든 것 — 를 받아 법선장을 버리므로, 모든 곱이
   직접 규칙으로 닫힙니다([factorization-terms.md](../../theory/rcwa/factorization-terms.md) §9). 이는
