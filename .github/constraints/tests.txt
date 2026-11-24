@@ -10,8 +10,8 @@ filelock==4.2.4
 fonttools==4.68.0
 fsspec==2026.9.0
 iniconfig==2.3.1
-jax==0.12.0.1
-jaxlib==0.12.0.1
+jax==0.12.1
+jaxlib==0.12.1
 jinja2==3.1.6
 kiwisolver==1.5.1
 markupsafe==3.0.3
@@ -22,7 +22,7 @@ networkx==3.7
 numpy==2.5.5
 opt-einsum==3.4.0
 optax==0.2.9
-packaging==26.3
+packaging==26.4
 pillow==13.0.0
 pluggy==1.7.0
 pygments==2.21.0
