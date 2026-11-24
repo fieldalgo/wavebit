@@ -236,9 +236,12 @@ between it and a default:
   not measure accuracy: Li's own result at orders 3 to 9 is 6e-4 to 1.7e-2 from its converged
   value.
 - **A layer of circles or ellipses costs far more.** A curve on the boundary route is a polygon
-  of `boundary.POLYGON_VERTICES` (256) edges: one circle of radius 0.25 of the period took 2.5
-  to 3 minutes per solve at orders 3 to 9, where the closed form took 1 to 20 s (warm solves on
-  a four-core Linux machine running other work).
+  of `boundary.POLYGON_VERTICES` (256) edges: one circle of radius 0.25 of the period took 54
+  to 58 s per solve at orders 3 to 9 on the default normal grid, where the closed form took
+  under 0.1 s to 2.9 s (warm NumPy solves on an idle four-core Linux machine, 2026-11-24).
+  Before the NumPy evaluation kept only the live pairs on 2026-11-22
+  ([known limits §1c](../../validation/rcwa/normal-field-known-limits.md)) the same circle took
+  2.5 to 3 minutes against 1 to 20 s, on a machine running other work.
 
 Until 2026-11-18 a third stood there: it stepped where two regions come into contact. The two
 boxes above, moved from a gap of `1e-8` of the period to an overlap of `1e-8`, stepped `T` by
