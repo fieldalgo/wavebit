@@ -210,6 +210,14 @@ that overlaps two blocks of the same material; the step at the routing tolerance
 change across it is 8.0e-10 for a change of 2e-8 in overlap, 9.5e-10 rotated, and a hundred
 times smaller for a change a hundred times smaller). A painted layer is built exactly as before, and `'per_shape'`, the default, names what the path has always done.
 
+The closed form also depends on how many shapes a structure is written with. It takes one shape's
+nearest periodic image but blends different shapes, so one pillar in its primitive cell and N
+copies of it in an `(N*a1, a2)` supercell get different fields between the pillars. Their answers
+differ at the truncation error and converge to one value: for four TiO2 pillars at orders 3 and 4,
+`T` by 3.3e-5 and 7.1e-5 and the zero-order phase by 0.012 and 0.007 rad, where Laurent's rule
+gives the two cells the same answer to rounding. `'interfaces'` narrows the gap to 3.7e-7 and 3.2e-7
+in `T` but does not close it on these circles ([known limits §10](../../validation/rcwa/normal-field-known-limits.md)).
+
 It is experimental, a run that uses it emits `ExperimentalWarning`, and two things stand
 between it and a default:
 
