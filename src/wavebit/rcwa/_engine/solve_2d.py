@@ -1354,6 +1354,44 @@ def _pivoted_lanes(xp, E, valid, keep):
     return taken
 
 
+def _flag_columns(xp, T, valid, mu, ndead, n1, n2):
+    """Columns ``[L_0 | L_1 | L_2]`` of a three-level split from the members' nested null spaces.
+
+    ``N`` is ``T`` less the mean of its members' diagonal, on member lanes only. ``L_2`` holds the
+    ``n2`` leading right singular vectors of ``N**2``, ``L_1`` the ``n1`` leading ones of ``N``
+    on the complement of ``L_2``, and ``L_0`` the rest, diagonalised and with the padded lanes'
+    stand-in pairs last (:func:`_dead_last`). At a cluster whose members sit at one point, with
+    ``n0`` chains through it and ``n1``, ``n2`` lanes in the upper levels, ``N`` is nearly
+    nilpotent and these are its kernel flag: ``N L_1`` lies in ``span(L_0)`` and ``N L_2`` in
+    ``span(L_0, L_1)``, so ``X^-1 T X`` couples each lane only to higher levels (Golub and Van
+    Loan, section 7.6.5). The levels are orthonormal and come from singular vectors, which stay
+    well conditioned where the eigenvectors of a Jordan chain are nearly parallel: on one
+    two-chain cluster the eigenvector splits read ``cond(X)`` from 1.3 to 112 on matrices equal
+    to rounding, this one about 1. Away from such a point it is simply a worse candidate, and
+    the caller keeps the one the check reads least of.
+    """
+    S, k, _ = T.shape
+    C = T.dtype
+    dev = getattr(T, 'device', None)
+    lane = xp.arange(k, device=dev)
+    eye = xp.astype(lane[:, None] == lane[None, :], C)
+    vv = valid[:, :, None] & valid[:, None, :]
+    members = xp.sum(xp.astype(valid, xp.real(T).dtype), axis=1)
+    diag = xp.linalg.diagonal(T)
+    mean = (xp.sum(xp.where(valid, diag, xp.zeros_like(diag)), axis=1)
+            / xp.astype(xp.maximum(members, xp.ones_like(members)), C))
+    N = xp.where(vv, T - mean[:, None, None] * eye, xp.zeros_like(T))
+    V2 = _conj_t(xp, xp.linalg.svd(N @ N, full_matrices=True)[2])[..., :n2]
+    outside = eye - V2 @ _conj_t(xp, V2)
+    V1 = _conj_t(xp, xp.linalg.svd(N @ outside, full_matrices=True)[2])[..., :n1]
+    Q, _ = xp.linalg.qr(xp.concat([V1, V2], axis=-1), mode='complete')
+    C0 = Q[..., n1 + n2:]
+    lam0, Y0 = _eig_raw(_conj_t(xp, C0) @ T @ C0)
+    Y0 = Y0 / xp.linalg.vector_norm(Y0, axis=-2)[..., None, :]
+    _, Y0 = _dead_last(xp, lam0, Y0, mu, ndead)
+    return xp.concat([C0 @ Y0, V1, V2], axis=-1)
+
+
 def _chain_split_traced_wide(xp, T, valid, pad):
     """:func:`_chain_split` under an abstract trace for the layouts of :data:`_WIDE_LEVELS`.
 
@@ -1428,6 +1466,14 @@ def _chain_split_traced_wide(xp, T, valid, pad):
             Xs.append(xp.where(vv, X, xp.broadcast_to(eye, X.shape)))
             lvls.append(lvl)
             oks.append(ok)
+        # The same layout from the nested null spaces of the members' restriction about their
+        # mean (_flag_columns): no eigenvectors of the defective block, so it does not inherit
+        # their conditioning at the chain.
+        X = _flag_columns(xp, T, valid, mu, ndead, n1, n2) @ _conj_t(xp, P)
+        X = X / xp.linalg.vector_norm(X, axis=-2)[..., None, :]
+        Xs.append(xp.where(vv, X, xp.broadcast_to(eye, X.shape)))
+        lvls.append(lvl)
+        oks.append(ok)
     if not Xs:
         inf = xp.full((S,), float('inf'), dtype=xp.real(T).dtype, device=dev)
         return xp.broadcast_to(eye, (S, k, k)), xp.zeros((S, k), dtype=xp.int32, device=dev), inf
