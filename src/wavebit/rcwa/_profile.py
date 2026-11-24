@@ -27,7 +27,7 @@ from .._common.backend import SlicingWarning, _device_of, array_namespace, as_ar
 from ..errors import IncompatibleProblemError, UnsupportedFeatureError, ValidationError, WavebitError
 from . import _adapt
 from .numerics import Slicing
-from .problem import Layer, Loft, Polygon, Problem, PROFILE_SHAPES, ProfiledLayer, Rectangle, Region, Trapezoid
+from .problem import Graded, Layer, Loft, Polygon, Problem, PROFILE_SHAPES, ProfiledLayer, Rectangle, Region, Trapezoid
 
 #: Samples along the height used to measure a sidewall's arc length when planning the slices.
 _PLAN_SAMPLES = 2048
@@ -165,8 +165,21 @@ def _period_y(problem, path):
     return stack.period[1]
 
 
-def slice_regions(problem, layer, m, z, path):
-    """The regions of ``layer`` at height ``z``: each profile shape as its cross-section."""
+def material_at(material, z, u):
+    """A :class:`Graded` material at height ``z`` (fraction ``u`` of the thickness); any other as it is."""
+    if isinstance(material, Graded):
+        return material.material(u if material.relative else z)
+    return material
+
+
+def slice_regions(problem, layer, m, z, path, u=None):
+    """The regions of ``layer`` at height ``z``: each profile shape as its cross-section.
+
+    ``u`` is that height as a fraction of the thickness, which a relative :class:`Graded`
+    material reads; given as a number, it stays one where ``z`` is traced through the thickness.
+    """
+    if u is None:
+        u = z/layer.thickness
     regions = []
     for j, region in enumerate(layer.regions):
         g = region.geometry
@@ -181,8 +194,14 @@ def slice_regions(problem, layer, m, z, path):
             geometry = Polygon(vertices=g.section(z))
         else:
             geometry = g
-        regions.append(Region(geometry=geometry, material=region.material))
+        regions.append(Region(geometry=geometry, material=material_at(region.material, z, u)))
     return tuple(regions)
+
+
+def slice_layer(problem, layer, m, z, u, thickness, path):
+    """One slice of ``layer``: an ordinary layer of its cross-section and materials at ``z``."""
+    return Layer(thickness=thickness, background=material_at(layer.background, z, u),
+                 regions=slice_regions(problem, layer, m, z, path, u))
 
 
 def _layer_math(problem, layer):
@@ -206,14 +225,12 @@ def expand(problem, fractions, merged):
         m = _layer_math(problem, layer)
         path = f'stack.layers[{i}]'
         if merged[i]:
-            layers.append(Layer(thickness=h, background=layer.background,
-                                regions=slice_regions(problem, layer, m, h/2, path)))
+            layers.append(slice_layer(problem, layer, m, h/2, .5, h, path))
             owner.append(i)
             continue
         t = fractions[i]
         for t0, t1 in zip(t[:-1], t[1:]):
-            layers.append(Layer(thickness=h*(t1 - t0), background=layer.background,
-                                regions=slice_regions(problem, layer, m, h*((t0 + t1)/2), path)))
+            layers.append(slice_layer(problem, layer, m, h*((t0 + t1)/2), (t0 + t1)/2, h*(t1 - t0), path))
             owner.append(i)
     stack = dataclasses.replace(problem.stack, layers=tuple(layers))
     return dataclasses.replace(problem, stack=stack), tuple(owner)
@@ -278,6 +295,8 @@ def plan_fractions(problem, i, count, rule):
     """Slice boundaries of profiled layer ``i`` as ``count + 1`` fractions of its thickness."""
     layer = problem.stack.layers[i]
     uniform = tuple(k/count for k in range(count)) + (1.,)
+    # A layer whose outline does not move -- a graded material alone -- is cut uniformly: its
+    # midpoint staircase converges at second order in the smooth material profile as it is.
     if rule == 'uniform' or not any(isinstance(r.geometry, PROFILE_SHAPES) for r in layer.regions):
         return uniform
     h = float(layer.thickness)
@@ -367,11 +386,16 @@ def invariant(problem, i, fractions):
     path = f'stack.layers[{i}]'
     first = None
     for t0, t1 in zip(fractions[:-1], fractions[1:]):
-        regions = slice_regions(problem, layer, m, h*((t0 + t1)/2), path)
-        leaves = [v for r in regions for v in _adapt.leaves(r.geometry)]
+        sliced = slice_layer(problem, layer, m, h*((t0 + t1)/2), (t0 + t1)/2, h, path)
+        parts = [sliced.background] + [r.material for r in sliced.regions] + [r.geometry for r in sliced.regions]
+        leaves = [v for part in parts for v in _adapt.leaves(part)]
         if any(_differentiated(v) for v in leaves):
             return False
-        values = [np.asarray(_adapt.host(v, path)) for v in leaves]
+        try:
+            values = [(type(part).__name__,) for part in parts] + [np.asarray(_adapt.host(v, path)) for v in leaves]
+        except (TypeError, ValueError):
+            # A material model with no array leaves to read (a tabulated table): compare it by identity.
+            values = [id(part) for part in parts]
         if first is None:
             first = values
         elif len(values) != len(first) or not all(np.array_equal(a, b) for a, b in zip(values, first)):

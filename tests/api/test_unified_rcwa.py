@@ -685,7 +685,7 @@ def test_every_exported_region_geometry_is_listed_here():
     from wavebit.rcwa import problem as declarations
     shapes = {name for name in rcwa.__all__
               if getattr(getattr(rcwa, name), '__module__', None) == declarations.__name__
-              and name not in ('Problem', 'Stack', 'Layer', 'ProfiledLayer', 'Region', 'Excitation', 'Outputs')}
+              and name not in ('Problem', 'Stack', 'Layer', 'ProfiledLayer', 'Graded', 'Region', 'Excitation', 'Outputs')}
     assert shapes == set(GEOMETRIES) | set(PROFILE_GEOMETRIES)
 
 

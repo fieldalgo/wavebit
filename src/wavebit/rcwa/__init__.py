@@ -1,6 +1,6 @@
 """Rigorous coupled-wave analysis with immutable problems and managed or explicit preparation."""
 from .problem import (Problem, Stack, Layer, ProfiledLayer, Region, Rectangle, Circle, Ellipse, Polygon,
-                      Trapezoid, Loft, Profile, Excitation, Outputs)
+                      Trapezoid, Loft, Profile, Graded, Excitation, Outputs)
 from .sources import PlaneWave, IncidentOrders, GaussianBeam, ElectricDipole
 from .numerics import Numerics, Slicing
 from .results import Result, BoundaryPower
@@ -10,7 +10,7 @@ from ._structure import sample_structure
 from . import diagnostics  # noqa: F401 -- public submodule, listed by __dir__ as fdtd.diagnostics is
 
 __all__ = ['Problem', 'Stack', 'Layer', 'ProfiledLayer', 'Region', 'Rectangle', 'Circle', 'Ellipse',
-           'Polygon', 'Trapezoid', 'Loft', 'Profile', 'Excitation', 'Outputs', 'PlaneWave',
+           'Polygon', 'Trapezoid', 'Loft', 'Profile', 'Graded', 'Excitation', 'Outputs', 'PlaneWave',
            'IncidentOrders', 'GaussianBeam', 'ElectricDipole', 'Numerics', 'Slicing', 'Result',
            'BoundaryPower', 'Prepared', 'Compiled', 'check', 'prepare', 'run', 'compile',
            'sample_structure']

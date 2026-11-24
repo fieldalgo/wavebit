@@ -1855,3 +1855,31 @@ def parse_period_mapping(value, name='period'):
             f"it has -- a skewed cell is given as `lattice=` instead, and its two "
             f"directions are u and v.")
     return [value['x'], value['y']]
+
+
+def bruggeman_root(xp, b, product):
+    """The passive root of the two-phase Bruggeman equation ``2*e**2 - b*e - product = 0``.
+
+    For constituents ``eps_a``, ``eps_b`` and inclusion fraction ``f`` with spherical inclusions
+    (depolarization 1/3), ``(1-f)(eps_a-e)/(eps_a+2e) + f(eps_b-e)/(eps_b+2e) = 0`` is that
+    quadratic with ``b = (2-3f)*eps_a + (3f-1)*eps_b`` and ``product = eps_a*eps_b``
+    (D. A. G. Bruggeman, Ann. Phys. 416, 636 (1935)).
+
+    The two roots are ``(b +- s)/4`` with ``s**2 = b**2 + 8*product``. Which square root ``s``
+    the backend returns does not matter: the roots are told apart by what they are, not by the
+    sign in front of ``s``. The physical one is the passive one, ``Im(e) >= 0`` under
+    ``e^{-iwt}``; for passive constituents the other root lies below the real axis or, both
+    being real, is negative. So the larger imaginary part decides, and between two real roots
+    the larger real part (the positive one): the effective medium of two positive dielectrics
+    is a positive dielectric. A tie, two roots with equal imaginary parts, is a double root
+    (``s = 0``) and either answer is the same number. ``xp.where`` keeps both candidates'
+    derivatives alive, and the selected one carries the derivative of the root it is.
+    """
+    s = xp.sqrt(b*b + 8*product)
+    first, second = (b + s)/4, (b - s)/4
+    di = xp.imag(first) - xp.imag(second)
+    scale = xp.abs(first) + xp.abs(second)
+    # Imaginary parts that agree to round-off are a real pair; the real part decides there.
+    tied = xp.abs(di) <= 64*np.finfo(np.float64).eps*scale
+    take_first = xp.where(tied, xp.real(first) >= xp.real(second), di > 0)
+    return xp.where(take_first, first, second)

@@ -24,10 +24,10 @@ _SCHEMA = 'wavebit.job/v2'
 _CLASS_MODULES = {
     'wavebit.units': ('Units',),
     'wavebit.lattice': ('Lattice',),
-    'wavebit.materials': ('Material', 'ConductiveMaterial', 'DispersiveMaterial',
+    'wavebit.materials': ('Material', 'Bruggeman', 'ConductiveMaterial', 'DispersiveMaterial',
                          'TabulatedMaterial', 'Drude', 'Lorentz', 'Debye'),
     'wavebit.rcwa': ('Problem', 'Stack', 'Layer', 'ProfiledLayer', 'Region', 'Rectangle', 'Circle',
-                     'Ellipse', 'Polygon', 'Trapezoid', 'Loft', 'Profile', 'Excitation', 'Outputs',
+                     'Ellipse', 'Polygon', 'Trapezoid', 'Loft', 'Profile', 'Graded', 'Excitation', 'Outputs',
                      'Numerics', 'Slicing',
                      'PlaneWave', 'IncidentOrders', 'GaussianBeam', 'ElectricDipole'),
     'wavebit.fdtd': ('Problem', 'Scene', 'Domain', 'Structure', 'SnappedSlab', 'Box', 'Sphere',
