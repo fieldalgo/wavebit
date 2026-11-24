@@ -30,6 +30,9 @@
 #     CI is the full validation of the new versions. If that fails, close it: the recorded
 #     versions stay, and the next refresh offers newer ones. The issue closes itself once main
 #     records the newest versions. docs/development/verification.md has the policy.
+#   - a refresh that fails -> open, or comment on, one issue titled REFRESH_FAILED_TITLE below.
+#     It is closed by the next refresh that succeeds, not by a daily run, which does not
+#     refresh.
 name: latest dependencies
 
 on:
@@ -63,6 +66,7 @@ permissions:
 env:
   CANARY_TITLE: Latest dependencies canary is failing
   REFRESH_TITLE: Newer dependency versions are ready to record
+  REFRESH_FAILED_TITLE: Latest dependencies refresh is failing
   REFRESH_PREFIX: deps/ci-constraints-
 
 jobs:
@@ -365,3 +369,29 @@ jobs:
             gh issue create --title "$REFRESH_TITLE" --body "$body"
           fi
           printf '%s\n' "$body" >> "$GITHUB_STEP_SUMMARY"
+
+      # The canary issue covers the three checking jobs only, and the next daily run would
+      # close it, so a refresh that fails has its own issue, which only a refresh closes.
+      - name: Open, comment on or close the refresh-failure issue
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          STATUS: ${{ job.status }}
+        run: |
+          existing=$(gh issue list --state open --search "\"$REFRESH_FAILED_TITLE\" in:title" --json number,title \
+            --jq "[.[] | select(.title == env.REFRESH_FAILED_TITLE)][0].number // empty")
+          if [ "$STATUS" = "failure" ]; then
+            body=$(printf '%s\n\n%s\n\n%s' \
+              "The refresh of the recorded dependency versions failed: $RUN_URL. It may have stopped before pushing a branch with the newer versions or updating the issue \"$REFRESH_TITLE\"." \
+              "Required CI and main are unaffected: they install the recorded versions. The failed step's log names the cause; after fixing it, run this workflow by hand with \`refresh\`, or wait for Monday's run." \
+              "This issue closes itself after the next refresh that succeeds.")
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --body "$body"
+            else
+              gh issue create --title "$REFRESH_FAILED_TITLE" --body "$body"
+            fi
+          elif [ -n "$existing" ]; then
+            gh issue close "$existing" --comment "The refresh succeeds again. Run: $RUN_URL."
+          fi

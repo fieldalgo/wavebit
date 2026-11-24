@@ -131,3 +131,15 @@ def test_a_latest_tests_install_leaves_the_cpu_torch_alone():
     recorded_ = ci_constraints.pip_arguments('tests', latest=False)
     assert recorded_[0] == [*ci_constraints.CPU_TORCH, '--extra-index-url', ci_constraints.PYPI]
 
+
+def test_a_failed_refresh_opens_its_own_issue_which_only_a_refresh_closes():
+    text = (WORKFLOWS / 'latest-deps.yml').read_text(encoding='utf-8')
+    assert re.search(r'^  REFRESH_FAILED_TITLE: \S', text, re.MULTILINE)
+    refresh = text[text.index('\n  refresh:\n'):]
+    step = refresh[refresh.index('name: Open, comment on or close the refresh-failure issue'):]
+    assert 'if: ${{ !cancelled() }}' in step and 'STATUS: ${{ job.status }}' in step
+    assert 'gh issue create --title "$REFRESH_FAILED_TITLE"' in step
+    assert 'gh issue close "$existing"' in step
+    # The report job, which a daily run also reaches, never touches it.
+    report = text[text.index('\n  report:\n'):text.index('\n  refresh:\n')]
+    assert 'REFRESH_FAILED_TITLE' not in report
