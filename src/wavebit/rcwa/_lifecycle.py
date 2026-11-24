@@ -43,6 +43,12 @@ _SPELLING = (
     (r'\bspectral_extent\b', 'GaussianBeam(angular_spectrum_extent=...)'),
     (r"\blayer_algorithm='(SMM|ETM)'", lambda m: f"Numerics(algorithm='{m.group(1).lower()}')"),
     (r'\bexcitation names order\b', 'IncidentOrders(weights=...) names order'),
+    # A stale record: the engine's caller holds the record and freezes it again; a prepared
+    # calculation holds it for the caller, who can only prepare again.
+    (r'Call freeze_geometry\(\) again((?: (?:with|under) [^.]*?)?), or drop geometry= to [a-z ]+\.',
+     r'Prepare the problem again with rcwa.prepare(...)\1; on JAX, rcwa.compile(...) prepares '
+     r'again by itself.'),
+    (r'; freeze_geometry\(\) again', '; prepare the problem again with rcwa.prepare(...)'),
 )
 
 

@@ -643,6 +643,32 @@ def test_jax_grad_shape_step_across_a_topology_boundary_asks_for_a_new_preparati
     assert error.value.issue.code == 'prepared.topology'
 
 
+def _two_boxes(width):
+    return patterned(tuple(rcwa.Rectangle(size=(width, 200.), center=(c, 0.)) for c in (-60., 60.)))
+
+
+def _box_over_a_box(x):
+    return patterned((rcwa.Rectangle(size=(300., 300.)), rcwa.Rectangle(size=(100., 100.), center=(x, 0.))))
+
+
+@pytest.mark.parametrize('numerics, prepared_with, run_with', [
+    (PATTERNED_NUMERICS, _two_boxes(100.), _two_boxes(130.)),
+    (PATTERNED_NUMERICS, _two_boxes(130.), _two_boxes(100.)),
+    (PATTERNED_NUMERICS, _box_over_a_box(0.), _box_over_a_box(120.)),
+    (rcwa.Numerics(orders=(2, 2), factorization='li'), _two_boxes(100.), _two_boxes(130.)),
+], ids=['summed, now overlapping', 'painted, now apart', 'painted, a covered box comes out',
+        'li, the edges change order'])
+def test_a_stale_preparation_is_refused_in_public_spelling(numerics, prepared_with, run_with):
+    """The engine advises ``freeze_geometry()`` or dropping ``geometry=``; a prepared
+    calculation holds that record for its caller, who can only prepare again."""
+    prepared = rcwa.prepare(prepared_with, numerics=numerics)
+    with pytest.raises(IncompatibleProblemError, match=r'rcwa\.prepare\(\.\.\.\)') as error:
+        prepared.run(run_with)
+    assert error.value.issue.code == 'prepared.topology'
+    assert 'freeze_geometry' not in str(error.value)
+    assert 'geometry=' not in str(error.value)
+
+
 #: One declaration of every region geometry the public namespace exports.
 GEOMETRIES = {'Rectangle': dict(size=(.3, .2), angle=.3),
               'Circle': dict(radius=.15),
