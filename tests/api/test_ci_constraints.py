@@ -112,3 +112,22 @@ def test_merge_takes_the_union_and_refuses_a_disagreement(tmp_path):
     windows.write_text('build==1.7.0\n', encoding='utf-8')
     with pytest.raises(SystemExit, match='build'):
         ci_constraints.merge('distribution', [linux, windows], out)
+
+
+def test_a_latest_distribution_install_upgrades_what_the_runner_image_ships():
+    """The runners' own Pythons ship some distributions (certifi on macOS, packaging on
+    Windows); a plain install keeps them and the three freezes stop agreeing."""
+    for name in ('distribution', 'distribution-tools'):
+        for arguments in ci_constraints.pip_arguments(name, latest=True):
+            assert arguments[:3] == ['--upgrade', '--upgrade-strategy', 'eager'], (name, arguments)
+        for arguments in ci_constraints.pip_arguments(name, latest=False):
+            assert '--upgrade' not in arguments, (name, arguments)
+
+
+def test_a_latest_tests_install_leaves_the_cpu_torch_alone():
+    latest = ci_constraints.pip_arguments('tests', latest=True)
+    assert latest[0] == ci_constraints.CPU_TORCH
+    assert not any('--upgrade' in arguments or '--upgrade-strategy' in arguments for arguments in latest)
+    recorded_ = ci_constraints.pip_arguments('tests', latest=False)
+    assert recorded_[0] == [*ci_constraints.CPU_TORCH, '--extra-index-url', ci_constraints.PYPI]
+

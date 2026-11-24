@@ -71,6 +71,16 @@ ENVIRONMENTS = {
 # is the checkout under test.
 UNRECORDED = {'pip', 'wavebit'}
 
+# Sets whose `--latest` install also upgrades what is already installed, dependencies
+# included. The distribution job installs into the runner's own Python on Linux, macOS
+# and Windows, and those images ship distributions of their own (certifi on macOS,
+# packaging on Windows, in November 2026). A plain `pip install` keeps one wherever it
+# satisfies the requirement, so a freeze there records the image's version rather than
+# the newest, and `merge` then finds the three systems disagreeing. `tests` is left as
+# it is: an eager upgrade there could replace the `+cpu` torch with PyPI's build, and it
+# is recorded on Linux only.
+EAGER_LATEST = {'distribution'}
+
 
 def canonical(name):
     """PEP 503 normalized name, so that a file sorts and diffs the same however a
@@ -89,6 +99,18 @@ def pip_environment(name):
     return {'PIP_CONSTRAINT': path, 'PIP_BUILD_CONSTRAINT': path}
 
 
+def pip_arguments(name, *, latest):
+    """The `pip install` argument lists `install` runs for a set, in order."""
+    out = []
+    for arguments in ENVIRONMENTS[name][1]:
+        if not latest and '--index-url' in arguments:
+            arguments = [*arguments, '--extra-index-url', PYPI]
+        if latest and ENVIRONMENTS[name][0] in EAGER_LATEST:
+            arguments = ['--upgrade', '--upgrade-strategy', 'eager', *arguments]
+        out.append(arguments)
+    return out
+
+
 def install(name, *, latest):
     env = dict(os.environ)
     for key in ('PIP_CONSTRAINT', 'PIP_BUILD_CONSTRAINT'):
@@ -97,9 +119,7 @@ def install(name, *, latest):
         if not constraints_file(name).is_file():
             raise SystemExit(f'{constraints_file(name).relative_to(ROOT)} is missing')
         env.update(pip_environment(name))
-    for arguments in ENVIRONMENTS[name][1]:
-        if not latest and '--index-url' in arguments:
-            arguments = [*arguments, '--extra-index-url', PYPI]
+    for arguments in pip_arguments(name, latest=latest):
         command = [sys.executable, '-m', 'pip', 'install', *arguments]
         print('+', ' '.join(command), flush=True)
         subprocess.run(command, cwd=ROOT, env=env, check=True)
