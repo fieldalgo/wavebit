@@ -156,6 +156,12 @@ one issue that lists the changes and links to a pull request from that branch. A
 opens that pull request: Actions may not open pull requests in this repository, and one its
 token opened would run no CI.
 
+The distribution environment is installed into each runner's own Python, and the macOS and
+Windows images ship some distributions of their own (certifi and packaging, for example).
+Its newest-release install therefore upgrades every requirement and dependency
+(`--upgrade --upgrade-strategy eager`): otherwise a system keeps the image's version, and the
+three systems' records disagree and cannot be combined into one file.
+
 A version moves only through that pull request. Its required CI is the full validation on the
 new versions, including macOS and Windows. Merge it when it is green. If it is red, close it:
 the recorded versions stay, and the next refresh offers newer ones. To land part of it, keep
