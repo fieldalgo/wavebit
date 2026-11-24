@@ -106,9 +106,12 @@ A cell of four equal pillars is then solved against the primitive cell at the sa
 
 The two cells keep the same orders, and the orders between the primitive ones stay empty to
 rounding. T still differs by up to 1.8e-4 and the phase by up to 0.011 rad, and the
-difference does not shrink monotonically from M = 4 to 6. Where it comes from was not traced.
-One candidate is the normal field of the default factorization, if it depends on the cell it
-is built on; that was not checked in the source.
+difference does not shrink monotonically from M = 4 to 6. The cause is the normal field of the
+default factorization: it takes one shape's nearest periodic image but blends different shapes,
+so four copies in the supercell get a different field between the pillars from one pillar in the
+primitive cell. For the 150 nm pillar under `factorization='laurent'`, which reads no normal
+field, the two cells agree to rounding, and under the default both converge to one value.
+[Known limits §10](normal-field-known-limits.md) has the measurements.
 
 **Rigorous value.** One NumPy solve of the cell with the default settings, the efficiency of
 transmitted order (1, 0). Every solve asserts `R + T = 1` to 1e-9.

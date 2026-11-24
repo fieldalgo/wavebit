@@ -1512,6 +1512,86 @@ never fires" was first written with its before and after identical, which the ha
 a no-op rather than counting as a kill. A mutation that does not apply, or applies to nothing, is
 indistinguishable from a passing test unless the harness says so out loud.
 
+## 10. Copies of one shape in a supercell are a different description (2026-11-24)
+
+Measured 2026-11-24 on one CPU host (four logical cores of an Intel Xeon at 2.10 GHz in a shared
+cloud container), NumPy, float64. The instrument and its printed output are in
+`studies/rcwa/supercell_normal_field/`.
+
+**What.** The closed-form field (`shape_normal_method='per_shape'`, the default) treats the
+periodic images of one shape and different shapes differently. For one shape it takes the normal
+of the nearest image, switching on the Voronoi boundary between images (`_round_instances`); it
+blends different shapes by the ratio weights `(d_min / d) ** 4` (`_piece_field`, both in
+`src/wavebit/rcwa/_engine/parametric.py`; the blend is §8a). A primitive cell holding one pillar
+is one piece. The same array written as the supercell `(N*a1, a2)` holding N copies of the pillar
+is N pieces, and a neighbour that was an image becomes a different shape. At the interfaces the two
+fields agree; between the pillars they do not. The structure, the retained primitive orders and
+the permittivity coefficients are the same in both cells, so the normal field is the only input
+that differs.
+
+**How far.** TiO2 pillars (n = 2.43) on fused silica, hexagonal pitch 350 nm, height 600 nm,
+diameter 150 nm, 532 nm, normal incidence, s. The supercell keeps `|m| <= N*M, |n| <= M`, which
+contains the primitive cell's `|m|, |n| <= M`.
+
+N = 4 against the primitive cell: the difference in T, and in the zero-order phase in radians.
+*Laurent* is `factorization='laurent'`; *interfaces* is `shape_normal_method='interfaces'`.
+
+| | T, M = 3 | phase, M = 3 | T, M = 4 | phase, M = 4 |
+| --- | --- | --- | --- | --- |
+| default NVF | -3.3e-5 | +1.2e-2 | -7.1e-5 | +7.3e-3 |
+| Laurent | -1.9e-15 | +3.1e-14 | -1.4e-15 | +2.0e-13 |
+| interfaces | +3.7e-7 | -6.1e-4 | +3.2e-7 | +5.5e-5 |
+
+Laurent's rule reads no normal field, and with it the two cells agree to rounding. The default
+NVF difference does not move with the field's sample grid: -3.22e-5, -3.28e-5 and -3.28e-5 in T at
+`shape_nvf_grid_size` 512, 1024 and 2048. The field itself, evaluated at the same physical points
+by the builder the solve uses (241 x 241 points over one primitive cell about a pillar):
+
+| from the nearest pillar boundary | largest angle (deg) | mean angle (deg) |
+| --- | --- | --- |
+| 0–1 nm | 0.000 | 0.000 |
+| 1–5 nm | 0.000 | 0.000 |
+| 5–20 nm | 0.028 | 0.002 |
+| 20–60 nm | 87.5 | 1.0 |
+| 60–200 nm | 90.0 | 13.4 |
+
+The primitive cell's field is the radial normal of the nearest pillar image at all but 56 of the
+58081 points, 55 of them within 1 nm of equidistant from two pillars and one at a pillar's centre.
+The four pillars of the supercell carry the same field as each other.
+
+Both cells converge to one value. For N = 2 against the primitive cell at M = 3 to 9, with the
+primitive cell at M = 14 as the reference:
+
+| M | T(1) - ref | T(N=2) - ref | T(N=2) - T(1) | phase difference (rad) |
+| --- | --- | --- | --- | --- |
+| 3 | +3.2e-4 | +4.7e-4 | +1.5e-4 | -7.3e-3 |
+| 4 | +4.2e-4 | +4.4e-4 | +1.3e-5 | -1.3e-3 |
+| 5 | +1.9e-4 | +1.3e-4 | -6.0e-5 | +2.0e-3 |
+| 6 | +1.9e-4 | +1.7e-4 | -2.8e-5 | +3.4e-3 |
+| 7 | +5.9e-5 | +8.1e-5 | +2.2e-5 | +9.2e-4 |
+| 8 | +7.2e-5 | +9.1e-5 | +1.8e-5 | -1.2e-3 |
+| 9 | +3.5e-5 | +4.1e-5 | +5.3e-6 | -1.8e-3 |
+
+The gap in T is the size of each cell's own distance from the reference, changes sign, and falls
+from 1.5e-4 to 5.3e-6. The phase gap stays between 9e-4 and 7.3e-3 rad over this range. The
+reference is the primitive cell itself, so this shows a common limit, not its value.
+
+**How to tell.** Any comparison, under the default NVF, between descriptions of one structure that
+split it into a different number of shapes per period: a supercell against its primitive cell, as
+in the anchor of [the deflector study](deflector-supercell.md), or copies of a shape against one
+shape with its images. The difference is at the truncation error, so it looks like convergence.
+
+**What to do.** Compare at matched descriptions, or at orders where both have converged. When the
+comparison itself is the point, `factorization='laurent'` makes the two cells agree exactly, at
+the cost of its slower convergence on high-contrast boundaries.
+`shape_normal_method='interfaces'` narrows the gap but does not close it on these circles, and it
+is experimental and slow on curved shapes (about eight minutes per pair of solves here).
+
+**Status.** Open. The answers are not wrong; they are two truncations of one limit. Whether the
+closed form should blend a shape's own images the way it blends different shapes, which would make
+its field independent of the description and would also change every closed-form answer at the
+truncation level, is a design question this entry does not decide.
+
 ## Explicit Cartesian alternative for rectangular contacts
 
 Axis-aligned rectangular paintings can now select `factorization='li'` to bypass

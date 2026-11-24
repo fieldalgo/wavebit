@@ -1,0 +1,49 @@
+python 3.12.3  Linux x86_64  logical CPUs 4
+cpu Intel(R) Xeon(R) Processor @ 2.10GHz
+wavebit 0.0.5  numpy 2.5.5  scipy 1.18.1
+thread settings library defaults
+
+rule: N = 4 against the primitive cell, d = 150 nm
+    factorization   M   T(N=4) - T(1)   phase(N=4) - phase(1) (rad)   time (s)
+    default (nvf)   3   -3.283e-05        +1.229e-02                     5.0
+    default (nvf)   4   -7.136e-05        +7.279e-03                     2.4
+    laurent         3   -1.887e-15        +3.053e-14                     0.4
+    laurent         4   -1.443e-15        +1.972e-13                     1.4
+
+field: the default normal field, 241 x 241 points over one primitive cell about a pillar
+    pieces in the blend: primitive cell 1, supercell N = 4: 4
+    primitive field against the radial normal of the nearest pillar image: 56 of 58081 points differ by more than 1 deg; 55 of them lie within 1 nm of equidistant from two pillars, 1 at a centre
+    angle between the two cells' fields (deg), by distance from the nearest pillar boundary
+    pillar     0-1   nm max / mean     1-5   nm max / mean     5-20  nm max / mean    20-60  nm max / mean    60-200 nm max / mean
+      0          0.000 /  0.000       0.000 /  0.000       0.028 /  0.002      87.535 /  1.011      90.000 / 13.357
+      1          0.000 /  0.000       0.000 /  0.000       0.028 /  0.002      87.535 /  1.011      90.000 / 13.357
+      2          0.000 /  0.000       0.000 /  0.000       0.028 /  0.002      87.535 /  1.011      90.000 / 13.357
+      3          0.000 /  0.000       0.000 /  0.000       0.028 /  0.002      87.535 /  1.011      90.000 / 13.357
+    (the four supercell pillars give the same angles to 1.2e-06 deg)
+
+grid: N = 4 against the primitive cell at M = 3, shape_nvf_grid_size
+    grid    T(N=4) - T(1)   phase(N=4) - phase(1) (rad)   time (s)
+      512   -3.218e-05      +1.223e-02                     0.6
+     1024   -3.283e-05      +1.229e-02                     0.6
+     2048   -3.280e-05      +1.229e-02                     5.8
+
+convergence: N = 2 against the primitive cell; reference T(1) at M = 14
+    reference T = 0.96640607  (20 s)
+     M   orders (1 / N=2)   T(1) - ref    T(N=2) - ref   T(N=2) - T(1)   phase(N=2) - phase(1) (rad)
+     3       49 /   91      +3.19e-04     +4.70e-04      +1.51e-04        -7.29e-03
+     4       81 /  153      +4.22e-04     +4.35e-04      +1.29e-05        -1.31e-03
+     5      121 /  231      +1.94e-04     +1.34e-04      -6.01e-05        +1.95e-03
+     6      169 /  325      +1.93e-04     +1.66e-04      -2.75e-05        +3.36e-03
+     7      225 /  435      +5.86e-05     +8.10e-05      +2.24e-05        +9.21e-04
+     8      289 /  561      +7.24e-05     +9.07e-05      +1.83e-05        -1.19e-03
+     9      361 /  703      +3.54e-05     +4.07e-05      +5.32e-06        -1.77e-03
+
+python 3.12.3  Linux x86_64  logical CPUs 4
+cpu Intel(R) Xeon(R) Processor @ 2.10GHz
+wavebit 0.0.5  numpy 2.5.5  scipy 1.18.1
+thread settings library defaults
+
+interfaces: N = 4 against the primitive cell, shape_normal_method="interfaces" (experimental)
+    M   T(N=4) - T(1)   phase(N=4) - phase(1) (rad)   time (s)
+    3   +3.739e-07      -6.129e-04                   499.8
+    4   +3.165e-07      +5.486e-05                   491.7
