@@ -1,0 +1,145 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_gyptis_wide_c1",
+  "physics": "rcwa",
+  "comparison": "different-discretization",
+  "role": "external oracle for wall_resolution's matched coordinates (C1) where golden_gyptis_wide has none: 3D finite-element R, T and mid-plane fields of a metal circle at theta 40 deg (p, s) and at 350 nm with five propagating orders, and of a 130 x 80 nm metal ellipse at theta 20 deg (p, s); the pre-registered criteria of the widened table are asserted against them",
+  "references": [
+    {
+      "tool": "gyptis",
+      "version": "1.2.0",
+      "build": "FEniCS (dolfin) 2019.1.0, gmsh 4.15.2, PETSc/petsc4py 3.26.1, MUMPS 5.8.2 (conda-forge), one thread, out of core",
+      "modified": {
+        "value": false,
+        "description": "used through its public Python API; the package itself was not changed"
+      },
+      "spdx": "MIT",
+      "source": "https://pypi.org/project/gyptis/",
+      "install": {
+        "kind": "conda",
+        "command": null
+      },
+      "settings": "Maxwell3DPeriodic on symmetry-reduced cells: at normal incidence a quarter of the cell (x mirrors perfect electric, y mirrors perfect magnetic walls), half the height split into parts even and odd in z (two solves); at phi 0 the whole period in x (Bloch periodic) and half of it in y, z split the same way; over a substrate the quarter cell at full height, one solve with the analytic air/substrate field as the background. s at normal incidence is p on the cell turned by 90 deg. Second-order edge (Nedelec) elements, 400 nm of air and 900 nm of perfectly matched layer above and below. R and T by projecting the periodic part of the scattered field on each diffraction order over an air (or substrate) slab. Relative residuals of the direct solves 2.1e-13 to 1.8e-12. Before the metal cases were read the models were checked against uniform slabs (analytic, within 1.2e-4) and the dielectric block (RETICOLO at order 30, within 1.3e-4); the criterion was 1e-3. The stored phasors are in gyptis's time convention, the conjugate of Wavebit's; the consumer maps them as sign * conj(E), sign -1 for p and +1 for s. An ellipse is a cylinder dilated into a B-spline; its bounds for labelling and refinement come from the surface triangulation. On each ellipse run one mid-plane sample (of 2304), on the domain boundary, missed the cell search by roundoff and takes the nearest cell's value",
+      "discretization": "tetrahedral meshes graded toward the walls and edges, two levels per case (coarser/finer: C1r6p nz 22181/40462 cells; C1a40p oz 42600/79280 cells; C1a40s oz 42600/79280 cells; C1ep oz 43551/82373 cells; C1es oz 43551/82373 cells), the finer with 0.27 to 0.54 million complex unknowns per solve and a smallest edge of about 1.5 nm; the product side is a Fourier truncation of the same cell",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "private research repository",
+    "sha256": "c40d0ea1e4c9beb13378e226751c7d4cd856ba2560f1e224606996c19d824870",
+    "command": "python fem_sym.py <case> <level> with the mesh rule v2, levels 0 and 1, for each of the five cases; then R and T of the newest record per case and level, and the finer level's plane fields reduced to their in-plane components in single precision",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-11-23",
+  "environment": {
+    "python": "3.13.18",
+    "numpy": "2.5.5",
+    "threads": 1
+  },
+  "cost": {
+    "wall_seconds": 3805,
+    "max_rss_gb": 6.47,
+    "note": "the finer level only, five cases; the machine shared its CPU with other work, so the time is not a cost measurement"
+  },
+  "inputs": {
+    "cells": {
+      "period_nm": "400 x 400",
+      "layer_thickness_nm": 150.0,
+      "shapes": "a circle of radius 100 nm (C1r6p, C1a40*) or an ellipse with semi-axes 130 nm along x and 80 nm along y (C1e*), centred in the cell",
+      "shape_epsilon": "-20+1.5j (Wavebit's convention, loss a positive imaginary part; the runs take its conjugate)",
+      "background_epsilon": 1.0,
+      "superstrate_epsilon": 1.0,
+      "substrate_epsilon": 1.0,
+      "two_layers": "none"
+    },
+    "incidence": {
+      "wavelength_nm": "900, except C1r6p: 350 (five propagating orders)",
+      "theta_deg": "40 for C1a40*, 20 for C1e*, 0 for C1r6p; phi 0 (plane of incidence xz)",
+      "polarization": "the case name's last letter (p or s)",
+      "source": "a plane wave from the top"
+    },
+    "cases": [
+      "C1r6p",
+      "C1a40p",
+      "C1a40s",
+      "C1ep",
+      "C1es"
+    ],
+    "values": {
+      "R, T": "total reflectance and transmittance on the finer mesh level (level 1)",
+      "R_coarse, T_coarse": "the same on the coarser level (level 0)",
+      "u_F": "|R - R_coarse| / R",
+      "E_<case>": "in-plane (Ex, Ey) on each patterned layer's mid-plane, E[plane, j, i, component] at (x[i], y[j]); complex64; gyptis's convention, normalised so the incident wave has phase 0 at the stack's top and x = 0",
+      "x_<case>, y_<case>": "48 points each, ((i + 0.37)/48 - 1/2) * Px and ((j + 0.41)/48 - 1/2) * Py",
+      "depth_<case>": "each plane's depth below the stack's top, top layer first"
+    },
+    "mesh_rule": "v2 of 2026-11-22: PML 40 nm and air 20 nm elements at every level, refinement at the true edges and on the shapes' walls, top and bottom faces; the two levels differ only in the wall and edge sizes"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": "u_F, the relative R change between the two levels, is 1.7e-04 to 1.7e-03 (above 1e-3, which the criteria call weak, for C1a40p); it is stored with the values",
+    "failed_or_discarded": "the first run of C1ep at the coarser level stopped at the field sampling (the roundoff miss above) and was run again with the nearest-cell fallback",
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_gyptis_wide_c1.npz",
+    "format": "npz",
+    "file_sha256": "9c88d55f233261a4248d697e963cc832e7407e2403d96b426285e12d6ddfabcc",
+    "arrays": [
+      "E_C1a40p",
+      "E_C1a40s",
+      "E_C1ep",
+      "E_C1es",
+      "E_C1r6p",
+      "R",
+      "R_coarse",
+      "T",
+      "T_coarse",
+      "case",
+      "depth_C1a40p",
+      "depth_C1a40s",
+      "depth_C1ep",
+      "depth_C1es",
+      "depth_C1r6p",
+      "u_F",
+      "x_C1a40p",
+      "x_C1a40s",
+      "x_C1ep",
+      "x_C1es",
+      "x_C1r6p",
+      "y_C1a40p",
+      "y_C1a40s",
+      "y_C1ep",
+      "y_C1es",
+      "y_C1r6p"
+    ]
+  },
+  "values_sha256": "aff2efd62981a639a354aee61f9820649b0a9765d9e225b14c3ce56b9f38aae6",
+  "content_sha256": "53566deb854a8dc87deb999ba51a5fa48997c7ba96900444aeaf7945b9d41e01",
+  "consumers": [
+    "tests/references/test_gyptis_wide_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[0]": "the run script, its results file and the run logs, read on 2026-11-24",
+    "references[0].independence": "the finite-element script imports numpy, dolfin, gmsh, gyptis and a NumPy-only case table"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "generator.clean_tree": "the generator does not load the product and records no commit",
+    "generator.product_commit": "the generator does not load the product and records no commit",
+    "outcomes.matched": "what the comparison found is in the consumer test",
+    "outcomes.not_matched": "what the comparison found is in the consumer test",
+    "outcomes.not_run": "what the comparison found is in the consumer test",
+    "references[0].install.command": "the method notes name the conda-forge environment and its versions, not the command that built it"
+  }
+}

@@ -4,8 +4,10 @@
 ones, ``eps`` -20+1.5j -- the 200 nm block at theta 20 and 40 deg (p and s), over glass, two layers
 with a 100 nm gap and at 350 nm (P1); the radius 100 nm circle at theta 20 deg, over glass, in a
 400 x 300 cell and in two layers (C1) -- and the dielectric block, ``eps`` 12.25, at normal
-incidence and at theta 20 deg. Each case has ``R`` and ``T`` on the finer of two mesh levels and
-on the coarser, and the in-plane ``E`` on the mid-plane of each patterned layer.
+incidence and at theta 20 deg. ``golden_gyptis_wide_c1.npz`` holds five more metal C1 cases, run
+after the first table under the same criteria: the circle at theta 40 deg (p and s) and at 350 nm,
+and a 130 x 80 nm ellipse at theta 20 deg (p and s). Each case has ``R`` and ``T`` on the finer of
+two mesh levels and on the coarser, and the in-plane ``E`` on the mid-plane of each patterned layer.
 
 The criteria are the ones written before the table was measured (the validation page,
 ``wall-resolution-wide``): ``u_F``, the relative change of the reference ``R`` between the two
@@ -14,7 +16,7 @@ metal the in-plane plane error (RMS over the reference's plane RMS, all patterne
 is at most a quarter of the default solve's at the same order -- uncompressed Li on a box, NVF on
 a circle. On the dielectric it is at most 1%.
 
-All sixteen run at order 12 in the slow tier, about 1 to 3 minutes each. The default run takes
+All twenty-one run at order 12 in the slow tier, about 1 to 3 minutes each. The default run takes
 the cheapest metal and dielectric cases, the 400 x 300 circle (p) and the block at normal
 incidence, at order 8 under the same criteria: measured when the table was made, order 8 already
 met them there (circle: ``R`` +0.06%, ``T`` -0.12%, field ratio 0.064; block: ``R`` -0.07%,
@@ -28,9 +30,9 @@ import pytest
 
 from wavebit import Material, Units, rcwa
 
-GOLDEN = Path(__file__).with_name('golden_gyptis_wide.npz')
+GOLDENS = [Path(__file__).with_name(name) for name in ('golden_gyptis_wide.npz', 'golden_gyptis_wide_c1.npz')]
 METAL, GLASS = -20 + 1.5j, 1.45 ** 2
-BOX, CIRCLE = ('box', 200.0, 200.0), ('cyl', 100.0)
+BOX, CIRCLE, ELLIPSE = ('box', 200.0, 200.0), ('cyl', 100.0), ('ell', 130.0, 80.0)
 pytestmark = pytest.mark.filterwarnings('ignore::wavebit.rcwa.diagnostics.ExperimentalWarning')
 
 #: per case: period (nm), wavelength (nm), theta (deg), polarization, substrate epsilon, gap (nm)
@@ -52,12 +54,24 @@ CASES = {
     'blk_d_n': ((400.0, 400.0), 900.0, 0, 'p', 1.0, None, [(150.0, BOX, 12.25, 1.0)]),
     'blk_d_o20p': ((400.0, 400.0), 900.0, 20, 'p', 1.0, None, [(150.0, BOX, 12.25, 1.0)]),
     'blk_d_o20s': ((400.0, 400.0), 900.0, 20, 's', 1.0, None, [(150.0, BOX, 12.25, 1.0)]),
+    # golden_gyptis_wide_c1.npz
+    'C1r6p': ((400.0, 400.0), 350.0, 0, 'p', 1.0, None, [(150.0, CIRCLE, METAL, 1.0)]),
+    'C1a40p': ((400.0, 400.0), 900.0, 40, 'p', 1.0, None, [(150.0, CIRCLE, METAL, 1.0)]),
+    'C1a40s': ((400.0, 400.0), 900.0, 40, 's', 1.0, None, [(150.0, CIRCLE, METAL, 1.0)]),
+    'C1ep': ((400.0, 400.0), 900.0, 20, 'p', 1.0, None, [(150.0, ELLIPSE, METAL, 1.0)]),
+    'C1es': ((400.0, 400.0), 900.0, 20, 's', 1.0, None, [(150.0, ELLIPSE, METAL, 1.0)]),
 }
+
+
+def _cases(path):
+    with np.load(path) as golden:
+        return list(golden['case'])
 
 
 def _reference(name):
     """R, T, u_F and the in-plane field in Wavebit's convention, ``(plane, n_y, n_x, 2)``."""
-    with np.load(GOLDEN) as golden:
+    golden_file = next(path for path in GOLDENS if name in _cases(path))
+    with np.load(golden_file) as golden:
         k = list(golden['case']).index(name)
         R, T, u_F = float(golden['R'][k]), float(golden['T'][k]), float(golden['u_F'][k])
         x, y, depth = golden[f'x_{name}'], golden[f'y_{name}'], golden[f'depth_{name}']
@@ -74,7 +88,8 @@ def _problem(name):
     for k, (thickness, shape, epsilon, background) in enumerate(stack):
         if k:
             layers.append(rcwa.Layer(thickness=gap, background=Material(epsilon=1.0)))
-        geometry = (rcwa.Rectangle(size=shape[1:]) if shape[0] == 'box' else rcwa.Circle(radius=shape[1]))
+        geometry = (rcwa.Rectangle(size=shape[1:]) if shape[0] == 'box' else
+                    rcwa.Circle(radius=shape[1]) if shape[0] == 'cyl' else rcwa.Ellipse(radii=shape[1:]))
         layers.append(rcwa.Layer(thickness=thickness, background=Material(epsilon=background),
                                  regions=[rcwa.Region(geometry=geometry, material=Material(epsilon=epsilon))]))
     return rcwa.Problem(
@@ -120,12 +135,14 @@ def _check(name, order):
         assert error <= 1e-2, error
 
 
-def test_the_golden_holds_the_sixteen_cases():
-    with np.load(GOLDEN) as golden:
-        assert list(golden['case']) == list(CASES)
-        # u_F is the stored levels' own R difference, which the tolerances read.
-        np.testing.assert_allclose(golden['u_F'], np.abs(golden['R'] - golden['R_coarse']) / golden['R'], rtol=1e-12)
-        assert np.all(golden['R'] + golden['T'] <= 1.0)
+def test_the_goldens_hold_the_twenty_one_cases():
+    assert _cases(GOLDENS[0]) + _cases(GOLDENS[1]) == list(CASES)
+    for path in GOLDENS:
+        with np.load(path) as golden:
+            # u_F is the stored levels' own R difference, which the tolerances read.
+            np.testing.assert_allclose(golden['u_F'], np.abs(golden['R'] - golden['R_coarse']) / golden['R'],
+                                       rtol=1e-12)
+            assert np.all(golden['R'] + golden['T'] <= 1.0)
 
 
 @pytest.mark.parametrize('name', ['C1cp', 'blk_d_n'])
