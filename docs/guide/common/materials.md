@@ -21,6 +21,36 @@ Each constructor refuses malformed input with a `ValidationError` (a `ValueError
 
 A single complex permittivity at one frequency does not by itself define a causal broadband time-domain model. FDTD checks this distinction and rejects unsupported responses; supply an explicit supported conductivity or dispersive model instead of guessing a time-domain continuation.
 
+## Effective media
+
+`wavebit.materials.Bruggeman(host, inclusion, fraction)` is a material made of two others: the
+`inclusion` at volume fraction `fraction` in the `host`, mixed by the symmetric two-phase rule of
+Bruggeman with spherical inclusions. At each wavelength it evaluates both constituents and solves
+
+```latex
+(1 - f)\,\frac{\varepsilon_h - \varepsilon}{\varepsilon_h + 2\varepsilon} + f\,\frac{\varepsilon_i - \varepsilon}{\varepsilon_i + 2\varepsilon} = 0
+```
+
+for the effective permittivity, taking the passive root (`Im(eps) >= 0`). The constituents may be
+any isotropic, nonmagnetic material models -- constant, dispersive, tabulated, or another
+`Bruggeman` -- and `fraction` is a real number in `[0, 1]` that differentiates on PyTorch and
+JAX. `fraction=0` is the host and `fraction=1` the inclusion. A fraction outside `[0, 1]` is
+`material.fraction`; a magnetic or tensor constituent is `material.mixture`, when the mixture is
+evaluated.
+
+Surface roughness in ellipsometry is usually modeled as a thin Bruggeman layer of the material
+and 50% void (D. E. Aspnes, J. B. Theeten and F. Hottier, Phys. Rev. B **20**, 3292 (1979)):
+
+```python
+from wavebit.materials import Bruggeman
+
+rough_silicon = Bruggeman(host=Material(epsilon=15.2 + 0.16j), inclusion=Material(epsilon=1.), fraction=0.5)
+```
+
+An interface layer whose mixture changes with height is an RCWA
+[profiled layer](../rcwa/profiled-layers.md#materials-that-change-with-height) with
+`rcwa.Graded.interface(below, above)`.
+
 ## Tables and catalog data
 
 Material tables carry their own declared wavelength unit. The receiving problem independently declares `Units`; the public solver converts consistently when evaluating the table. Do not reinterpret a table in nanometres as micrometres by changing the geometry values alone. Tabulated frequency-domain data require a supported time-domain realization before use in FDTD; they are not automatically fitted.

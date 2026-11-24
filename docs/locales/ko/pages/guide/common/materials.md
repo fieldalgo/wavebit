@@ -21,6 +21,26 @@ response = resonant.at(.8, units=Units(length="um"))
 
 한 주파수에서의 복소 유전율 하나만으로는 인과적인 광대역 시간 영역 모델이 정의되지 않습니다. FDTD는 이 구분을 검사하고 지원하지 않는 응답을 거부합니다. 시간 영역 연장을 짐작하지 말고, 지원되는 전도율 모델이나 분산 모델을 명시적으로 제공하세요.
 
+## Effective media
+
+`wavebit.materials.Bruggeman(host, inclusion, fraction)`은 두 재료로 만든 재료입니다. `host` 안에 `inclusion`이 부피 분율 `fraction`으로 들어 있고, 구형 포함체를 가정한 Bruggeman의 대칭 2상 규칙으로 섞습니다. 파장마다 두 구성 재료를 평가한 뒤
+
+```latex
+(1 - f)\,\frac{\varepsilon_h - \varepsilon}{\varepsilon_h + 2\varepsilon} + f\,\frac{\varepsilon_i - \varepsilon}{\varepsilon_i + 2\varepsilon} = 0
+```
+
+을 유효 유전율에 대해 풀고, 수동적인 근(`Im(eps) >= 0`)을 고릅니다. 구성 재료는 등방성이고 비자성인 재료 모델이면 무엇이든 됩니다. 상수, 분산, 표 재료, 또는 다른 `Bruggeman`도 됩니다. `fraction`은 `[0, 1]`의 실수이며 PyTorch와 JAX에서 미분됩니다. `fraction=0`은 host, `fraction=1`은 inclusion입니다. `[0, 1]` 밖의 분율은 `material.fraction`으로, 자성이거나 텐서인 구성 재료는 혼합물을 평가할 때 `material.mixture`로 거부합니다.
+
+타원 계측에서는 표면 거칠기를 보통 재료와 50% 빈 공간을 섞은 얇은 Bruggeman 층으로 모델링합니다(D. E. Aspnes, J. B. Theeten and F. Hottier, Phys. Rev. B **20**, 3292 (1979)).
+
+```python
+from wavebit.materials import Bruggeman
+
+rough_silicon = Bruggeman(host=Material(epsilon=15.2 + 0.16j), inclusion=Material(epsilon=1.), fraction=0.5)
+```
+
+높이에 따라 혼합 비율이 바뀌는 계면 층은 `rcwa.Graded.interface(below, above)`를 쓴 RCWA [프로파일 층](../rcwa/profiled-layers.md#materials-that-change-with-height)입니다.
+
 ## 표와 카탈로그 데이터
 
 재료 표는 자체적으로 선언한 파장 단위를 가집니다. 표를 받는 문제는 `Units`를 독립적으로 선언하며, 공개 솔버는 표를 평가할 때 일관되게 변환합니다. 기하 값만 바꿔서 나노미터 단위의 표를 마이크로미터로 재해석하지 마세요. 표로 주어진 주파수 영역 데이터를 FDTD에서 쓰려면 먼저 지원되는 시간 영역 구현이 필요합니다. 이 데이터는 자동으로 피팅되지 않습니다.
