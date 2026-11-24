@@ -20,18 +20,26 @@ The parts, in the order of the argument:
               M = 14.
   interfaces  the comparison at M = 3 and 4 with ``shape_normal_method='interfaces'``
               (experimental; about ten minutes a pair on four cores).
+  cause       what is left under ``'interfaces'``: two inputs of its normal field are read off the
+              cell rather than the structure, the kernel radius R (half the longest diagonal of the
+              reduced cell) and the sample grid (``shape_nvf_grid_size`` per side of the cell, so the
+              supercell takes 1/N of the samples per primitive period along a1). Each solve is run
+              with neither, one or both of the other cell's inputs, at M = 3 and 4, and the projector
+              coefficients each solve builds are compared at the primitive orders (about an hour).
 
 Run from the repository root:
 
     python studies/rcwa/supercell_normal_field/supercell_normal_field.py
     python studies/rcwa/supercell_normal_field/supercell_normal_field.py --part interfaces
+    python studies/rcwa/supercell_normal_field/supercell_normal_field.py --part cause
 
-The two printed logs, concatenated in that order, are
+The three printed logs, concatenated in that order, are
 ``studies/rcwa/supercell_normal_field/records/supercell_normal_field.log``. The write-up is §10 of
 ``docs/validation/rcwa/normal-field-known-limits.md``.
 """
 
 import argparse
+import contextlib
 import os
 import platform
 import time
@@ -41,7 +49,7 @@ from importlib import metadata
 import numpy as np
 
 from wavebit import Lattice, Material, Units, eps_from_refractive_index, rcwa
-from wavebit.rcwa._engine import parametric
+from wavebit.rcwa._engine import boundary, integrated_normal, parametric
 
 PITCH = 350.0
 HEIGHT = 600.0
@@ -212,13 +220,117 @@ def part_interfaces():
             print(f'    {order}   {dt:+.3e}      {dphase:+.3e}                  {seconds:6.1f}', flush=True)
 
 
+@contextlib.contextmanager
+def _interfaces_inputs(radius=None, grid_divisor=1):
+    """Solve with the 'interfaces' kernel radius set to ``radius`` (None keeps the cell's own) and
+    the second axis of the normal grid divided by ``grid_divisor``; record what each solve used.
+
+    Both are module-level lookups inside the solve, so a wrapper replaces them for its duration:
+    ``integrated_normal._sparse_fields`` receives the radius the cell gives, and
+    ``boundary.normal_projector_coeffs`` receives the grid and returns the projector coefficients.
+    """
+    seen = {'radius': [], 'grid': [], 'coefficients': []}
+    sparse, coefficients = integrated_normal._sparse_fields, boundary.normal_projector_coeffs
+
+    def forced_sparse(pts, grid, A, E, L2, valid, contrast, nx, ny, own, *rest):
+        seen['radius'].append(float(own))
+        return sparse(pts, grid, A, E, L2, valid, contrast, nx, ny,
+                      own if radius is None else radius, *rest)
+
+    def forced_coefficients(xp, loops, grid_shape, *rest, **options):
+        grid_shape = (grid_shape[0], grid_shape[1]//grid_divisor)
+        seen['grid'].append(tuple(int(size) for size in grid_shape))
+        out = coefficients(xp, loops, grid_shape, *rest, **options)
+        seen['coefficients'].append([np.asarray(c) for c in out[:3]])
+        return out
+
+    integrated_normal._sparse_fields, boundary.normal_projector_coeffs = forced_sparse, forced_coefficients
+    try:
+        yield seen
+    finally:
+        integrated_normal._sparse_fields, boundary.normal_projector_coeffs = sparse, coefficients
+
+
+def _arm(count, order, radius=None, grid_divisor=1):
+    with warnings.catch_warnings(), _interfaces_inputs(radius, grid_divisor) as seen:
+        warnings.simplefilter('ignore', rcwa.diagnostics.ExperimentalWarning)
+        started = time.perf_counter()
+        transmitted, zero = solve(count, order, shape_normal_method='interfaces')
+    # One layer, one normal field: each wrapper must have run once, or the forcing missed the solve.
+    assert len(seen['radius']) == len(seen['grid']) == len(seen['coefficients']) == 1, seen['grid']
+    # The supercell's coefficients at the primitive orders: its first-axis harmonics that are
+    # multiples of N. The closure rows below check this correspondence to rounding.
+    grids = seen['coefficients'][0]
+    if count > 1:
+        width = (grids[0].shape[-1]-1)//2
+        keep = np.arange(-width, width+1) % count == 0
+        assert max(float(np.abs(c[..., ~keep]).max()) for c in grids) < 1e-12
+        grids = [c[..., keep] for c in grids]
+    return dict(T=transmitted, zero=zero, radius=seen['radius'][0], grid=seen['grid'][0],
+                coefficients=grids, seconds=time.perf_counter()-started)
+
+
+def _difference(a, b):
+    """T, zero-order phase (rad), zero-order amplitude, largest projector coefficient and its DC."""
+    centre = tuple((size-1)//2 for size in a['coefficients'][0].shape)
+    largest = max(float(np.abs(x-y).max()) for x, y in zip(a['coefficients'], b['coefficients']))
+    dc = max(float(abs(x[centre]-y[centre])) for x, y in zip(a['coefficients'], b['coefficients']))
+    return (a['T']-b['T'], float(np.angle(a['zero']/b['zero'])), abs(a['zero']-b['zero']), largest, dc)
+
+
+def part_cause():
+    count = 4
+    print(f'\ncause: N = {count} against the primitive cell, shape_normal_method="interfaces" (experimental)')
+    print('    columns: T, zero-order phase (rad), |zero-order amplitude|, largest projector coefficient')
+    print('    and its DC term, each as a difference; coefficients compared at the primitive orders')
+    for order in (3, 4):
+        primitive = _arm(1, order)
+        supercell = _arm(count, order)
+        r1, rn = primitive['radius'], supercell['radius']
+        print(f'\n  M = {order}: kernel radius R {r1:.3f} nm (primitive), {rn:.3f} nm (supercell); '
+              f'normal grid {primitive["grid"]} in both')
+        arms = (
+            ('supercell', supercell, primitive),
+            ('primitive, supercell R', _arm(1, order, radius=rn), primitive),
+            (f'primitive, grid / {count}', _arm(1, order, grid_divisor=count), primitive),
+            (f'primitive, supercell R, grid / {count}', _arm(1, order, radius=rn, grid_divisor=count),
+             primitive),
+            ('supercell, primitive R', _arm(count, order, radius=r1), primitive),
+        )
+        print('    arm minus the primitive cell             T           phase       |amplitude|  '
+              'coefficient (DC)       time (s)')
+        for label, arm, base in arms:
+            dt, dphase, da, dc_max, dc_dc = _difference(arm, base)
+            print(f'    {label:38s}  {dt:+.4e}  {dphase:+.4e}  {da:.2e}     {dc_max:.2e} ({dc_dc:.1e})'
+                  f'     {arm["seconds"]:6.1f}', flush=True)
+        by = {label: arm for label, arm, _ in arms}
+        both = by[f'primitive, supercell R, grid / {count}']
+        closures = (
+            ('supercell minus primitive given both supercell inputs', supercell, both),
+            (f'supercell with primitive R minus primitive on grid / {count}',
+             by['supercell, primitive R'], by[f'primitive, grid / {count}']),
+        )
+        print('    closure                                                  T          |amplitude|  coefficient')
+        for label, a, b in closures:
+            dt, _, da, dc_max, _ = _difference(a, b)
+            print(f'    {label:55s}  {dt:+.1e}   {da:.1e}      {dc_max:.1e}')
+            assert abs(dt) < 1e-12 and da < 1e-12 and dc_max < 1e-12
+        total = supercell['T']-primitive['T']
+        alone_r = by['primitive, supercell R']['T']-primitive['T']
+        alone_g = by[f'primitive, grid / {count}']['T']-primitive['T']
+        print(f'    share of the T difference: R alone {alone_r/total:.1%}, grid alone {alone_g/total:.1%}, '
+              f'interaction {total-alone_r-alone_g:+.1e}')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    parser.add_argument('--part', choices=('main', 'interfaces'), default='main')
+    parser.add_argument('--part', choices=('main', 'interfaces', 'cause'), default='main')
     arguments = parser.parse_args()
     environment()
     if arguments.part == 'interfaces':
         part_interfaces()
+    elif arguments.part == 'cause':
+        part_cause()
     else:
         part_rule()
         part_field()
