@@ -37,7 +37,7 @@ FDTD 모듈에는 자체 선언(`fdtd.Problem`, `fdtd.Scene`, `fdtd.Numerics` �
   선언 자체의 생성자를 뜻합니다. *check 시*는 `rcwa.check`가 이를 보고하고
   `rcwa.prepare`와 `rcwa.run`이 예외를 일으킨다는 뜻이며, *prepare 시*와 *run 시*는 그보다 앞선 어떤 단계도
   이를 보지 못한다는 뜻입니다.
-* **모든 재료는 재료 모델입니다** -- `Material`, `ConductiveMaterial`,
+* **모든 재료는 재료 모델입니다** -- `Material`, `ConductiveMaterial`, `Bruggeman`,
   `DispersiveMaterial` 또는 `TabulatedMaterial` -- 절대 맨 숫자가 아닙니다. 그 `epsilon`은
   굴절률이 아니라 상대 유전율이며(`eps_from_refractive_index`가 변환합니다), 맨
   `3.5`는 어느 쪽으로도 읽히지 않고 check 시 `material.type`으로 거부됩니다.
@@ -109,15 +109,15 @@ FDTD 모듈에는 자체 선언(`fdtd.Problem`, `fdtd.Scene`, `fdtd.Numerics` �
 | 필드 | 기본값 | 받는 값 | 거부하는 값 |
 | --- | --- | --- | --- |
 | `thickness` | 필수 | `rcwa.Layer`와 같음 | `rcwa.Layer`와 같음 |
-| `background` | `Material(epsilon=1.)` | `rcwa.Layer`와 같음 | `rcwa.Layer`와 같음 |
-| `regions` | `()` | `rcwa.Region`의 튜플, 순서대로 칠함. 어느 것이든 `Trapezoid`, `Loft`, `Profile`을 가질 수 있음 | `Region`이 아닌 모든 것: `layer.regions`, 생성 시. 층에 맞지 않는 형상: `shape.profile`, prepare 시 |
+| `background` | `Material(epsilon=1.)` | `rcwa.Layer`와 같음. 또는 높이에 따라 바뀌는 `rcwa.Graded` 재료 | `rcwa.Layer`와 같음 |
+| `regions` | `()` | `rcwa.Region`의 튜플, 순서대로 칠함. 어느 것이든 `Trapezoid`, `Loft`, `Profile`과 `Graded` 재료를 가질 수 있음 | `Region`이 아닌 모든 것: `layer.regions`, 생성 시. 층에 맞지 않는 형상: `shape.profile`, prepare 시 |
 
 ### `rcwa.Region`
 
 | 필드 | 기본값 | 받는 값 | 거부하는 값 |
 | --- | --- | --- | --- |
 | `geometry` | 필수 | `rcwa.Rectangle`, `rcwa.Circle`, `rcwa.Ellipse` 또는 `rcwa.Polygon`. `rcwa.ProfiledLayer` 안에서는 `rcwa.Trapezoid`, `rcwa.Loft`, `rcwa.Profile`도 | 레시피 `dict`를 포함한 그 밖의 모든 것: `shape.type`, 생성 시. `rcwa.Layer` 안의 `Trapezoid`, `Loft`, `Profile`: `layer.profile_geometry`, 생성 시 |
-| `material` | 필수 | 스칼라 또는 텐서 재료 모델 | 맨 숫자: `material.type`, check 시 |
+| `material` | 필수 | 스칼라 또는 텐서 재료 모델. `rcwa.ProfiledLayer` 안에서는 `rcwa.Graded`도 | 맨 숫자: `material.type`, check 시. `rcwa.Layer` 안의 `Graded` 재료: `layer.profile_material`, 생성 시 |
 
 ### 기하 형상
 
@@ -150,6 +150,20 @@ prepare 시 `rcwa.invalid`로 거부됩니다.
 
 `Trapezoid`는 셀을 `y` 방향으로 가로지르므로 `Stack(period=...)`가 필요합니다. `lattice`로 주면
 prepare 시 `shape.profile_cell`로 거부됩니다.
+
+### `rcwa.Graded`
+
+`rcwa.ProfiledLayer`의 배경이나 영역에 쓰는, 높이에 따라 바뀌는 재료입니다.
+[높이에 따라 바뀌는 재료](../guide/rcwa/profiled-layers.md#materials-that-change-with-height)를 보세요.
+
+| 필드 | 기본값 | 받는 값 | 거부하는 값 |
+| --- | --- | --- | --- |
+| `material` | 필수 | 높이를 받아 재료 모델을 돌려주는 호출 가능한 객체. 층 아래 면에서 잰 `z`, 또는 `relative=True`이면 `u = z / thickness` | 호출할 수 없음: `material.graded`, 생성 시. `rcwa.Layer` 안: `layer.profile_material`. 반공간: `stack.graded_half_space`, 둘 다 생성 시. 문제를 job으로 저장: `job.encoding` |
+| `relative` | `False` | `bool` | 그 밖의 값: `material.graded` |
+
+`rcwa.Graded.interface(below, above, fraction=None)`는 `u`에서의 재료가
+`wavebit.materials.Bruggeman(host=below, inclusion=above, fraction=fraction(u))`인 상대 점진 재료를 만듭니다.
+`fraction`의 기본값은 `u`입니다.
 
 `factorization='li'`는 축 정렬 직사각형만 만듭니다. 그 아래에서 다른 영역은 모두
 check 시 `rcwa.unsupported`로 거부됩니다.
@@ -394,16 +408,16 @@ result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(2, 2), factorization='
 | `geometry` | `geometry.cell_snapped`(경고) | `fdtd` |
 | `initial` | `initial.type` | `fdtd` |
 | `job`, `record` | `job.encoding`(생성자가 거부하는 저장된 선언이나 재료 표도 해당), `job.schema`, `record.format` | `wavebit.Job`, 실행 기록 |
-| `layer` | `layer.ambiguous`, `layer.mu_without_raster`, `layer.raster_shape`, `layer.regions`, `layer.thickness` | `rcwa` |
-| `material` | `material.type`. `material.scalar`, `material.shape`, `material.poles`, `material.wavelength_range`, `material.unknown_field`(`material.scalar`, `material.shape`, `material.poles`는 생성 시. [재료 가이드](../guide/common/materials.md)를 보세요). `material.engine_model`, `material.causal_model`, `material.pole_type`, `material.fdtd`(재료를 시간 영역으로 변환할 때) | `rcwa`, `fdtd.periodic`. `wavebit.materials`. `fdtd` |
+| `layer` | `layer.ambiguous`, `layer.mu_without_raster`, `layer.raster_shape`, `layer.regions`, `layer.thickness`, `layer.profile_raster`, `layer.profile_geometry`, `layer.profile_material` | `rcwa` |
+| `material` | `material.type`. `material.scalar`, `material.shape`, `material.poles`, `material.wavelength_range`, `material.unknown_field`, `material.fraction`, `material.mixture`, `material.graded`(`material.scalar`, `material.shape`, `material.poles`는 생성 시. [재료 가이드](../guide/common/materials.md)를 보세요). `material.engine_model`, `material.causal_model`, `material.pole_type`, `material.fdtd`(재료를 시간 영역으로 변환할 때) | `rcwa`, `fdtd.periodic`. `wavebit.materials`. `fdtd` |
 | `medium` | `medium.poles` | `fdtd.native` |
 | `migration` | `migration.shape`, `migration.shape_fields`, `migration.layer_fields`, `migration.layer_mu`, `migration.solver` | `wavebit.migration` |
 | `monitor` | `monitor.type`, `monitor.geometry`, `monitor.plane`, `monitor.plane_span`, `monitor.extent`, `monitor.outside_domain`, `monitor.source`, `monitor.orders`(`monitor.geometry`는 점이 아닌 `TimeSeriesMonitor(at=...)`에도 해당) | `fdtd` |
 | `native` | `native.invalid`, `native.unsupported` | `fdtd.native` |
-| `numerics` | `numerics.type`, `numerics.choice`, `numerics.orders`, `numerics.grid`, `numerics.detuning`, `numerics.half_space_merge_tolerance`, `numerics.unavailable`(선택적 의존성이 설치되지 않은 옵션) | `rcwa`(`numerics.type`, `numerics.choice`, `numerics.orders`는 FDTD에서도) |
+| `numerics` | `numerics.type`, `numerics.choice`, `numerics.orders`, `numerics.grid`, `numerics.detuning`, `numerics.half_space_merge_tolerance`, `numerics.slicing`, `numerics.unavailable`(선택적 의존성이 설치되지 않은 옵션) | `rcwa`(`numerics.type`, `numerics.choice`, `numerics.orders`는 FDTD에서도) |
 | `numerics` (FDTD) | `numerics.absorber`(매핑이 아닌 `PML(reference_media=...)`도 해당. 거부되는 `ConductiveAbsorber(cells=...)`는 `numerics.absorber.cells`에서. 그리고 `numerics.absorber`에서, 지지 영역이 결합이 허용하는 범위 밖의 `ConductiveAbsorber` 안까지 닿는 스무딩된 구조는 `check`, `prepare`, `run`, `Prepared.validate`에서 똑같이 거부), `numerics.absorber_reflection`(경고), `numerics.checkpoint_steps`, `numerics.checkpoint_scope`, `numerics.discretization`, `numerics.duration`, `numerics.geometry_ranges`, `numerics.junction`, `numerics.memory_bound`, `numerics.stopping`. `numerics.time_step_seconds`. `numerics.spacing`, `numerics.duration_seconds`, `numerics.transverse_spacing`, `numerics.reference_scope` | `fdtd`. `fdtd.native`. `fdtd.periodic` |
 | `observation` | `observation.empty`, `observation.order_labels`, `observation.shape`, `observation.wavelength_axis`. `observation.amplitude_units`, `observation.reference_key` | `wavebit.DiffractionOrders`, `wavebit.RawDiffractionSpectrum`. 같은 것과 그 단일 차수 기록 `wavebit.observations.DiffractionOrder` 및 `RawDiffractionOrder` |
-| `operators` | `operators.type`, `operators.shape`, `operators.slots`, `operators.spectral_shape`, `operators.source_groups`, `operators.detuning`, `operators.execution`, `operators.physical_contract`, `operators.physical_transform` | `rcwa.operators` |
+| `operators` | `operators.type`, `operators.shape`, `operators.slots`, `operators.spectral_shape`, `operators.source_groups`, `operators.profiled_layer`, `operators.detuning`, `operators.execution`, `operators.physical_contract`, `operators.physical_transform` | `rcwa.operators` |
 | `outputs` | `outputs.boolean`, `outputs.unavailable`, `outputs.power_region`(`'cell'`, `'infinite'` 또는 양의 폭을 가진 직사각형이 아닌 결맞는 소스 `power_region`. 여러 Bloch 섹터에 걸친 `None`. 유한 직사각형 `power_region`이 없는 `GaussianBeam`이나 고립된 `ElectricDipole`) | `rcwa` |
 | `periodic` | `periodic.invalid`, `periodic.unsupported` | `fdtd.periodic` |
 | `prepared` | `prepared.structure`. `prepared.static_input`, `prepared.dependencies`, `prepared.pml_wavelength`. `prepared.topology`, `prepared.host_topology`, `prepared.host_topology_scope`, `prepared.source_grouping`, `prepared.detuning_transform`, `prepared.shape_topology`, `prepared.rectilinear_topology`, 그리고 런타임 가드 `prepared.finite_inputs`(NaN이나 무한대인 실행 시점 값. 값을 읽을 수 있으면 그 경로가 필드를 가리킵니다), `prepared.positive_wavelength`, `prepared.nonnegative_thickness`, `prepared.nonzero_polarization`, `prepared.raster_partition` | 모든 솔버. `fdtd`. `rcwa` |
@@ -411,11 +425,11 @@ result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(2, 2), factorization='
 | `pulse` | `pulse.frequency_sigma_hz` | `fdtd.periodic` |
 | `rcwa` | `rcwa.invalid`, `rcwa.unsupported`, `rcwa.singular`, `rcwa.nonfinite`, `rcwa.host_geometry`, `rcwa.mixed_layer_encoding`, `rcwa.raster_partition_transform`, `rcwa.scattering_algorithm`, `rcwa.coherent_detuning`, `rcwa.coherent_diffraction`, `rcwa.coherent_half_space_merge`, `rcwa.coherent_scattering`, `rcwa.coherent_transform` | `rcwa` |
 | `scene` | `scene.type`, `scene.structure_name`, `scene.structure_name_duplicate` | `fdtd` |
-| `shape` | `shape.type`, `shape.dimension`, `shape.value`, `shape.outline`, `shape.vertices` | `rcwa`, `fdtd`(`shape.type`. 생성자가 거부하는 `SnappedSlab` 구간이나 `SnappedBox` 크기에는 `shape.dimension`) |
+| `shape` | `shape.type`, `shape.dimension`, `shape.value`, `shape.outline`, `shape.vertices`, `shape.profile`, `shape.profile_cell` | `rcwa`, `fdtd`(`shape.type`. 생성자가 거부하는 `SnappedSlab` 구간이나 `SnappedBox` 크기에는 `shape.dimension`) |
 | `snapshots` | `snapshots.every`, `snapshots.components`, `snapshots.slices` | `fdtd.native`, `fdtd.periodic` |
 | `source` | `source.type`, `source.name`, `source.name_duplicate`, `source.pulse`, `source.plane`, `source.plane_span`, `source.box`, `source.outside_domain`, `source.waveform_range`. `source.amplitude`, `source.direction`, `source.polarization_value`. `source.side`, `source.repetition`, `source.dimension`, `source.direction_ambiguous`, `source.polarization`, `source.polarization_shape`, `source.weights`, `source.weights_duplicate`, `source.angular_spectrum_extent`, `source.host_layer`(한 재료로 되어 있지 않은 층 안의 `ElectricDipole`) | `fdtd`. `rcwa`와 `fdtd.periodic`. `rcwa` |
-| `stack` | `stack.layers`, `stack.period`, `stack.cell_ambiguous`, `stack.mixed_layer_encoding` | `rcwa`, `fdtd.periodic` |
-| `structure` | `structure.component`(스칼라 층에서는 `None`, 텐서 층에서는 `'xy'` 같은 xyz 쌍 하나), `structure.concrete`, `structure.layer`, `structure.nonfinite`, `structure.quantity`, `structure.samples`, `structure.wavelength` | `rcwa.sample_structure` |
+| `stack` | `stack.layers`, `stack.period`, `stack.cell_ambiguous`, `stack.mixed_layer_encoding`, `stack.graded_half_space` | `rcwa`, `fdtd.periodic` |
+| `structure` | `structure.component`(스칼라 층에서는 `None`, 텐서 층에서는 `'xy'` 같은 xyz 쌍 하나), `structure.concrete`, `structure.profiled_layer`, `structure.layer`, `structure.nonfinite`, `structure.quantity`, `structure.samples`, `structure.wavelength` | `rcwa.sample_structure` |
 | `units` | `units.type`, `units.length` | 모든 솔버 |
 | `wavelength` | `wavelength.value`, `wavelength.empty`, `wavelength.shape` | `rcwa`, `fdtd.periodic`, `wavebit.materials`(`TabulatedMaterial`의 `wavelengths`, 생성 시) |
 

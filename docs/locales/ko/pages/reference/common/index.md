@@ -27,6 +27,9 @@
 .. autoclass:: wavebit.TabulatedMaterial
    :members:
 
+.. autoclass:: wavebit.materials.Bruggeman
+   :members:
+
 .. autofunction:: wavebit.eps_from_refractive_index
 
 .. autofunction:: wavebit.refractive_index_from_eps

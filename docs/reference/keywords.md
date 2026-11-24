@@ -37,7 +37,7 @@ A few rules cover the whole surface and are worth stating once:
   is the declaration's own constructor; *at check* means `rcwa.check` reports it and
   `rcwa.prepare` and `rcwa.run` raise it; *at prepare* and *at run* mean nothing earlier sees
   it.
-* **Every material is a material model** -- `Material`, `ConductiveMaterial`,
+* **Every material is a material model** -- `Material`, `ConductiveMaterial`, `Bruggeman`,
   `DispersiveMaterial` or `TabulatedMaterial` -- never a bare number. Its `epsilon` is a
   relative permittivity, not a refractive index (`eps_from_refractive_index` converts), and a
   bare `3.5` is refused at check with `material.type` rather than read as either.
@@ -109,15 +109,15 @@ A layer whose cross-section changes with height, sliced by Wavebit: see
 | Field | Default | Accepts | Refuses |
 | --- | --- | --- | --- |
 | `thickness` | required | as on `rcwa.Layer` | as on `rcwa.Layer` |
-| `background` | `Material(epsilon=1.)` | as on `rcwa.Layer` | as on `rcwa.Layer` |
-| `regions` | `()` | a tuple of `rcwa.Region`, painted in order; any of them may hold a `Trapezoid`, `Loft` or `Profile` | anything but `Region`s: `layer.regions`, at construction; a shape that does not fit the layer: `shape.profile`, at prepare |
+| `background` | `Material(epsilon=1.)` | as on `rcwa.Layer`, or an `rcwa.Graded` material that changes with height | as on `rcwa.Layer` |
+| `regions` | `()` | a tuple of `rcwa.Region`, painted in order; any of them may hold a `Trapezoid`, `Loft` or `Profile`, and a `Graded` material | anything but `Region`s: `layer.regions`, at construction; a shape that does not fit the layer: `shape.profile`, at prepare |
 
 ### `rcwa.Region`
 
 | Field | Default | Accepts | Refuses |
 | --- | --- | --- | --- |
 | `geometry` | required | an `rcwa.Rectangle`, `rcwa.Circle`, `rcwa.Ellipse` or `rcwa.Polygon`; in an `rcwa.ProfiledLayer` also an `rcwa.Trapezoid`, `rcwa.Loft` or `rcwa.Profile` | anything else, a recipe `dict` included: `shape.type`, at construction; a `Trapezoid`, `Loft` or `Profile` in an `rcwa.Layer`: `layer.profile_geometry`, at construction |
-| `material` | required | a material model, scalar or tensor | a bare number: `material.type`, at check |
+| `material` | required | a material model, scalar or tensor; in an `rcwa.ProfiledLayer` also an `rcwa.Graded` | a bare number: `material.type`, at check; a `Graded` material in an `rcwa.Layer`: `layer.profile_material`, at construction |
 
 ### The geometries
 
@@ -151,6 +151,20 @@ are taken by an `rcwa.ProfiledLayer` only.
 
 A `Trapezoid` spans the cell along `y` and needs `Stack(period=...)`; with `lattice` it is
 refused at prepare with `shape.profile_cell`.
+
+### `rcwa.Graded`
+
+A material that changes with height, for the background or a region of an `rcwa.ProfiledLayer`:
+see [materials that change with height](../guide/rcwa/profiled-layers.md#materials-that-change-with-height).
+
+| Field | Default | Accepts | Refuses |
+| --- | --- | --- | --- |
+| `material` | required | a callable returning a material model at a height: `z` from the layer's bottom face, or `u = z / thickness` with `relative=True` | not callable: `material.graded`, at construction; in an `rcwa.Layer`: `layer.profile_material`; as a half-space: `stack.graded_half_space`, both at construction; saving the problem as a job: `job.encoding` |
+| `relative` | `False` | a `bool` | anything else: `material.graded` |
+
+`rcwa.Graded.interface(below, above, fraction=None)` builds a relative grading whose material at
+`u` is `wavebit.materials.Bruggeman(host=below, inclusion=above, fraction=fraction(u))`, with
+`fraction` defaulting to `u`.
 
 `factorization='li'` builds axis-aligned rectangles only; any other region under it is refused at
 check with `rcwa.unsupported`.
@@ -396,16 +410,16 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 | `geometry` | `geometry.cell_snapped` (a warning) | `fdtd` |
 | `initial` | `initial.type` | `fdtd` |
 | `job`, `record` | `job.encoding` (also a saved declaration or material table its constructor refuses), `job.schema`, `record.format` | `wavebit.Job`, run records |
-| `layer` | `layer.ambiguous`, `layer.mu_without_raster`, `layer.raster_shape`, `layer.regions`, `layer.thickness` | `rcwa` |
-| `material` | `material.type`; `material.scalar`, `material.shape`, `material.poles`, `material.wavelength_range`, `material.unknown_field` (`material.scalar`, `material.shape` and `material.poles` at construction; see [the materials guide](../guide/common/materials.md)); `material.engine_model`, `material.causal_model`, `material.pole_type`, `material.fdtd` (lowering a material to time domain) | `rcwa`, `fdtd.periodic`; `wavebit.materials`; `fdtd` |
+| `layer` | `layer.ambiguous`, `layer.mu_without_raster`, `layer.raster_shape`, `layer.regions`, `layer.thickness`, `layer.profile_raster`, `layer.profile_geometry`, `layer.profile_material` | `rcwa` |
+| `material` | `material.type`; `material.scalar`, `material.shape`, `material.poles`, `material.wavelength_range`, `material.unknown_field`, `material.fraction`, `material.mixture`, `material.graded` (`material.scalar`, `material.shape` and `material.poles` at construction; see [the materials guide](../guide/common/materials.md)); `material.engine_model`, `material.causal_model`, `material.pole_type`, `material.fdtd` (lowering a material to time domain) | `rcwa`, `fdtd.periodic`; `wavebit.materials`; `fdtd` |
 | `medium` | `medium.poles` | `fdtd.native` |
 | `migration` | `migration.shape`, `migration.shape_fields`, `migration.layer_fields`, `migration.layer_mu`, `migration.solver` | `wavebit.migration` |
 | `monitor` | `monitor.type`, `monitor.geometry`, `monitor.plane`, `monitor.plane_span`, `monitor.extent`, `monitor.outside_domain`, `monitor.source`, `monitor.orders` (`monitor.geometry` also a `TimeSeriesMonitor(at=...)` that is not a point) | `fdtd` |
 | `native` | `native.invalid`, `native.unsupported` | `fdtd.native` |
-| `numerics` | `numerics.type`, `numerics.choice`, `numerics.orders`, `numerics.grid`, `numerics.detuning`, `numerics.half_space_merge_tolerance`, `numerics.unavailable` (an option whose optional dependency is not installed) | `rcwa` (`numerics.type`, `numerics.choice` and `numerics.orders` also FDTD) |
+| `numerics` | `numerics.type`, `numerics.choice`, `numerics.orders`, `numerics.grid`, `numerics.detuning`, `numerics.half_space_merge_tolerance`, `numerics.slicing`, `numerics.unavailable` (an option whose optional dependency is not installed) | `rcwa` (`numerics.type`, `numerics.choice` and `numerics.orders` also FDTD) |
 | `numerics` (FDTD) | `numerics.absorber` (also a `PML(reference_media=...)` that is not a mapping; a `ConductiveAbsorber(cells=...)` it refuses, at `numerics.absorber.cells`; and, at `numerics.absorber`, a smoothed structure whose support reaches into a `ConductiveAbsorber` outside the scope its coupling admits, at `check`, `prepare`, `run` and `Prepared.validate` alike), `numerics.absorber_reflection` (a warning), `numerics.checkpoint_steps`, `numerics.checkpoint_scope`, `numerics.discretization`, `numerics.duration`, `numerics.geometry_ranges`, `numerics.junction`, `numerics.memory_bound`, `numerics.stopping`; `numerics.time_step_seconds`; `numerics.spacing`, `numerics.duration_seconds`, `numerics.transverse_spacing`, `numerics.reference_scope` | `fdtd`; `fdtd.native`; `fdtd.periodic` |
 | `observation` | `observation.empty`, `observation.order_labels`, `observation.shape`, `observation.wavelength_axis`; `observation.amplitude_units`, `observation.reference_key` | `wavebit.DiffractionOrders`, `wavebit.RawDiffractionSpectrum`; the same, and their one-order records `wavebit.observations.DiffractionOrder` and `RawDiffractionOrder` |
-| `operators` | `operators.type`, `operators.shape`, `operators.slots`, `operators.spectral_shape`, `operators.source_groups`, `operators.detuning`, `operators.execution`, `operators.physical_contract`, `operators.physical_transform` | `rcwa.operators` |
+| `operators` | `operators.type`, `operators.shape`, `operators.slots`, `operators.spectral_shape`, `operators.source_groups`, `operators.profiled_layer`, `operators.detuning`, `operators.execution`, `operators.physical_contract`, `operators.physical_transform` | `rcwa.operators` |
 | `outputs` | `outputs.boolean`, `outputs.unavailable`, `outputs.power_region` (a coherent-source `power_region` that is not `'cell'`, `'infinite'` or a rectangle with positive widths; `None` across several Bloch sectors; a `GaussianBeam` or an isolated `ElectricDipole` without a finite rectangle `power_region`) | `rcwa` |
 | `periodic` | `periodic.invalid`, `periodic.unsupported` | `fdtd.periodic` |
 | `prepared` | `prepared.structure`; `prepared.static_input`, `prepared.dependencies`, `prepared.pml_wavelength`; `prepared.topology`, `prepared.host_topology`, `prepared.host_topology_scope`, `prepared.source_grouping`, `prepared.detuning_transform`, `prepared.shape_topology`, `prepared.rectilinear_topology`, and the runtime guards `prepared.finite_inputs` (a live value that is NaN or infinite; its path names the field when the value can be read), `prepared.positive_wavelength`, `prepared.nonnegative_thickness`, `prepared.nonzero_polarization`, `prepared.raster_partition` | every solver; `fdtd`; `rcwa` |
@@ -413,11 +427,11 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 | `pulse` | `pulse.frequency_sigma_hz` | `fdtd.periodic` |
 | `rcwa` | `rcwa.invalid`, `rcwa.unsupported`, `rcwa.singular`, `rcwa.nonfinite`, `rcwa.host_geometry`, `rcwa.mixed_layer_encoding`, `rcwa.raster_partition_transform`, `rcwa.scattering_algorithm`, `rcwa.coherent_detuning`, `rcwa.coherent_diffraction`, `rcwa.coherent_half_space_merge`, `rcwa.coherent_scattering`, `rcwa.coherent_transform` | `rcwa` |
 | `scene` | `scene.type`, `scene.structure_name`, `scene.structure_name_duplicate` | `fdtd` |
-| `shape` | `shape.type`, `shape.dimension`, `shape.value`, `shape.outline`, `shape.vertices` | `rcwa`, `fdtd` (`shape.type`; `shape.dimension` for a `SnappedSlab` span or `SnappedBox` size its constructor refuses) |
+| `shape` | `shape.type`, `shape.dimension`, `shape.value`, `shape.outline`, `shape.vertices`, `shape.profile`, `shape.profile_cell` | `rcwa`, `fdtd` (`shape.type`; `shape.dimension` for a `SnappedSlab` span or `SnappedBox` size its constructor refuses) |
 | `snapshots` | `snapshots.every`, `snapshots.components`, `snapshots.slices` | `fdtd.native`, `fdtd.periodic` |
 | `source` | `source.type`, `source.name`, `source.name_duplicate`, `source.pulse`, `source.plane`, `source.plane_span`, `source.box`, `source.outside_domain`, `source.waveform_range`; `source.amplitude`, `source.direction`, `source.polarization_value`; `source.side`, `source.repetition`, `source.dimension`, `source.direction_ambiguous`, `source.polarization`, `source.polarization_shape`, `source.weights`, `source.weights_duplicate`, `source.angular_spectrum_extent`, `source.host_layer` (an `ElectricDipole` in a layer that is not one material) | `fdtd`; `rcwa` and `fdtd.periodic`; `rcwa` |
-| `stack` | `stack.layers`, `stack.period`, `stack.cell_ambiguous`, `stack.mixed_layer_encoding` | `rcwa`, `fdtd.periodic` |
-| `structure` | `structure.component` (`None` on a scalar layer, one xyz pair such as `'xy'` on a tensor one), `structure.concrete`, `structure.layer`, `structure.nonfinite`, `structure.quantity`, `structure.samples`, `structure.wavelength` | `rcwa.sample_structure` |
+| `stack` | `stack.layers`, `stack.period`, `stack.cell_ambiguous`, `stack.mixed_layer_encoding`, `stack.graded_half_space` | `rcwa`, `fdtd.periodic` |
+| `structure` | `structure.component` (`None` on a scalar layer, one xyz pair such as `'xy'` on a tensor one), `structure.concrete`, `structure.profiled_layer`, `structure.layer`, `structure.nonfinite`, `structure.quantity`, `structure.samples`, `structure.wavelength` | `rcwa.sample_structure` |
 | `units` | `units.type`, `units.length` | every solver |
 | `wavelength` | `wavelength.value`, `wavelength.empty`, `wavelength.shape` | `rcwa`, `fdtd.periodic`, `wavebit.materials` (a `TabulatedMaterial`'s `wavelengths`, at construction) |
 

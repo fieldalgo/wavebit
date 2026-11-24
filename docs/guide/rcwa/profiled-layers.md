@@ -2,7 +2,8 @@
 
 `rcwa.ProfiledLayer` holds a cross-section that changes with height -- a line with a sidewall
 angle, rounded top corners and a footing, or a pillar whose outline shrinks toward the top --
-and Wavebit cuts it into slices itself. You declare the shape's parameters; the preparation
+and Wavebit cuts it into slices itself. The materials may change with height too: a graded
+index, or an interface layer mixing two materials. You declare the shape's parameters; the preparation
 chooses the slices, the run reports how many it used and the estimated error of the staircase
 in `z`, and every parameter differentiates on PyTorch and JAX.
 
@@ -149,6 +150,45 @@ sidewall angle that is a JAX tracer or a tensor with `requires_grad` keeps the l
 that the derivative at `swa = pi/2` sees the taper it would make; the value then agrees with the
 single layer to round-off (1e-12 is tested).
 
+## Materials that change with height
+
+The background of a `ProfiledLayer`, and the material of any of its regions, may be an
+`rcwa.Graded`: a callable that returns a material model at a height. Each slice takes the
+material at its midpoint, as it takes the cross-section there.
+
+```python
+from wavebit.materials import Bruggeman
+
+silicon, oxide, air = Material(epsilon=15.2 + 0.16j), Material(epsilon=2.1025), Material(epsilon=1.0)
+
+# A graded-index film: eps rises linearly from 2.25 at the bottom to 4.0 at the top.
+graded = rcwa.ProfiledLayer(thickness=0.3, background=rcwa.Graded(
+    material=lambda u: Material(epsilon=2.25 + 1.75*u), relative=True))
+
+# An interface layer: oxide mixing into silicon, linearly, as a Bruggeman effective medium.
+interface = rcwa.ProfiledLayer(thickness=0.003, background=rcwa.Graded.interface(below=silicon, above=oxide))
+
+# Surface roughness: one uniform layer of silicon and 50% void. It needs no slicing.
+roughness = rcwa.Layer(thickness=0.002, background=Bruggeman(host=silicon, inclusion=air, fraction=0.5))
+```
+
+| Declaration | What it is |
+| --- | --- |
+| `rcwa.Graded(material, relative=False)` | `material(z)` returns a material model at the height `z` above the layer's bottom face; with `relative=True`, `material(u)` at `u = z / thickness` in `[0, 1]`, so the grading keeps its shape when the thickness changes |
+| `rcwa.Graded.interface(below, above, fraction=None)` | a mixed layer: `above` at volume fraction `fraction(u)` in `below`, as a Bruggeman medium; `fraction` defaults to `u`, a linear ramp from `below` at the bottom to `above` at the top |
+| `wavebit.materials.Bruggeman(host, inclusion, fraction)` | the two-phase Bruggeman effective medium, a material model like any other; see [materials](../common/materials.md#effective-media) |
+
+A grading is sliced uniformly: the midpoint staircase of a smooth permittivity profile converges
+at second order without moving the boundaries, as the measurements show. The arc-length rule
+still places the slices of a layer whose outline moves. A grading that returns the same material
+at every height is solved as one layer, as a height-independent outline is.
+
+`thickness`, the `fraction` of a `Bruggeman` mixture and every parameter a grading closes over
+differentiate on PyTorch and JAX. A `Graded` material belongs in a `ProfiledLayer` only: in an
+ordinary `Layer` it is refused with `layer.profile_material`, and as a half-space with
+`stack.graded_half_space`. A problem holding one cannot be saved as a job, since a callable has
+no portable form; a `Bruggeman` mixture can.
+
 ## Why the region path, and not a raster
 
 Every slice is built from regions: a line's slices are `Rectangle`s on the closed-form route,
@@ -188,8 +228,8 @@ the thickness is; write it with operations of the backend it runs on. A problem 
 
 ## What is not here
 
-- Materials that vary with height -- graded index, effective-medium roughness and interface
-  layers -- are not part of this release of `ProfiledLayer`.
+- Effective media other than the two-phase, spherical-inclusion Bruggeman rule (Maxwell
+  Garnett, more phases, shaped inclusions) and anisotropic or magnetic mixtures.
 - There is no continuous-`z` formulation; the layer is always a staircase, with its error
   reported.
 - 3D CAD, STEP, STL and GDS input are not read.
@@ -203,6 +243,13 @@ the thickness is; write it with operations of the backend it runs on. A problem 
   arbitrary-shaped gratings*, J. Opt. Soc. Am. A **19**, 33-42 (2002).
   [doi:10.1364/JOSAA.19.000033](https://doi.org/10.1364/JOSAA.19.000033) -- how a staircase
   converges, and where it does not.
+- D. A. G. Bruggeman, *Berechnung verschiedener physikalischer Konstanten von heterogenen
+  Substanzen*, Ann. Phys. **416**, 636-664 (1935).
+  [doi:10.1002/andp.19354160705](https://doi.org/10.1002/andp.19354160705) -- the mixing rule.
+- D. E. Aspnes, J. B. Theeten and F. Hottier, *Investigation of effective-medium models of
+  microscopic surface roughness by spectroscopic ellipsometry*, Phys. Rev. B **20**, 3292 (1979).
+  [doi:10.1103/PhysRevB.20.3292](https://doi.org/10.1103/PhysRevB.20.3292) -- roughness as a
+  Bruggeman layer.
 - J. P. Hugonin and P. Lalanne, *RETICOLO software for grating analysis*,
   [arXiv:2101.00901](https://arxiv.org/abs/2101.00901) -- the external reference the slicing is
   checked against.

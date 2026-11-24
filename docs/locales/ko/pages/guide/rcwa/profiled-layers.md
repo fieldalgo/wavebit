@@ -1,6 +1,6 @@
 # 프로파일 층: 측벽각, 라운딩, 자동 z 슬라이스
 
-`rcwa.ProfiledLayer`는 높이에 따라 단면이 바뀌는 층입니다. 측벽각과 상단 라운딩, footing이 있는 라인이나 위로 갈수록 윤곽이 줄어드는 기둥이 여기에 해당하고, 슬라이스는 Wavebit이 직접 자릅니다. 사용자는 형상 파라미터만 선언합니다. 준비 단계가 슬라이스를 정하고, 실행 결과는 사용한 슬라이스 수와 `z` 방향 계단의 추정 오차를 알려 줍니다. 모든 파라미터는 PyTorch와 JAX에서 미분됩니다.
+`rcwa.ProfiledLayer`는 높이에 따라 단면이 바뀌는 층입니다. 측벽각과 상단 라운딩, footing이 있는 라인이나 위로 갈수록 윤곽이 줄어드는 기둥이 여기에 해당하고, 슬라이스는 Wavebit이 직접 자릅니다. 점진 굴절률이나 두 재료가 섞이는 계면 층처럼 재료도 높이에 따라 바뀔 수 있습니다. 사용자는 형상 파라미터만 선언합니다. 준비 단계가 슬라이스를 정하고, 실행 결과는 사용한 슬라이스 수와 `z` 방향 계단의 추정 오차를 알려 줍니다. 모든 파라미터는 PyTorch와 JAX에서 미분됩니다.
 
 ```python
 import math
@@ -104,6 +104,36 @@ print(report['count'], report['staircase_error'])
 
 라운딩 없는 수직 `Trapezoid`나 두 윤곽이 같은 `Loft`처럼 모든 슬라이스가 같다면, 그 층은 보통 층 하나로 풀립니다. 결과는 직접 그렇게 쓴 층과 비트 단위까지 같습니다. 다만 형상 값 중 미분을 가진 것이 없을 때만 그렇습니다. 측벽각이 JAX 추적자이거나 `requires_grad`인 텐서라면 층을 슬라이스한 채로 둡니다. 그래야 `swa = pi/2`에서의 미분이 그 각이 만들 테이퍼를 봅니다. 이때 값은 한 층으로 푼 결과와 반올림 오차 수준으로 같습니다(1e-12를 시험함).
 
+## Materials that change with height
+
+`ProfiledLayer`의 배경과 그 안의 어느 영역의 재료든 `rcwa.Graded`가 될 수 있습니다. `rcwa.Graded`는 높이를 받아 재료 모델을 돌려주는 호출 가능한 객체입니다. 각 슬라이스는 단면을 중점 높이에서 잡듯이 재료도 중점 높이의 것을 씁니다.
+
+```python
+from wavebit.materials import Bruggeman
+
+silicon, oxide, air = Material(epsilon=15.2 + 0.16j), Material(epsilon=2.1025), Material(epsilon=1.0)
+
+# A graded-index film: eps rises linearly from 2.25 at the bottom to 4.0 at the top.
+graded = rcwa.ProfiledLayer(thickness=0.3, background=rcwa.Graded(
+    material=lambda u: Material(epsilon=2.25 + 1.75*u), relative=True))
+
+# An interface layer: oxide mixing into silicon, linearly, as a Bruggeman effective medium.
+interface = rcwa.ProfiledLayer(thickness=0.003, background=rcwa.Graded.interface(below=silicon, above=oxide))
+
+# Surface roughness: one uniform layer of silicon and 50% void. It needs no slicing.
+roughness = rcwa.Layer(thickness=0.002, background=Bruggeman(host=silicon, inclusion=air, fraction=0.5))
+```
+
+| 선언 | 뜻 |
+| --- | --- |
+| `rcwa.Graded(material, relative=False)` | `material(z)`가 층 아래 면에서 잰 높이 `z`의 재료 모델을 돌려줌. `relative=True`이면 `u = z / thickness`(`[0, 1]`)에서 `material(u)`를 불러, 두께가 바뀌어도 점진 프로파일의 모양이 유지됨 |
+| `rcwa.Graded.interface(below, above, fraction=None)` | 혼합층. `below` 안에 `above`가 부피 분율 `fraction(u)`로 섞인 Bruggeman 매질. `fraction`의 기본값은 `u`로, 아래 면의 `below`에서 위 면의 `above`까지 선형으로 바뀜 |
+| `wavebit.materials.Bruggeman(host, inclusion, fraction)` | 2상 Bruggeman 유효 매질. 다른 재료 모델과 똑같이 쓰는 재료 모델이며, [재료](../common/materials.md#effective-media)를 보세요 |
+
+점진 재료는 균일하게 자릅니다. 매끈한 유전율 프로파일의 중점 계단 근사는 경계를 옮기지 않아도 2차로 수렴하며, 측정도 그렇게 나왔습니다. 윤곽이 움직이는 층의 슬라이스 위치는 여전히 호 길이 규칙이 정합니다. 모든 높이에서 같은 재료를 돌려주는 점진 재료는, 높이에 따라 변하지 않는 윤곽처럼 층 하나로 풉니다.
+
+`thickness`, `Bruggeman` 혼합물의 `fraction`, 점진 재료가 감싼 모든 파라미터는 PyTorch와 JAX에서 미분됩니다. `Graded` 재료는 `ProfiledLayer`에만 넣을 수 있습니다. 보통 `Layer`에 넣으면 `layer.profile_material`로, 반공간으로 쓰면 `stack.graded_half_space`로 거부합니다. 호출 가능한 객체는 이식 가능한 형태가 없으므로 이것이 든 문제는 job으로 저장할 수 없습니다. `Bruggeman` 혼합물은 저장할 수 있습니다.
+
 ## 왜 래스터가 아니라 영역 경로인가
 
 모든 슬라이스는 영역으로 만들어집니다. 라인의 슬라이스는 닫힌 형식 경로의 `Rectangle`이고, `Loft`와 `Profile`의 슬라이스는 [경계 모델링](boundary-modeling.md)의 칠하기 경로에 놓이는 `Polygon`입니다. 샘플링(래스터) 층은 폭을 픽셀 단위로 양자화합니다. 그러면 측벽각이 바뀔 때 폭이 계단처럼 움직이고, 반사율도 각에 대해 계단이 되어 계단 사이에서는 미분이 0이 됩니다. 그래서 래스터 층이 있는 스택에 `ProfiledLayer`를 넣으면 `layer.profile_raster`로 거부하고, 보통 `Layer`에 프로파일 형상을 넣으면 `layer.profile_geometry`로 거부합니다.
@@ -122,7 +152,7 @@ print(report['count'], report['staircase_error'])
 
 ## 여기에 없는 것
 
-- 높이에 따라 바뀌는 재료(점진 굴절률, 유효 매질 거칠기, 계면 층)는 이번 `ProfiledLayer`에 포함되지 않습니다.
+- 구형 포함체의 2상 Bruggeman 규칙 말고 다른 유효 매질(Maxwell Garnett, 3상 이상, 모양 있는 포함체)과, 이방성이거나 자성인 혼합물은 없습니다.
 - 연속 `z` 정식화는 없습니다. 층은 항상 계단이며, 그 오차를 보고합니다.
 - 3D CAD, STEP, STL, GDS 입력은 읽지 않습니다.
 
@@ -134,5 +164,11 @@ print(report['count'], report['staircase_error'])
 - E. Popov, M. Nevière, B. Gralak and G. Tayeb, *Staircase approximation validity for
   arbitrary-shaped gratings*, J. Opt. Soc. Am. A **19**, 33-42 (2002).
   [doi:10.1364/JOSAA.19.000033](https://doi.org/10.1364/JOSAA.19.000033). 계단 근사가 어떻게 수렴하고 어디서 수렴하지 않는가.
+- D. A. G. Bruggeman, *Berechnung verschiedener physikalischer Konstanten von heterogenen
+  Substanzen*, Ann. Phys. **416**, 636-664 (1935).
+  [doi:10.1002/andp.19354160705](https://doi.org/10.1002/andp.19354160705). 혼합 규칙.
+- D. E. Aspnes, J. B. Theeten and F. Hottier, *Investigation of effective-medium models of
+  microscopic surface roughness by spectroscopic ellipsometry*, Phys. Rev. B **20**, 3292 (1979).
+  [doi:10.1103/PhysRevB.20.3292](https://doi.org/10.1103/PhysRevB.20.3292). 거칠기를 Bruggeman 층으로 보는 방법.
 - J. P. Hugonin and P. Lalanne, *RETICOLO software for grating analysis*,
   [arXiv:2101.00901](https://arxiv.org/abs/2101.00901). 슬라이스를 견준 외부 기준.

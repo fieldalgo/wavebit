@@ -57,6 +57,7 @@ paper, a docstring or an earlier record, in quotation marks) keeps its own wordi
 | slice / slicing (of a profiled layer) | 슬라이스 / 슬라이스 분할 | 슬라이스 수, 슬라이스 경계. |
 | sidewall angle (SWA) | 측벽각 | footing and undercut stay in English. |
 | arc length | 호 길이 | |
+| effective medium | 유효 매질 | volume fraction: 부피 분율. |
 
 ## Terms already used consistently
 

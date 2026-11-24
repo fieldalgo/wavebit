@@ -53,6 +53,9 @@
 .. autoclass:: wavebit.rcwa.Profile
    :members:
 
+.. autoclass:: wavebit.rcwa.Graded
+   :members:
+
 .. autoclass:: wavebit.rcwa.Excitation
    :members:
 
