@@ -222,6 +222,39 @@ fmmax 1.7.1 (MIT) solved five dielectric scenes -- a circle at theta 20 deg (p, 
 - **The comparison as first set up did not meet its criterion, because of its input.** It gave fmmax a pixel grid whose boundary pixels mixed the two permittivities by area. fmmax forms the inverse-permittivity coefficients from the reciprocal of the array it is given, and the reciprocal of an area-weighted permittivity misstates `1/eps` on those pixels (0.075 against 0.54 at half fill). Its `R` then moved as one over the grid -- by 3.0e-4 from 400 to 3200 pixels on the circle at theta 20 deg, p, at 800 terms -- and the matched solve was 0.44 to 1.10% from it in seven of eight rows. Giving fmmax the pixels' mean of `1/eps` instead holds its `R` within 4e-7 over the same grids.
 - The exact-coefficient comparison was made after that first result was seen, so the criterion written before measuring is recorded as not met.
 
+(wall-resolution-spurious)=
+## Strong stretches: spurious layer modes and the exceptional-point handling
+
+A strong stretch is reported in the literature to add spurious layer modes that move away as the order rises. The solver was run unchanged, with each layer's eigenvalues `w = q**2` read through a wrapper. The scenes were seven layers in the 400 nm cell at 900 nm:
+
+- a 200 nm box and a circle of radius 100 nm;
+- permittivity 12.25 or -20+1.5j;
+- normal incidence and 20 deg.
+
+Each scene was solved at orders 4 to 16 and slopes `G` from 0.1 to 0.005, and by the default solve at the same orders. The criteria were written before measuring. Where a reading was added after the first results, it says so.
+
+- **Uniform media, where the answer is exact.** In the stretched coordinates a uniform medium's modes are the plane waves, `w = kx**2 + ky**2 - eps`. The stretched uniform media of permittivity 1, 2.25 and 12.25, on all seven coordinate systems, were compared with them.
+  - No part of the spectrum held more computed values than plane waves, at any order or slope.
+  - Within `|w| <= 50` -- the modes that still carry a field across a 150 nm layer at 900 nm -- the largest relative error was 3 to 5% at order 8, 4e-4 at order 12 and 3e-6 at order 16, nearly the same at every slope.
+  - The criterion written first asked for 1e-3 up to the plane wave of order `N/2`. It is not met at any order, for example 64 of 98 values at order 8 and `G` 0.02. Those are high-order plane waves computed less accurately; the extra values a spurious mode would add were not found. The two readings that separate these, the count and the band, were added after the first results.
+- **Patterned layers.**
+  - At `G` 0.02, no layer had more roots with `Im w > 0` within `|w| <= 50` than the default solve at the same order. Such a root grows along `z` in a passive layer. At `G` 0.01 and 0.005, four of the seventy comparisons had one to four more.
+  - In the lossless layers every such root, stretched or not, had its conjugate among the roots: a complex-mode pair, which carries no net power. `1 - R - T` stayed within 8e-13 of zero.
+  - In the metal layers the absorption was positive.
+  - The ten least-attenuated modes of a metal layer converged faster with the stretch. From order 12 to 16, 10 of 10 agreed to 1e-2 at `G` 0.02 on the box, against 2 of 10 for Li. On the circle it was 8 at `G` 0.02 and 10 at 0.01, against 6 for NVF.
+- **The exceptional-point handling.**
+  - On the 30 scenes measured for {ref}`the finite-element table beyond normal incidence <wall-resolution-wide>` (its slabs and blocks included), at orders 8, 12 and 16, `exceptional_points='rebuild'` and `'off'` gave the same `R` and `T` to 6.7e-16. The criterion was 1e-9. A pair was rebuilt in two of the 90 solves.
+  - On the 69 points of the sweeps below where the stretched solve rebuilt a pair or a cluster, the two agreed to 7.7e-11.
+- **Wavelength sweeps.** Three cases at 20 deg, p: the metal box, the metal circle and the dielectric box. Each ran from 550 to 1100 nm every 4 nm, at `G` 0.02 at orders 8 and 12, and by the default solve at order 12.
+  - Nothing was refused.
+  - No point departed by more than 1e-3 from a quadratic fit through its six neighbours unless the default solve and the other order's sweep showed it too, as the sharp guided resonances at 562 to 622 nm and 710 to 762 nm do.
+  - The step was planned at 2 nm. A feature narrower than about 4 nm can have been missed.
+- **Three warnings that did not change the answer.** The stretched solve raised `ExceptionalPointWarning` ("a 2D layer holds three or more modes of one defective eigenvalue cluster ... that no rebuild takes exactly") at three points of the sweeps. The default solve raised none on them.
+  - The three points were 846 nm on both boxes at order 8, and 654 nm on the dielectric box at order 12.
+  - The warnings came from the stretched air half-spaces, not the patterned layer.
+  - At each point `R` was the same to the bit with the handling off. It lay within 7e-6 of the line through the solves 0.5 nm either side, which differ from each other by 3e-4 to 4e-3. It differed from the other order's value by what the neighbouring wavelengths differ by.
+  - The cluster's exact cause was not traced.
+
 ## Not measured
 
 - A reference at phi other than 0; for circles and ellipses, a reference with a shape away from the cell's centre; for the ellipse, a second angle, a substrate or two layers; a second reference on a substrate. A finer finite-element level for the eight weak rows above.
@@ -229,4 +262,4 @@ fmmax 1.7.1 (MIT) solved five dielectric scenes -- a circle at theta 20 deg (p, 
 - Layers with more than two walls along an axis against a reference. A uniform slab through four unevenly placed walls reads the right `R` to 1e-5.
 - A second mesh level for five of the seven references.
 - Single precision; `jax.jit`, `jax.vmap` and gradients, which are refused.
-- The interaction with the exceptional-point handling: a strong stretch is reported in the literature to add spurious layer modes that move away as the order rises, and none was looked for.
+- Spurious modes at slopes below 0.005 or orders above 16; wavelength features narrower than about 4 nm; the cause of the three warnings above.
