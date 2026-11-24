@@ -223,9 +223,9 @@ class ShapeNormalMethod(str, Enum):
 
     ``'interfaces'`` builds every shape layer the second way, overlapping or not: one field,
     taken from the interfaces of the structure, whatever description produced it. It is
-    experimental -- not measured against independent references, its contact limit differs
-    from the default's (``docs/guide/rcwa/boundary-modeling.md``), and a curved layer costs
-    far more than the closed form.
+    experimental -- not measured against independent references, not shown to be more accurate
+    than the default at a given order (``docs/guide/rcwa/boundary-modeling.md``), and a curved
+    layer costs far more than the closed form.
 
     Read only by the scalar shape NVF build with the linear projector; explicitly set anywhere
     else it is refused rather than ignored. The solver option that takes it is

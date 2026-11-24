@@ -3352,15 +3352,15 @@ class CoreSolveMixin:
 
 
 #: What a build under ``shape_normal_method='interfaces'`` warns with: compared with the default
-#: and with Li on axis-aligned rectangles only, and its contact limit is not the default's.
+#: and with Li on axis-aligned rectangles only, and far more expensive on a curved layer.
 _INTERFACES_EXPERIMENTAL = (
     "shape_normal_method='interfaces' is experimental. Every layer of regions builds its normal "
     "field from the interfaces of the resolved structure, so tiles and a painting of one "
     "structure answer alike and nothing steps where regions start to overlap; it is compared "
     "with the default and with Li on axis-aligned rectangles and with no independent "
-    "implementation, it steps where two regions come into contact, and a layer of circles or "
-    "ellipses costs far more than the default. Its values, what it accepts and its name may "
-    "change between releases; the guide \"Boundary modeling\" has the measurements. "
+    "implementation, and a layer of circles or ellipses costs far more than the default. Its "
+    "values, what it accepts and its name may change between releases; the guide "
+    "\"Boundary modeling\" has the measurements. "
     'Silence with warnings.simplefilter("ignore", wavebit.rcwa.diagnostics.ExperimentalWarning).')
 
 
@@ -5572,8 +5572,8 @@ class CoreFactorizationMixin:
 
         ``'interfaces'`` sends every shape layer down the boundary route, overlapping or not,
         so the field is the interfaces' whatever description produced them. Experimental: it
-        has no independent reference yet, it steps where two shapes come into contact (the
-        default does not), and a curved layer costs far more than the closed form. See
+        has no independent reference yet, it is not shown to be more accurate than the default
+        at a given order, and a curved layer costs far more than the closed form. See
         :class:`~wavebit.rcwa._engine.enums.ShapeNormalMethod`.
 
         Read by the scalar shape NVF build with the linear projector. Like
