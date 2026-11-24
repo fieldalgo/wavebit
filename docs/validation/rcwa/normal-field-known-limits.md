@@ -1514,8 +1514,8 @@ indistinguishable from a passing test unless the harness says so out loud.
 
 ## 10. Copies of one shape in a supercell are a different description (2026-11-24)
 
-Measured 2026-11-24 on one CPU host (four logical cores of an Intel Xeon at 2.10 GHz in a shared
-cloud container; the `'interfaces'` causes at 2.30 GHz), NumPy, float64. The instrument and its
+Measured 2026-11-24 in a shared cloud container (four logical cores of an Intel Xeon at 2.10 GHz;
+the `--part cause` runs on one at 2.30 GHz), NumPy, float64. The instrument and its
 printed output are in `studies/rcwa/supercell_normal_field/`.
 
 **What.** The closed-form field (`shape_normal_method='per_shape'`, the default) treats the
@@ -1581,11 +1581,13 @@ two of its inputs are read off the cell rather than the structure. Its kernel ra
 longest diagonal of the reduced cell: 303.109 nm for the primitive cell, 630.971 nm for the
 supercell, whose reduced basis is `(4*a1 + 2*a2, a2)`. Its sample grid is `shape_nvf_grid_size`
 per side of the cell, so the supercell takes a quarter of the samples per primitive period along
-`a1`. `--part cause` solves each cell with neither, one or both of the other cell's inputs, and
-compares the projector coefficients each solve builds at the primitive orders. R(1) and R(4) are
-the radii of the primitive cell and the supercell, and grid / 4 is (1024, 256), the supercell's
-density along `a1`. Each row is the difference from the primitive cell as it runs by default; *coefficient* is the largest difference
-over the three projector grids, with that of the constant term in brackets.
+`a1`. `--part cause` solves the primitive cell with neither, one or both of the supercell's inputs,
+and the supercell with the primitive cell's R, and compares the projector coefficients each solve
+builds at the primitive orders. R(1) and R(4) are the radii of the primitive cell and the
+supercell; grid / 4 keeps 1024 samples along `a2` and takes 256 along `a1`, the supercell's
+density. Each row is the difference from the primitive cell as it runs by default; *coefficient* is
+the largest difference over the three projector coefficient arrays (`n_u**2`, `n_u*n_v`,
+`n_v**2`), with the largest difference of their constant terms in brackets.
 
 At M = 3:
 
@@ -1612,8 +1614,9 @@ Given both of the supercell's inputs, the primitive cell reproduces the supercel
 cell's R, the supercell reproduces the primitive cell on the coarser grid to 5.6e-14, 3.5e-13 and
 3e-17. With these two inputs matched nothing else differs between the cells. The radius carries 96%
 of the difference in T and nearly all of the phase: the wider kernel moves projector coefficients
-by up to 1.1e-2 and leaves the constant term alone. The grid carries the rest, mostly through the
-constant term. The two add, to 2e-11 in T. Each arm took 18 to 523 s here; the run takes
+by up to 1.1e-2 and leaves the constant terms alone. The grid carries the rest; it moves the
+coefficients by up to 5.5e-7, the constant terms by 4.3e-7. The two parts add: their interaction is
+at most 2e-11 in T. Each arm took 18 to 523 s here; the run takes
 about 40 minutes.
 
 **How to tell.** Any comparison, under the default NVF, between descriptions of one structure that
@@ -1633,8 +1636,8 @@ closed form should blend a shape's own images the way it blends different shapes
 its field independent of the description and would also change every closed-form answer at the
 truncation level, is a design question this entry does not decide. So is whether the
 `'interfaces'` kernel radius should be a length of the structure rather than of the cell it is
-written in: that would make that field independent of the description too, and would change every
-`'interfaces'` answer at the same level. The grid part comes from sampling each cell on its own grid; how it falls with the grid size
+written in: that would remove the radius part of the difference, about 96% in T, and would change
+every `'interfaces'` answer at the same level. The grid part comes from sampling each cell on its own grid; how it falls with the grid size
 is not measured here.
 
 ## Explicit Cartesian alternative for rectangular contacts
