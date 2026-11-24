@@ -279,6 +279,46 @@ PROFILE_SHAPES = (Trapezoid, Loft, Profile)
 
 
 @spec
+class Graded:
+    """A material that changes with height, for the background or a region of a :class:`ProfiledLayer`.
+
+    ``material`` is a callable returning a material model (a ``Material``, a dispersive or
+    tabulated model, a :class:`wavebit.materials.Bruggeman` mixture) at a height. It is called
+    with ``z``, in the Problem's length unit, measured up from the layer's bottom face; with
+    ``relative=True`` it is called with ``u = z / thickness`` in ``[0, 1]`` instead, so the
+    grading keeps its shape when the thickness changes. Each slice of the layer takes the
+    material at its midpoint height. Write the callable with operations of the backend it runs
+    on: its argument is a Python float unless the thickness is traced and ``relative`` is false.
+
+    A problem holding a ``Graded`` material cannot be saved as a job, since a callable has no
+    portable form.
+    """
+    material: object
+    relative: bool = False
+
+    def __post_init__(self):
+        if not callable(self.material):
+            raise ValidationError('Graded material must be a callable height -> material model.',
+                                  code='material.graded', path='material.material')
+        if type(self.relative) is not bool:
+            raise ValidationError('Graded relative must be a bool.', code='material.graded',
+                                  path='material.relative')
+
+    @classmethod
+    def interface(cls, below, above, fraction=None):
+        """A mixed layer between two materials: ``above`` at volume fraction ``fraction(u)`` in ``below``.
+
+        ``u`` runs from 0 at the layer's bottom face to 1 at its top, and ``fraction`` defaults
+        to ``u`` itself, a linear ramp. Each height is the Bruggeman effective medium of the two
+        (:class:`wavebit.materials.Bruggeman`), so the layer passes continuously from ``below``
+        to ``above``.
+        """
+        from ..materials import Bruggeman
+        profile = (lambda u: u) if fraction is None else fraction
+        return cls(material=lambda u: Bruggeman(host=below, inclusion=above, fraction=profile(u)), relative=True)
+
+
+@spec
 class Region:
     """A typed shape and its material; later regions paint over earlier regions.
 
@@ -318,6 +358,9 @@ class Layer:
         if not all(isinstance(r, Region) for r in self.regions):
             raise ValidationError('regions must contain Region declarations.',
                                   code='layer.regions', path='layer.regions')
+        if isinstance(self.background, Graded) or any(isinstance(r.material, Graded) for r in self.regions):
+            raise ValidationError('A Graded material changes with height; put it in an rcwa.ProfiledLayer, which '
+                                  'slices it, rather than an rcwa.Layer.', code='layer.profile_material', path='layer')
         for i, region in enumerate(self.regions):
             if isinstance(region.geometry, PROFILE_SHAPES):
                 raise ValidationError(f'{type(region.geometry).__name__} changes with height; put it in an '
@@ -340,7 +383,8 @@ class ProfiledLayer:
 
     Holds regions as :class:`Layer` does, painted in order, and any of them may be a
     :class:`Trapezoid`, :class:`Loft` or :class:`Profile`, whose outline depends on the height
-    ``z`` above the layer's bottom face. The layer is solved as a stack of slices, each with
+    ``z`` above the layer's bottom face. The background and any region's material may be
+    :class:`Graded`, a material that changes with height. The layer is solved as a stack of slices, each with
     the cross-section at its midpoint height; ``Numerics(slicing=rcwa.Slicing(...))`` chooses
     how many and where, and ``result.diagnostics['z_slicing']`` reports what was used and the
     estimated error of the staircase in ``z``. The slices are internal: results, layer indices
@@ -384,6 +428,10 @@ class Stack:
         if not all(isinstance(layer, (Layer, ProfiledLayer)) for layer in self.layers):
             raise ValidationError('layers must contain rcwa.Layer or rcwa.ProfiledLayer declarations.',
                                   code='stack.layers', path='stack.layers')
+        for side in ('top', 'bottom'):
+            if isinstance(getattr(self, side), Graded):
+                raise ValidationError(f'The {side} half-space is uniform; a Graded material belongs in an '
+                                      f'rcwa.ProfiledLayer.', code='stack.graded_half_space', path=f'stack.{side}')
         if self.period is not None and self.lattice is not None:
             raise ValidationError('Supply either period or lattice, not both.',
                                   code='stack.cell_ambiguous', path='stack')

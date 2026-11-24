@@ -326,6 +326,63 @@ class DispersiveMaterial(Declaration):
 
 
 @eager_under_torch_compile
+@dataclass(frozen=True)
+class Bruggeman(Declaration):
+    """A two-phase Bruggeman effective medium: ``inclusion`` at volume fraction ``fraction`` in ``host``.
+
+    The effective permittivity ``e`` solves
+    ``(1 - f)(eps_host - e)/(eps_host + 2e) + f(eps_inc - e)/(eps_inc + 2e) = 0`` at each
+    wavelength, for spherical inclusions (depolarization factor 1/3), the symmetric mixing rule
+    of D. A. G. Bruggeman, Ann. Phys. 416, 636 (1935). The passive root is taken
+    (:func:`wavebit._common.conventions.bruggeman_root`). It is the model ellipsometry uses for
+    surface roughness -- a layer of the material and 50% void -- after D. E. Aspnes, J. B. Theeten
+    and F. Hottier, Phys. Rev. B 20, 3292 (1979).
+
+    ``host`` and ``inclusion`` are material models of their own (``Material``, a dispersive or
+    tabulated model, another ``Bruggeman``), evaluated at the same wavelength, isotropic and
+    nonmagnetic. ``fraction`` is a real number in ``[0, 1]``; it, and every parameter of the two
+    constituents, differentiates on PyTorch and JAX. ``fraction=0`` is the host and
+    ``fraction=1`` the inclusion, to round-off.
+    """
+    host: object
+    inclusion: object
+    fraction: object
+
+    def __post_init__(self):
+        for name in ('host', 'inclusion'):
+            if not hasattr(getattr(self, name), 'at'):
+                raise ValidationError(f'Bruggeman {name} must be a material model (a Material, a dispersive or '
+                                      f'tabulated model), not {type(getattr(self, name)).__name__}.',
+                                      code='material.type', path=f'material.{name}')
+        valid = _scalar(self.fraction, 'material.fraction')
+        xp, ref = _namespace(self.fraction)
+        inside = as_array(xp, self.fraction, device=getattr(ref, 'device', None))
+        if _concrete(valid & (inside >= 0) & (inside <= 1)) is False:
+            raise ValidationError(f'Bruggeman fraction is a volume fraction in [0, 1], not {self.fraction!r}.',
+                                  code='material.fraction', path='material.fraction')
+        _register(type(self), ('host', 'inclusion', 'fraction'))
+
+    def at(self, wavelength, *, units):
+        from wavebit._common.conventions import bruggeman_root
+        a = self.host.at(wavelength, units=units)
+        b = self.inclusion.at(wavelength, units=units)
+        for name, response in (('host', a), ('inclusion', b)):
+            if response.mu is not None:
+                raise ValidationError(f'Bruggeman mixes nonmagnetic constituents; the {name} has a permeability.',
+                                      code='material.mixture', path=f'material.{name}')
+            if tuple(getattr(response.epsilon, 'shape', ())) != tuple(getattr(response, '_wavelength_shape', None) or ()):
+                raise ValidationError(f'Bruggeman mixes isotropic constituents; the {name} is a tensor.',
+                                      code='material.mixture', path=f'material.{name}')
+        xp, ref = _namespace(a.epsilon, b.epsilon, self.fraction)
+        ea = as_array(xp, a.epsilon, device=getattr(ref, 'device', None))
+        eb = as_array(xp, b.epsilon, dtype=ea.dtype, device=getattr(ref, 'device', None))
+        f = self.fraction if in_namespace(xp, self.fraction) else as_array(xp, self.fraction, device=getattr(ref, 'device', None))
+        f = xp.astype(f, ea.dtype) if hasattr(xp, 'astype') else f
+        e = bruggeman_root(xp, (2 - 3*f)*ea + (3*f - 1)*eb, ea*eb)
+        return MaterialResponse(e, None, _wavelength_shape=getattr(a, '_wavelength_shape', None))
+
+
+@eager_under_torch_compile
 class TabulatedMaterial(LegacyTabulatedMaterial):
     """A static spectrum with its own wavelength unit and interpolation convention."""
     # Its wavelengths and every query pass through a length-unit conversion; see _evaluate.
