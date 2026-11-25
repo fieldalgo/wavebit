@@ -1313,3 +1313,57 @@ def test_traced_answers_at_two_coincident_chains_are_exact(point, first_order):
             g_ref = 2 * np.real(np.sum(np.conj(a0) * da))
             g = float(grad(jnp.asarray(w)))
             assert abs(g - g_ref) < 1e-11 * abs(g_ref), ('grad', algo, rel, g, g_ref)
+
+
+def _two_chain_slot(seed, delta, coupling, k=8, members=6, pad=186.7):
+    """A slot of the traced three-level split: two Jordan chains of length three at one
+    eigenvalue, coupled by ``coupling``, in a seeded random unitary basis, with a seeded relative
+    perturbation ``delta`` and ``k - members`` padded lanes at the stand-in ``pad``."""
+    rng = np.random.default_rng(seed)
+    lam = 9.908 + 0.0j
+    J = np.zeros((members, members), complex)
+    for start in (0, 3):
+        J[start, start + 1] = J[start + 1, start + 2] = coupling
+    Q, _ = np.linalg.qr(rng.normal(size=(members, members))
+                        + 1j * rng.normal(size=(members, members)))
+    block = Q @ (lam * np.eye(members) + J) @ Q.conj().T
+    block = block + delta * abs(lam) * (rng.normal(size=(members, members))
+                                        + 1j * rng.normal(size=(members, members)))
+    T = np.zeros((1, k, k), complex)
+    T[0, :members, :members] = block
+    T[0, members:, members:] = pad * np.eye(k - members)
+    valid = np.zeros((1, k), bool)
+    valid[0, :members] = True
+    return T, valid, pad
+
+
+@pytest.mark.parametrize('backend', ['numpy', 'jax'])
+@pytest.mark.parametrize('seed,delta', [(4, 0.0), (1, 1e-16), (8, 1e-16)])
+def test_the_traced_two_chain_split_reads_the_check_far_below_its_threshold(backend, seed, delta):
+    """The traced three-level split of a two-chain slot, read as the cluster check reads it:
+    ``cond(X)`` times the part of ``X^-1 T X`` outside the levels' coupling, over ``tau``
+    (:func:`solve_2d._joint_cluster_bases`). With eigenvector candidates only, these three slots
+    read 6.2, 8.2 and 6.3 -- the check fails and the traced answer is NaN by design -- because
+    the eigenvectors of a Jordan chain are nearly parallel; equal-to-rounding slots of the
+    six-mode C4v chains read cond(X) from 1.3 to 112. The kernel-flag candidate
+    (:func:`solve_2d._flag_columns`) reads 2e-4 to 4e-4 here, and at most 7.9e-3 over 160 such
+    slots (couplings 1e-7 to 1e-3, perturbations 0 to 1e-14), never more than the eigenvector
+    candidates."""
+    import array_api_compat
+    T, valid, pad = _two_chain_slot(seed, delta, 1e-3)
+    if backend == 'jax':
+        jax = pytest.importorskip('jax')
+        jax.config.update('jax_enable_x64', True)
+        args = (jax.numpy.asarray(T), jax.numpy.asarray(valid))
+    else:
+        args = (T, valid)
+    xp = array_api_compat.array_namespace(args[0])
+    X, level, cond = solve_2d._chain_split_traced_wide(xp, *args, pad)
+    X, level = np.asarray(X)[0], np.asarray(level)[0]
+    Mx = np.linalg.solve(X, T[0] @ X)
+    off = ~(level[:, None] < level[None, :]) & ~np.eye(len(level), dtype=bool)
+    dropped = np.linalg.norm(np.where(np.outer(valid[0], valid[0]) & off, Mx, 0))
+    tau = solve_2d._EP_BACKWARD * max(1., abs(np.trace(T[0, :6, :6]) / 6))
+    assert float(np.asarray(cond)[0]) < 3
+    assert np.linalg.cond(X) * dropped / tau < 1e-2
+    assert sorted(level[:6]) == [0, 0, 1, 1, 2, 2] and list(level[6:]) == [0, 0]

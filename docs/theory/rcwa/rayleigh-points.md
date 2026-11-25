@@ -1286,6 +1286,26 @@ and 1e-6) the pivoted choice read within a factor of ten of the full enumeration
 time. A slot that one lane a level represents never takes the wide family, so it keeps its
 bits.
 
+*A kernel-flag candidate* (2026-11-24). The eigenvectors of a Jordan chain are nearly parallel,
+so a split built from them is ill conditioned where the chain is, and how ill depends on
+rounding. At the six-mode point above, slot matrices equal to rounding (their eigenvalues agree
+within the 1e-6 a chain of length three spreads by at that precision) gave eigenvector splits
+with `cond(X)` from 1.3 to 112. Under `jax.jit` on one Linux machine the best of the wide
+family read 1.17 of the check's threshold (`cond(X)` 93), the cluster was marked failed and the
+answer was NaN by design; the eager run passed at 0.001, and other machines passed under `jit`
+too. The wide family now also forms, for each layout, the split from the members' nested null
+spaces about their mean (`_flag_columns`): level 2 holds the leading right singular vectors of
+`N**2`, level 1 those of `N` on the rest, level 0 the remainder, with `N` the slot less the
+members' mean on member lanes (Golub and Van Loan, section 7.6.5). Its levels are orthonormal
+and come from singular vectors, so it stays well conditioned at the chain; the check still keeps
+whichever candidate it reads least of, so no slot takes a worse split. On the slots captured
+under `jit` it read `cond(X)` 1.2 to 1.4 and 0.002 of the threshold. Over 160 synthetic slots
+(two chains of length three at one eigenvalue, couplings 1e-7 to 1e-3, relative perturbations 0
+to 1e-14, ten random bases each) it was never worse than the eigenvector candidates, and the
+check read at most 7.9e-3 of its threshold; without it, three of them read 6.2 to 8.2 and failed.
+`tests/rcwa/test_third_order_exceptional_point.py` holds those three, and the six-mode point's
+traced values and derivatives pass on the machine where they had been NaN.
+
 At the two-chain point (wavelength 745.9149148229458 nm, permittivity 4.9546179826310786,
 truncation `(4, 4)`), against Cauchy circles in the wavelength with the rebuilds closed:
 `jax.jit` and `jax.vmap` values within 8.7e-15 at relative offsets 0 and either sign of
