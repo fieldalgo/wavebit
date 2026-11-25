@@ -102,13 +102,31 @@ each wavelength, and its fraction derivative on PyTorch and JAX matches a centra
 
 ## Cost
 
-Per slice, one wavelength, 31 orders, one CPU core: about 10 ms under `factorization='li'`, and
-about 1.1 s under the default NVF, almost all of it the shape normal field
-(`parametric._field_tiled`). The two agree to 1e-14 on a line's slices. On JAX, eager execution
-costs about 4 s per layer and `jax.jit` compiles in time growing with the slice count; these are
-the same for hand-written layers (measured: 16.0 s against 16.0 s for four layers), so they are
-not the slicing's. The eigenproblems of the slices are solved one layer at a time, as for every
-stack; batching them is a separate change.
+Measured 2026-11-25 on 4 cores of an Intel Xeon at 2.10 GHz, one wavelength, 31 orders, the
+rounded line of the tables above with `count` fixed; times after a warm-up run in the process.
+
+| Backend and path | Per slice | Notes |
+| --- | --- | --- |
+| NumPy, `factorization='li'` | 12 ms | 32 slices in 0.385 s, 63 MB peak; the eigensolves are 22% of it |
+| PyTorch, `factorization='li'` | 12 ms | 32 slices in 0.388 s |
+| NumPy, default NVF | 1.26 s | 87% is the shape normal field (`parametric._field_tiled`); the answer agrees with Li to 1e-14 on a line's slices |
+| JAX eager, `'li'` | 166 ms | four slices in 0.66 s |
+| JAX `jit(value_and_grad)`, `'li'`, default exceptional points | compile 110 s for 4 slices and 290 s for 8; then 2.2 s and 4.5 s a call | 3.5 GB and 7.6 GB peak |
+| the same, `exceptional_points='off'` | compile 6.3 s for 4 slices, 3.6 s for 1; then 72 ms and 30 ms a call | 0.54 GB and 0.49 GB peak |
+
+Four hand-written `Rectangle` layers cost the same under `jit` (109.5 s to compile, 2.25 s a
+call), so none of this is the slicing's. The first PyTorch preparation in a process took 17 s,
+the library's own initialization; later preparations take 0.04 to 0.1 s.
+
+**The slices' eigenproblems are not batched, and batching them was measured not to pay.** The
+engine solves one layer at a time. Solving 32 random 62 x 62 complex eigenproblems as one batch
+against a loop: NumPy 157 ms against 193 ms, PyTorch 131 ms against 247 ms; at 128 of them NumPy
+gains nothing (629 against 644 ms) and PyTorch 1.6x; at 242 x 242 NumPy's batch is slower (3.26 s
+against 2.92 s) and PyTorch's equal. With the eigensolves 22% of a run, a batch would save at
+most about a tenth of it on PyTorch and nothing on NumPy, for a restructured per-layer loop.
+The costs that do dominate -- the NVF normal field per slice, and under `jit` the exceptional-point
+handling per layer -- are properties of the engine for any stack. No GPU was available, so no
+GPU time or memory was measured.
 
 ## Not checked here
 
