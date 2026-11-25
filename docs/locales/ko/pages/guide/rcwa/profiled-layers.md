@@ -134,6 +134,8 @@ roughness = rcwa.Layer(thickness=0.002, background=Bruggeman(host=silicon, inclu
 
 `thickness`, `Bruggeman` 혼합물의 `fraction`, 점진 재료가 감싼 모든 파라미터는 PyTorch와 JAX에서 미분됩니다. `Graded` 재료는 `ProfiledLayer`에만 넣을 수 있습니다. 보통 `Layer`에 넣으면 `layer.profile_material`로, 반공간으로 쓰면 `stack.graded_half_space`로 거부합니다. 호출 가능한 객체는 이식 가능한 형태가 없으므로 이것이 든 문제는 job으로 저장할 수 없습니다. `Bruggeman` 혼합물은 저장할 수 있습니다.
 
+[`examples/rcwa/film_roughness_interface.py`](../../../examples/rcwa/film_roughness_interface.py)는 실리콘 위 산화막을 점진 계면과 거칠기 층 사이에 두고, 반사율을 독립적인 특성 행렬 계산과 견줍니다.
+
 ## 왜 래스터가 아니라 영역 경로인가
 
 모든 슬라이스는 영역으로 만들어집니다. 라인의 슬라이스는 닫힌 형식 경로의 `Rectangle`이고, `Loft`와 `Profile`의 슬라이스는 [경계 모델링](boundary-modeling.md)의 칠하기 경로에 놓이는 `Polygon`입니다. 샘플링(래스터) 층은 폭을 픽셀 단위로 양자화합니다. 그러면 측벽각이 바뀔 때 폭이 계단처럼 움직이고, 반사율도 각에 대해 계단이 되어 계단 사이에서는 미분이 0이 됩니다. 그래서 래스터 층이 있는 스택에 `ProfiledLayer`를 넣으면 `layer.profile_raster`로 거부하고, 보통 `Layer`에 프로파일 형상을 넣으면 `layer.profile_geometry`로 거부합니다.

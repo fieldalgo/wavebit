@@ -189,6 +189,10 @@ ordinary `Layer` it is refused with `layer.profile_material`, and as a half-spac
 `stack.graded_half_space`. A problem holding one cannot be saved as a job, since a callable has
 no portable form; a `Bruggeman` mixture can.
 
+[`examples/rcwa/film_roughness_interface.py`](../../../examples/rcwa/film_roughness_interface.py)
+puts an oxide film on silicon between a graded interface and a roughness layer, and checks the
+reflectance against an independent characteristic-matrix calculation.
+
 ## Why the region path, and not a raster
 
 Every slice is built from regions: a line's slices are `Rectangle`s on the closed-form route,
