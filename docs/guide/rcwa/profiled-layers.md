@@ -202,14 +202,27 @@ ordinary `Layer` is refused with `layer.profile_geometry`.
 ## Factorization and cost
 
 A `Trapezoid`'s slices are full-height rectangles, whose interfaces are all normal to `x`.
-`factorization='li'` is exact for them and costs about 10 ms a slice at 31 orders on one CPU
-core; the default NVF reaches the same answer (to 1e-14) but builds a normal field per slice,
-about 1 s each. Prefer `'li'` for lines. A `Loft` or a `Profile` takes the factorizations a
-`Polygon` takes: not `'li'`.
+`factorization='li'` is exact for them and costs about 12 ms a slice at 31 orders on one CPU
+core, on NumPy and PyTorch alike; the default NVF reaches the same answer (to 1e-14) but builds
+a normal field per slice, about 1.3 s each. Prefer `'li'` for lines. A `Loft` or a `Profile`
+takes the factorizations a `Polygon` takes: not `'li'`.
 
-Each slice is one more layer to solve. On JAX the eager cost per layer is about 4 s and a
-`jax.jit` compilation grows with the slice count, as for a stack of ordinary layers; keep the
-count fixed and small while developing on JAX.
+Each slice is one more layer to solve, and on JAX that is where the cost is:
+
+- **Eager JAX** costs about 170 ms a slice once warm. The first run in a process is slower,
+  while JAX compiles each operation it meets for the first time.
+- **`jax.jit` with the default exceptional-point handling** compiles in about 30 s per slice and
+  runs a value and its gradient in about 0.5 s per slice, with 0.6 to 1 GB of memory each:
+  under a trace the handling cannot branch on values, so it carries every layer's rebuild.
+- **`jax.jit` with `rcwa.Numerics(exceptional_points='off')`** compiled four slices in 6 s and
+  ran a value and its gradient in 72 ms, in 0.5 GB. That setting skips the handling, so at and
+  near an exceptional point the answer can be wrong with no warning
+  ([exceptional points](exceptional-points.md)). For a fit or an optimization under `jax.jit`,
+  run the design eagerly first at a few representative points; if no
+  `rcwa.diagnostics.ExceptionalPointWarning` appears, `'off'` is the fast choice.
+
+These costs are the same for hand-written layers; they are not the slicing's. See the
+[measurements](../../validation/rcwa/profiled-layers.md#cost).
 
 ## Derivatives
 
