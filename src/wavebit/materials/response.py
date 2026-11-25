@@ -388,10 +388,14 @@ def refractive_index_from_eps(eps):
     if hasattr(eps, 'dtype'):
         xp = array_namespace(eps)
         if not xp.isdtype(eps.dtype, 'complex floating'):
-            # Multiplying by a Python complex 1 promotes without naming a width, so a
-            # single-precision caller is not silently widened to complex128. Exact: the real
-            # part is multiplied by 1.0 and the (zero) imaginary part contributes nothing.
-            eps = eps * (1 + 0j)
+            # Adding a Python complex zero promotes without naming a width, so a
+            # single-precision caller is not silently widened to complex128, and the
+            # imaginary part comes out +0.0 on every backend (IEEE: -0.0 + 0.0 and 0.0 + 0.0
+            # are both +0.0), which puts a negative real value on the cut's upper lip.
+            # Multiplying by (1 + 0j) does not: jax 0.12.1 forms a real-times-complex product
+            # as (x * 1, x * 0), and x * 0 is -0.0 for a negative x -- the lower lip, the gain
+            # root.
+            eps = eps + 0j
         return principal_sqrt(xp, eps)
     return _complex_sqrt(complex(eps))
 

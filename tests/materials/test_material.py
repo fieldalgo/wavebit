@@ -549,6 +549,36 @@ def test_refractive_index_from_eps_runs_on_a_jax_array():
     assert complex(traced.imag) == pytest.approx(2.0 ** 0.5)
 
 
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'jax-jit', 'torch'])
+@pytest.mark.parametrize('width', [32, 64])
+def test_a_real_negative_permittivity_takes_the_decaying_root(backend, width):
+    """A lossless metal written as a real array: ``Im(n) > 0`` (decaying, not gain) at the
+    caller's width. The promotion to complex has to leave the imaginary part ``+0.0``; jax
+    0.12.1 made the earlier ``eps * (1 + 0j)`` come out ``-0.0`` for a negative real value,
+    eagerly and under ``jit``, and the root then sat on the gain lip."""
+    values = [-2.0, -16.0, 2.25]
+    if backend == 'numpy':
+        eps = np.asarray(values, dtype=f'float{width}')
+        n = refractive_index_from_eps(eps)
+        got, dtype = np.asarray(n), str(n.dtype)
+    elif backend.startswith('jax'):
+        if jax is None:
+            pytest.skip('jax is not installed')
+        eps = jnp.asarray(values, dtype=f'float{width}')
+        f = jax.jit(refractive_index_from_eps) if backend == 'jax-jit' else refractive_index_from_eps
+        n = f(eps)
+        got, dtype = np.asarray(n), str(n.dtype)
+    else:
+        torch = pytest.importorskip('torch')
+        eps = torch.tensor(values, dtype=getattr(torch, f'float{width}'))
+        n = refractive_index_from_eps(eps)
+        got, dtype = n.numpy(), str(n.dtype).replace('torch.', '')
+    assert dtype == f'complex{2 * width}'
+    tol = 1e-6 if width == 32 else 1e-14
+    np.testing.assert_allclose(got, [2.0 ** 0.5 * 1j, 4j, 1.5], rtol=tol)
+    assert np.all(got.imag[:2] > 0) and not np.signbit(got.imag[2])
+
+
 def test_material_is_exported_from_the_package_root():
     """The public surface: the type and both conversions, importable as ``wavebit.X``."""
     assert wavebit.Material is Material
