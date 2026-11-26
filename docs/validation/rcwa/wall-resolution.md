@@ -220,7 +220,7 @@ A layer with more than two walls along an axis divides the stretched cell among 
 - **Two of the four are met.**
   - On the metal bars in p, `R` is 1.04% low against a tolerance of 0.52%. `R` is only 0.071 there. `T` and the field meet the criteria.
   - On the frame, `R` and `T` are outside 0.30% and the field ratio is 0.525 against 0.25.
-- **A fifth case was planned and not judged.** Two metal bars at theta 20 deg, p, were to be included only if the reference's finer level fitted the measuring machine's disk. It did not: its factorization took 51 GB.
+- **A fifth case was planned and not judged.** Two metal bars at theta 20 deg, p, were to be included only if the reference's finer level fitted the measuring machine's disk. It did not: its factorization needed 51 GB.
 - **By order** (read after the verdict). The stretched `R` on the bars in p was -1.38, -1.04 and -0.44% off at orders 8, 12 and 16, moving towards the reference. On the frame, `R` was -1.45, -0.35 and -0.10% off, and `T` -0.84, -0.59 and -0.03%. On the other two cases both stayed within 0.24% at every order.
 - **The frame's field error is mostly in the samples** (read after the verdict).
   - 57 of the 2304 samples lie 0.08 or 0.25 nm from the frame's outer walls. No order here resolves a jump at that distance. On the bars the closest sample is 1.4 nm from a wall.
