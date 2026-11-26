@@ -221,11 +221,11 @@ A layer with more than two walls along an axis divides the stretched cell among 
   - On the metal bars in p, `R` is 1.04% low against a tolerance of 0.52%. `R` is only 0.071 there. `T` and the field meet the criteria.
   - On the frame, `R` and `T` are outside 0.30% and the field ratio is 0.525 against 0.25.
 - **A fifth case was planned and not judged.** Two metal bars at theta 20 deg, p, were to be included only if the reference's finer level fitted the measuring machine's disk. It did not: its factorization needed 51 GB.
-- **By order** (read after the verdict). The stretched `R` on the bars in p was -1.38, -1.04 and -0.44% off at orders 8, 12 and 16, moving towards the reference. On the frame, `R` was -1.45, -0.35 and -0.10% off, and `T` -0.84, -0.59 and -0.03%. On the other two cases both stayed within 0.24% at every order.
+- **By order** (read after the verdict). The stretched `R` on the bars in p was -1.38, -1.04, -0.44 and -0.09% off at orders 8, 12, 16 and 20, moving towards the reference. On the frame, `R` was -1.45, -0.35, -0.10 and -0.07% off, and `T` -0.84, -0.59, -0.03 and +0.02%. Order 20 was run on these two cases only. On the other two cases both stayed within 0.24% at orders 8 to 16.
 - **The frame's field error is mostly in the samples** (read after the verdict).
   - 57 of the 2304 samples lie 0.08 or 0.25 nm from the frame's outer walls. No order here resolves a jump at that distance. On the bars the closest sample is 1.4 nm from a wall.
-  - Without the samples within 1 nm of a wall, the stretched field error is 8.6% at order 12 and 7.4% at order 16. The default solve's is 34.7% and 21.6%.
-  - That is still about three times the bars' error. The reference's own field moved by 2.1% between its levels there, against 0.4 to 0.9% on the bars.
+  - Without the samples within 1 nm of a wall, the stretched field error is 8.6, 7.4 and 3.9% at orders 12, 16 and 20. The default solve's is 34.7, 21.6 and 20.9%.
+  - At orders 12 and 16 that is still about three times the bars' error. The reference's own field moved by 2.1% between its levels there, against 0.4 to 0.9% on the bars, so the 3.9% at order 20 is as large as the reference's own step.
   - The measurement does not separate the frame's walls from the hole's re-entrant metal corners as the cause.
 - Before these, the only check was a uniform slab through four unevenly placed walls, which reads the right `R` to 1e-5.
 - These references are not stored in the repository, and no test asserts them.
