@@ -316,6 +316,16 @@ mesh and Fourier resolution remain fixed, the optical slopes still follow
 the constitutive JVP rather than independently solved positive gaps, and
 there is no certified independent optical reference for this fixture.
 
+The degree-seven reflections are not given above, so the reflection step could not be
+checked from this page. Re-run on 2026-11-26 on main `910eb795` (Linux, NumPy 2.5.5) with the
+degree-seven command (`--order 4 --degree 7 --refinement 1 --quadrature 140
+--angular-quadrature 80 --transmission-branches 2`), every physical and reflection guard
+passes, the transmissions reproduce the recorded `.489376142234` / `.479557214869` to within
+`4e-13`, and the reflections are `.283052703041` / `.171356925992`. The step to degree eight
+is therefore `-1.513e-6` / `-1.045e-7`, as stated. The slopes agree with the recorded ones to
+`3e-9`, inside the `4.77e-9` / `4.58e-9` between the two stencils. That run took 27,278
+seconds on four cores; the timing is not comparable with the ones on this page.
+
 The complete run took 14,575 seconds, with raw equations saved after 3,910
 seconds. It includes the original independent physical verifier and used
 bounded three-word row tiling, before the fixed polynomial-gradient cache
