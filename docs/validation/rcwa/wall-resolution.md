@@ -226,7 +226,12 @@ A layer with more than two walls along an axis divides the stretched cell among 
   - 57 of the 2304 samples lie 0.08 or 0.25 nm from the frame's outer walls. No order here resolves a jump at that distance. On the bars the closest sample is 1.4 nm from a wall.
   - Without the samples within 1 nm of a wall, the stretched field error is 8.6, 7.4 and 3.9% at orders 12, 16 and 20. The default solve's is 34.7, 21.6 and 20.9%.
   - At orders 12 and 16 that is still about three times the bars' error. The reference's own field moved by 2.1% between its levels there, against 0.4 to 0.9% on the bars, so the 3.9% at order 20 is as large as the reference's own step.
-  - The measurement does not separate the frame's walls from the hole's re-entrant metal corners as the cause.
+  - A second measurement, under rules written before it, read both solves on an 80 by 80 grid whose samples all lie 2.5 nm or more from every wall. There the frame's field error is 5.0, 3.2 and 3.3% at orders 12, 16 and 20. The default solve's is 35.9, 23.7 and 22.0%, so the ratio is 0.14 to 0.15. On the bars the stretched error is 2.7, 3.5 and 2.1%.
+  - The rules asked whether what remains comes from the samples near the walls, from four walls on both axes, or from the hole's re-entrant corners. They separated none of them.
+    - The frame's excess over the bars is at order 12 only: 1.86 times, and 1.14 at order 16.
+    - A layer of the frame's four corner blocks, with the same walls and only convex corners, behaves like the bars.
+    - Only 3% of the frame's error lies within 20 nm of a re-entrant corner.
+  - On all three layers the stretched solve stays 2.0 to 3.5% from the reference at orders 16 and 20. Away from the walls the reference moves by 0.6 to 0.7% between its levels. Which side holds the rest was not measured.
 - Before these, the only check was a uniform slab through four unevenly placed walls, which reads the right `R` to 1e-5.
 - These references are not stored in the repository, and no test asserts them.
 
@@ -284,7 +289,7 @@ Each scene was solved at orders 4 to 16 and slopes `G` from 0.1 to 0.005, and by
 
 - A reference at phi other than 0; for circles and ellipses, a reference with a shape away from the cell's centre; for the ellipse, a second angle, a substrate or two layers; a second reference on a substrate. A finer finite-element level for the weak rows above.
 - An independent implementation of the stretched solve or the matched mesh: none was found to compare with at the same truncation.
-- Layers with more than four walls along an axis; four walls at oblique incidence or on a substrate; the cause of the frame's field error above.
+- Layers with more than four walls along an axis; four walls at oblique incidence or on a substrate; why the frame's field error at order 12 is larger than the bars', and which side holds the 2.0 to 3.5% left at order 20.
 - A second mesh level for five of the seven references.
 - Single precision; `jax.jit`, `jax.vmap` and gradients, which are refused.
 - Spurious modes at slopes below 0.005 or orders above 16; wavelength features narrower than about 4 nm; the cause of the three warnings above.
