@@ -205,6 +205,31 @@ Eighteen metal cases and three dielectric ones against 3D finite-element fields,
 - **The 350 nm block by order.** The stretched solve's ten orders are within -0.15 to +0.20% of the reference's each, the default solve's within -3.5 to +1.3%; on the circle at 350 nm, -0.09 to +0.05% against -3.4 to +0.31%.
 - **Not covered.** For circles and ellipses, a shape away from the cell's centre (with the same shape in every layer this is the same structure moved, whose invariance is a test below); for the ellipse, one angle and no substrate or second layer; for all, phi other than 0 and a second reference on a substrate.
 
+(wall-resolution-many-walls)=
+## Four walls along an axis
+
+A layer with more than two walls along an axis divides the stretched cell among more pieces. Four such layers were checked against the same 3D finite elements, under the criteria above, written before measuring. The cell is the one above (400 nm square, a 150 nm layer, 900 nm, in air; the metal is `eps` -20+1.5j). Two bars, each 80 by 200 nm and centred at x = -100 and +100 nm, put four walls along x and two along y. A square frame, 240 nm outside with a 120 nm hole, puts four along each axis. All are at normal incidence, at order 12; the default solve is uncompressed Li.
+
+| Case | `wall_resolution=0.02`: `R` / `T` against the reference | Default solve: `R` / `T` | Field: stretched / default (ratio) | Reference's own step (`u_F`) | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| two metal bars, p (E across the bars) | -1.04 / -0.12% | -2.47 / -0.18% | 2.67 / 17.4% (0.153) | 2.6e-3 | not met, weak |
+| two metal bars, s (E along the bars) | -0.24 / +0.07% | -2.64 / -1.50% | 3.44 / 38.5% (0.089) | 1.5e-3 | met, weak |
+| metal frame, p | -0.35 / -0.59% | -3.14 / +0.33% | 19.9 / 37.9% (0.525) | 3.3e-4 | not met |
+| two dielectric bars (`eps` 12.25), p | -0.07 / 0.00% | +0.61 / -0.01% | 0.85 / 12.3% | 9.3e-4 | met |
+
+- **Two of the four are met.**
+  - On the metal bars in p, `R` is 1.04% low against a tolerance of 0.52%. `R` is only 0.071 there. `T` and the field meet the criteria.
+  - On the frame, `R` and `T` are outside 0.30% and the field ratio is 0.525 against 0.25.
+- **A fifth case was planned and not judged.** Two metal bars at theta 20 deg, p, were to be included only if the reference's finer level fitted the measuring machine's disk. It did not: its factorization took 51 GB.
+- **By order** (read after the verdict). The stretched `R` on the bars in p was -1.38, -1.04 and -0.44% off at orders 8, 12 and 16, moving towards the reference. On the frame, `R` was -1.45, -0.35 and -0.10% off, and `T` -0.84, -0.59 and -0.03%. On the other two cases both stayed within 0.24% at every order.
+- **The frame's field error is mostly in the samples** (read after the verdict).
+  - 57 of the 2304 samples lie 0.08 or 0.25 nm from the frame's outer walls. No order here resolves a jump at that distance. On the bars the closest sample is 1.4 nm from a wall.
+  - Without the samples within 1 nm of a wall, the stretched field error is 8.6% at order 12 and 7.4% at order 16. The default solve's is 34.7% and 21.6%.
+  - That is still about three times the bars' error. The reference's own field moved by 2.1% between its levels there, against 0.4 to 0.9% on the bars.
+  - The measurement does not separate the frame's walls from the hole's re-entrant metal corners as the cause.
+- Before these, the only check was a uniform slab through four unevenly placed walls, which reads the right `R` to 1e-5.
+- These references are not stored in the repository, and no test asserts them.
+
 (wall-resolution-reticolo)=
 ## Rectangles against RETICOLO's unstretched solve at high order
 
@@ -257,9 +282,9 @@ Each scene was solved at orders 4 to 16 and slopes `G` from 0.1 to 0.005, and by
 
 ## Not measured
 
-- A reference at phi other than 0; for circles and ellipses, a reference with a shape away from the cell's centre; for the ellipse, a second angle, a substrate or two layers; a second reference on a substrate. A finer finite-element level for the eight weak rows above.
+- A reference at phi other than 0; for circles and ellipses, a reference with a shape away from the cell's centre; for the ellipse, a second angle, a substrate or two layers; a second reference on a substrate. A finer finite-element level for the weak rows above.
 - An independent implementation of the stretched solve or the matched mesh: none was found to compare with at the same truncation.
-- Layers with more than two walls along an axis against a reference. A uniform slab through four unevenly placed walls reads the right `R` to 1e-5.
+- Layers with more than four walls along an axis; four walls at oblique incidence or on a substrate; the cause of the frame's field error above.
 - A second mesh level for five of the seven references.
 - Single precision; `jax.jit`, `jax.vmap` and gradients, which are refused.
 - Spurious modes at slopes below 0.005 or orders above 16; wavelength features narrower than about 4 nm; the cause of the three warnings above.
