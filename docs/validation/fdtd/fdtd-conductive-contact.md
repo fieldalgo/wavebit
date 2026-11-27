@@ -10,9 +10,10 @@ Targets: `src/wavebit/fdtd/_prepare/conductive_contact.py`,
 The local harmonic constitutive law of two passive conductors in one cell has
 an exact realization as a DC conductivity plus one induced Debye relaxation.
 This gives a passive cell update for an exactly touching planar pair. The local
-constitutive and energy identities below are verified. Wave accuracy is
-**not** fully accepted; see [Accuracy status](#accuracy-status) and
-[issue #51](https://github.com/fieldalgo/wavebit/issues/51).
+constitutive and energy identities below are verified. The original registered
+wave campaign failed and that verdict stands; a separately registered asymptotic
+criterion later passed, and the route is supported within the contract below. See
+[Accuracy status](#accuracy-status).
 
 ## Bounded contract
 
@@ -90,6 +91,10 @@ wave accuracy or differentiation.
 
 ## Accuracy status
 
+Three things are kept apart here: the verdicts of the registered criteria, the
+[comparison with other tools](#comparison-with-meep-and-fdtdx), and the support
+decision.
+
 **Registered wave fixture.** `tests/fixtures/fdtd/conductive_contact.py` places
 two films on a fixed transverse wavenumber at 35 degrees:
 
@@ -97,6 +102,8 @@ two films on a fixed transverse wavenumber at 35 degrees:
 - three wavelengths .9 / 1 / 1.1 L0, both polarizations;
 - comparison against an independent continuum characteristic-matrix
   reference.
+
+### Original campaign (2026-10-18)
 
 Its registered p-polarized 40/80/160-cell campaign, at grid phase .375, with
 120 periods and time-step halving, did **not** pass as a whole. That result is
@@ -112,36 +119,42 @@ kept:
 The narrower df = .07 cohort was registered separately. It stopped at the same
 reflection-order gate.
 
-**Cross-tool comparison.** The same physical case at n80 (dx = L0/80,
-dt = .2 dx/√3, 24-cell PML, 120 periods), maximum over the three wavelengths:
+The campaign ran with the PlaneWave launch of that date, a hard source. Its two
+open questions were tracked in
+[issue #51](https://github.com/fieldalgo/wavebit/issues/51), and both are answered:
 
-| | abs r error | abs t error | 60→120-period change, df .1 |
-|---|---|---|---|
-| Wavebit | 2.5e-4 | 1.8e-3 | 1.8e-6 |
-| Meep 1.34.0, `eps_averaging` on | 2.5e-3 | 1.5e-3 | 2.4e-7 |
-| Meep 1.34.0, `eps_averaging` off | 1.75e-2 | 1.6e-3 | 2.4e-7 |
-| FDTDx 0.6.2 and 0.6.3, voxel staircase | 3.2e-2 | 1.9e-3 | 2.2e-7 |
+- **Reflection order.** The high coarse-grid order is cancellation in the leading
+  h² term with a pre-asymptotic h³ contribution. On finer grids the order is
+  second, and the separately registered asymptotic criterion passed; see the
+  [follow-up](#original-bandwidth-follow-up-2026-10-22). The original window
+  still fails on the 40/80-cell pair and is not changed.
+- **Wide-band residual.** The late-time change belonged to the hard-source
+  launch, not to the films. With the current launch the same fixture changes by
+  at most 5.7e-8 between 60 and 120 periods, against 1.8e-6 before, and its
+  errors are the same within 2 %; see the comparison below.
 
-Reading the table:
+### Support decision (2026-11-27)
 
-- **Errors at n80.** Wavebit's reflection error is the smallest of the three
-  tools. Its transmission error is at the same level as the others.
-- **Placement sensitivity.** The external results depend strongly on grid
-  placement and smoothing; Meep changes by up to 4× under a half-cell shift.
-  They are context, not a reference, and a similar error in another tool does
-  not establish a common limit.
-- **Wide-band residual.** The df = .1 late-time change is 5–12× larger in
-  Wavebit. The external runs inject a soft current sheet while Wavebit uses its
-  plane-wave source. Whether this is a solver defect or a property of the
-  source was unresolved in that original comparison; see the follow-up below.
+Recorded after the results and kept apart from the verdicts above, which stand:
+the original campaign failed as registered, and no tolerance, golden value or
+acceptance window was changed for this route. The touching conductive-film
+route is supported within the bounded contract above. The reasons:
 
-These comparisons were measured by the maintainers and have not been
-independently reviewed.
+- The local constitutive law, the injected current and the discrete energy
+  budget are verified on NumPy, JAX and PyTorch (Verified checks).
+- The separately registered asymptotic criterion passed on both polarizations
+  and both grid phases, with a finest reflection order of 1.89–2.18.
+- With the current PlaneWave launch the fixture's late-time change is 5.7e-8 at
+  most. The manual PlaneWave acceptance campaign holds it to 2e-7.
+- In the comparison below, Wavebit's reflection error is below Meep's and
+  FDTDX's at every wavelength and its transmission error is of the same size.
+  That is context for what a grid can be expected to do here, not a verdict.
 
-**Open questions.** Both the reflection order and the wide-band residual are
-tracked in [issue #51](https://github.com/fieldalgo/wavebit/issues/51). Until it
-is resolved, validate spatial, time and boundary convergence for your own case.
-No tolerance, golden value or acceptance window was changed for this route.
+The decision covers this fixture's materials, angle and two grid phases on CPU.
+It does not cover other materials or angles, curved or rotated interfaces, GPU
+or other platforms, and it has not been independently reviewed. The planning
+`SubpixelAccuracyWarning` is kept: validate spatial, time and boundary
+convergence for your own case.
 
 ## Original-bandwidth follow-up (2026-10-22)
 
@@ -191,6 +204,57 @@ material/angle fixture only. They are new-source Linux JAX CPU evidence, not a
 fresh external-solver run, other-platform validation or independent review.
 
 See [PlaneWave acceptance](fdtd-planewave-acceptance.md) for source qualification
-and the separate broad-pulse PML limitation. The original failed campaign and
-its external-tool measurements above remain historical evidence. No material
+and the separate broad-pulse PML limitation. The original failed campaign above
+and the external-tool measurements below remain historical evidence. No material
 algorithm, default boundary, golden or numerical tolerance changed in this follow-up.
+
+## Comparison with Meep and FDTDX
+
+Measured 2026-10-18 for the external tools and frozen 2026-11-27, after every
+verdict above; it changes none of them. Meep 1.34.0 and FDTDX 0.6.3 each ran in
+its own process from inputs written as plain numbers, through public interfaces
+only. The values, the settings of each tool and what could not be matched are
+frozen in `tests/references/golden_c8_contact_cross_solver.json` and its record.
+`tests/references/test_c8_contact_cross_solver_golden.py` holds this table, and
+each statement below it, to those values.
+
+What was matched: the fixture's films, fixed transverse wavenumber, p
+polarization and three wavelengths; 80 cells per wavelength; the time step
+.2 dx/√3; the df = .1 pulse; a 24-cell absorber designed for 1e-12; and the
+60- and 120-period readings. Every amplitude is a ratio against the same tool's
+empty run. What was not matched:
+
+- **Source.** Meep and FDTDX inject a soft current sheet; Wavebit uses its
+  plane-wave launch.
+- **Interfaces.** Wavebit uses the contact route's union memory. Meep's subpixel
+  averaging smooths the permittivity but not the loss. FDTDX is a voxel
+  staircase, and its interfaces sit on grid nodes because the fixture's grid
+  phase of .375 cannot be represented there.
+- **Absorber profiles** are each tool's own.
+
+| Quantity | Wavebit | Meep, `eps_averaging` on | Meep, `eps_averaging` off | FDTDX |
+| --- | --- | --- | --- | --- |
+| abs(r - reference) after 120 periods (.9 / 1 / 1.1) | 2.5e-4 / 1.2e-4 / 1.4e-4 | 6.2e-4 / 1.6e-3 / 2.5e-3 | 1.4e-2 / 1.6e-2 / 1.7e-2 | 3.2e-2 / 3.1e-2 / 3.1e-2 |
+| abs(t - reference) after 120 periods (.9 / 1 / 1.1) | 1.8e-3 / 1.3e-3 / 9.3e-4 | 1.5e-3 / 8.8e-4 / 7.0e-4 | 1.6e-3 / 1.0e-3 / 8.6e-4 | 1.9e-3 / 1.4e-3 / 1.1e-3 |
+| Largest change from 60 to 120 periods, r / t | 4.5e-8 / 5.7e-8 | 2.4e-7 / 2.5e-7 | 2.4e-7 / 2.5e-7 | 2.2e-7 / 9.6e-8 |
+| Same, with the historical hard-source launch | 1.8e-6 / 1.2e-6 | - | - | - |
+| abs(r - reference), Meep grid moved half a cell (.9 / 1 / 1.1) | - | 9.1e-3 / 9.4e-3 / 9.8e-3 | - | - |
+| abs(t - reference), Meep grid moved half a cell (.9 / 1 / 1.1) | - | 4.0e-3 / 3.8e-3 / 3.5e-3 | - | - |
+
+What the comparison shows:
+
+- **Reflection.** Wavebit's error is the smallest at every wavelength: 2.5 to
+  18 times below smoothed Meep and more than 50 times below the two staircases.
+- **Transmission.** Every tool's error is within a factor of two of Wavebit's.
+  Smoothed Meep is the smallest and FDTDX the largest at each wavelength.
+- **Late-time change.** With the current launch Wavebit's change from 60 to 120
+  periods is below each tool's. With the historical hard source it was about 5
+  to 13 times theirs. The two launches' errors agree within 2 %, so the
+  launch changed how the run settles, not its accuracy.
+- **Placement sensitivity.** Moving Meep's grid by half a cell raises its
+  reflection error 3.9 to 15 times and its transmission error 2.6 to 5.1 times.
+  The external values are therefore context, not a reference, and a similar
+  error in another tool does not establish a common limit.
+
+These measurements were made by the maintainers and have not been independently
+reviewed. FDTDX 0.6.2 gave the same amplitudes as 0.6.3 within 4e-14.

@@ -1,0 +1,217 @@
+{
+ "schema": "wavebit.reference-values/1",
+ "case": "golden_c8_contact_cross_solver",
+ "physics": "fdtd",
+ "comparison": "different-discretization",
+ "role": "cross-solver comparison of the touching conductive-film (C8 contact) case: evidence printed in fdtd-conductive-contact.md, not acceptance",
+ "references": [
+  {
+   "tool": "Meep",
+   "version": "1.34.0",
+   "build": "pymeep conda-forge nompi_py312h1c86e9f_101 (no MPI), Python 3.12.15, NumPy 2.5.4",
+   "modified": {
+    "value": false,
+    "description": "the conda-forge build, unmodified"
+   },
+   "spdx": "GPL-2.0-or-later",
+   "source": "https://github.com/NanoComp/meep",
+   "install": {
+    "kind": "conda",
+    "command": "micromamba create -n meep -c conda-forge python=3.12 pymeep=1.34.0=nompi*"
+   },
+   "settings": "public API only. Axes (X, Y, Z) = (y, z, x): a 2-D cell with one periodic pixel along X, propagation along Y, kz_2d=\"complex\" carrying the transverse wavenumber exactly; Courant 0.2/sqrt(3); Medium(epsilon, D_conductivity = sigma/epsilon), whose epsilon(f) equals the target at the three frequencies; PML(0.3, R_asymptotic 1e-12) with the default profile; a CustomSource electric current sheet on Ez with the stated waveform. Fields read with get_field_point at exact Ez nodes each step and transformed here as dt sum E exp(+i omega t); add_dft_fields was not used. Run script sha256 bd233d525deca77580c7923c276480db634ac13932806c70d24dcb7e783f5e87",
+   "discretization": "80 pixels per L0; meep and meep_unsmoothed have Ez nodes on the Wavebit E nodes (interfaces at grid phase 0.375), meep_shifted has them half a cell away; subpixel averaging on except meep_unsmoothed",
+   "arrays": [
+    "meep__*",
+    "meep_unsmoothed__*",
+    "meep_shifted__*"
+   ],
+   "execution": "separate-process",
+   "independence": {
+    "product_loaded_in_reference_process": false,
+    "reference_inputs_built_from_product_objects": false
+   }
+  },
+  {
+   "tool": "FDTDX",
+   "version": "0.6.3",
+   "build": "pip wheel, JAX 0.11.2 on the CPU with float64, NumPy 2.4.6, Python 3.12.3",
+   "modified": {
+    "value": false,
+    "description": "the released wheel, unmodified"
+   },
+   "spdx": "MIT",
+   "source": "https://github.com/ymahlau/fdtdx",
+   "install": {
+    "kind": "pip",
+    "command": "python -m pip install fdtdx==0.6.3 jax==0.11.2 jaxlib==0.11.2"
+   },
+   "settings": "public objects. 1 x 1 x 245 cells; x Bloch boundary with the transverse wavenumber in rad/m (a ghost-cell phase, so the transverse derivative is discrete: effective kx = (2/dx) sin(kx dx/2)), y periodic; courant_factor 0.2; UniformMaterialObject per voxel with electric_conductivity = eps0 c sigma/L0, L0 = 1 um; CPML 24 cells, sigma order 3 for 1e-12 at normal incidence, kappa 1; a PointDipoleSource electric current on Ex with the stated waveform; FieldDetector(exact_interpolation=False) raw Ex each step, transformed here as for Meep. Run script sha256 b400dc6c9512894548584295a021597a1a6eca2a726d3dde75164d10289e7401. Version 0.6.2 gave the same r and t within 4e-14",
+   "discretization": "uniform Yee grid, 80 cells per L0, voxel staircase with the film interfaces on Ex nodes (grid phase 0; the 0.375 phase of the other runs cannot be represented)",
+   "arrays": [
+    "fdtdx__*"
+   ],
+   "execution": "separate-process",
+   "independence": {
+    "product_loaded_in_reference_process": false,
+    "reference_inputs_built_from_product_objects": false
+   }
+  },
+  {
+   "tool": "wavebit",
+   "version": "0.0.5",
+   "build": "source checkout at the product commit below, NumPy backend, complex128",
+   "modified": {
+    "value": false,
+    "description": "this repository"
+   },
+   "spdx": "Apache-2.0 AND MIT",
+   "source": "https://github.com/fieldalgo/wavebit",
+   "install": {
+    "kind": "source",
+    "command": "python -m pip install -e ."
+   },
+   "settings": "tests/fixtures/fdtd/conductive_contact.py measure(n=80, pol=\"p\", fraction=.375, periods=60 and 120): the current PlaneWave launch (differentiated two-node current), Diffraction monitors, PML(cells=24, reflection=1e-12), Courant 0.2",
+   "discretization": "uniform Yee grid, 80 cells per L0, grid phase 0.375, the contact route's union memory",
+   "arrays": [
+    "wavebit__*"
+   ],
+   "execution": "separate-process",
+   "independence": {
+    "product_loaded_in_reference_process": true,
+    "reference_inputs_built_from_product_objects": true
+   }
+  },
+  {
+   "tool": "wavebit",
+   "version": "0.0.4",
+   "build": "the unpublished candidate of the contact route (later landed unchanged on main as 84f4824a6a57 and fa73a94e7d6b), NumPy 2.5.1, Python 3.12.9, complex128",
+   "modified": {
+    "value": false,
+    "description": "this repository"
+   },
+   "spdx": "Apache-2.0 AND MIT",
+   "source": "https://github.com/fieldalgo/wavebit",
+   "install": {
+    "kind": "source",
+    "command": "python -m pip install -e ."
+   },
+   "settings": "the same fixture and settings with the historical hard-source PlaneWave launch of 2026-10-18; values after 41570 and 83139 steps as stored by the original campaign",
+   "discretization": "uniform Yee grid, 80 cells per L0, grid phase 0.375, the contact route's union memory",
+   "arrays": [
+    "wavebit_hard__*"
+   ],
+   "execution": "separate-process",
+   "independence": {
+    "product_loaded_in_reference_process": true,
+    "reference_inputs_built_from_product_objects": true
+   }
+  }
+ ],
+ "generator": {
+  "path": "private research repository",
+  "sha256": "484ff8c2fd27125d73892a764df4177c90bbed4df84ef9c2e0d06be45d023523",
+  "command": "python freeze_public_golden.py golden_c8_contact_cross_solver.json (assembles the scored Meep and FDTDX results, the stored hard-source Wavebit values and a fresh run of the product fixture)",
+  "product_commit": "22986aac6ba6131f741e127f46780028bf45d6a2",
+  "clean_tree": true
+ },
+ "generated_utc": "2026-11-27T15:05:00Z",
+ "environment": {
+  "python": "3.12.15 (Meep), 3.12.3 (FDTDX and the current Wavebit run), 3.12.9 (historical Wavebit run)",
+  "numpy": "2.5.4 (Meep), 2.4.6 (FDTDX), 2.5.5 (current Wavebit), 2.5.1 (historical Wavebit)",
+  "os": "Linux x86_64, CPU only, for the external tools and the current Wavebit run; macOS for the historical Wavebit run"
+ },
+ "cost": {
+  "max_rss_mb": {
+   "Meep": "up to 226",
+   "FDTDX": "up to 628",
+   "wavebit": "under 100"
+  },
+  "wall_clock": "Meep 7 to 8 s per run, FDTDX 18 to 20 s, Wavebit 23 s (60 periods) and 44 s (120 periods), one process at a time on 4 CPUs"
+ },
+ "inputs": {
+  "case": "two touching conductive films in vacuum: eps 4 / sigma 8 on z in [-0.125, 0] above eps 2.25 / sigma 4 on [-0.25, -0.125], lengths in L0, eps*(omega) = eps + i sigma/omega with omega in c/L0; incidence along -z on a fixed transverse wavenumber kx = 2 pi sin(35 deg)/L0, p polarization",
+  "wavelengths_L0": [
+   0.9,
+   1.0,
+   1.1
+  ],
+  "cells_per_L0": 80,
+  "time_step": "0.2 dx / sqrt(3) (L0/c)",
+  "pulse": "Gaussian envelope times sine, centre frequency 1, df 0.1, start cutoff 1e-6",
+  "durations_periods": [
+   60,
+   120
+  ],
+  "absorber": "24 cells (0.3 L0) at both z ends, each tool's own profile designed for 1e-12",
+  "observables": "complex r_p = -E_x,reflected/E_x,incident at z = 0 and t = E_x(z = -0.25)/E_x,incident(z = 0); the empty run of each band normalizes it",
+  "oracles": {
+   "r_reference": [
+    [
+     0.2918613307049163,
+     0.08977845231925022
+    ],
+    [
+     0.2980203306619793,
+     0.10288540120957634
+    ],
+    [
+     0.29889674451955256,
+     0.10045016561067985
+    ]
+   ],
+   "t_reference": [
+    [
+     -0.6036151696967945,
+     0.14589309609773432
+    ],
+    [
+     -0.52385186349795,
+     0.3290963871212535
+    ],
+    [
+     -0.4198988760296201,
+     0.45172104448982087
+    ]
+   ],
+   "source": "fixed-kx characteristic matrix of the continuum stack, as tests/fixtures/fdtd/conductive_contact.py computes it; an independent transfer-matrix script reproduced it to 2e-16"
+  },
+  "keys": "tool__quantity with quantity r or t; each holds {\"60\": ..., \"120\": ...}, lists of [re, im] at the three wavelengths after that many periods. meep is eps_averaging on with Ez nodes on the Wavebit E nodes, meep_unsmoothed is eps_averaging off on the same grid, meep_shifted is eps_averaging on with the grid moved half a cell; wavebit is the current PlaneWave launch, wavebit_hard the historical hard-source launch"
+ },
+ "outcomes": {
+  "matched": "films, transverse wavenumber, polarization, wavelengths, cell size, time step (to 2e-19), pulse waveform, absorber thickness and design reflection, durations; ratios against each tool's own empty run; plane shifts by each tool's numerical vacuum wavenumber, no phase fitting",
+  "not_matched": "source mechanism (soft current sheets in Meep and FDTDX, Wavebit's plane-wave launch); absorber profiles; material interface treatment (Wavebit union memory, Meep subpixel averaging of epsilon but not of the loss, FDTDX voxel staircase); FDTDX grid phase and its discrete transverse derivative",
+  "reference_self_check": "the incident amplitude from the two nodes beside z = 0 agrees with the one from the transmission plane to 1.9e-5 (Meep) and 2.2e-6 (FDTDX); Meep's neighbouring-node wavenumber differs from the dispersion formula by up to 6.5e-4 with a complex part that does not fall with resolution, consistent with an absorber reflection of amplitude 2e-5 to 3e-5; both tools approach the reference on 160 and 320 cells per L0",
+  "failed_or_discarded": "nothing discarded. The first Meep batch had its Ez nodes half a cell from the Wavebit nodes and is kept as meep_shifted. Meep add_dft_fields monitors in this one-pixel kz_2d cell returned values that barely change with position and were not used",
+  "not_run": "df 0.07 values and the resolution ladders are not in this payload; s polarization and other grid phases were not run in the external tools; no external tool was rerun for this freeze"
+ },
+ "payload": {
+  "file": "golden_c8_contact_cross_solver.json",
+  "format": "json",
+  "file_sha256": "74dbdc0efe5c75af27d0724db3ed2b309e8eb0fff0b089b9aee5225592b1bbd2",
+  "arrays": [
+   "fdtdx__r",
+   "fdtdx__t",
+   "meep__r",
+   "meep__t",
+   "meep_shifted__r",
+   "meep_shifted__t",
+   "meep_unsmoothed__r",
+   "meep_unsmoothed__t",
+   "wavebit__r",
+   "wavebit__t",
+   "wavebit_hard__r",
+   "wavebit_hard__t"
+  ]
+ },
+ "values_sha256": null,
+ "content_sha256": "234da142727dfe457c53edc89697a329f192a6290906f67aaeaf8f375f18102e",
+ "consumers": [
+  "tests/references/test_c8_contact_cross_solver_golden.py"
+ ],
+ "provenance_status": "complete",
+ "regeneration": [],
+ "not_recorded": {
+  "values_sha256": "a nested JSON payload has no values digest (tests/references/_reference_records.py)"
+ }
+}
