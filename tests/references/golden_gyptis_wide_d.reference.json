@@ -1,0 +1,149 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_gyptis_wide_d",
+  "physics": "rcwa",
+  "comparison": "different-discretization",
+  "role": "external oracle for wall_resolution with shapes away from the cell's centre: a circle and an ellipse moved across the cell's edge and corner and a block moved across the corner (written as the four rectangles the cell's edges cut it into), whose reference is the centred structure's 3D finite-element solve read at the moved samples, and a T of two rectangles with no x mirror at theta 20 deg, p; the pre-registered criteria of the widened table are asserted against them",
+  "references": [
+    {
+      "tool": "gyptis",
+      "version": "1.2.0",
+      "build": "FEniCS (dolfin) 2019.1.0, gmsh 4.15.2, PETSc/petsc4py 3.26.1, MUMPS 5.8.2 (conda-forge), one thread, out of core",
+      "modified": {
+        "value": false,
+        "description": "used through its public Python API; the package itself was not changed"
+      },
+      "spdx": "MIT",
+      "source": "https://pypi.org/project/gyptis/",
+      "install": {
+        "kind": "conda",
+        "command": null
+      },
+      "settings": "Maxwell3DPeriodic on symmetry-reduced cells: at phi 0 the whole period in x (Bloch periodic) and half of it in y (y mirrors perfect magnetic walls for p), half the height split into parts even and odd in z (two solves); at normal incidence a quarter of the cell (x mirrors perfect electric, y mirrors perfect magnetic walls). Second-order edge (Nedelec) elements, 400 nm of air and 900 nm of perfectly matched layer above and below. R and T by projecting the periodic part of the scattered field on each diffraction order over an air slab. Relative residuals of the direct solves 6.9e-13 to 2.2e-12. A moved shape is the centred structure moved, so its R and T are the centred structure's and its field at a sample r is the centred field at r - d (folded into the cell) times exp(i kx dx) with the Bloch phase of the folding; the centred structure's finer level was solved again with the same mesh rule to read the field there. Its R differs from the stored level's by 4.4e-6 (circle), 7.6e-10 (ellipse) and less than 1e-11 (circle in the 400 x 300 cell, block); the rebuilt circle and ellipse meshes differ from the first ones by 23 and 2 of about 80000 cells. The stored phasors are in gyptis's time convention, the conjugate of Wavebit's; the consumer maps them as sign * conj(E), sign -1 for p. Before measuring, the T's metal volume in the mesh was checked against the analytic one (to 1e-14)",
+      "discretization": "tetrahedral meshes graded toward the walls and edges, two levels per structure (coarser/finer: circle oz 42600/79280 cells, its field from a rebuilt finer level of 79257; ellipse oz 43551/82373, rebuilt 82371; circle in the 400 x 300 cell nz 19082/37746; block oz 50313/104197; T oz 52877/112836), the finer with 0.25 to 0.73 million complex unknowns per solve and a smallest edge of about 1.4 nm; the product side is a Fourier truncation of the same cell",
+      "arrays": [
+        "*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "private research repository",
+    "sha256": "21d24d85277002b2ca21e1d828087bb58c37d522c814096f5182b14d3c333792",
+    "command": "python fem_sym.py <case> <level> with the mesh rule v2: the T at levels 0 and 1; the centred circle, ellipse, circle in the 400 x 300 cell and block at level 1 again with SHIFT_GRID set to the moves; then python make_golden_d.py, which takes R and T of the newest records (the centred structures' stored levels for the moved shapes) and the finer level's plane fields reduced to their in-plane components in single precision",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-11-27",
+  "environment": {
+    "python": "3.13.18",
+    "numpy": "2.5.5",
+    "threads": 1
+  },
+  "cost": {
+    "wall_seconds": 3273,
+    "max_rss_gb": 8.3,
+    "note": "the finer levels only: four centred structures solved again (the circle's run read both moves) and the T at p; the machine shared its CPU with other work, so the time is not a cost measurement"
+  },
+  "inputs": {
+    "cells": {
+      "period_nm": "400 x 400, 400 x 300 for C1cp_m",
+      "layer_thickness_nm": 150.0,
+      "shapes": "C1ap_m1, C1ap_m2: a circle of radius 100 nm centred at (196, 0) and (196, 187) nm; C1ep_m: an ellipse with semi-axes 130 nm along x and 80 nm along y centred at (-146, 130); C1cp_m: the circle centred at (60, 110) in the 400 x 300 cell; R1p_m: a 200 x 200 nm block centred at (146, 130), written as the rectangles x 46..200 and -200..-154 by y 30..200 and -200..-170; A1T_o20p: the rectangles x -120..0, y -100..100 and x 0..80, y -50..50; coordinates from the cell's centre",
+      "shape_epsilon": "-20+1.5j (Wavebit's convention, loss a positive imaginary part; the runs take its conjugate)",
+      "background_epsilon": 1.0,
+      "superstrate_epsilon": 1.0,
+      "substrate_epsilon": 1.0
+    },
+    "incidence": {
+      "wavelength_nm": 900.0,
+      "theta_deg": "0 for C1cp_m, 20 otherwise; phi 0 (plane of incidence xz)",
+      "polarization": "p",
+      "source": "a plane wave from the top"
+    },
+    "cases": [
+      "C1ap_m1",
+      "C1ap_m2",
+      "C1ep_m",
+      "C1cp_m",
+      "R1p_m",
+      "A1T_o20p"
+    ],
+    "values": {
+      "R, T": "total reflectance and transmittance on the finer mesh level (level 1); for a moved shape the centred structure's",
+      "R_coarse, T_coarse": "the same on the coarser level (level 0)",
+      "u_F": "|R - R_coarse| / R",
+      "E_<case>": "in-plane (Ex, Ey) on each patterned layer's mid-plane, E[plane, j, i, component] at (x[i], y[j]); complex64; gyptis's convention, normalised so the incident wave has phase 0 at the stack's top and x = 0",
+      "x_<case>, y_<case>": "48 points each, ((i + 0.37)/48 - 1/2) * Px and ((j + 0.41)/48 - 1/2) * Py",
+      "depth_<case>": "each plane's depth below the stack's top, top layer first"
+    },
+    "mesh_rule": "v2 of 2026-11-22: PML 40 nm and air 20 nm elements at every level, refinement at the true edges and on the shapes' walls, top and bottom faces; the two levels differ only in the wall and edge sizes"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": "u_F, the relative R change between the two levels, is 2.0e-04 to 2.0e-03 (above 1e-3, which the criteria call weak, for R1p_m and A1T_o20p); it is stored with the values",
+    "failed_or_discarded": "none of these six; two more cases measured with them (the T at s and two bars of unequal widths) did not meet the criteria and are not stored",
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_gyptis_wide_d.npz",
+    "format": "npz",
+    "file_sha256": "4d1f702c1d22577ccdeedd89b9efbee30a1f2d81740bc89e61ce79e467387f06",
+    "arrays": [
+      "E_A1T_o20p",
+      "E_C1ap_m1",
+      "E_C1ap_m2",
+      "E_C1cp_m",
+      "E_C1ep_m",
+      "E_R1p_m",
+      "R",
+      "R_coarse",
+      "T",
+      "T_coarse",
+      "case",
+      "depth_A1T_o20p",
+      "depth_C1ap_m1",
+      "depth_C1ap_m2",
+      "depth_C1cp_m",
+      "depth_C1ep_m",
+      "depth_R1p_m",
+      "u_F",
+      "x_A1T_o20p",
+      "x_C1ap_m1",
+      "x_C1ap_m2",
+      "x_C1cp_m",
+      "x_C1ep_m",
+      "x_R1p_m",
+      "y_A1T_o20p",
+      "y_C1ap_m1",
+      "y_C1ap_m2",
+      "y_C1cp_m",
+      "y_C1ep_m",
+      "y_R1p_m"
+    ]
+  },
+  "values_sha256": "d791f9f2479ff9e7f2a461908b5f7ed8d8eccc026a0ae7669a5792bd929550c9",
+  "content_sha256": "6f35ff0f253ea130853aa8c682739149cf39d99302bcf14d9dc9030622b7c986",
+  "consumers": [
+    "tests/references/test_gyptis_wide_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[0]": "the run script, its results file and the run logs, read on 2026-11-27",
+    "references[0].independence": "the finite-element script imports numpy, dolfin, gmsh, gyptis and a NumPy-only case table"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "generator.clean_tree": "the generator does not load the product and records no commit",
+    "generator.product_commit": "the generator does not load the product and records no commit",
+    "outcomes.matched": "what the comparison found is in the consumer test",
+    "outcomes.not_matched": "what the comparison found is in the consumer test",
+    "outcomes.not_run": "what the comparison found is in the consumer test",
+    "references[0].install.command": "the method notes name the conda-forge environment and its versions, not the command that built it"
+  }
+}

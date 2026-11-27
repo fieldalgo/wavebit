@@ -209,7 +209,7 @@ Twenty-four metal cases and three dielectric ones against 3D finite-element fiel
 - **The references.** 3D finite elements (gyptis 1.2.0, second-order edge elements) on cells reduced by the structures' mirror planes: a quarter of the cell at normal incidence, half of it at phi 0, the full height over a substrate; two mesh levels each, the finer with 0.25 to 0.69 million complex unknowns. Before any metal was read the models were checked against uniform slabs (analytic values, within 1.2e-4) and the dielectric block (RETICOLO at order 30, below: within 7.7e-5 at normal incidence, 3.6e-5 and 1.3e-4 at theta 20 deg for p and s); the criterion was 1e-3. All twenty-seven are stored here (`tests/references/golden_gyptis_wide.npz` and, for the C1 rows added later, `golden_gyptis_wide_c1.npz` for five and `golden_gyptis_wide_c1e.npz` for the six on the ellipse, each with its record): `R` and `T` on both mesh levels, `u_F` and the finer level's in-plane field on each patterned layer's mid-plane. `tests/references/test_gyptis_wide_golden.py` asserts the criteria above on all twenty-seven at order 12 in the slow tier, and in the default run on the cheapest metal and dielectric cases, the 400 by 300 nm circle (p) and the block at normal incidence, at order 8, where they already meet the same criteria.
 - **A first set of references was not good enough.** Its absorbing layer kept nearly the same coarse mesh at every level, which left an error that refinement did not remove: on the lossless dielectric block `R + T` read 0.99985, and the oblique model failed the block check. With the absorbing layer meshed at 40 nm and the air at 20 nm the check passed and every row above was measured again; the criteria were not changed.
 - **The 350 nm block by order.** The stretched solve's ten orders are within -0.15 to +0.20% of the reference's each, the default solve's within -3.5 to +1.3%; on the circle at 350 nm, -0.09 to +0.05% against -3.4 to +0.31%.
-- **Not covered.** For circles and ellipses, a shape away from the cell's centre (with the same shape in every layer this is the same structure moved, whose invariance is a test below); for all, phi other than 0 and a second reference on a substrate.
+- **Not covered.** Phi other than 0 and a second reference on a substrate. Shapes away from the cell's centre are measured {ref}`below <wall-resolution-off-centre>`.
 
 (wall-resolution-many-walls)=
 ## Four walls along an axis
@@ -240,6 +240,41 @@ A layer with more than two walls along an axis divides the stretched cell among 
   - On all three layers the stretched solve stays 2.0 to 3.5% from the reference at orders 16 and 20. Away from the walls the reference moves by 0.6 to 0.7% between its levels. Which side holds the rest was not measured.
 - Before these, the only check was a uniform slab through four unevenly placed walls, which reads the right `R` to 1e-5.
 - These references are not stored in the repository, and no test asserts them.
+
+(wall-resolution-off-centre)=
+## Shapes away from the cell's centre
+
+Eight more metal cases were checked against the same 3D finite elements, under the criteria of the table above, written before measuring. The cell, layer, wavelength and metal are those above, all at order 12; the default solve is uncompressed Li on rectangles and NVF on a circle or an ellipse.
+
+- **Five shapes moved in the cell.**
+  - With one patterned layer a moved shape is the centred structure moved. Its reference `R` and `T` are the centred structure's. Its reference field at a sample is the centred structure's at the sample minus the move, with the Bloch phase. So the finite elements add nothing new here; what is measured is whether the solve keeps its accuracy when the shape crosses the cell's edge or corner.
+  - The moves are not multiples of the samples' spacing, so the samples sit in other places on the shape than in the centred rows.
+  - A rectangle may not cross the cell's edge, so the moved block is written as the four rectangles the cell's edges cut it into.
+- **Three new layers with no mirror along x.** A T of two rectangles, x -120 to 0 by y -100 to 100 nm and x 0 to 80 by y -50 to 50 nm, puts three walls along x. Two bars of widths 80 and 40 nm, at x -150 to -70 and 50 to 90 nm, put four. All three are at theta 20 deg, phi 0, solved on half the cell in y.
+
+| Case | `wall_resolution=0.02`: `R` / `T` against the reference | Default solve: `R` / `T` | Field: stretched / default (ratio) | Reference's own step (`u_F`) | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| metal circle at (196, 0) nm, across the edge, theta 20 deg, p | +0.03 / -0.01% | -2.29 / -1.03% | 0.53 / 22.3% (0.024) | 3.9e-4 | met |
+| metal circle at (196, 187) nm, across the corner, theta 20 deg, p | +0.03 / -0.01% | -2.29 / -1.03% | 0.56 / 22.3% (0.025) | 3.9e-4 | met |
+| metal ellipse 130 by 80 nm at (-146, 130) nm, across the corner, theta 20 deg, p | +0.02 / -0.02% | -1.16 / -1.67% | 0.72 / 27.5% (0.026) | 2.0e-4 | met |
+| metal circle at (60, 110) nm in the 400 by 300 nm cell, across the edge, p | +0.02 / -0.01% | -1.09 / -0.97% | 0.72 / 29.2% (0.025) | 2.3e-4 | met |
+| metal block at (146, 130) nm, across the corner, four rectangles, theta 20 deg, p | -0.18 / -0.26% | -1.63 / -0.40% | 6.73 / 28.1% (0.240) | 1.5e-3 | met, weak |
+| metal T, theta 20 deg, p | -0.30 / -0.35% | -1.59 / -2.08% | 5.66 / 27.9% (0.203) | 2.0e-3 | met, weak |
+| metal T, theta 20 deg, s | -2.53 / -0.27% | -2.17 / -1.11% | 9.74 / 30.0% (0.324) | 2.3e-3 | not met, weak |
+| two metal bars of unequal widths, theta 20 deg, p | -1.00 / -0.11% | -3.17 / -0.48% | 2.14 / 19.5% (0.110) | 2.8e-3 | not met, weak |
+
+- **Six of the eight are met.**
+  - On the circles and the ellipse the field error is 0.53 to 0.72%, as in their centred rows (0.52 to 0.76%). Moved, the solve gives the centred `R` and `T` to 1.3e-10 and the centred field to 5e-9 of its largest value.
+  - On the moved block `T` is at -0.26% against 0.30% and the field ratio at 0.240 against 0.25; the centred block's field error is 0.73%.
+  - On the T in s, `R` is 2.53% low against 0.45% and the field ratio is 0.324.
+  - On the bars `R` is 1.00% low against 0.55%. `R` is only 0.014 there; `T` and the field meet the criteria.
+- **Two rectangles of one material that touch make a wall where they touch** (read after the verdict).
+  - Every rectangle edge is a wall of the stretch, also an edge with the same metal on both sides. The moved block's four pieces put such walls on the cell's edges, and the solve then differs from the centred block's: by -7.6e-4 in `R`, -3.1e-3 in `T` and 6.7% in the field (RMS). The default solve does not change, to 1e-12.
+  - The centred block written as two rectangles that meet at x = 0 moves the same way: by -9.9e-4 in `R`, -2.0e-3 in `T` and 4.9% in the field. One rectangle moved within the cell is the centred block to 1.3e-11.
+- **By order** (read after the verdict). On the T in s the stretched `R` is -3.89, -2.53, -0.43 and -0.10% off at orders 8, 12, 16 and 20, and the field error 14.5, 9.7, 6.4 and 2.2%. On the T in p the field error is 10.7, 5.7, 3.3 and 2.4%. On the bars `R` is -1.50, -1.00, -0.83 and -0.01% off at orders 8, 12, 16 and 20.
+- **The references.** For the moved shapes, the centred structure's finer level, solved again to read the field at the moved samples. Its `R` is within 4.4e-6 of the stored level's; the rebuilt circle and ellipse meshes differ from the first ones by 23 and 2 of about 80000 cells. For the T and the bars, two new levels each, with 0.73 and 0.82 million complex unknowns on the finer one. Before measuring, their metal volume in the mesh was checked against the analytic one, to 1e-14.
+- The six met are stored in `tests/references/golden_gyptis_wide_d.npz`, with its record, and `tests/references/test_gyptis_wide_golden.py` asserts the criteria on them at order 12 in the slow tier. The two not met are not stored.
+- **Not measured.** A new structure with no mirror along either axis, or two patterned layers moved by different amounts: a reference needs the whole cell or the whole height, two to four times the unknowns, which did not fit the measuring machine.
 
 (wall-resolution-reticolo)=
 ## Rectangles against RETICOLO's unstretched solve at high order
@@ -293,7 +328,7 @@ Each scene was solved at orders 4 to 16 and slopes `G` from 0.1 to 0.005, and by
 
 ## Not measured
 
-- A reference at phi other than 0; for circles and ellipses, a reference with a shape away from the cell's centre; a second reference on a substrate. A finer finite-element level for the weak rows above.
+- A reference at phi other than 0; a reference for a structure with no mirror along either axis, or for patterned layers moved by different amounts; a second reference on a substrate. A finer finite-element level for the weak rows above.
 - An independent implementation of the stretched solve or the matched mesh: none was found to compare with at the same truncation.
 - Layers with more than four walls along an axis; four walls at oblique incidence or on a substrate; why the frame's field error at order 12 is larger than the bars', and which side holds the 2.0 to 3.5% left at order 20.
 - A second mesh level for five of the seven references.
