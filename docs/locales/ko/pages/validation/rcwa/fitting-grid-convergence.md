@@ -280,3 +280,65 @@ NumPy와 동일하게 처리하는지, 형상 배치의 전·역방향 미분이
 격자 수렴 검증이 아닙니다. 전체 메모리는 배치 크기·형상·미분 방향 수·광학 행렬
 크기에 따라 여전히 증가합니다. 보편적인 메모리 상한이나 모든 플랫폼에서
 과거의 2 GiB 사용량을 회복했다는 뜻은 아닙니다.
+
+## 묶음 JIT 실행과 JAX 버전
+
+JAX/jaxlib 0.11.0에는 별도의 CPU 교착 문제가 있습니다. solver 기준 `91badd36`에서
+5개씩의 `vmap` 여섯 묶음을 한 JIT 안에서 이어 붙이면 형상과 재료가 유효해도
+컴파일 뒤 멈출 수 있습니다. 이 측정은 N5의 **s 15개 + p 15개** 관측, 격자128,
+차수(4,4), double 정밀도, 네 매개변수를 유지합니다. 값 계산은 타원 중심 x가
+90.1·89.9 nm인 concrete 형상에서 새로 준비합니다(원 `10h` 중앙차분 양쪽).
+Jacobian은 생성 매개변수에서 host 위상 검사로 준비하며, 미분120개와 함께
+값·유효성 플래그를 반환합니다.
+
+Linux의 0.11.0 joined 값 계산은207.4초에 컴파일된 뒤 CPU 작업이 멈췄습니다.
+네이티브 스택에서는 작업 스레드5개 전부가 `ParallelBatchMap` /
+`BlockingCounter::Wait`에서 기다렸습니다. 3개는 `lapack_zgesdd_ffi`(SVD),
+2개는 `lapack_zgetrf_ffi`(LU)였습니다. 작업을 맡길 여유 스레드가 없어 생긴
+교착이며, 물리 조건 거부나 앞 절의 메모리 회귀와는 다른 문제입니다.
+5개씩 분리 호출해도 네 묶음 뒤 멈췄으므로, 호출 분할은 이 라이브러리의
+보편적인 해결책이 아닙니다.
+
+macOS26.7.2 arm64 러너에서도0.11.0의 여섯 경로(중심± 값과 원점 Jacobian의
+joined/분리 호출)가 모두 멈췄습니다. 중심+ joined의 네이티브 sample에는
+SVD 작업 스레드2개와 LU 스레드1개가 같은 중첩 풀 경로에서 기다립니다.
+CPU 작업이120초 동안 진행되지 않아 외부 guard로 중단했으며,
+어느 것도 완료된 스펙트럼으로 세지 않습니다.
+
+공개 JAX0.11.1 wheel은 중첩된 LAPACK 스레드 풀 경로를 비활성화했습니다
+([상류 변경](https://github.com/jax-ml/jax/commit/859992407d38c09dfb0cb97d4da00e9fdd9e7830),
+[릴리스 소스](https://github.com/jax-ml/jax/blob/jax-v0.11.1/jaxlib/cpu/lapack_kernels.cc)).
+설치 하한과 `Execution` 사전 검사는 이제 JAX·jaxlib 모두0.11.1 이상을 요구하며,
+장치 초기화나 그래프 추적 전에 확인합니다. 오래된 라이브러리를 로드한 환경에는
+`execution.jax_version`과 갱신·재시작 안내를 반환합니다. solver의 행렬 계산,
+미분, 수치 허용치, 전역 스레드 설정은 바꾸지 않았습니다.
+
+완료된 측정도 같은30개 관측과120개 Jacobian 항목을 사용합니다.
+
+| 런타임 / 플랫폼 | 완료 경로 | joined/분리 값의 최대 차이 | Jacobian의 최대 차이 |
+|---|---|---|---|
+| 0.11.1 / macOS arm64, CI 스레드 | 6 / 6 | 4.33e-15 | 3.93e-14 |
+| 0.12.0.1 / Linux x86_64, CI 스레드 | 6 / 6 | 0 | 0 |
+| 0.12.0.1 / macOS arm64, CI 스레드 | 6 / 6 | 2.89e-15 | 5.52e-14 |
+| 0.12.0.1 / macOS arm64, 기본 XLA | 6 / 6 | 4.67e-15 | 5.52e-14 |
+
+CI 스레드는 BLAS/OpenMP 스레드 수1과
+`XLA_FLAGS=--xla_cpu_multi_thread_eigen=false`를 뜻합니다. 기본XLA 측정은
+BLAS/OpenMP 제한을 유지하고 XLA 플래그만 비웁니다. 완료된 모든 경로의
+값·미분은 유한하며 유효성 플래그도 전부 참입니다. Linux는 Python3.12.14,
+macOS는3.12.10입니다. 명시한 러너의 측정이며 원 제보자의 정확한 하드웨어와
+같다는 뜻은 아닙니다.
+
+[보존 기록](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_fitting_grid/grouped-execution.json)에는
+완료된 값·Jacobian, 비교 허용치와 중단된 실행이 있습니다.
+[재현 도구](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_fitting_grid/grouped_execution.py)는
+새 프로세스마다 한 실행 방식을 측정합니다. `--execution joined` 또는 `separate`,
+값 계산은 `--mode value --offset 0.1` 또는 `-0.1`, 미분은
+`--mode jacobian --offset 0`을 선택합니다. 각 실행에 새 `--output` 경로가 필요합니다.
+값은 `rtol=1e-10, atol=1e-12`, Jacobian은 `rtol=1e-8, atol=1e-11`로 비교하고,
+유효성 플래그도 모두 참이어야 합니다. 문제가 있는 과거 checkout을 재현할 때는
+외부 프로세스 제한 시간이 필요하며, 중단을 완료로 보고해서는 안 됩니다.
+
+이는 같은 법선장 격자에서 CPU 실행 완료와 실행 방식 사이의 일치를 확인합니다.
+격자 수렴, 모든 OS의 전체 수치 지원, 앞으로 나올 임의의 JAX 버전에서 다른
+동시 실행 결함도 없다는 보장은 아닙니다.

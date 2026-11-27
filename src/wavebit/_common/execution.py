@@ -2,6 +2,7 @@
 from wavebit._common.backend import eager_under_torch_compile
 from dataclasses import dataclass, field
 from contextlib import contextmanager
+import re
 from types import MappingProxyType
 from .declarations import Declaration
 from .enums import backend_of
@@ -10,6 +11,29 @@ from wavebit.errors import ValidationError, UnsupportedFeatureError
 
 def frozen_mapping(value):
     return MappingProxyType(dict(value))
+
+
+def _check_jax_runtime(jax):
+    """Refuse runtimes whose CPU batched LAPACK kernels can deadlock.
+
+    The public jaxlib wheels disable that thread-pool path from 0.11.1.
+    Check the loaded modules, including jaxlib, before device discovery or tracing;
+    source checkouts and environments installed without dependencies bypass pip's floor.
+    """
+    import jaxlib
+    versions = {'jax': jax.__version__, 'jaxlib': jaxlib.__version__}
+    for version in versions.values():
+        release = re.match(r'^(\d+)\.(\d+)\.(\d+)', version)
+        numbers = None if release is None else tuple(map(int, release.groups()))
+        prerelease_at_floor = (numbers == (0, 11, 1)
+                              and re.match(r'(?:a|b|rc|\.dev)', version[release.end():]))
+        if numbers is None or numbers < (0, 11, 1) or prerelease_at_floor:
+            raise UnsupportedFeatureError(
+                'JAX execution requires jax and jaxlib >= 0.11.1. Earlier CPU runtimes '
+                'can deadlock in concurrent batched LU/SVD calculations. Upgrade both '
+                'packages and restart Python before preparing a calculation.',
+                code='execution.jax_version', path='execution.backend',
+                expected='jax >= 0.11.1 and jaxlib >= 0.11.1', actual=versions)
 
 
 @eager_under_torch_compile
@@ -56,6 +80,7 @@ class Execution(Declaration):
                 import jax
             except ImportError as exc:
                 raise UnsupportedFeatureError('install the jax extra to use this backend', code='execution.backend_unavailable', path='execution.backend') from exc
+            _check_jax_runtime(jax)
             if self.precision == 'double' and not jax.config.x64_enabled:
                 raise UnsupportedFeatureError('JAX double precision requires jax.config.update("jax_enable_x64", True) before creating arrays', code='execution.jax_x64', path='execution.precision')
             platform, sep, index = self.device.partition(':')

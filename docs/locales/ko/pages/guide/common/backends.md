@@ -2,6 +2,12 @@
 
 실행 설정은 물리 문제 및 수치 설정과 구분합니다.
 
+JAX 실행에는 `jax`와 `jaxlib` >= 0.11.1이 필요합니다. 장치 설정 전에 실제 로드된
+두 버전을 확인하며, 오래된 환경에는 갱신 안내와 `execution.jax_version`을 반환합니다.
+물리적으로 유효한 형상에서도 발생하는 0.11.0의 CPU 배치 LU/SVD 교착을 피하기 위한
+조건입니다. 버전별 검증 범위는 [설치](../../getting-started/installation.md)를 참고하세요.
+로드된 네이티브 백엔드를 갱신한 뒤에는 Python을 다시 시작해야 합니다.
+
 ```python
 result = rcwa.run(problem, numerics=numerics,
                   backend="numpy", device="cpu", precision="double")

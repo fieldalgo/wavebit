@@ -6,6 +6,8 @@
 | `check_grid.py` | Are fixed-geometry values and derivatives stable under grid refinement, and does AD agree with finite differences? |
 | `shared_matrix_model.py` | Can this nondispersive case share its geometry matrix build across wavelengths without changing values or derivatives? |
 | `batch_memory.py` | How much memory does the spectral `jit(jacfwd(vmap))` need, and does its Jacobian agree with separate scalar calls? |
+| `grouped_execution.py` | Which JAX CPU versions complete six spectral groups inside one JIT, with the same values and derivatives as separate calls? |
+| `grouped-execution.json` | What completed or stalled on Linux and macOS, and how closely did the completed grouping strategies agree? |
 | `batch-memory.json` | Did geometry-only candidate selection and bounded dense integration remove the measured 30-lane memory regression? |
 | `measurement.json` | Did the historical solver `18bbcbfd` meet both refinement tolerances through grid 1024? |
 | `integral-fixed-point.json` | How did fixed-point spectra, Jacobians and finite differences compare after the integral normal field landed? |
