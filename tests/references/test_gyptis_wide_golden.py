@@ -6,17 +6,19 @@ with a 100 nm gap and at 350 nm (P1); the radius 100 nm circle at theta 20 deg, 
 400 x 300 cell and in two layers (C1) -- and the dielectric block, ``eps`` 12.25, at normal
 incidence and at theta 20 deg. ``golden_gyptis_wide_c1.npz`` holds five more metal C1 cases, run
 after the first table under the same criteria: the circle at theta 40 deg (p and s) and at 350 nm,
-and a 130 x 80 nm ellipse at theta 20 deg (p and s). Each case has ``R`` and ``T`` on the finer of
-two mesh levels and on the coarser, and the in-plane ``E`` on the mid-plane of each patterned layer.
+and a 130 x 80 nm ellipse at theta 20 deg (p and s). ``golden_gyptis_wide_c1e.npz`` holds six more,
+the same ellipse at theta 40 deg, over glass and in two layers with a 100 nm gap (p and s each).
+Each case has ``R`` and ``T`` on the finer of two mesh levels and on the coarser, and the in-plane
+``E`` on the mid-plane of each patterned layer.
 
 The criteria are the ones written before the table was measured (the validation page,
 ``wall-resolution-wide``): ``u_F``, the relative change of the reference ``R`` between the two
 mesh levels, sets the tolerance for both ``R`` and ``T``, ``max(0.3%, 2 u_F)``, at order 12. On a
 metal the in-plane plane error (RMS over the reference's plane RMS, all patterned planes together)
 is at most a quarter of the default solve's at the same order -- uncompressed Li on a box, NVF on
-a circle. On the dielectric it is at most 1%.
+a circle or an ellipse. On the dielectric it is at most 1%.
 
-All twenty-one run at order 12 in the slow tier, about 1 to 3 minutes each. The default run takes
+All twenty-seven run at order 12 in the slow tier, about 1 to 3 minutes each. The default run takes
 the cheapest metal and dielectric cases, the 400 x 300 circle (p) and the block at normal
 incidence, at order 8 under the same criteria: measured when the table was made, order 8 already
 met them there (circle: ``R`` +0.06%, ``T`` -0.12%, field ratio 0.064; block: ``R`` -0.07%,
@@ -30,7 +32,8 @@ import pytest
 
 from wavebit import Material, Units, rcwa
 
-GOLDENS = [Path(__file__).with_name(name) for name in ('golden_gyptis_wide.npz', 'golden_gyptis_wide_c1.npz')]
+GOLDENS = [Path(__file__).with_name(name)
+           for name in ('golden_gyptis_wide.npz', 'golden_gyptis_wide_c1.npz', 'golden_gyptis_wide_c1e.npz')]
 METAL, GLASS = -20 + 1.5j, 1.45 ** 2
 BOX, CIRCLE, ELLIPSE = ('box', 200.0, 200.0), ('cyl', 100.0), ('ell', 130.0, 80.0)
 pytestmark = pytest.mark.filterwarnings('ignore::wavebit.rcwa.diagnostics.ExperimentalWarning')
@@ -60,6 +63,13 @@ CASES = {
     'C1a40s': ((400.0, 400.0), 900.0, 40, 's', 1.0, None, [(150.0, CIRCLE, METAL, 1.0)]),
     'C1ep': ((400.0, 400.0), 900.0, 20, 'p', 1.0, None, [(150.0, ELLIPSE, METAL, 1.0)]),
     'C1es': ((400.0, 400.0), 900.0, 20, 's', 1.0, None, [(150.0, ELLIPSE, METAL, 1.0)]),
+    # golden_gyptis_wide_c1e.npz
+    'C1e40p': ((400.0, 400.0), 900.0, 40, 'p', 1.0, None, [(150.0, ELLIPSE, METAL, 1.0)]),
+    'C1e40s': ((400.0, 400.0), 900.0, 40, 's', 1.0, None, [(150.0, ELLIPSE, METAL, 1.0)]),
+    'C1ebp': ((400.0, 400.0), 900.0, 0, 'p', GLASS, None, [(150.0, ELLIPSE, METAL, 1.0)]),
+    'C1ebs': ((400.0, 400.0), 900.0, 0, 's', GLASS, None, [(150.0, ELLIPSE, METAL, 1.0)]),
+    'C1edp': ((400.0, 400.0), 900.0, 0, 'p', 1.0, 100.0, [(150.0, ELLIPSE, METAL, 1.0)] * 2),
+    'C1eds': ((400.0, 400.0), 900.0, 0, 's', 1.0, 100.0, [(150.0, ELLIPSE, METAL, 1.0)] * 2),
 }
 
 
@@ -135,8 +145,8 @@ def _check(name, order):
         assert error <= 1e-2, error
 
 
-def test_the_goldens_hold_the_twenty_one_cases():
-    assert _cases(GOLDENS[0]) + _cases(GOLDENS[1]) == list(CASES)
+def test_the_goldens_hold_the_twenty_seven_cases():
+    assert sum((_cases(path) for path in GOLDENS), []) == list(CASES)
     for path in GOLDENS:
         with np.load(path) as golden:
             # u_F is the stored levels' own R difference, which the tolerances read.
