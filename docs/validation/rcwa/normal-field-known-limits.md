@@ -331,6 +331,8 @@ a step straddled at 1e-4 -- and reads 0.1476 / 0.1478 / 0.1477 / 0.1477 / 0.1477
   slightly faster; and by 2.5e-4 / 1.6e-4 on a 256-gon over a rectangle at grids 128 / 256, where
   every facet's neighbours nearly tie. Neither is an improvement worth that, so the step stays.
   The cross-pair average has the same structure and was not measured (issue #36).
+
+  **No longer reproduced (2026-11-21).** The step belonged to this interval average, which weighed each candidate against the one `argmin` picked. The boundary integral of §1c (`131afb25`) picks no reference: on `e11b057` the square above moves by at most 2.2e-15 for every shift listed. Three multi-material scenes with their cross-pair ties on samples (squares 0.25 on a side, two touching, one painted inside another, three in a row) stepped by 3e-9 to 2.7e-8 under the average, from both stages; on `e11b057` they move by at most 5.9e-15 for shifts from 1e-13 to 1e-7 and of one period. The last commit with the step is `131afb25`'s parent.
 - *Time and memory.* The field at the default grid 1024 costs 1.8 to 2.3 times the hard one
   (section 6, NumPy: 6.6 s against 3.7 s on the tilted L's 96 interval images, 14.0 s against
   6.6 s on the painted pair's 176, 484 s against 215 s on a disc painted over a rectangle, whose
