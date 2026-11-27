@@ -89,7 +89,7 @@ def test_isolated_padding_zero_distance_and_beam_convergence():
 
 @pytest.mark.parametrize('change', ['nonuniform', 'descending', 'loss', 'negative_n',
                                   'direction', 'real_values', 'carrier', 'periodic_padding',
-                                  'singleton_padding', 'negative_distance', 'target_grid'])
+                                  'singleton_padding', 'negative_distance', 'target_grid', 'target_complex'])
 def test_invalid_contracts_are_refused(change):
     p, numerics = plane(), ASM()
     if change == 'nonuniform': p = p.replace(x=p.x+np.arange(len(p.x))**2*.001)
@@ -105,8 +105,9 @@ def test_invalid_contracts_are_refused(change):
     with pytest.raises(ValidationError):
         if change == 'negative_distance':
             plan_asm(p)(-.1)
-        elif change == 'target_grid':
-            propagate(p, target=Plane(x=p.x+.01, y=p.y, distance=.1, units=p.units), method='asm')
+        elif change in ('target_grid', 'target_complex'):
+            x = p.x+(.01 if change == 'target_grid' else 1e-18j)
+            propagate(p, target=Plane(x=x, y=p.y, distance=.1, units=p.units), method='asm')
         else:
             plan_asm(p, numerics=numerics)
 
@@ -155,7 +156,7 @@ def test_actual_fdtd_calibrated_exterior_plane_connects():
     out = plan_asm(p)(.15)
     np.testing.assert_allclose(field(out), p.values*np.exp(2j*np.pi*.15/.9), atol=1e-10, rtol=1e-10)
     assert out.diagnostics['continuum_approximation']
-    assert p.metadata['source_metadata']['normalization'] == 'soft-source spectrum'
+    assert p.metadata['source_metadata']['normalization'] == s.metadata['normalization']
 
 
 def backend_plane(name):
@@ -171,8 +172,10 @@ def backend_plane(name):
 
 
 @pytest.mark.parametrize('name', ['jax', 'torch'])
-def test_backend_forward_and_parameter_gradients(name):
+@pytest.mark.parametrize('boundary', ['periodic', 'isolated'])
+def test_backend_forward_and_parameter_gradients(name, boundary):
     original, p, xp = backend_plane(name)
+    original, p = original.replace(boundary=boundary), p.replace(boundary=boundary)
     prepared = plan_asm(p)
     expected = field(plan_asm(original)(.19))
     got = field(prepared(.19))

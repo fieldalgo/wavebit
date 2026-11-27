@@ -176,8 +176,8 @@ class ASMPlan(Declaration):
         kz = k0*boundary_kz(xp, _array(xp, radicand, u, u.dtype), xp.zeros_like(radicand))
         py, px = self.padding
         envelope = u*xp.conj(self.carrier_phase)
-        spectrum = xp.fft.fft2(_pad(xp, envelope, py, px), axes=(-2, -1))
-        propagated = xp.fft.ifft2(spectrum*xp.exp(1j*kz*d), axes=(-2, -1))
+        spectrum = xp.fft.fft2(_pad(xp, envelope, py, px))
+        propagated = xp.fft.ifft2(spectrum*xp.exp(1j*kz*d))
         out = propagated[py:py+u.shape[0], px:px+u.shape[1]]*self.carrier_phase
         out = xp.where(valid, out, xp.full_like(out, float('nan')))
         sign = 1 if p.direction == '+z' else -1
@@ -259,6 +259,8 @@ def propagate_asm(plane, target, numerics):
         v = _array(xp, getattr(target, name), u, u.dtype)*factor
         expected = getattr(plan.plane, name)
         _require(v.shape == expected.shape, 'target.'+name, 'ASM keeps the source observation grid')
+        _require(xp.all(xp.isfinite(v) & (xp.imag(v) == 0)), 'target.'+name,
+                 'Expected finite real coordinates', 'sampling')
         _require(xp.all(xp.abs(v-expected) <= 64*xp.finfo(expected.dtype).eps*xp.maximum(xp.abs(expected), xp.ones_like(expected))),
                  'target.'+name, 'ASM does not interpolate/resample the observation grid', 'sampling')
     result = plan(target.distance*factor)
