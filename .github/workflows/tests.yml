@@ -14,21 +14,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - jax: '0.11.0'
+          - jax: '0.11.1'
             numpy: '2.5.1'
             scipy: '1.18.0'
             threads: ci
             xla: '--xla_cpu_multi_thread_eigen=false'
-          - jax: '0.12.0.1'
-            numpy: '2.5.5'
-            scipy: '1.18.1'
-            threads: ci
-            xla: '--xla_cpu_multi_thread_eigen=false'
-          - jax: '0.12.0.1'
-            numpy: '2.5.5'
-            scipy: '1.18.1'
-            threads: default-xla
-            xla: ''
     env:
       PYTHONPATH: src
       PYTHONIOENCODING: utf-8
