@@ -1,618 +1,96 @@
-# Six jobs with different purposes.
-#
-#   test     — installs both optional backends and runs the default suite. This is
-#              where the physics is verified. The `research` tier (tests of the
-#              experimental conforming NVF module and its study instruments) is
-#              left out of a run over `tests` by `tests/conftest.py`, and no job
-#              here runs it: it is a development aid for that research code, run
-#              by hand while the code is worked on, not a gate on other changes.
-#              tests/README.md says how. Both numerical jobs use the recorded runner;
-#              source-writing tests execute serially in a private source snapshot.
-#   slow     — runs the tests marked `slow` (tests/conftest.py): the FDTD line's
-#              resolution-refinement studies, finite-difference gradient checks
-#              and Meep comparisons.
-#              Together with `test` it covers the default tier on every push, split so
-#              that neither half runs into the job limit.
-#   minimal  — builds an sdist and its wheel, installs in an isolated venv, and
-#              checks NumPy RCWA/FDTD, bundled data and the optional plot extra.
-#              Runs on Linux, macOS and Windows, on Python 3.12 and 3.13; no
-#              source-tree import fallback.
-#   examples — runs every script under `examples/` and checks it did not fail.
-#              The suite imports the library the way the library likes to be
-#              imported; the examples are the only thing here that exercises the
-#              public API the way a reader of the README would write it, so an
-#              interface the code moved out from under them shows up nowhere else.
-#              Kept separate so a broken example has its own failure report.
-#   lint     — runs ruff on the rules `pyproject.toml` selects. It installs no
-#              package at all, so it answers in seconds; the point is that a
-#              rule nothing enforces is a comment. The config landed with 19
-#              findings cleared, and without this job the twentieth arrives
-#              unannounced.
-#   docs     — builds the Sphinx site with `-W`, so any warning fails the job.
-#              It does NOT deploy one; see `docs-deploy.yml` for why that is a
-#              decision and not an omission. What `-W` buys is the class of
-#              breakage nothing else sees: `docs/reference/api.md` names objects
-#              by hand and autodoc reports an unimportable one as a warning, so a
-#              renamed public symbol fails here instead of leaving a quietly
-#              shorter page.
-#
-# Every job except `lint` installs through `tools/ci_constraints.py`, which applies the exact
-# versions in `.github/constraints/` (ruff is pinned in its own step). A new upstream release
-# therefore cannot turn a run red on a commit that changed nothing; the versions move by a pull
-# request that replaces those files. `latest-deps.yml` installs the newest releases daily,
-# outside this workflow, and raises the alarm there. docs/development/verification.md has the
-# policy.
-name: tests
-
+# Diagnostic-only branch: never merge this workflow replacement into main.
+# This run is experimental evidence, not the product CI gate.
+name: JAX CPU grouped-call diagnostic
 on:
-  push:
-    # main is the only long-lived branch since 2026-10-16: every change reaches it by a pull
-    # request whose run was green, so a push here is a record of the landed state, and a
-    # release is a tag on one of its commits (owner, 2026-10-16).
-    branches: [main]
-  pull_request:
-    # `ready_for_review` is not in the default set, and it is the event that matters: a draft
-    # pull request runs nothing here (see the `if:` on every job), so the run that gates the
-    # landing starts when the author marks it ready, after the local tests (owner, 2026-10-16).
-    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
-    inputs:
-      slow_runner_diagnostics:
-        description: 'Run only the slow shards, with runner diagnostics (not a complete CI gate)'
-        type: boolean
-        default: false
-
-concurrency:
-  # Preserve main runs in one queue per workflow/ref; supersede older non-main runs.
-  group: ${{ github.workflow }}-${{ github.ref }}
-  queue: ${{ github.ref == 'refs/heads/main' && 'max' || 'single' }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
-
+permissions:
+  contents: read
 jobs:
-  lint:
-    if: ${{ !inputs.slow_runner_diagnostics && (github.event_name != 'pull_request' || !github.event.pull_request.draft ) }}
-    name: lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-          cache: pip
-
-      # Pinned, not floored, and that is the opposite of the rule the runtime
-      # dependencies follow. A floor there says "verified from here up"; a floor
-      # here would let a later ruff introduce findings on a commit that changed
-      # nothing, and a red run nobody caused is how a check stops being read.
-      # The rule set in pyproject.toml was chosen rather than inherited, so the
-      # tool that interprets it is chosen too. Raise this deliberately.
-      - name: Install ruff
-        run: pip install ruff==0.16.2
-
-      # No package install: ruff reads source, so this job needs neither the
-      # dependencies nor a build, and finishes in seconds. `.` covers the
-      # notebooks under tutorials/ as well -- ruff lints their cells.
-      - name: Check the rules pyproject.toml selects
-        run: ruff check .
-
-  test:
-    if: ${{ !inputs.slow_runner_diagnostics && (github.event_name != 'pull_request' || !github.event.pull_request.draft ) }}
-    name: full backends (${{ matrix.shard }}/32)
-    runs-on: ubuntu-latest
-    # Six shards, each its own runner, since 2026-10-15. Not for speed first: for memory.
-    # This partition never finished on these runners between 2026-09-11 and then. The two
-    # xdist workers' resident memory grows through the run (1.1 to 7.8 GB of the runner's
-    # 7.9, with 3 GB of swap, measured with `free -m` every 5 s on run 38675626066), until the
-    # runner service kills itself with "received a shutdown signal", exit 143, at 50 to 61 %
-    # -- 79 minutes in on run 38714919709, 114 on 38712716110. Nothing a test asserts is
-    # that large; it is what a long-lived worker accumulates across thousands of JAX and
-    # PyTorch tests. A fresh runner per shard resets it: the first sharded run (38727516339,
-    # four shards) lost no runner. It also measured the suite: the four shards took 55, 70
-    # and more than 81 minutes each (two were at 98 % when the run was cancelled), so the
-    # whole partition is about 300 worker-minutes at `-n 2`, not the 250 extrapolated from
-    # the first 61 %. Six shards put a shard near 50 minutes.
-    #
-    # Sixteen since 2026-10-19, for the clock this time. The runners are now 16.4 GB with four
-    # CPUs (the repository is public; see `slow`), and the account runs 60 jobs at once. As
-    # eight, on runs 39148705675 and 39152923922, the shards took 27 to 50 minutes: a job is
-    # about its worker-minutes over two plus 1.8 minutes of setup, and the recorded timings
-    # put 73 worker-minutes in each of eight, 36.5 in each of sixteen.
-    #
-    # Thirty-two since 2026-10-20. As sixteen the shards were bound twice at about 20 minutes:
-    # by load (585 worker-minutes over 32 workers is 18.3 each) and by whole files (the
-    # largest, test_conical_cutoff.py, is 18.3 worker-minutes on one worker). The fourteen
-    # files above 9 worker-minutes are marked `shard_unit(per='test')`, one unit per test
-    # function, so the largest unit is now 8.4; on the recorded per-test times thirty-two
-    # shards put the slowest near 11 minutes, forty near 10. A run is about 52 jobs with
-    # `slow`, inside the 60 the account ran at once before. Measured on run 39357008175,
-    # balanced by the file table of the run above: 6.5 to 18.2 minutes a shard, the run 24
-    # minutes (34 as sixteen); a few jobs waited 3 to 6 minutes for a runner. The table now
-    # holds that run's per-unit times.
-    #
-    # Since 2026-11-22 a test marked `memory_heavy` does not share the runner with a worker:
-    # `run_verification.py` holds those back and runs them after the parallel phase, one at
-    # a time (its `memory` phase). Two first-order exceptional-point tests peaked at 9.4 and
-    # 7.1 GB alone then; beside a second worker they shut the runner down (exit 143, no failed
-    # test) in shards 4, 5 and 30 on 2026-11-21, on main three commits in a row.
-    #
-    # `--shard` assigns whole units -- files, or `shard_unit` units -- largest first to the
-    # lightest shard, from the same collection every shard records, and `test-complete` below
-    # refuses to call the suite green unless all shards add up to exactly that collection. So
-    # nothing can fall between the shards, and a shard that never reports fails the run by
-    # number. Shards are balanced by recorded unit durations in tools/ci_shard_timings.json;
-    # new cases use estimated costs.
+  diagnose:
+    name: macOS JAX ${{ matrix.jax }} (${{ matrix.threads }})
+    runs-on: macos-latest
+    timeout-minutes: 55
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-                17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]
-    # The backstop under the per-test `--timeout`, which on run 33715389225 never fired
-    # while this did, after three hours. 120 for a shard whose healthy length is now about 20
-    # minutes (above): a hang costs two hours of runner time instead of GitHub's six, and a
-    # shard that is merely heavy is not cut.
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-python@v7
-        with:
-          # Matches the development environment, and jax 0.11 requires 3.12.
-          python-version: '3.12'
-          cache: pip
-
-      # The CPU torch wheel goes in first, so pip already sees torch as satisfied and does
-      # not pull the multi-gigabyte CUDA wheel from PyPI. `tools/ci_constraints.py` runs that
-      # install and the package install after it, both at the versions in
-      # `.github/constraints/tests.txt`.
-      #
-      # `contour` belongs here with the backends, and its absence cost 41 of the 42
-      # failures in run 33738428639 -- every one of them the same ImportError,
-      # `normal_method='contour'` reaching for contourpy that no step had installed.
-      # It is a real optional extra (pyproject declares it, the default normal method
-      # is 'distance', and nothing else in the package reads it), so a user who skips
-      # it is fine. This job is not that user: it is the one that installs everything
-      # precisely so that no part of the suite goes unexercised.
-      # Install plotting too so time-record coordinate/animation tests cannot silently skip.
-      - name: Install CPU-only PyTorch, then Wavebit with both optional backends, contour, and plotting
-        run: python tools/ci_constraints.py install tests
-
-      # Fails the run if a backend is missing, which would otherwise turn the
-      # cross-backend tests into silent skips: the suite guards them with
-      # pytest.importorskip, so an absent backend drops those tests and still
-      # reports success.
-      #
-      # contourpy is checked here too, and it is the reason this step is worth more
-      # than it looks. The contour tests do *not* guard with importorskip -- they fail
-      # outright -- so a missing optional does not go quiet, it goes loud 41 times and
-      # buries the one real failure underneath. Naming it here fails the job in three
-      # seconds instead, on the install and not on the physics.
-      - name: Verify all three backends and contourpy are importable
-        run: python -c "import numpy, jax, torch, contourpy, matplotlib, wavebit; print(wavebit.__file__)"
-
-      # Every installed distribution against tools/third_party_licenses.json, strictly:
-      # an unreviewed package or a changed license fails. One shard is enough, since the
-      # shards all install the same environment. docs/development/third-party.md is the policy.
-      - name: Check installed licenses against the reviewed inventory
-        if: ${{ matrix.shard == 1 }}
-        run: python tools/check_licenses.py
-
-      # Single-threaded BLAS, so that two calls with the same inputs give the same bits.
-      #
-      # Part of the suite asserts exact equality between two results computed in the same
-      # process -- that freezing a geometry is a no-op, that `full=True` only adds fields,
-      # that the core reproduces the legacy chains. Those are claims about this code taking
-      # one path twice, and they are worth asserting exactly; but a threaded kernel is free
-      # to partition a reduction differently between two calls, and then the last bit moves
-      # for reasons that have nothing to do with the claim. That is what these runners did:
-      # the same commit failed three such comparisons on one run and passed them on a re-run,
-      # and only on the cases with 26x26 mode matrices or larger.
-      #
-      # (Differing runner CPU models cannot explain it on their own: both results in each of
-      # those comparisons are computed in one process on one machine, so a SIMD kernel chosen
-      # per CPU applies equally to both.)
-      #
-      # Nothing here is large enough to want threads -- the biggest mode matrix in the suite
-      # is a few hundred square -- so this costs no wall-clock worth measuring.
-      - name: Run verification suite
-        env:
-          OPENBLAS_NUM_THREADS: 1
-          OMP_NUM_THREADS: 1
-          MKL_NUM_THREADS: 1
-          NUMEXPR_NUM_THREADS: 1
-          VECLIB_MAXIMUM_THREADS: 1
-          # XLA's own thread pool, which none of the five above reach -- they set BLAS and
-          # OpenMP counts and XLA:CPU is neither. It deadlocks on these two-core runners:
-          # `probes` in run 33869683436 watched `test_a_frozen_geometry_makes_a_shape_parameter
-          # _traceable[ellipse lx]` sit at 1195 MiB of resident set, unchanging, for three
-          # minutes, with 5958 MiB still available. Nothing was being allocated and nothing
-          # was short; the process was stuck. With this flag the same three cases pass in 91
-          # seconds.
-          #
-          # Job-wide because it has to be: XLA reads it when the backend initialises, so it
-          # cannot be scoped to a test. That is the right scope anyway -- the stall was never
-          # specific to this test. It moved between parametrisations run to run, so any
-          # jit-of-grad in the suite could reach it, and most of the jax tests are that.
-          #
-          # It should not move a number. Serialising a reduction makes it more reproducible,
-          # not less, which is the same direction the five above are set for.
-          XLA_FLAGS: --xla_cpu_multi_thread_eigen=false
-        #
-        # The recorder retains the parallel ordinary phase, then runs the source-writing
-        # boundary/Gamma tests serially in a byte-checked copy. loadfile alone cannot
-        # isolate a temporary edit from a different worker reading the same checkout.
-        #
-        # Two workers, because the runner has two cores and every thread count above pins
-        # this process to one of them. The suite spent 77 minutes using half the machine.
-        # `--dist loadfile` keeps a file's tests on one worker, which matters here: several
-        # files set process-wide state at import -- `test_boundary.py` turns on
-        # `JAX_ENABLE_X64` and `test_fp_warnings.py` reasons explicitly about what has been
-        # imported by the time it runs -- and per-test distribution would scatter that.
-        #
-        # Verified before landing rather than after: the whole suite under `-n 2 --dist
-        # loadfile` locally gives 3946 passed, 39 skipped, 1 xfailed, nothing failed. That
-        # is the claim worth checking, since the speedup is arithmetic and the breakage
-        # would not be.
-        #
-        # The six tests that cost 32 of those 77 minutes -- four in `test_boundary.py`, two in
-        # `test_oblique_lattice.py` -- were marked slow on 2026-09-15 and are back in this tier
-        # since 2026-10-14: each now states the small shape-NVF grid its assertion cannot
-        # tell from the default, and none takes more than 11 s. The default grid is what made
-        # them slow -- f453b21 folds polygon segments over the 3x3 periodic images, which is
-        # 9x the segments and is correctness work, not a regression to revert.
-        #
-        # `--timeout` turns a hung test into a named failure instead of a dead job.
-        # Without it the run that hangs reports nothing at all: pytest prints its
-        # summary at the end, so when GitHub cancels the job at the six-hour mark
-        # every failure the run had already found is lost with it. That is not
-        # hypothetical -- run 33656262958 stalled at 43% and took two real assertion
-        # failures down with it, and neither the stuck test nor the failing ones are
-        # named anywhere in its log.
-        #
-        # The `signal` method is chosen, not inherited. `thread` dumps every stack
-        # and then calls `os._exit`, which kills the whole run at the first stuck
-        # test -- the same dead job, only faster. `signal` raises inside the test, so
-        # the run carries on and the summary still arrives. The cost is that SIGALRM
-        # is only delivered when the interpreter is reachable, which is why the job
-        # keeps a `timeout-minutes` above it.
-        #
-        # 1200s is deliberately far above anything here rather than merely above it.
-        # The slowest single test in the suite is 63 seconds on a developer machine,
-        # but these runners are not that machine -- one 72-test block took 30 minutes,
-        # a mean of 25 seconds a test -- and a bound that fires on a slow test rather
-        # than a stuck one would be a false red mark on a healthy commit.
-        #
-        # `--verbose --live-output` retains pytest -v in the log and CI console.
-        # This is the part that actually diagnoses a hang. `-q`
-        # prints one character per test and flushes a line every 72 of them, so a
-        # job killed mid-line names none of the 72 -- run 33656262958 and run
-        # 33715389225 both died that way, and recovering even the *identity* of what
-        # failed took rebuilding pytest's collection order offline and matching it
-        # against the skip pattern. `-v` writes the node id *before* running the test
-        # and flushes, so the last line of a killed log is the stuck test by name,
-        # and every failure is named inline as it happens rather than in a summary
-        # that a killed run never reaches.
-        #
-        # `thread`, not `signal`, and this is a retreat from a choice made one commit
-        # ago. `signal` was chosen so a stuck test would fail and let the run carry
-        # on; on run 33715389225 it sat through 2h05m of stall without firing once,
-        # which says the interpreter never becomes reachable there -- the alarm is
-        # set, and no bytecode boundary ever arrives to deliver it. `thread` watches
-        # from a second thread that the main thread cannot block, dumps every
-        # thread's stack, and exits. That ends the run, which is why it was rejected
-        # before; with `-v` above, every failure up to that point is already in the
-        # log, so the objection no longer holds. What it buys is the one thing still
-        # missing: *where* the process is stuck, not merely which test was running.
-        #
-        # There was a deselect here for four days, and the history is worth keeping
-        # because the first two diagnoses of it were wrong. Run 33730652133 named
-        # `test_a_frozen_geometry_makes_a_shape_parameter_traceable` as the test that
-        # hangs -- stalled in `float(jax.jit(jax.grad(total))(x))` -- and `thread` ends
-        # the run there, so everything after it in collection order went unrun. That
-        # was not a small blind spot: the parametric refactor had renamed
-        # `test_analytic.py` to `test_parametric.py`, moving two known failures from
-        # before this point to after it, and the run reported zero failures with both
-        # still sitting there.
-        #
-        # The deselect is gone, and with it the last of this investigation. Two separate
-        # failures wore one symptom here. `ellipse lx`, `rectangle lx` and `rectangle
-        # angle` were a deadlock in XLA's multi-threaded Eigen, which the `XLA_FLAGS`
-        # line above removes -- they came back at 91 seconds once it was set.
-        # `overlapping pair` was not that: it asked for 11559862304 bytes on a 7.9 GB
-        # runner, and this comment used to say "no flag will change that", which was
-        # true and beside the point. The request was never the physics. The chunking in
-        # `boundary.distance_gradient_normal_field` did not survive tracing -- a Python
-        # loop is one copy of the body per chunk, and reverse mode holds them all -- so
-        # with `lax.scan` and a rematerialised body the same solve asks for 0.570 GiB
-        # and the whole function passes, measured at 2202 MB against this runner's 7.9.
-        #
-        # `-m "not slow and not research"`: the tests marked slow run in their own job, `slow` below, and
-        # the two jobs together are the whole suite. Measured 2026-09-15 on the desktop under
-        # `-n 5`, the FDTD line's full suite was 97 minutes of wall clock and 484
-        # worker-minutes, and 74 cases took 281 of those. the trunk's own runs take 27 minutes
-        # there and 65 to 78 here, and by that ratio this job was headed for about 260 minutes
-        # against the 180 above. Split, this half took 42 minutes on the desktop, which is
-        # roughly 100 to 120 here by the same ratio.
-        run: >
-          python -u tools/run_verification.py --profile full --slow exclude
-          --shard ${{ matrix.shard }}/32
-          --shard-timings tools/ci_shard_timings.json
-          --workers 2 --timeout 1200 --timeout-method thread --verbose --live-output
-          --output "${{ runner.temp }}/wavebit-verification/default"
-
-      # The output also contains pytest temporary fixtures. Keep it outside the
-      # checkout so study fixtures satisfy their raw-output isolation contract.
-      # Keep receipts and partial logs after failures without uploading source copies,
-      # pytest caches or temporary fixtures. Each phase writes its reports at one level.
-      - name: Upload verification evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: verification-default-${{ matrix.shard }}
-          path: |
-            ${{ runner.temp }}/wavebit-verification/default/*.json
-            ${{ runner.temp }}/wavebit-verification/default/*/*.json
-            ${{ runner.temp }}/wavebit-verification/default/*/*.jsonl
-            ${{ runner.temp }}/wavebit-verification/default/*/*.xml
-            ${{ runner.temp }}/wavebit-verification/default/*/*.log
-            !${{ runner.temp }}/wavebit-verification/default/snapshot/**
-          if-no-files-found: warn
-          retention-days: 14
-
-  # The shards are only a verification of the suite together. This job reads the thirty-two
-  # receipts and fails unless every shard is present once, all collected the same list,
-  # the lists partition it, and every shard exited 0 -- `tools/verify_shards.py`. It runs
-  # whether or not the shards passed (`always()`), so a shard that was cancelled or whose
-  # runner died is a named failure here rather than a job that silently never reported.
-  test-complete:
-    name: full backends complete
-    runs-on: ubuntu-latest
-    needs: test
-    if: ${{ !inputs.slow_runner_diagnostics && (always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) ) }}
-    timeout-minutes: 10
+        include:
+          - jax: '0.11.0'
+            numpy: '2.5.1'
+            scipy: '1.18.0'
+            threads: ci
+            xla: '--xla_cpu_multi_thread_eigen=false'
+          - jax: '0.12.0.1'
+            numpy: '2.5.5'
+            scipy: '1.18.1'
+            threads: ci
+            xla: '--xla_cpu_multi_thread_eigen=false'
+          - jax: '0.12.0.1'
+            numpy: '2.5.5'
+            scipy: '1.18.1'
+            threads: default-xla
+            xla: ''
+    env:
+      PYTHONPATH: src
+      PYTHONIOENCODING: utf-8
+      JAX_PLATFORMS: cpu
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      XLA_FLAGS: ${{ matrix.xla }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: actions/download-artifact@v7
-        with:
-          pattern: verification-default-*
-          path: shards
-      - name: The thirty-two shards must add up to the whole partition
-        run: python tools/verify_shards.py --count 32 shards/verification-default-*/
-
-  slow:
-    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    name: slow tests (${{ matrix.shard }}/12)
-    runs-on: ubuntu-latest
-    # Time-balanced shards, first for memory isolation as in `test` above. Unsharded, this job
-    # reached 90 % (147 passed, 0 failed) before the runner shut itself down on run
-    # 38574993959; as two shards on run 38727516339 both finished, in 38 and 39 minutes. As
-    # three, shard 3 lost its runner at about 95 %, 48 minutes in, on both attempts of run
-    # 39098232669 (exit 143, the same shutdown signal), so the tier is split again: the
-    # recorded timings put each of six near 36 worker-minutes. `slow-complete` below checks
-    # the six shards add up. The cause was then measured, not guessed: the diagnostics run
-    # 39145409231 (all six passed) found these runners at 16.4 GB and four CPUs (the repository
-    # is public; the 7.9 GB above was measured while it was private), and one test,
-    # test_fdtd_painted_optics.py's resolution-20 Jacobian, taking its worker from 3.5 to
-    # 13.3 GB, the runner to 0.22 GB available. Both lost attempts died as the other worker
-    # started its own large jit beside that peak.
-    #
-    # Twelve since 2026-10-20, for the clock. As six, a shard's test step took 15 to 18
-    # minutes, and no count of whole files could do better: the largest slow file,
-    # test_fdtd_layer_gradients.py, is 21.7 worker-minutes on one worker under `loadfile`.
-    # Tests marked `shard_unit` may now run apart from the rest of their file (see
-    # `shard_files` in tools/run_verification.py); nodes that share a cache or fixture carry
-    # one name and stay together. On the recorded per-test times the largest unit is the Mie
-    # glass sweep, 8.1 worker-minutes, and twelve shards put the slowest near 11 minutes;
-    # fourteen or sixteen gain under a minute. Measured with the file table: 5.4 to 15.2
-    # minutes a shard on run 39286150908, 5.8 to 14.4 on 39357008175, whose per-unit times
-    # the table now holds.
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-    # A healthy slow shard is about 20 minutes (above); this is for a hang.
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-          cache: pip
-
-      # The same installation as `test`, for the same reasons given there.
-      - name: Install CPU-only PyTorch, then Wavebit with both optional backends, contour, and plotting
-        run: python tools/ci_constraints.py install tests
-
-      - name: Verify all three backends and contourpy are importable
-        run: python -c "import numpy, jax, torch, contourpy, matplotlib, wavebit; print(wavebit.__file__)"
-
-      # Only on a `slow_runner_diagnostics` dispatch: the instrument is checked on this
-      # runner before the slow tests rely on it. Ordinary runs test it in `test`.
-      - name: Check runner diagnostic instrument
-        if: ${{ inputs.slow_runner_diagnostics }}
-        env:
-          CUDA_VISIBLE_DEVICES: '-1'
-        run: python -m pytest tests/api/test_ci_runner_diagnostics.py -q
-
-      # The environment is `test`'s, and the comments there are the reasons for it. What
-      # differs is the per-test bound, 2400 s rather than 1200 s. The slowest of these took
-      # 752 s at `-n 5` on the desktop, and 1110 s on another run, where 1200 s killed its
-      # worker. These runners are slower than that machine, and the bound is for a hung test,
-      # not a slow one.
-      - name: Run the slow tests
-        env:
-          OPENBLAS_NUM_THREADS: 1
-          OMP_NUM_THREADS: 1
-          MKL_NUM_THREADS: 1
-          NUMEXPR_NUM_THREADS: 1
-          VECLIB_MAXIMUM_THREADS: 1
-          XLA_FLAGS: --xla_cpu_multi_thread_eigen=false
-        run: |
-          if [ "${{ inputs.slow_runner_diagnostics }}" = "true" ]; then
-            python -u tools/ci_runner_diagnostics.py --output "$RUNNER_TEMP/runner-diagnostics.jsonl" &
-            diagnostic_pid=$!
-            trap 'kill -TERM "$diagnostic_pid" 2>/dev/null || true; wait "$diagnostic_pid" || true' EXIT
-          fi
-          python -u tools/run_verification.py --profile full --slow only \
-            --shard ${{ matrix.shard }}/12 \
-            --shard-timings tools/ci_shard_timings.json \
-            --workers 2 --timeout 2400 --timeout-method thread --verbose --live-output \
-            --output "${{ runner.temp }}/wavebit-verification/slow"
-
-      - name: Upload runner diagnostics
-        if: ${{ always() && inputs.slow_runner_diagnostics }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: runner-diagnostics-slow-${{ matrix.shard }}
-          path: ${{ runner.temp }}/runner-diagnostics.jsonl
-          if-no-files-found: warn
-          retention-days: 14
-
-      # The output also contains pytest temporary fixtures. Keep it outside the
-      # checkout so study fixtures satisfy their raw-output isolation contract.
-      # Keep receipts and partial logs after failures without uploading source copies,
-      # pytest caches or temporary fixtures. Each phase writes its reports at one level.
-      - name: Upload verification evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: verification-slow-${{ matrix.shard }}
-          path: |
-            ${{ runner.temp }}/wavebit-verification/slow/*.json
-            ${{ runner.temp }}/wavebit-verification/slow/*/*.json
-            ${{ runner.temp }}/wavebit-verification/slow/*/*.jsonl
-            ${{ runner.temp }}/wavebit-verification/slow/*/*.xml
-            ${{ runner.temp }}/wavebit-verification/slow/*/*.log
-            !${{ runner.temp }}/wavebit-verification/slow/snapshot/**
-          if-no-files-found: warn
-          retention-days: 14
-
-  slow-complete:
-    name: slow tests complete
-    runs-on: ubuntu-latest
-    needs: slow
-    # Also on a diagnostics dispatch, which runs every slow shard: it then checks the slow
-    # tier alone, still not the whole CI.
-    if: ${{ always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - uses: actions/download-artifact@v7
-        with:
-          pattern: verification-slow-*
-          path: shards
-      - name: The twelve shards must add up to the whole slow partition
-        run: python tools/verify_shards.py --count 12 shards/verification-slow-*/
-
-  # A diagnostics dispatch skips most of CI, so it must never conclude as a successful
-  # `tests` run: release-gate.yml accepts any successful run on the release commit. This
-  # job fails it on purpose; read the slow tier's verdict from `slow tests complete`.
-  diagnostics-not-a-gate:
-    name: diagnostics run, not a CI gate
-    if: ${{ inputs.slow_runner_diagnostics }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Fail the run so no gate counts it
-        run: |
-          echo "::error::slow_runner_diagnostics skips most of CI; this run is not a CI pass. The slow tier's own result is the 'slow tests complete' job."
-          exit 1
-
-  examples:
-    if: ${{ !inputs.slow_runner_diagnostics && (github.event_name != 'pull_request' || !github.event.pull_request.draft ) }}
-    name: examples smoke
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-          cache: pip
-
-      # Both backends, because `shapes_1d` solves on torch,
-      # `shapes_2d` on jax, and the two `_verification` ones run all three.
-      # The FDTD recording example also exercises the optional plot extra.
-      # The CPU torch wheel goes in first, as in `test`, at the versions in tests.txt.
-      - name: Install CPU-only PyTorch, then Wavebit with both optional backends
-        run: python tools/ci_constraints.py install examples
-
-      # Runs every examples/**/*.py from its own directory under MPLBACKEND=Agg and
-      # fails on a non-zero exit or a `Traceback`.
-      #
-      # This says the examples still RUN, and nothing about whether their numbers are
-      # right -- there is no per-scene expected value here to compare against. It used
-      # to also fail on an `UnphysicalResultWarning`; that check was removed from the
-      # solver (docs/reference/common/result-guards.md). The physics is checked in tests/.
-      - name: Run every example
-        run: python tools/run_examples_smoke.py
-
-      - name: Run current API tutorial notebooks in fresh interpreters
-        run: python tools/run_tutorials_smoke.py
-
-  minimal:
-    if: ${{ !inputs.slow_runner_diagnostics && (github.event_name != 'pull_request' || !github.event.pull_request.draft ) }}
-    name: distribution (${{ matrix.os }}, Python ${{ matrix.python-version }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        # pyproject admits Python >= 3.12. Every other job runs 3.12; 3.13 here catches an
-        # install, import or packaging break on it, on all three OSes, for three runners.
-        # It does not run the numerical suite on 3.13.
-        python-version: ['3.12', '3.13']
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-      - name: Install distribution tooling
-        run: python tools/ci_constraints.py install distribution-tools
-      # The smoke builds in an isolated environment and installs into a venv of its own; the
-      # PIP_* variables carry `.github/constraints/distribution.txt` into both.
-      - name: Apply the recorded versions to the smoke's own pip calls
+      - name: Install diagnostic dependencies
+        run: python -m pip install "jax==${{ matrix.jax }}" "jaxlib==${{ matrix.jax }}" "numpy==${{ matrix.numpy }}" "scipy==${{ matrix.scipy }}" array-api-compat==1.16.0
+      - name: Compare original grouping and separate calls
         shell: bash
-        run: python tools/ci_constraints.py env distribution >> "$GITHUB_ENV"
-      - name: Build and exercise an isolated installed distribution
-        run: python tools/run_distribution_smoke.py --output "${{ runner.temp }}/wavebit-distribution"
-
-  docs:
-    if: ${{ !inputs.slow_runner_diagnostics && (github.event_name != 'pull_request' || !github.event.pull_request.draft ) }}
-    name: docs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-          cache: pip
-
-      # The package itself, because autodoc imports it to read the docstrings -- NumPy only,
-      # since nothing on the public surface needs an optional backend to be introspected.
-      - name: Install Wavebit and the docs extra
-        run: python tools/ci_constraints.py install docs
-
-      - name: Check installed licenses against the reviewed inventory
-        run: python tools/check_licenses.py
-
-      # `-W` turns every warning into a failure, and that is the whole check rather than a
-      # tidiness preference. `docs/reference/api.md` names objects by hand, and autodoc
-      # reports a name it cannot import as a warning -- so with `-W`, a public symbol that is
-      # renamed or moved fails this job instead of leaving a quietly shorter page. It also
-      # catches a dead cross-reference and a `_toc.yml` entry with no file. The build is at
-      # zero warnings, which is what makes the switch usable.
-      - name: Build English and Korean sites, warnings as errors
         run: |
-          python -m sphinx -W -b html -D wavebit_bilingual=1 -d docs/_build/doctrees/en docs docs/_build/html
-          python -m sphinx -W -b html -D wavebit_bilingual=1 -D language=ko -d docs/_build/doctrees/ko docs docs/_build/html/ko
+          mkdir -p artifacts/grouped-call
+          python - <<'PY'
+          import json, platform, subprocess, sys
+          from pathlib import Path
+          root = Path('artifacts/grouped-call')
+          base = Path('studies/rcwa/nvf_fitting_grid')
+          cases = [
+              ('centre-plus-joined', []),
+              ('centre-minus-joined', ['--offset=-.1']),
+              ('centre-plus-separate', ['--execution=separate']),
+              ('centre-minus-separate', ['--execution=separate', '--offset=-.1']),
+              ('jacobian-joined', ['--mode=jacobian', '--offset=0']),
+              ('jacobian-separate', ['--mode=jacobian', '--offset=0', '--execution=separate']),
+          ]
+          codes = {}
+          for name, args in cases:
+              print('START', name, flush=True)
+              with (root/(name+'.log')).open('w', encoding='utf-8') as log:
+                  codes[name] = subprocess.call([sys.executable, str(base/'jit_groups_guard.py'),
+                      str(root/(name+'.guard.json')), sys.executable, str(base/'jit_groups_diagnostic.py'),
+                      '--output', str(root/(name+'.json')), *args], stdout=log, stderr=subprocess.STDOUT)
+              print('END', name, codes[name], flush=True)
+          receipt = dict(exit_codes=codes, platform=platform.platform(), machine=platform.machine())
+          import numpy as np
+          comparisons = {}
+          for name in ('centre-plus', 'centre-minus', 'jacobian'):
+              if codes[name+'-joined'] or codes[name+'-separate']:
+                  continue
+              a = json.loads((root/(name+'-joined.json')).read_text(encoding='utf-8'))['repeats'][0]
+              b = json.loads((root/(name+'-separate.json')).read_text(encoding='utf-8'))['repeats'][0]
+              comparisons[name] = {}
+              for key, rtol, atol in [('values', 1e-10, 1e-12), ('jacobian', 1e-8, 1e-11)]:
+                  if a[key] is None:
+                      continue
+                  comparisons[name][key] = dict(max_abs=float(np.max(np.abs(np.asarray(a[key])-b[key]))),
+                      passed=bool(np.allclose(a[key], b[key], rtol=rtol, atol=atol)))
+          receipt['comparisons'] = comparisons
+          (root/'receipt.json').write_text(json.dumps(receipt, indent=2)+'\n', encoding='utf-8')
+          print(json.dumps(receipt, indent=2), flush=True)
+          assert not any(codes.values())
+          assert all(v['passed'] for row in comparisons.values() for v in row.values())
+          PY
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: grouped-call-macos-jax-${{ matrix.jax }}-${{ matrix.threads }}
+          path: artifacts/grouped-call/

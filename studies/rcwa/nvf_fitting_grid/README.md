@@ -2,6 +2,8 @@
 
 | Entry | Question it answers |
 | --- | --- |
+| `jit_groups_diagnostic.py` | Does one JIT containing six five-lane vmaps complete with the same values and derivatives as separate compiled calls? |
+| `jit_groups_guard.py` | Does a CPU diagnostic make progress, or does it stall with a native stack available for inspection? |
 | `nvf_fitting_grid.py` | How far do four fitted dimensions move when the normal-field grid changes, with the target and Fourier order held fixed? |
 | `check_grid.py` | Are fixed-geometry values and derivatives stable under grid refinement, and does AD agree with finite differences? |
 | `shared_matrix_model.py` | Can this nondispersive case share its geometry matrix build across wavelengths without changing values or derivatives? |
