@@ -21,7 +21,9 @@ def solver(backend='jax', **kwargs):
     return _legacy_wavebit_rcwa(backend=backend, **(cfg | kwargs))
 
 
-@pytest.mark.timeout(30)
+# Leak checking includes cold JAX compilation and can approach 30 seconds on CI.
+# Bound stalled execution without making this state-ownership check a speed test.
+@pytest.mark.timeout(120)
 @pytest.mark.parametrize('door', ['solve', 'solve_field', 'solve_field_eager'])
 def test_fit_releases_state_before_jax_checks_leaks(door):
     s = solver()
