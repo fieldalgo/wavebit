@@ -5,6 +5,8 @@
 | `nvf_fitting_grid.py` | How far do four fitted dimensions move when the normal-field grid changes, with the target and Fourier order held fixed? |
 | `check_grid.py` | Are fixed-geometry values and derivatives stable under grid refinement, and does AD agree with finite differences? |
 | `shared_matrix_model.py` | Can this nondispersive case share its geometry matrix build across wavelengths without changing values or derivatives? |
+| `batch_memory.py` | How much memory does the spectral `jit(jacfwd(vmap))` need, and does its Jacobian agree with separate scalar calls? |
+| `batch-memory.json` | Did geometry-only candidate selection and bounded dense integration remove the measured 30-lane memory regression? |
 | `measurement.json` | Did the historical solver `18bbcbfd` meet both refinement tolerances through grid 1024? |
 | `integral-fixed-point.json` | How did fixed-point spectra, Jacobians and finite differences compare after the integral normal field landed? |
 | `integral-fitting.json` | Does refitting the integral construction meet the unchanged parameter and spectral refinement criteria? |
@@ -26,6 +28,18 @@ avoids tracing the entire spectrum as one large program. Larger batches can cost
 substantially more compilation memory; start with the default. Batching does not
 change the observations or numerical tolerances. `Model(...)(p, derivative=False)`
 uses a separate value-only function for finite-difference checks.
+
+`batch_memory.py` isolates that execution question at grid 128 and orders (4, 4).
+It defaults to **30 s-polarized wavelengths** from 800 to 1200 nm; `--mixed` uses
+15 wavelengths for each of s and p. Run `--execution vmap` and `--execution scalar`
+in separate fresh processes with identical `--lanes`, `--grid` and polarization
+settings. Each requires a new `--output` JSON path. The record includes compiled
+temporary bytes, available process peak RSS, source hash, timings, all Jacobian
+entries and independently evaluated scalar values/validity. The peak and execution
+time cover the Jacobian calculation; the subsequent scalar value checks are
+excluded. Windows records RSS as `null` because `resource` is unavailable.
+This measures execution, not grid convergence or a new fit. Large batches still
+require a suitable memory budget; bounded scalar calls remain the fallback.
 
 Both commands accept `--shared-matrices` for this fixed N5 case. Its materials
 are wavelength-independent, scalar and nonmagnetic, so the layer convolution

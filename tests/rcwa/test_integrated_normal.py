@@ -189,6 +189,110 @@ def test_jax_sparse_and_dense_fallback_match_values_and_shape_derivatives(
     assert float(derivative) == pytest.approx(float(secant), rel=2e-5, abs=2e-7)
 
 
+def test_spectral_candidates_keep_conditional_execution_and_zero_contrast_mask():
+    jax = pytest.importorskip("jax")
+    import jax.numpy as jnp
+
+    jax.config.update("jax_enable_x64", True)
+    angles = np.linspace(0.0, 2 * np.pi, 96, endpoint=False)
+    ellipse = np.stack(
+        [0.12 * np.cos(angles) + 0.65, 0.09 * np.sin(angles) + 0.65], axis=-1
+    )
+    rectangle = np.array([[0., 0.], [.2, 0.], [.2, .2], [0., .2]])
+    cell = ((1.0, 0.0), (0.0, 1.0))
+    transform = b.reduction_transform(cell)
+    plan = b.plan_interfaces([(4., [rectangle]), (9., [ellipse])], cell, transform)
+
+    def field(xp, epsilon):
+        regions = [(epsilon, [xp.asarray(rectangle)]), (9., [xp.asarray(ellipse)])]
+        segments = b.replay_interfaces(xp, regions, 1., cell, transform, plan)
+        contrasts = b.interface_contrasts(xp, regions, 1., plan, xp.float64)
+        return xp.stack(b.material_projector_fields(
+            xp, (5, 5), cell, xp.float64, segments, contrasts, plan, transform,
+        ))
+
+    epsilons = np.array([1., 4., 9.])
+    batched = jax.vmap(lambda epsilon: field(jnp, epsilon))
+    # The rectangle disappears optically in lane zero, including at grid points
+    # on its boundary. Retaining it as a candidate must not set the pole scale.
+    want = np.stack([field(np, epsilon) for epsilon in epsilons])
+    np.testing.assert_allclose(jax.jit(batched)(jnp.asarray(epsilons)), want,
+                               rtol=0, atol=2e-12)
+
+    def has_conditional(value):
+        if hasattr(value, "eqns"):
+            return any(e.primitive.name == "cond" or has_conditional(e.params)
+                       for e in value.eqns)
+        if hasattr(value, "jaxpr"):
+            return has_conditional(value.jaxpr)
+        if isinstance(value, dict):
+            return any(has_conditional(v) for v in value.values())
+        if isinstance(value, (tuple, list)):
+            return any(has_conditional(v) for v in value)
+        return False
+
+    # A batched predicate becomes select, which executes both branches. Material
+    # variation alone must leave this geometry-dependent conditional intact.
+    assert has_conditional(jax.make_jaxpr(batched)(jnp.asarray(epsilons)))
+
+
+def test_batched_dense_integral_bounds_memory_and_preserves_derivatives(monkeypatch):
+    jax = pytest.importorskip("jax")
+    import jax.numpy as jnp
+    from wavebit.rcwa._engine import integrated_normal
+
+    jax.config.update("jax_enable_x64", True)
+    # Exercise overflow cheaply, with independently varying geometry/materials
+    # and a zero-contrast lane that must retain the empty-field convention.
+    monkeypatch.setattr(integrated_normal, "_CANDIDATE_CAPACITY", 32)
+    angles = np.linspace(0.0, 2 * np.pi, 96, endpoint=False)
+    vertices = np.stack(
+        [0.2 * np.cos(angles) + 0.5, 0.14 * np.sin(angles) + 0.5], axis=-1
+    )
+    cell = ((1.0, 0.0), (0.0, 1.0))
+    transform = b.reduction_transform(cell)
+    plan = b.plan_interfaces([(4.0, [vertices])], cell, transform)
+    weights = np.arange(63).reshape(7, 9) / 63
+    lanes = np.linspace(-3.0, 1.0, 32)
+
+    def objective(xp, q, lane, chunk):
+        v = xp.asarray(vertices) * q + xp.stack([lane * 0.001, xp.asarray(0.0)])
+        regions = [(4.0 + lane, [v])]
+        segments = b.replay_interfaces(xp, regions, 1.0, cell, transform, plan)
+        contrasts = b.interface_contrasts(xp, regions, 1.0, plan, xp.float64)
+        field = b.material_projector_fields(
+            xp, (7, 9), cell, xp.float64, segments, contrasts, plan, transform,
+            chunk=chunk,
+        )[0]
+        return xp.sum(field * xp.asarray(weights))
+
+    def values(q, chunk):
+        return jax.vmap(lambda lane: objective(jnp, q, lane, chunk))(jnp.asarray(lanes))
+
+    q = jnp.ones(2)
+    pointwise = jax.jit(jax.jacfwd(lambda q: values(q, 1))).lower(q).compile()
+    batched = jax.jit(jax.jacfwd(lambda q: values(q, 63))).lower(q).compile()
+    small = pointwise.memory_analysis().temp_size_in_bytes
+    large = batched.memory_analysis().temp_size_in_bytes
+    # A whole grid of points must not multiply the dense working set. Compare
+    # the same compiler/input against its one-point control, not a platform RSS.
+    assert large <= 2 * small, (small, large)
+    got = np.asarray(batched(q))
+    np.testing.assert_allclose(got, pointwise(q), rtol=2e-12, atol=2e-12)
+    want = np.array([objective(np, np.ones(2), lane, 8) for lane in lanes])
+    np.testing.assert_allclose(jax.jit(lambda q: values(q, 63))(q), want, rtol=0, atol=2e-12)
+    h = 1e-5
+    secant = np.stack([
+        [(objective(np, np.ones(2) + h * axis, lane, 8)
+          - objective(np, np.ones(2) - h * axis, lane, 8)) / (2 * h)
+         for lane in lanes]
+        for axis in np.eye(2)
+    ], axis=1)
+    np.testing.assert_allclose(got, secant, rtol=2e-5, atol=2e-7)
+    reverse = jax.jit(jax.jacrev(lambda q: values(q, 63)))(q)
+    np.testing.assert_allclose(reverse, secant, rtol=2e-5, atol=2e-7)
+
+
 def test_compact_support_has_no_value_or_slope_step():
     a = np.array([[-0.2, 0.0], [-0.2, 1.3]])
     e = np.array([[0.4, 0.0], [0.4, 0.0]])

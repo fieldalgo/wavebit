@@ -163,7 +163,8 @@ def projector_fields(
     )[2]
     strength = contrasts[xp.asarray(ids)]
     distinct = xp.asarray([pair[0] != pair[1] for pair in pairs])
-    valid = (strength > 0) & distinct & (xp.sum(E * E, axis=1) > 0) & ~repeat
+    geometric = distinct & (xp.sum(E * E, axis=1) > 0) & ~repeat
+    valid = (strength > 0) & geometric
     t = E / xp.sqrt(L2)[:, None]
     nx, ny = t[:, 1], -t[:, 0]
     contrast = strength**4
@@ -218,7 +219,7 @@ def projector_fields(
             ny[copies],
         )
 
-    def integrate(p, a, e, l2, live, weight, normal_x, normal_y, indices=None):
+    def integrate_block(p, a, e, l2, live, weight, normal_x, normal_y, indices=None):
         count = a.shape[0]
         if extra is not None:
             a = xp.concat([a, extra[0]], axis=0)
@@ -257,6 +258,25 @@ def projector_fields(
             axis=-1,
         )
 
+    def integrate(p, a, e, l2, live, weight, normal_x, normal_y, indices=None):
+        if "jax" in xp.__name__:
+            # vmap turns a lane-dependent cond into a select: even a sparse lane
+            # can execute the dense fallback. Bound its point x interval arrays
+            # by the sparse branch's working size, including facing corrections.
+            # Split points only: the nearest-distance scale and ordered interval
+            # reductions must still see every interval of each individual point.
+            intervals = len(a) + (len(extra[0]) if extra is not None else 0)
+            rows = max(1, (chunk or 256) * _CANDIDATE_CAPACITY // intervals)
+            if len(p) > rows:
+                return b._scanned_normals(
+                    xp,
+                    lambda points: integrate_block(
+                        points, a, e, l2, live, weight, normal_x, normal_y, indices
+                    ),
+                    p, len(p), rows, width=3,
+                )
+        return integrate_block(p, a, e, l2, live, weight, normal_x, normal_y, indices)
+
     def full(p):
         return integrate(p, A, E, L2, valid, contrast, nx, ny)
 
@@ -268,7 +288,11 @@ def projector_fields(
         # cutoff. The conservative box test can retain extra intervals harmlessly.
         gap = xp.maximum(lower - xp.max(p, axis=0), xp.min(p, axis=0) - upper)
         gap = xp.maximum(gap, xp.zeros_like(gap))
-        keep = valid & (xp.sum(gap**2, axis=1) <= radius**2)
+        # Candidate locations depend on geometry only. Including spectral
+        # contrast here batches the predicate even for a shared geometry, so
+        # vmap executes the dense fallback too. Zero-contrast candidates are
+        # harmless extra slots, provided the integral still uses their live mask.
+        keep = geometric & (xp.sum(gap**2, axis=1) <= radius**2)
         if "jax" in xp.__name__ and len(A) > _CANDIDATE_CAPACITY:
             # Static-size gather for JIT/AD, with a full fallback for dense scenes.
             # No assumption about a maximum physical interface count is made.
@@ -276,7 +300,7 @@ def projector_fields(
 
             count = xp.sum(xp.astype(keep, xp.int64))
             index = xp.nonzero(keep, size=_CANDIDATE_CAPACITY, fill_value=0)[0]
-            selected = xp.arange(_CANDIDATE_CAPACITY) < count
+            selected = (xp.arange(_CANDIDATE_CAPACITY) < count) & valid[index]
             return jax.lax.cond(
                 count <= _CANDIDATE_CAPACITY,
                 lambda _: integrate(
