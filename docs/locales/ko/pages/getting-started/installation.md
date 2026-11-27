@@ -80,16 +80,25 @@ conda activate wavebit
 ## 요구 버전과 높은 하한의 이유
 
 Python ≥ 3.12, NumPy ≥ 2.5.1, SciPy ≥ 1.18, array-api-compat가 필요합니다.
-선택적 백엔드는 `jax >= 0.11` 또는 `torch >= 2.14`입니다.
+선택적 백엔드는 `jax >= 0.11.1`과 `jaxlib >= 0.11.1`, 또는 `torch >= 2.14`입니다.
 
-이 하한은 작동할 가능성이 있는 최저 버전이 아니라 시험을 실제로 검증한 버전입니다.
-나중에 낮출 수는 있지만 release 뒤 올리는 것은 안전하지 않으므로 엄격하게
-시작합니다. 일부 하한은 알려진 결함보다 높습니다. NumPy 2.2.5–2.3.0은
-복소수 `matmul`의 부동소수점 상태를 잘못 보고하여 올바른 효율을 반환하면서도
-`RuntimeWarning: ... encountered in matmul`을 반복 출력하고, Torch 2.13
-미만은 solver를 compile할 수 없습니다. 각 하한의 이유는
-[`pyproject.toml`](https://github.com/fieldalgo/wavebit/blob/main/pyproject.toml)에
-주석으로 기록되어 있습니다. 더 오래된 버전이 필요하면 검증 후 하한을 낮출 수 있습니다.
+하한은 필요한 백엔드 기능과 확인된 결함의 경계를 반영합니다.
+[검증 가이드](../development/verification.md)는 전체 CI 환경과 버전·플랫폼별
+개별 검증을 구분합니다. JAX/jaxlib 0.11.0은 물리적으로 유효한 스펙트럼 묶음에서도
+CPU의 배치 LU/SVD 계산이 교착할 수 있습니다. 공개 0.11.1 wheel은 중첩된 스레드 풀
+경로를 비활성화했습니다. Wavebit는 장치 설정 전에 실제 로드된 JAX와 jaxlib 버전을
+확인하고, 오래된 환경에는 `execution.jax_version`을 반환합니다. 소스 checkout이나
+의존성 설치를 생략한 환경도 같은 검사를 거칩니다.
+두 패키지를 갱신한 뒤 Python 프로세스를 다시 시작하세요. 디스크의 파일만 바꾸어서는
+이미 로드된 네이티브 라이브러리가 교체되지 않습니다. 현재 전체 CI는 0.12.0.1을
+사용합니다. 원 모델·플랫폼 범위·수치 대조는
+[묶음 실행 측정](../validation/rcwa/fitting-grid-convergence.md#묶음-jit-실행과-jax-버전)을 참고하세요.
+
+다른 하한도 알려진 결함을 제외합니다. NumPy 2.2.5–2.3.0은 복소수 `matmul`의
+부동소수점 상태를 잘못 보고하여 올바른 효율을 반환하면서도 경고를 반복하며,
+Torch 2.13 미만은 solver를 compile할 수 없습니다. 각 하한의 이유는
+[`pyproject.toml`](https://github.com/fieldalgo/wavebit/blob/main/pyproject.toml)에 적혀 있습니다.
+이전 버전의 지원을 재검토하려면 별도 검증이 필요합니다.
 
 `contourpy`는 `raster_normal_method='contour'`만 사용하므로 선택적입니다.
 Matplotlib에 포함되어 대부분의 환경에 이미 설치되어 있습니다.

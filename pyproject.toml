@@ -54,10 +54,12 @@ dependencies = [
 # The jax floor is a hard requirement on top of the verification rule, not just a record:
 # src/wavebit/_common/backend.py calls jax.lax.linalg.eig(enable_eigvec_derivs=True), which does not
 # exist before 0.11 -- an older jax installs fine and then fails at the first
-# eigendecomposition.
+# eigendecomposition. Public jaxlib wheels before 0.11.1 can also deadlock when
+# batched LU/SVD calls share the CPU thread pool. From 0.11.1 those wheels execute
+# each LAPACK batch without recursively scheduling work onto that pool.
 jax = [
-    "jax>=0.11",
-    "jaxlib>=0.11",
+    "jax>=0.11.1",
+    "jaxlib>=0.11.1",
     "optax>=0.2",
     "tqdm>=4.67",
 ]

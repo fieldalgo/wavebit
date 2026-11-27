@@ -306,7 +306,7 @@ check 시 `rcwa.unsupported`로 거부됩니다.
 
 | 필드 | 기본값 | 받는 값 | 거부하는 값 |
 | --- | --- | --- | --- |
-| `backend` | `'numpy'` | 정확히 `'numpy'`, `'jax'` 또는 `'torch'`, 또는 `wavebit.Backend` 멤버 | 그 밖의 모든 것(`'JAX'`, `1`): `execution.backend`. 설치되지 않은 extra: `execution.backend_unavailable`. `rcwa`에서 `'numpy'`나 `'jax'` 아래에, 문제의 어딘가에 PyTorch가 미분하는 PyTorch 텐서(`requires_grad`, 또는 순방향 모드나 `torch.func` 접선)가 있는 경우: 필드 경로와 함께 `execution.backend_autodiff`, check 시(grad가 필요 없는 텐서는 숫자로 읽힙니다) |
+| `backend` | `'numpy'` | 정확히 `'numpy'`, `'jax'` 또는 `'torch'`, 또는 `wavebit.Backend` 멤버 | 그 밖의 모든 것(`'JAX'`, `1`): `execution.backend`. 설치되지 않은 extra: `execution.backend_unavailable`. 로드한 `jax` 또는 `jaxlib`가0.11.1 미만: `execution.jax_version`(둘 다 갱신하고 Python 재시작). `rcwa`에서 `'numpy'`나 `'jax'` 아래에, 문제의 어딘가에 PyTorch가 미분하는 PyTorch 텐서(`requires_grad`, 또는 순방향 모드나 `torch.func` 접선)가 있는 경우: 필드 경로와 함께 `execution.backend_autodiff`, check 시(grad가 필요 없는 텐서는 숫자로 읽힙니다) |
 | `device` | `'cpu'` | 문자열: `'cpu'`. PyTorch에서는 `'cpu:0'`(유일한 CPU 장치. N > 0인 `'cpu:N'`은 존재하지 않는 장치입니다), `'cuda'` 또는 `'cuda:N'`도 가능. JAX에서는 `'gpu'` 또는 `'tpu'`도 가능하며, 선택적으로 `:N`을 붙입니다 | 문자열이 아님(`0`): `execution.device`. CPU가 아닌 NumPy, PyTorch의 `'mps'` 또는 JAX의 `'cuda'`: `execution.device`. 존재하지 않는 장치: `execution.device_unavailable` |
 | `precision` | `'double'` | `'double'`(complex128) 또는 `'single'`(complex64) | 그 밖의 모든 것: `execution.precision`. `jax.config.update("jax_enable_x64", True)` 이전의 JAX `'double'`: `execution.jax_x64` |
 
@@ -401,7 +401,7 @@ result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(2, 2), factorization='
 | `decay_check` | `decay_check.threshold`, `decay_check.window_seconds` | `fdtd.native`, `fdtd.periodic` |
 | `dispersion` | `dispersion.poles` | `fdtd.periodic` |
 | `excitation` | `excitation.sources` | `rcwa`, `fdtd.periodic` |
-| `execution` | `execution.backend`, `execution.backend_unavailable`, `execution.device`, `execution.device_unavailable`, `execution.precision`, `execution.jax_x64`, `execution.backend_autodiff`(`rcwa`). `execution.cuda_scope`(검증된 FDTD CUDA 경로 밖) | 모든 솔버. `fdtd` |
+| `execution` | `execution.backend`, `execution.backend_unavailable`, `execution.device`, `execution.device_unavailable`, `execution.precision`, `execution.jax_version`, `execution.jax_x64`, `execution.backend_autodiff`(`rcwa`). `execution.cuda_scope`(검증된 FDTD CUDA 경로 밖) | 모든 솔버. `fdtd` |
 | `experimental` | `experimental.orders` | `rcwa.experimental` |
 | `fdtd` | `fdtd.invalid`(생성자가 거부하는 `Domain`, `Plane` 또는 `TimeSeriesMonitor` 이름이나 성분도 해당), `fdtd.unsupported`, `fdtd.padding_continuation`, `fdtd.torch_transform`(`torch.func.vmap`, `jacfwd` 또는 `hessian` 아래의 Torch 실행, 또는 `jacrev` 아래의 체크포인트 실행) | `fdtd` |
 | `field` | `field.coordinates`, `field.side`, `field.part`(`result.boundary_fields`), `field.reconstruction` | `rcwa` |

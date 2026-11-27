@@ -307,3 +307,68 @@ the baseline exceeded that control by 10.68 times. These checks qualify executio
 not grid convergence. Total memory still grows with batch size, geometry,
 derivative directions and optical matrix dimensions; this is not a universal
 memory ceiling or a claim of the historical 2 GiB footprint on every platform.
+
+## Grouped JIT execution and JAX versions
+
+A separate CPU liveness failure occurs in JAX/jaxlib 0.11.0. On solver base
+`91badd36`, six five-lane `vmap` calls concatenated inside one JIT can stop after
+compilation, even though the geometry and materials are valid. This measurement
+uses the N5 **15 s + 15 p** observations, grid 128, orders (4, 4), double precision,
+and all four parameters. The value-only calls prepare concrete geometry at
+ellipse centre x = 90.1 and 89.9 nm (the original `10h` central-difference pair);
+the Jacobian calls use the preparation at the generating parameters with host
+topology checks and return the values and validity flags alongside all 120 entries.
+
+On Linux, the 0.11.0 joined value call compiled in 207.4 s, then stopped making
+CPU progress. Native stacks showed all five worker threads waiting in
+`ParallelBatchMap` / `BlockingCounter::Wait`: three in `lapack_zgesdd_ffi` (SVD),
+two in `lapack_zgetrf_ffi` (LU). This is a thread-pool starvation deadlock, not a
+physical rejection or the preceding memory regression. Separate five-lane calls
+also stalled after four groups on that runtime; splitting calls is not a general
+cure for the affected library.
+
+The macOS 26.7.2 arm64 runner also stalled in all six 0.11.0 cases (joined and
+separate centre± values and origin Jacobians). Its centre+ joined native sample
+shows two SVD workers and one LU worker waiting in the same nested pool path.
+The process guard interrupted these calls after 120 s without CPU progress;
+none is counted as a completed spectrum.
+
+The public JAX 0.11.1 wheels disable this nested LAPACK thread-pool path
+([upstream change](https://github.com/jax-ml/jax/commit/859992407d38c09dfb0cb97d4da00e9fdd9e7830),
+[release source](https://github.com/jax-ml/jax/blob/jax-v0.11.1/jaxlib/cpu/lapack_kernels.cc)).
+The dependency floor and `Execution` admission check now require both JAX and
+jaxlib >= 0.11.1, before device initialization or graph tracing. An older loaded
+runtime returns `execution.jax_version` with upgrade/restart guidance. The solver's
+linear algebra, derivatives, numerical tolerances and global thread settings are
+unchanged.
+
+Completed measurements use the same 30 observations and 120 Jacobian entries:
+
+| Runtime / platform | Completed cases | Maximum joined/separate value difference | Maximum Jacobian difference |
+|---|---|---|---|
+| 0.11.1 / macOS arm64, CI threads | 6 / 6 | 4.33e-15 | 3.93e-14 |
+| 0.12.0.1 / Linux x86_64, CI threads | 6 / 6 | 0 | 0 |
+| 0.12.0.1 / macOS arm64, CI threads | 6 / 6 | 2.89e-15 | 5.52e-14 |
+| 0.12.0.1 / macOS arm64, default XLA | 6 / 6 | 4.67e-15 | 5.52e-14 |
+
+CI threads means BLAS/OpenMP thread counts of 1 and
+`XLA_FLAGS=--xla_cpu_multi_thread_eigen=false`. The default-XLA measurement keeps
+the BLAS/OpenMP limits and leaves XLA flags empty. Every completed case has
+finite values/derivatives and true validity flags. Linux uses Python 3.12.14;
+macOS uses 3.12.10. These are measurements on the stated runners, not the original
+reporter's exact hardware.
+
+The [retained record](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_fitting_grid/grouped-execution.json)
+contains the completed values/Jacobians, comparison tolerances and interrupted
+runs. The [reproducer](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_fitting_grid/grouped_execution.py)
+measures one execution strategy per fresh process; choose `--execution joined`
+or `separate`, `--mode value` with `--offset 0.1` or `-0.1`, or `--mode jacobian
+--offset 0`. Each command requires a new `--output` path. Compare values with
+`rtol=1e-10, atol=1e-12` and Jacobians with `rtol=1e-8, atol=1e-11`; every validity
+flag must be true. Measuring an affected historical checkout requires an external
+process timeout and must not be reported as completed when interrupted.
+
+This checks CPU completion and agreement between execution strategies at the same
+normal grid. It does not establish grid convergence, full numerical support on
+all operating systems, or a guarantee that arbitrary future JAX versions cannot
+have other concurrency defects.

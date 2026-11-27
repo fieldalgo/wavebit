@@ -77,16 +77,25 @@ conda activate wavebit
 ## Requirements, and why the floors are high
 
 Python ≥ 3.12, NumPy ≥ 2.5.1, SciPy ≥ 1.18 and array-api-compat. With the optional backends,
-`jax >= 0.11` or `torch >= 2.14`.
+`jax >= 0.11.1` with `jaxlib >= 0.11.1`, or `torch >= 2.14`.
 
-The floors are the versions the suite is **actually verified against**, not the oldest that
-might work. Loosening one later is safe; tightening one after a release is not, so they start
-strict. Two of them also sit above a known defect — NumPy 2.2.5 through 2.3.0 mis-report the
-floating-point status of a complex `matmul`, printing hundreds of `RuntimeWarning: ...
-encountered in matmul` while returning correct efficiencies, and torch below 2.13 cannot compile
-the solver at all. Every floor is commented in
-[`pyproject.toml`](https://github.com/fieldalgo/wavebit/blob/main/pyproject.toml) with the
-reason it sits where it does. If you need an older one, verify it and the floor can come down.
+The floors reflect required backend features and known failure boundaries; the
+[verification guide](../development/verification.md) distinguishes the full CI environment
+from targeted version and platform checks. JAX/jaxlib 0.11.0 can deadlock in CPU batched
+LU/SVD operations, including physically valid grouped spectral calculations. The public
+0.11.1 wheels disable that nested thread-pool path. Wavebit checks the loaded JAX and
+jaxlib versions before device setup and reports `execution.jax_version` in older
+environments, including source checkouts and installations made without dependencies.
+Upgrade both packages and restart the Python process; changing files on disk cannot
+replace an already loaded native library. The current full CI uses 0.12.0.1. See the
+[grouped execution measurements](../validation/rcwa/fitting-grid-convergence.md#grouped-jit-execution-and-jax-versions)
+for the original model, platform coverage and numerical comparisons.
+
+Other floors also exclude known defects. NumPy 2.2.5 through 2.3.0 mis-report the
+floating-point status of a complex `matmul`, emitting repeated warnings while returning
+correct efficiencies, and torch below 2.13 cannot compile the solver at all. Each floor is
+commented in [`pyproject.toml`](https://github.com/fieldalgo/wavebit/blob/main/pyproject.toml).
+Older versions need separate validation before their support can be reconsidered.
 
 `contourpy` is optional because only `raster_normal_method='contour'` reads it; it ships with
 matplotlib, so most environments already have it.

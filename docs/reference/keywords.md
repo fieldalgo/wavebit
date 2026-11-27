@@ -307,7 +307,7 @@ is how a `wavebit.Job` carries them. It is validated when a run uses it, not whe
 
 | Field | Default | Accepts | Refuses |
 | --- | --- | --- | --- |
-| `backend` | `'numpy'` | `'numpy'`, `'jax'` or `'torch'`, exactly, or a `wavebit.Backend` member | anything else (`'JAX'`, `1`): `execution.backend`; an extra that is not installed: `execution.backend_unavailable`; in `rcwa`, under `'numpy'` or `'jax'`, a PyTorch tensor that PyTorch differentiates (`requires_grad`, or a forward-mode or `torch.func` tangent) anywhere in the problem: `execution.backend_autodiff`, at check, with the field's path (a tensor that needs no grad is read as a number) |
+| `backend` | `'numpy'` | `'numpy'`, `'jax'` or `'torch'`, exactly, or a `wavebit.Backend` member | anything else (`'JAX'`, `1`): `execution.backend`; an extra that is not installed: `execution.backend_unavailable`; loaded `jax` or `jaxlib` below 0.11.1: `execution.jax_version` (upgrade both and restart Python); in `rcwa`, under `'numpy'` or `'jax'`, a PyTorch tensor that PyTorch differentiates (`requires_grad`, or a forward-mode or `torch.func` tangent) anywhere in the problem: `execution.backend_autodiff`, at check, with the field's path (a tensor that needs no grad is read as a number) |
 | `device` | `'cpu'` | a string: `'cpu'`; on PyTorch also `'cpu:0'` (its one CPU device; `'cpu:N'` for N > 0 is a device that is not present), `'cuda'` or `'cuda:N'`; on JAX also `'gpu'` or `'tpu'`, optionally with `:N` | not a string (`0`): `execution.device`; NumPy off the CPU, PyTorch's `'mps'` or JAX's `'cuda'`: `execution.device`; a device that is not present: `execution.device_unavailable` |
 | `precision` | `'double'` | `'double'` (complex128) or `'single'` (complex64) | anything else: `execution.precision`; JAX `'double'` before `jax.config.update("jax_enable_x64", True)`: `execution.jax_x64` |
 
@@ -403,7 +403,7 @@ new one. `observation.amplitude_units` refuses a unit label other than the one i
 | `decay_check` | `decay_check.threshold`, `decay_check.window_seconds` | `fdtd.native`, `fdtd.periodic` |
 | `dispersion` | `dispersion.poles` | `fdtd.periodic` |
 | `excitation` | `excitation.sources` | `rcwa`, `fdtd.periodic` |
-| `execution` | `execution.backend`, `execution.backend_unavailable`, `execution.device`, `execution.device_unavailable`, `execution.precision`, `execution.jax_x64`, `execution.backend_autodiff` (`rcwa`); `execution.cuda_scope` (outside the qualified FDTD CUDA route) | every solver; `fdtd` |
+| `execution` | `execution.backend`, `execution.backend_unavailable`, `execution.device`, `execution.device_unavailable`, `execution.precision`, `execution.jax_version`, `execution.jax_x64`, `execution.backend_autodiff` (`rcwa`); `execution.cuda_scope` (outside the qualified FDTD CUDA route) | every solver; `fdtd` |
 | `experimental` | `experimental.orders` | `rcwa.experimental` |
 | `fdtd` | `fdtd.invalid` (also a `Domain`, `Plane` or `TimeSeriesMonitor` name or component its constructor refuses), `fdtd.unsupported`, `fdtd.padding_continuation`, `fdtd.torch_transform` (a Torch run under `torch.func.vmap`, `jacfwd` or `hessian`, or a checkpointed one under `jacrev`) | `fdtd` |
 | `field` | `field.coordinates`, `field.side`, `field.part` (`result.boundary_fields`), `field.reconstruction` | `rcwa` |
