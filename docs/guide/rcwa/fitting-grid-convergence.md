@@ -83,6 +83,17 @@ measurements within their noise.
 
 ## What to verify for a new problem
 
+For JAX spectral batches, interface candidates depend on geometry, so changing
+material values alone does not force both integration branches to run. The
+integral normal-field builder also automatically bounds
+the point-by-interface working arrays, including the dense fallback that `vmap`
+can evaluate alongside its sparse branch. This retains every observation and
+interface. It does not cap total memory: batch size, derivative directions,
+geometry and optical matrix sizes still matter. Use bounded groups of scalar
+compiled calls when a whole-spectrum batch exceeds the available budget. The
+[batch measurement instrument](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_fitting_grid/batch_memory.py)
+compares both routes without changing the physical inputs.
+
 Choose dimensional tolerances before the sweep. For example, a 0.02 nm allowed
 thickness change and a `1e-5` allowed reflectance change are separate requirements;
 a small change in reflectance can still move a poorly identified dimension.

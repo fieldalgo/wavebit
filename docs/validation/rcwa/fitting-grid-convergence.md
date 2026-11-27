@@ -265,3 +265,45 @@ larger). Its value alone supplies no error estimate. No solver tolerance or
 reference value was changed to pass these checks. Independent Maxwell accuracy,
 Fourier-order convergence and the ellipse's geometric approximation remain
 separate validation questions.
+
+## Spectral batch memory
+
+The integral builder selects candidate interfaces using geometry alone. Material
+contrast is applied when integrating those candidates. Previously contrast also
+entered the candidate predicate, so a wavelength `vmap` turned the sparse/dense
+`cond` into a `select` and evaluated the large dense branch even for sparse lanes.
+For batches whose geometry really varies, dense integration now scans smaller
+point groups, targeting the sparse branch's point-by-interface working size
+(with a minimum of one point). Every point still sees all its intervals, including
+facing corrections, before its nearest-distance scaling and ordered reductions.
+No interface, observation, derivative direction or grid sample is dropped.
+
+The [measurement record](https://github.com/fieldalgo/wavebit/blob/main/studies/rcwa/nvf_fitting_grid/batch-memory.json)
+compares base `ed01b317` with the recorded integral-source hash on Linux CPU.
+The N5 parameters, grid 128, orders (4, 4), double precision and host topology
+checks are fixed. These batches use **all s polarization**, with 8 or 30 equally
+spaced wavelengths from 800 to 1200 nm; they are not the 15s+15p fitting data.
+
+| Lanes / JAX | Before: compiled temporaries | After: compiled temporaries | Before: peak RSS | After: peak RSS |
+| --- | ---: | ---: | ---: | ---: |
+| 8 / 0.11.0 | 4.29 GiB | 0.63 GiB | 6.75 GiB | 2.50 GiB |
+| 30 / 0.12.0.1 | 14.75 GiB | 2.22 GiB | Memory-guard interruption | 4.82 GiB |
+
+The 30-lane baseline was stopped by a 12 GiB shared-cgroup guard; this is not a
+completed run or a measured 16 GiB OOM. The corrected run completed all 120
+Jacobian entries. Their maximum absolute difference from independent scalar
+calls on the baseline was `5.91e-12`, within `rtol=1e-8, atol=1e-11`; all scalar
+values and validity checks passed. The 8-lane before/after Jacobian difference
+was `1.32e-13`. Timings in the record shared CPU with some local checks and are
+not an isolated speed benchmark. Two wavelengths with both s and p polarization
+also agree in their batched Jacobians with baseline scalar calls (maximum
+absolute difference `3.81e-14`); their scalar values and validity checks pass.
+
+Regression tests retain conditional execution under material-only batching,
+check a zero-contrast boundary against NumPy, and compare batched geometry's
+forward/reverse derivatives with independent finite differences. A dense-fallback
+control limits compiled temporary memory to twice its one-point execution;
+the baseline exceeded that control by 10.68 times. These checks qualify execution,
+not grid convergence. Total memory still grows with batch size, geometry,
+derivative directions and optical matrix dimensions; this is not a universal
+memory ceiling or a claim of the historical 2 GiB footprint on every platform.
