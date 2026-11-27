@@ -185,6 +185,18 @@ is 16x the pixels and 11.7x the time; 1024 → 2048 is 4x and 4.2x), so it is th
 transform, and dropping to 256 buys more than any backend choice on this page. It stops
 mattering by `truncation_order=7`, where the solve is 4x the modeling.
 
+(62.6 / 5.3 as printed is 11.8; both are rounded to 0.1 ms here and in the log, and the
+unrounded values were not kept, so the ratio they came from lies between 11.7 and 11.9.
+Re-measured on 2026-11-27 on another host -- a 4-core Linux x86 container, Python 3.13,
+NumPy 2.5.5, PyTorch 2.15.0, JAX 0.12.0.1, float64 -- with this study's own `decompose` at
+`truncation_order=3`, five rounds of the same median of 3 at main `0d3293a6` and at the
+record's `631031221`: the PyTorch modeling ratio 1024 / 256 is 9.9-13.3 and 9.0-17.7 from round
+to round, so one median of 3 does not fix it even to the nearest whole number, and 11.7
+against 11.8 is far inside that. 2048 / 1024 is 5.8-9.6 there, not 4.2. On that host JAX's modeling half is
+slower than PyTorch's at every grid (38 against 5 ms at 256, 199 against 53 ms at 1024), at
+both commits, so finding 2 below holds for the Apple silicon host it was measured on and does
+not carry to that one. The figures in the table are left as recorded.)
+
 **2. The old finding about `jax eager` has inverted, and the mechanism says why.** On the block
 path JAX was ~9x slower on the modeling step *at every size*, because JAX has no true eager
 mode and the block modeller emitted one small array operation per block — 902 of them at
