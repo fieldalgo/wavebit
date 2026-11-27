@@ -45,8 +45,12 @@ def _require(flag, path, message, code='input_contract'):
 
 
 @eager_under_torch_compile
-def propagate(orders, *, target, method='orders', chunk_size=256):
-    """Sum outgoing vector plane waves on ``target`` without a new Maxwell solve.
+def propagate(orders, *, target, method='orders', chunk_size=256, numerics=None):
+    """Continue calibrated orders or a sampled phasor plane without a new Maxwell solve.
+
+    ``method="asm"`` accepts PhasorPlane and optional ASM numerics on the same x/y
+    grid. Use plan_asm for repeated evaluation and JAX JIT. The remaining contract
+    describes ``method="orders"``.
 
     The result has axes (wavelength, y, x, xyz), E in V/m. Only calibrated CW,
     z-normal continuum orders in a uniform lossless nonmagnetic medium are
@@ -54,8 +58,13 @@ def propagate(orders, *, target, method='orders', chunk_size=256):
     JIT validation is refused. Invalid source amplitudes remain NaN.
     ``chunk_size`` limits forward observation-point intermediates, not AD storage.
     """
+    if method == 'asm':
+        from ._asm import propagate_asm
+        return propagate_asm(orders, target, numerics)
+    if numerics is not None:
+        raise ValidationError('ASM numerics apply only to method=asm', code='propagation.method', path='numerics')
     if method != 'orders':
-        raise UnsupportedFeatureError('Only direct orders propagation is implemented',
+        raise UnsupportedFeatureError('Expected orders or asm propagation',
                                       code='propagation.method', path='method')
     if not isinstance(orders, DiffractionOrders) or not isinstance(target, Plane):
         raise ValidationError('Expected DiffractionOrders and Plane',
