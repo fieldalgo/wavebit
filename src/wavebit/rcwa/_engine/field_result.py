@@ -513,6 +513,8 @@ class FieldState:
                 'coordinates (jax.jit, jax.vmap, jax.grad over x or y) are not sampled yet')
         if not isinstance(self.stretch, tuple):
             return self._matched_points(xp, grid, hosts)
+        if any(hasattr(axis, 'inverse_and_slope') for axis in self.stretch):
+            return self._traced_points(xp, hosts)
         mapped, slope = [], []
         for host, axis, like in zip(hosts, self.stretch, (x, y)):
             half = 0.5 * axis.period
@@ -523,6 +525,31 @@ class FieldState:
         one = np.ones_like(f)
         slopes = _array(xp, np.stack([f, g, one, f, g, one], axis=-1), x)
         return tuple(mapped), lambda field: field / slopes
+
+    def _traced_points(self, xp, hosts):
+        """:meth:`_stretched_points` on :class:`~wavebit.rcwa._engine.stretch.TracedAxis`.
+
+        The points and slopes are backend values that carry the walls' derivatives. Which piece
+        of the coordinate holds a sample is read from the walls' values, so the sampling is
+        eager: under ``jax.jit`` or ``jax.vmap`` over a rectangle's size or centre it is refused.
+        """
+        mapped, slope = [], []
+        for host, axis in zip(hosts, self.stretch):
+            half = 0.5 * axis.period
+            try:
+                u, f = axis.inverse_and_slope(np.real(np.asarray(host, dtype=complex)) + half)
+            except TypeError as exc:
+                raise NotImplementedError(
+                    'a field under wall_resolution places its samples in the coordinate pieces '
+                    'between the walls by the walls\' values, so with a rectangle\'s size or '
+                    'centre traced under jax.jit or jax.vmap it is not sampled; sample it eagerly '
+                    '(jax.grad and PyTorch derivatives are taken)') from exc
+            mapped.append(u - half)
+            slope.append(f)
+        f, g = xp.broadcast_arrays(*slope)
+        one = xp.ones_like(f)
+        slopes = xp.stack([f, g, one, f, g, one], axis=-1)
+        return tuple(mapped), lambda field: field / xp.astype(slopes, field.dtype)
 
     def _matched_points(self, xp, grid, hosts):
         """:meth:`_stretched_points` in :class:`~wavebit.rcwa._engine.stretch.Matched` coordinates.

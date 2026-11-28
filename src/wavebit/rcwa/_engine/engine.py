@@ -21,6 +21,7 @@ import numpy as _np
 import wavebit.rcwa._engine.parametric as _parametric
 import wavebit.rcwa._engine.rectilinear as _rectilinear
 from wavebit.rcwa._engine.stretch import Stretch as _Stretch
+from wavebit.rcwa._engine.stretch import TracedStretch as _TracedStretch
 import wavebit.rcwa._engine.boundary as _boundary
 import wavebit.rcwa._engine.factorization as _fac
 import wavebit.rcwa._engine.anisotropy as _anisotropy
@@ -6100,6 +6101,11 @@ class CoreFactorizationMixin:
             if factorization == Factorization.LI:
                 geometry.rectilinear_plans = [_rectilinear.plan_layer(layer.get('shapes', []), basis)
                                               for layer in self.structure]
+                if self._wall_resolution is not None:
+                    # The edges' order across layers, for a stretch whose rectangles are traced
+                    # under jax.jit or jax.vmap (`_traced_stretch`).
+                    geometry.stretch_order = _rectilinear.stretch_order(
+                        self.structure, basis, geometry.rectilinear_plans)
                 return geometry
             # The layer refusals run here, not only on the solve. This *is* the eager pass --
             # it is where the shapes are concrete by construction -- and a record taken over a
@@ -6809,7 +6815,7 @@ class CoreFactorizationMixin:
         self._reject_unread_merge_tolerance()
         self._reject_layer_count_mismatch()
         if self._wall_resolution is not None:
-            self._refuse_what_the_stretch_does_not_solve(None)
+            self._refuse_what_the_stretch_does_not_solve(None, checking=True)
 
     def _reject_layer_count_mismatch(self):
         """The stack has to be one stack: as many thicknesses as the structure has layers.
@@ -7548,7 +7554,7 @@ class CoreFactorizationMixin:
         stretch = self._refuse_what_the_stretch_does_not_solve(geometry)
         xp, C = self.xp, self.complex_dtype
         (_, half_width_u), (_, half_width_v) = self.order_window
-        if not isinstance(stretch, _Stretch):
+        if not isinstance(stretch, (_Stretch, _TracedStretch)):
             return self._solve_matched(stretch)
         plans = None if geometry is None else geometry.rectilinear_plans
         lattice = self._stretch_lattice()
@@ -7560,6 +7566,11 @@ class CoreFactorizationMixin:
             nesting=self.li_nesting)
         vacuum = _rectilinear.stretched_mu(xp, half_width_u, half_width_v, C, stretch)
         eps = self._poison_undecided_walls(eps)
+        if hasattr(stretch, 'valid'):
+            # A traced stretch whose live edges left the order it was built on (`TracedStretch`).
+            nan = xp.asarray(complex('nan'), dtype=C)
+            eps = _fac.ConvMatrices(*(None if m is None else xp.where(stretch.valid, m, nan)
+                                      for m in eps))
         n_layers = int(eps.epx.shape[0])
         mu = _fac.ConvMatrices(*(xp.stack([m] * n_layers) for m in vacuum), None, None)
         self._stretch_scope = {'axes': (stretch.x, stretch.y), 'unit': unit, 'mu': vacuum}
@@ -7658,13 +7669,14 @@ class CoreFactorizationMixin:
         finally:
             self.__dict__.pop('_stretch_scope', None)
 
-    def _refuse_what_the_stretch_does_not_solve(self, geometry):
+    def _refuse_what_the_stretch_does_not_solve(self, geometry, checking=False):
         """Refuse, by name, every scene :attr:`wall_resolution` is not implemented for.
 
         Returns the stack's coordinates, which are the last thing that can refuse: a
         :class:`~wavebit.rcwa._engine.stretch.Stretch` built from the rectangles' edges, or the
         :class:`~wavebit.rcwa._engine.stretch.Matched` coordinates of the one circle or
-        axis-aligned ellipse the patterned layers hold, both read as numbers.
+        axis-aligned ellipse the patterned layers hold, both read as numbers. ``checking``: the
+        build's own checks (no record yet), where moving rectangles are not built.
         """
         from wavebit.rcwa._engine.stretch import Stretch
         def refuse(what, instead):
@@ -7677,13 +7689,19 @@ class CoreFactorizationMixin:
                                             else self._period),)
                   if value is not None and carries_autodiff(value)]
         if self._modeling_path == ModelingPath.PARAMETRIC:
+            # A rectangle's size and centre may move (a traced stretch, `_traced_stretch`); a
+            # circle's or an ellipse's matched coordinates, and an angle, are read as numbers.
             moving += [f'a shape of layer {index}' for index, layer in enumerate(self.structure)
                        if any(carries_autodiff(v) for shape in layer.get('shapes', [])
-                              for key, v in shape.items() if key not in ('type', 'material'))]
+                              for key, v in shape.items()
+                              if key not in ('type', 'material') and not (
+                                  shape.get('type', 'rectangle') == 'rectangle'
+                                  and key in self._MOVING_EDGES))]
         if moving:
             refuse(f'{moving[0]} is traced or carries a derivative, and its walls are read as '
                    'numbers', 'A derivative with respect to the geometry, and jax.jit or '
-                   'jax.vmap over it, is not implemented; write the geometry as numbers.')
+                   'jax.vmap over it, is implemented for the size and centre of a rectangle; '
+                   'write the rest of the geometry as numbers.')
         if self._modeling_path != ModelingPath.PARAMETRIC:
             refuse('this structure is a raster',
                    'Describe the layers as rectangles, a circle or an ellipse, or leave '
@@ -7749,6 +7767,17 @@ class CoreFactorizationMixin:
         traced = ('wall_resolution reads the rectangles\' edges and the cell as numbers, so a '
                   'traced size, position or period (jax.jit, jax.vmap, jax.grad over geometry) '
                   'is not solved in stretched coordinates yet')
+        if self._moving_edges():
+            if checking:
+                return None
+            stretch = self._traced_stretch(geometry, plans, lattice)
+            for axis, half_width, name in ((stretch.x, half_width_u, 'x'),
+                                           (stretch.y, half_width_v, 'y')):
+                if not axis.identity and half_width == 0:
+                    refuse(f'the {name} axis has walls while the orders retain a single harmonic '
+                           'along it, which cannot hold the stretched coordinate',
+                           'Retain orders along that axis.')
+            return stretch
         try:
             undecided = []
             walls = _rectilinear.wall_positions(
@@ -7775,6 +7804,68 @@ class CoreFactorizationMixin:
                        'along it, which cannot hold the stretched coordinate',
                        'Retain orders along that axis.')
         return stretch
+
+    #: A rectangle's entries a traced stretch takes as backend values (`_traced_stretch`).
+    _MOVING_EDGES = ('lx', 'ly', 'cx', 'cy')
+
+    def _moving_edges(self):
+        """Whether a rectangle's size or centre is traced or carries a derivative."""
+        from wavebit._common.backend import carries_autodiff
+        return any(carries_autodiff(shape.get(key)) for layer in self.structure
+                   for shape in layer.get('shapes', []) for key in self._MOVING_EDGES
+                   if shape.get(key) is not None)
+
+    def _traced_stretch(self, geometry, plans, lattice):
+        """The :class:`~wavebit.rcwa._engine.stretch.TracedStretch` of rectangles that move.
+
+        What is static -- which edges are walls, their count and order, the piece of every
+        other edge -- is read from the edges' order (:func:`_rectilinear.stretch_order`): at the
+        primal where the edges carry one (an eager ``jax.grad``, a PyTorch tensor), and from the
+        preparation's record under ``jax.jit`` or ``jax.vmap``. The stretch's ``valid`` is false
+        where the live edges leave that order; the solve then answers NaN
+        (:meth:`_solve_stretched`), which ``validity.checks['numerical_finite']`` reports. At a
+        primal the walls are also built as numbers first, so a geometry the stretch cannot hold
+        is refused with the message a concrete solve gives.
+        """
+        from wavebit.rcwa._engine.stretch import Stretch, TracedStretch
+        xp, C = self.xp, self.complex_dtype
+        real = xp.float32 if C == xp.complex64 else xp.float64
+        layers = self.structure
+        groups = getattr(self, '_traced_material_groups', None)
+        try:
+            if plans is None:
+                plans = [_rectilinear.plan_layer(layer.get('shapes', []), lattice)
+                         for layer in layers]
+            order = _rectilinear.stretch_order(layers, lattice, plans)
+            primal = True
+        except (TypeError, ValueError) as exc:
+            if isinstance(exc, ValueError) and not isinstance(exc.__cause__, TypeError):
+                raise
+            order = None if geometry is None else getattr(geometry, 'stretch_order', None)
+            primal = False
+        if order is None or plans is None:
+            raise NotImplementedError(
+                'wall_resolution places a traced rectangle\'s walls in the order its edges had '
+                'when the geometry was prepared; under jax.jit or jax.vmap, rcwa.prepare the '
+                'problem with numbers outside the transform and run the prepared problem inside it')
+        periods = [float(_fac._to_numpy(lattice[i][i])) for i in (0, 1)]
+        if primal:
+            try:
+                Stretch(*_rectilinear.wall_positions(layers, lattice, plans, [], groups=groups),
+                        periods[0], periods[1], self._wall_resolution)
+            except ValueError as exc:
+                raise NotImplementedError(
+                    f'wall_resolution={self._wall_resolution!r}: {exc}') from exc
+        undecided = []
+        walls = _rectilinear.traced_walls(layers, plans, order, undecided, groups=groups)
+        self._undecided_walls = undecided
+
+        def value(index, node, axis):
+            shapes = layers[index].get('shapes', [])
+            return as_array(xp, _rectilinear._coordinate(shapes, 'xy'[axis], node, periods[axis],
+                                                         plans[index].folds), dtype=real)
+
+        return TracedStretch(xp, real, order, walls, value, periods, self._wall_resolution)
 
     def _matched_stack(self):
         """Whether :attr:`wall_resolution` is set on shapes that include a circle or an ellipse."""

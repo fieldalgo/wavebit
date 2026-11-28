@@ -235,7 +235,8 @@ def plane_wave_matrix(xp, axis_nodes, period, k_incident, half_width, weighted, 
     u, F, f, w = axis_nodes
     real = xp.float32 if dtype == xp.complex64 else xp.float64
     orders = xp.asarray([float(o) for o in range(-half_width, half_width + 1)], dtype=real)
-    u, F, f, w = (xp.asarray(a, dtype=real) for a in (u, F, f, w))
+    u, F, f, w = (xp.asarray(a, dtype=real) if isinstance(a, np.ndarray) else xp.astype(a, real)
+                  for a in (u, F, f, w))
     two_pi = 2.0 * math.pi / period
     bloch = xp.exp(1j * xp.asarray(k_incident, dtype=dtype) * xp.astype(F - u, dtype))
     weight = xp.astype(w * f if weighted else w, dtype) * bloch
@@ -268,6 +269,309 @@ class Stretch:
                 'walls_y': tuple(float(v) for v in self.y.walls),
                 'computational_x': tuple(float(v) for v in self.x.wall_u),
                 'computational_y': tuple(float(v) for v in self.y.wall_u)}
+
+
+def _no_gradient(x):
+    """``x`` with autodiff cut: ``detach`` where it exists, ``stop_gradient`` on JAX."""
+    detach = getattr(x, 'detach', None)
+    if detach is not None:
+        return detach()
+    if type(x).__module__.startswith('jax'):
+        import jax
+        return jax.lax.stop_gradient(x)
+    return x
+
+
+def _to_numpy(array):
+    if hasattr(array, 'cpu'):
+        array = array.cpu()
+    return np.asarray(array)
+
+
+class TracedAxis:
+    """:class:`Axis` with the walls as backend values, so a derivative or a trace runs through them.
+
+    Built when a rectangle's size or centre is traced or carries a derivative; a geometry written
+    as numbers keeps :class:`Axis`. What a trace cannot decide is static and comes from the
+    caller: how many walls there are and their order (``walls`` holds them increasing on
+    ``[0, period)``), and whether the first is the cell's edge (``origin``, a wall written at 0),
+    which fixes ``F(0) = 0`` on it. ``valid`` is a backend boolean, false where the walls are not
+    increasing or two are closer than the stretch can hold (:class:`Axis` refuses that by name;
+    the caller answers NaN under a trace).
+
+    The integrals run in ``t = u + shift``, the coordinate of ``F_0`` (``F(u) = F_0(u + shift)``),
+    where wall ``l`` sits at ``l du`` wherever the walls are: the pieces and their nodes stay put
+    and ``F_0`` is linear in each piece's start ``x_l`` and width ``dx_l``. ``shift`` enters as
+    the phase ``exp(i k shift)``. A point that is not a wall (``shift`` itself, the cell's edge in
+    ``u``, an edge that is not a wall, a field sample) is placed by solving ``F_0(t) = x`` in its
+    piece without a derivative and then taking one Newton step with it, which carries the
+    implicit derivative ``dt = (dx - dF_0) / F_0'``.
+    """
+
+    def __init__(self, xp, walls, period, slope, origin, real):
+        self.xp, self.real = xp, real
+        self.period, self.slope = float(period), float(slope)
+        self.count = len(walls)
+        self.identity = self.count == 0
+        self.origin = bool(origin)
+        if self.identity:
+            # F(u) = u: one piece as wide as the cell, a constant slope of one.
+            self.valid = xp.asarray(True)
+            self._du = self.period
+            self._shift_place = (0, 0, self._real(0.0))
+            return
+        P, K = self.period, self.count
+        self._du = P / K
+        self._x0 = xp.stack([self._real(w) for w in walls])
+        self._dx = xp.concat([self._x0[1:], self._x0[:1] + P]) - self._x0
+        self.valid = xp.all(2.0 * self._dx / self._du > self.slope)
+        if self.origin:
+            self._shift_place = (0, 0, self._real(0.0))
+        else:
+            # F_0(0) = x_0 > 0, so F_0(shift) = 0 falls in the last piece, a period back.
+            self._shift_place = (K - 1, -1, self._solve(
+                self._x0[K - 1], self._dx[K - 1], self._real(P)))
+
+    def _real(self, value):
+        xp = self.xp
+        if isinstance(value, (float, int, np.ndarray, np.floating)):
+            return xp.asarray(value, dtype=self.real)
+        return xp.astype(value, self.real)
+
+    # ---------------------------------------------------------------- the function on a piece
+
+    def _on_piece(self, x0, dx, tau):
+        """``(F_0, F_0')`` at ``tau`` into a piece starting at ``x0``, ``dx`` wide."""
+        xp, du = self.xp, self._du
+        swing = self.slope * du - dx
+        phase = (2.0 * math.pi / du) * tau
+        return (x0 + dx / du * tau + swing / (2.0 * math.pi) * xp.sin(phase),
+                dx / du + swing / du * xp.cos(phase))
+
+    def _solve(self, x0, dx, target):
+        """``tau`` in ``[0, du]`` with ``F_0 = target`` on the piece (no turn), as above."""
+        xp = self.xp
+        a, b, y = _no_gradient(x0), _no_gradient(dx), _no_gradient(target)
+        low, high = xp.zeros_like(y), xp.zeros_like(y) + self._du
+        for _ in range(60):
+            middle = 0.5 * (low + high)
+            below = self._on_piece(a, b, middle)[0] < y
+            low, high = xp.where(below, middle, low), xp.where(below, high, middle)
+        tau = 0.5 * (low + high)
+        for _ in range(3):
+            value, slope = self._on_piece(a, b, tau)
+            tau = tau - (value - y) / slope
+        tau = _no_gradient(tau)
+        value, slope = self._on_piece(x0, dx, tau)
+        return tau - (value - target) / slope
+
+    @property
+    def shift(self):
+        """``shift`` with ``F(u) = F_0(u + shift)``: a backend scalar, zero with a wall at 0."""
+        index, turn, tau = self._shift_place
+        return (turn * self.period + index * self._du) + tau
+
+    def place(self, kind, value=None):
+        """Where a point sits in ``t``: ``(piece, turn, tau)``, ``tau`` a backend scalar.
+
+        ``kind`` is ``('start',)`` or ``('end',)`` for ``u = 0`` and ``u = P`` (the cell's edges),
+        ``('wall', l)`` for wall ``l``, or ``('inside', l, turn)`` for the physical ``value``
+        strictly inside piece ``l`` (``turn`` -1 before the first wall).
+        """
+        if kind[0] == 'start':
+            return self._shift_place
+        if kind[0] == 'end':
+            index, turn, tau = self._shift_place
+            return index, turn + 1, tau
+        if kind[0] == 'wall':
+            return kind[1], 0, self._real(0.0)
+        if self.identity:
+            return 0, 0, self._real(value)
+        index, turn = kind[1], kind[2]
+        return index, turn, self._solve(self._x0[index], self._dx[index],
+                                        self._real(value) - turn * self.period)
+
+    # ---------------------------------------------------------------- integrals
+
+    def _integral(self, start, stop, orders, weight, harmonic, dtype):
+        """``(1/P) int_start^stop w(u) exp(-i k u) du`` between two places, ``[k]``.
+
+        Gauss-Legendre on each piece the span crosses, with the node count of a whole piece.
+        """
+        xp, du, P, K = self.xp, self._du, self.period, max(self.count, 1)
+        k = self._real(2.0 * math.pi * np.asarray(orders, dtype=float) / P)
+        node, w = _nodes(_BASE_NODES + 2 * int(math.ceil(harmonic * du / P)))
+        node, w = self._real(node), self._real(w)
+        first, last = start[1] * K + start[0], stop[1] * K + stop[0]
+        out = xp.zeros((len(orders),), dtype=dtype)
+        for g in range(first, last + 1):
+            index = g % K
+            low = start[2] if g == first else self._real(0.0)
+            high = stop[2] if g == last else self._real(du)
+            width = high - low
+            tau = low + width * node
+            if weight == 'one' or self.identity:
+                weights = w * width / P
+            else:
+                slope = self._on_piece(self._x0[index], self._dx[index], tau)[1]
+                weights = w * width / P * (slope if weight == 'slope' else 1.0 / slope)
+            phase = (index * du + tau)[:, None] * k[None, :]
+            out = out + xp.astype(weights, dtype) @ xp.exp(-1j * xp.astype(phase, dtype))
+        return out * xp.exp(1j * xp.astype(self.shift * k, dtype))
+
+    def segment_table(self, places, half_width, dtype, weight='slope'):
+        """:meth:`Axis.segment_table`, the segments' ends given as places (:meth:`place`).
+
+        ``places`` runs from the cell's left edge to its right one; a segment between two equal
+        places (``None`` at its right end) has zero width and a zero column.
+        """
+        xp = self.xp
+        orders = list(range(-2 * half_width, 2 * half_width + 1))
+        columns, left = [], places[0]
+        for right in places[1:]:
+            if right is None:
+                columns.append(xp.zeros((len(orders),), dtype=dtype))
+                continue
+            columns.append(self._integral(left, right, orders, weight, 2 * half_width, dtype))
+            left = right
+        return xp.stack(columns, axis=1)
+
+    def period_table(self, half_width, weight, dtype):
+        """:meth:`Axis.period_table`: the integrand is periodic, so ``t`` runs over ``[0, P)``."""
+        orders = list(range(-2 * half_width, 2 * half_width + 1))
+        zero = self._real(0.0)
+        return self._integral((0, 0, zero), (0, 1, zero), orders, weight, 2 * half_width, dtype)
+
+    def wave_nodes(self, half_width):
+        """:meth:`Axis.wave_nodes` over ``t`` in ``[0, P)``: ``(u, F(u), F'(u), weights)``."""
+        xp, du, P = self.xp, self._du, self.period
+        if self.identity:
+            # Nothing here moves; the identity's nodes are :class:`Axis`'s.
+            return Axis([], P, self.slope).wave_nodes(half_width)
+        node, w = _nodes(_BASE_NODES + 4 * int(math.ceil((2 * half_width + 2) * du / P)))
+        tau = self._real(du * node)
+        us, Fs, fs = [], [], []
+        for index in range(self.count):
+            F, f = self._on_piece(self._x0[index], self._dx[index], tau)
+            us.append(index * du + tau)
+            Fs.append(F)
+            fs.append(f)
+        return (xp.concat(us) - self.shift, xp.concat(Fs), xp.concat(fs),
+                np.tile(w * du / P, self.count))
+
+    # ---------------------------------------------------------------- sample points
+
+    def inverse_and_slope(self, x):
+        """``(u, F'(u))`` at the physical points ``x`` (NumPy, any period), as backend arrays.
+
+        Which piece holds a point is read from the walls' values, so this is eager: under
+        ``jax.jit`` or ``jax.vmap`` the walls have none, and it raises :class:`TypeError`.
+        """
+        xp, P = self.xp, self.period
+        x = np.asarray(x, dtype=float)
+        if self.identity:
+            return self._real(x), xp.ones(x.shape, dtype=self.real)
+        try:
+            walls = np.asarray(_to_numpy(_no_gradient(self._x0)), dtype=float)
+        except Exception as exc:        # a jax.jit or jax.vmap trace has no value to read
+            raise TypeError('the walls are traced and hold no values') from exc
+        turns = np.floor(x / P)
+        local = x - turns * P
+        # piece l holds (x_l, x_l+1]; before the first wall is the last piece, a turn back
+        index = np.searchsorted(walls, local, side='left') - 1
+        back = index < 0
+        index = np.where(back, self.count - 1, index).reshape(-1)
+        turns = (turns - back).reshape(-1)
+        taken = xp.asarray(index)
+        x0, dx = xp.take(self._x0, taken, axis=0), xp.take(self._dx, taken, axis=0)
+        tau = self._solve(x0, dx, self._real(x.reshape(-1) - turns * P))
+        slope = self._on_piece(x0, dx, tau)[1]
+        u = self._real(turns * P + index * self._du) + tau - self.shift
+        return xp.reshape(u, x.shape), xp.reshape(slope, x.shape)
+
+
+class TracedStretch:
+    """:class:`Stretch` on :class:`TracedAxis`: the walls are rectangle edges with backend values.
+
+    ``order`` is :func:`~wavebit.rcwa._engine.rectilinear.stretch_order`, per axis the edges of
+    every layer grouped where they meet, increasing, read at a point where the geometry has
+    numbers (the preparation, or the primal of an eager derivative); ``walls`` per axis the
+    indices of the groups that are walls; ``value(layer, node, axis)`` an edge's live position
+    in the cell. ``valid`` is false where the live edges leave that order or their groups.
+    """
+
+    def __init__(self, xp, real, order, walls, value, periods, slope):
+        self.xp, self.slope = xp, float(slope)
+        self._order, self._levels = order, []
+        valid = xp.asarray(True)
+        axes = []
+        for a, (levels, chosen, period) in enumerate(zip(order, walls, periods)):
+            tolerance = 1e-12 * period
+            values, at = [], {}
+            for number, sources in enumerate(levels):
+                cell = [side for (layer, (owner, side)) in sources if owner == -1]
+                if cell:
+                    level = xp.asarray(cell[0] * period, dtype=real)
+                    edges = [value(layer, node, a) for layer, node in sources if node[0] != -1]
+                else:
+                    edges = [value(layer, node, a) for layer, node in sources]
+                    level = edges[0]
+                for edge in edges:
+                    valid = valid & (xp.abs(edge - level) <= tolerance)
+                for layer, node in sources:
+                    at[layer, node] = number
+                values.append(level)
+            for first, second in zip(values[:-1], values[1:]):
+                valid = valid & (second - first > tolerance)
+            last = len(levels) - 1
+            # a wall at the cell's far edge is the one at 0, a period on
+            folded = sorted({0 if w == last and self._is_cell(levels[w], 1) else w for w in chosen})
+            origin = bool(folded) and self._is_cell(levels[folded[0]], 0)
+            axis = TracedAxis(xp, [values[w] for w in folded], period, slope, origin, real)
+            valid = valid & axis.valid
+            axes.append(axis)
+            self._levels.append((values, at, folded))
+        self.x, self.y = axes
+        self.valid = valid
+
+    @staticmethod
+    def _is_cell(sources, side):
+        return any(owner == -1 and s == side for _, (owner, s) in sources)
+
+    @property
+    def identity(self):
+        return self.x.identity and self.y.identity
+
+    def places(self, layer, nodes, axis):
+        """The places (:meth:`TracedAxis.place`) of a layer's edges ``nodes`` along ``axis``.
+
+        ``layer`` is the layer's index in the stack (``None`` for a layer with no rectangle);
+        an edge in the same group as the one before it gives ``None``, a segment of zero width.
+        """
+        values, at, folded = self._levels[axis]
+        stretched = (self.x, self.y)[axis]
+        last = len(values) - 1
+        out, before = [], None
+        for node in nodes:
+            if node[0] == -1:
+                level = 0 if node[1] == 0 else last
+            else:
+                level = at[layer, node]
+            if level == before:
+                out.append(None)
+                continue
+            before = level
+            if level == 0:
+                kind = ('start',)
+            elif level == last:
+                kind = ('end',)
+            elif level in folded:
+                kind = ('wall', folded.index(level))
+            else:
+                below = [i for i, w in enumerate(folded) if w < level]
+                kind = (('inside', below[-1], 0) if below else ('inside', len(folded) - 1, -1))
+            out.append(stretched.place(kind, values[level]))
+        return out
 
 
 #: Pixels per period, at least, of the computational raster a matched layer's tensor is

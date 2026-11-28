@@ -12,6 +12,8 @@ from collections import namedtuple
 import math
 import sys
 
+from numpy import ndarray as _np_ndarray
+
 from wavebit._common.backend import as_array
 from wavebit._common.backend import checked_float
 from wavebit.materials.response import as_material
@@ -155,7 +157,8 @@ def _table_series(xp, table, dtype):
     :func:`~wavebit.rcwa._engine.factorization._segment_series`, with the stretch's slope as the
     weight of every segment's integral.
     """
-    table = xp.matrix_transpose(xp.asarray(table, dtype=dtype))            # [j, k]
+    table = xp.matrix_transpose(xp.astype(table, dtype) if not isinstance(table, _np_ndarray)
+                                else xp.asarray(table, dtype=dtype))       # [j, k]
 
     def series(a):
         return xp.astype(a, dtype) @ table
@@ -212,54 +215,116 @@ def wall_positions(layers, lattice, plans=None, undecided=None, groups=None):
         shapes = layer.get('shapes', [])
         plan = plan_layer(shapes, lattice) if plans is None else plans[index]
         periods = [checked_float(lattice[a][a]) for a in (0, 1)]
-        keys = [_material_key(shape.get('material', 1.), i) for i, shape in enumerate(shapes)]
-        keys.append(_material_key(layer.get('background', 1.), -1))
-        labels = groups[index] if groups is not None and index < len(groups) else None
-        if labels is not None and len(labels) == len(keys):
-            # One traced value written for several owners is one material (`groups`).
-            keys = [label if _opaque_key(key) and label is not None else key
-                    for key, label in zip(keys, labels)]
+        keys = _layer_keys(layer, index, groups)
         positions = [[checked_float(_coordinate(shapes, axis, n, period, plan.folds)) for n in nodes]
                      for axis, nodes, period in zip(('x', 'y'), (plan.x, plan.y), periods)]
-        for a in (0, 1):
-            period, coords, nodes = periods[a], positions[a], (plan.x, plan.y)[a]
-            other = positions[1 - a]
-            tolerance = 1e-12 * period
-            # the intervals of positive width along this axis, and the rows across it
-            open_cells = [k for k in range(len(coords) - 1) if coords[k + 1] - coords[k] > tolerance]
-            rows = [j for j in range(len(other) - 1) if other[j + 1] - other[j] > tolerance]
-            if not open_cells or not rows:
-                continue
-
-            def owner(row, cell):
-                return plan.owners[row][cell] if a == 0 else plan.owners[cell][row]
-
-            seen = []
-            for n, node in enumerate(nodes):
-                if node[0] == -1:
-                    continue
-                x0 = coords[n]
-                if any(abs(x0 - s) <= tolerance for s in seen):
-                    continue
-                seen.append(x0)
-                # the last open cell ending at x0 and the first starting there, across the period
-                left = [k for k in open_cells if coords[k + 1] <= x0 + tolerance]
-                right = [k for k in open_cells if coords[k] >= x0 - tolerance]
-                k_left = left[-1] if left else open_cells[-1]
-                k_right = right[0] if right else open_cells[0]
-                pairs = [(owner(j, k_left), owner(j, k_right)) for j in rows]
-                differ = [(o1, o2) for o1, o2 in pairs if keys[o1] != keys[o2]]
-                if not differ:
-                    continue
-                walls[a].append(x0)
-                if undecided is not None and all(_opaque_key(keys[o1]) or _opaque_key(keys[o2])
-                                                 for o1, o2 in differ):
-                    undecided.append((index, sorted(set(differ))))
+        _layer_walls(plan, keys, positions, [1e-12 * period for period in periods], index, walls,
+                     undecided)
     return walls
 
 
+def _layer_keys(layer, index, groups):
+    """What tells a layer's owners' materials apart (:func:`_material_key`), the background last."""
+    shapes = layer.get('shapes', [])
+    keys = [_material_key(shape.get('material', 1.), i) for i, shape in enumerate(shapes)]
+    keys.append(_material_key(layer.get('background', 1.), -1))
+    labels = groups[index] if groups is not None and index < len(groups) else None
+    if labels is not None and len(labels) == len(keys):
+        # One traced value written for several owners is one material (`groups`).
+        keys = [label if _opaque_key(key) and label is not None else key
+                for key, label in zip(keys, labels)]
+    return keys
+
+
+def _layer_walls(plan, keys, positions, tolerances, index, walls, undecided):
+    """Append a layer's walls to ``walls`` (per axis), as :func:`wall_positions` describes.
+
+    ``positions`` holds the plan's edges per axis as numbers to compare within ``tolerances``:
+    their places in the cell, or the indices of the groups they fall in
+    (:func:`stretch_order`, with a tolerance of one half), which decide alike.
+    """
+    for a in (0, 1):
+        tolerance, coords, nodes = tolerances[a], positions[a], (plan.x, plan.y)[a]
+        other = positions[1 - a]
+        # the intervals of positive width along this axis, and the rows across it
+        open_cells = [k for k in range(len(coords) - 1) if coords[k + 1] - coords[k] > tolerance]
+        rows = [j for j in range(len(other) - 1) if other[j + 1] - other[j] > tolerance]
+        if not open_cells or not rows:
+            continue
+
+        def owner(row, cell):
+            return plan.owners[row][cell] if a == 0 else plan.owners[cell][row]
+
+        seen = []
+        for n, node in enumerate(nodes):
+            if node[0] == -1:
+                continue
+            x0 = coords[n]
+            if any(abs(x0 - s) <= tolerance for s in seen):
+                continue
+            seen.append(x0)
+            # the last open cell ending at x0 and the first starting there, across the period
+            left = [k for k in open_cells if coords[k + 1] <= x0 + tolerance]
+            right = [k for k in open_cells if coords[k] >= x0 - tolerance]
+            k_left = left[-1] if left else open_cells[-1]
+            k_right = right[0] if right else open_cells[0]
+            pairs = [(owner(j, k_left), owner(j, k_right)) for j in rows]
+            differ = [(o1, o2) for o1, o2 in pairs if keys[o1] != keys[o2]]
+            if not differ:
+                continue
+            walls[a].append(x0)
+            if undecided is not None and all(_opaque_key(keys[o1]) or _opaque_key(keys[o2])
+                                             for o1, o2 in differ):
+                undecided.append((index, sorted(set(differ))))
+
+
+def stretch_order(layers, lattice, plans=None):
+    """Every layer's edges per axis, grouped where they meet and increasing: the walls' topology.
+
+    Returns ``(x, y)``, each a tuple of groups, each group a tuple of ``(layer, node)`` (``node``
+    as in the layer's plan, the cell's edges ``(-1, 0)`` and ``(-1, 1)`` included) whose places
+    lie within ``1e-12`` of the period of the next one in the group. Read where the geometry has
+    numbers (a preparation, or the primal of an eager derivative), it is what a traced stretch
+    (:class:`~wavebit.rcwa._engine.stretch.TracedStretch`) takes as static: which edges are walls,
+    how many there are and in what order, and which piece holds each edge that is not one.
+    """
+    periods = [checked_float(lattice[a][a]) for a in (0, 1)]
+    order = []
+    for a, (axis, period) in enumerate(zip(('x', 'y'), periods)):
+        entries = []
+        for index, layer in enumerate(layers):
+            shapes = layer.get('shapes', [])
+            plan = plan_layer(shapes, lattice) if plans is None else plans[index]
+            for node in (plan.x, plan.y)[a]:
+                entries.append((checked_float(_coordinate(shapes, axis, node, period, plan.folds)),
+                                index, node))
+        entries.sort(key=lambda e: e[0])
+        groups, last = [], None
+        for value, index, node in entries:
+            if last is None or value - last > 1e-12 * period:
+                groups.append([])
+            groups[-1].append((index, node))
+            last = value
+        order.append(tuple(tuple(g) for g in groups))
+    return tuple(order)
+
+
+def traced_walls(layers, plans, order, undecided=None, groups=None):
+    """:func:`wall_positions` on the groups of :func:`stretch_order`: per axis, the indices of the
+    groups that are walls, read without the edges' values (they may be traced)."""
+    walls = ([], [])
+    for index, layer in enumerate(layers):
+        plan = plans[index]
+        at = [{node: number for number, group in enumerate(levels)
+               for (owner, node) in group if owner == index} for levels in order]
+        positions = [[at[a][node] for node in (plan.x, plan.y)[a]] for a in (0, 1)]
+        _layer_walls(plan, _layer_keys(layer, index, groups), positions, [0.5, 0.5], index, walls,
+                     undecided)
+    return tuple(sorted(set(w)) for w in walls)
+
+
 def stretched_layer_matrices(xp, shapes, background, hu, hv, lattice, dtype, stretch, plan=None,
-                             nesting=None):
+                             nesting=None, index=None):
     """:func:`layer_matrices` in the stretched coordinates: ``eps~ = eps diag(g/f, f/g, f g)``.
 
     The layer is still constant on the rectangles its edges cut, now of the computational
@@ -277,9 +342,21 @@ def stretched_layer_matrices(xp, shapes, background, hu, hv, lattice, dtype, str
     materials = [as_array(xp, as_material(s.get('material', 1.)).epsilon, dtype=dtype) for s in shapes]
     materials.append(as_array(xp, as_material(background).epsilon, dtype=dtype))
     cell = xp.stack([xp.stack([materials[i] for i in row]) for row in owners])
+    if hasattr(stretch, 'places'):
+        # A traced stretch (`stretch.TracedStretch`): the edges are placed by their groups, and
+        # the tables are the backend's, carrying the walls' derivatives.
+        series_u, series_v = (
+            _table_series(xp, axis.segment_table(stretch.places(index, nodes, a), half, dtype),
+                          dtype)
+            for a, (axis, nodes, half) in enumerate(((stretch.x, plan.x, hu),
+                                                     (stretch.y, plan.y, hv))))
+        ex = _li_slot(xp, cell, hu, hv, series_u, series_v, 'u', nesting)
+        ey = _li_slot(xp, cell, hu, hv, series_u, series_v, 'v', nesting)
+        ez = xp.linalg.inv(_li_slot(xp, cell, hu, hv, series_u, series_v, None, nesting))
+        return ex, ey, ez
     # The edges as the numbers they were written as: the backend's copy is a trace under
-    # jax.jit even for a constant, and the tables below are NumPy. A traced edge is refused
-    # before the solve (rcwa.unsupported); here it would raise TypeError.
+    # jax.jit even for a constant, and the tables below are NumPy. A traced edge takes the
+    # traced stretch above.
     host = []
     for axis, nodes, period in zip(('x', 'y'), (plan.x, plan.y), (lattice[0][0], lattice[1][1])):
         period = checked_float(period)
@@ -313,6 +390,8 @@ def stretched_mu(xp, hu, hv, dtype, stretch):
     one = xp.ones((1, 1), dtype=dtype)
 
     def series(axis, half_width, weight):
+        if hasattr(stretch, 'places'):
+            return _table_series(xp, axis.period_table(half_width, weight, dtype)[:, None], dtype)
         return _table_series(xp, axis.period_table(half_width, weight)[:, None], dtype)
 
     def slot(weight_u, weight_v):
@@ -341,7 +420,7 @@ def layer_stack(xp, layers, hu, hv, lattice, dtype, plans=None, nesting=None, st
     if stretch is not None:
         matrices = [stretched_layer_matrices(
             xp, layer.get('shapes', []), layer.get('background', 1.), hu, hv, lattice, dtype,
-            stretch, None if plans is None else plans[i], nesting)
+            stretch, None if plans is None else plans[i], nesting, index=i)
             for i, layer in enumerate(layers)]
         return ConvMatrices(*(xp.stack([m[i] for m in matrices]) for i in range(3)), None, None)
     matrices = [layer_matrices(xp, layer.get('shapes', []), layer.get('background', 1.),

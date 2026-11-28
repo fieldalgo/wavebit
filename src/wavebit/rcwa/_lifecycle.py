@@ -96,26 +96,36 @@ def _engine_scene(solver):
 
 
 def _refuse_traced_stretch_geometry(problem):
-    """Refuse a cell or region geometry that is traced or carries a derivative, by its path.
+    """Refuse a geometry ``wall_resolution`` reads as numbers when it is traced, by its path.
 
-    ``wall_resolution`` builds its coordinates from the walls' positions as numbers (NumPy
-    tables of the stretch, `rcwa._engine.stretch`), so a moving wall would move the solve's
-    coordinates with no derivative through them: a JAX tracer under ``jax.grad``, ``jax.jit``
-    or ``jax.vmap``, or a PyTorch tensor that requires grad. Before 2026-11-28 eager JAX read the
-    primal and refused later with a generic message, and PyTorch failed with "element 0 of
-    tensors does not require grad". A geometry written as numbers inside a transformed function
-    is a constant and is solved.
+    A rectangle's size and centre may be traced or carry a derivative: the stretch then places
+    its walls as backend values (`rcwa._engine.stretch.TracedStretch`, 2026-11-28). The cell, a
+    rectangle's angle and a circle's or an ellipse's radius, centre or angle are still read as
+    numbers (the stretch's period; Li's axis-aligned rectangles; the matched coordinates), so a
+    JAX tracer under ``jax.grad``, ``jax.jit`` or ``jax.vmap``, or a PyTorch tensor that requires
+    grad, there would move the solve's coordinates with no derivative through them. A geometry
+    written as numbers inside a transformed function is a constant and is solved.
     """
     from .._common.backend import carries_autodiff
+    from .problem import Rectangle
+    moving = set()
+    for i, layer in enumerate(problem.stack.layers):
+        for j, region in enumerate(layer.regions):
+            if isinstance(region.geometry, Rectangle):
+                moving.update(f'stack.layers[{i}].regions[{j}].geometry.{name}'
+                              for name in ('size', 'center'))
     for path, value in _adapt.geometry_values(problem).items():
+        if path in moving:
+            continue
         if any(_adapt.abstract(v) or carries_autodiff(v) for v in _adapt.leaves(value)):
             raise UnsupportedFeatureError(
                 'This geometry is traced or carries a derivative, and wall_resolution builds its '
-                'coordinates from the walls as numbers: a derivative with respect to the '
-                'geometry (size, centre, radius, angle or cell), and jax.jit or jax.vmap over '
-                'it, is not implemented under wall_resolution. Write the geometry as numbers '
-                '(a constant inside a transformed function), or leave wall_resolution unset. '
-                'Materials, wavelength and the incident angles may be traced.',
+                'coordinates from it as numbers: a derivative with respect to the cell, an '
+                'angle, or a circle\'s or an ellipse\'s radius or centre, and jax.jit or jax.vmap '
+                'over it, is not implemented under wall_resolution. Write it as numbers (a '
+                'constant inside a transformed function), or leave wall_resolution unset. A '
+                'rectangle\'s size and centre, materials, wavelength and the incident angles may '
+                'be traced.',
                 code='rcwa.unsupported', path=path)
 
 

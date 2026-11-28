@@ -128,6 +128,11 @@ class StaticGeometry:
             record per layer. Coordinates and materials stay live. Zero-width contact
             intervals are retained; eager replay refuses crossed edges. Like the other
             index-only plans, these participate in content hashing. Never shared with NVF.
+        stretch_order: under ``wall_resolution``, every layer's rectangle edges per axis,
+            grouped where they meet and increasing (:func:`~wavebit.rcwa._engine.rectilinear.
+            stretch_order`). Pure Python and content-hashed like ``rectilinear_plans``; read only
+            by a stretch whose rectangles are traced under ``jax.jit`` or ``jax.vmap``, which
+            answers NaN where the live edges leave it.
         factorization: the rule the record was taken under -- ``'li'``, ``'nvf'`` or
             ``'laurent'`` -- written by ``freeze_geometry`` and compared, not consumed: a
             replay under any other rule is refused by name
@@ -175,6 +180,7 @@ class StaticGeometry:
     mu_compression: Optional[Any] = None
     gamma_plans: Optional[Any] = None
     rectilinear_plans: Optional[Any] = None
+    stretch_order: Optional[Any] = None
     #: Tensor geometry: integrated shape topology, or sampled phase interfaces
     #: and fixed normals. Uses identity hashing because sampled records contain arrays.
     tensor_geometry: Optional[Any] = None
@@ -209,7 +215,8 @@ class StaticGeometry:
             try:
                 key = ('content', self.factorization, self.shape_normal_method,
                        _hashable(self.boundary_plans),
-                       _hashable(self.gamma_plans), _hashable(self.rectilinear_plans))
+                       _hashable(self.gamma_plans), _hashable(self.rectilinear_plans),
+                       _hashable(self.stretch_order))
                 hash(key)
                 return key
             except TypeError:
