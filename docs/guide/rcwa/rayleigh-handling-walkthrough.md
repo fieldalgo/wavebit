@@ -137,6 +137,17 @@ pass `1e-8` for the same behaviour.
   to 1e-13 in every efficiency. Until 2026-11-09 the first-order mode split miscounted there
   and raised `rcwa.invalid`, advising a higher Fourier order, which keeps the condition;
   `detuning` did not retry that refusal.
+- **Under `jax.jit` or `jax.vmap`** nothing can refuse or retry, and `detuning` is refused there.
+  An exactly zero mode in a uniform layer that no half-space merge removes therefore comes back
+  as `NaN`, value and gradient, with `result.validity.checks['numerical_finite']` False. That is
+  the traced form of `rcwa.singular`, and the contract (fieldalgo/wavebit#268):
+  - read the flag, then mask or reject the result;
+  - or solve that point eagerly with `Numerics(detuning=...)`;
+  - or move the input off the exact float. For a uniform layer one ULP is enough under `jit`
+    too.
+
+  A layer of a half-space's own medium is merged instead and answers exactly
+  (`rayleigh-points.md` §5).
 - **Measurement scripts probing this regime must leave `detuning` at `None`** (on the earlier
   interface, pass `auto_detune=False`) — otherwise the library moves the exact point you meant
   to sample, and "exact vs detuned" comparisons come back identical (see `rayleigh-points.md`
