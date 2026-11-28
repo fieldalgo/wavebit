@@ -7640,14 +7640,21 @@ class CoreFactorizationMixin:
                     refuse(f'the orders retain a single harmonic along {name}, which cannot '
                            'hold the matched coordinates', 'Retain orders along both axes.')
             return matched
+        traced = ('wall_resolution reads the rectangles\' edges and the cell as numbers, so a '
+                  'traced size, position or period (jax.jit, jax.vmap, jax.grad over geometry) '
+                  'is not solved in stretched coordinates yet')
         try:
             walls = _rectilinear.wall_positions(self.structure, lattice, plans)
             periods = [float(_fac._to_numpy(lattice[i][i])) for i in (0, 1)]
-        except (TypeError, ValueError) as exc:
-            raise NotImplementedError(
-                'wall_resolution reads the rectangles\' edges and the cell as numbers, so a '
-                'traced size, position or period (jax.jit, jax.vmap, jax.grad over geometry) '
-                'is not solved in stretched coordinates yet') from exc
+        except TypeError as exc:
+            raise NotImplementedError(traced) from exc
+        except ValueError as exc:
+            # A traced topology reaches here as the plan's ValueError raised from a TypeError;
+            # any other ValueError is the geometry's own refusal (a rectangle crossing the cell
+            # edge, a size that is not positive) and keeps its message, as without the stretch.
+            if isinstance(exc.__cause__, TypeError):
+                raise NotImplementedError(traced) from exc
+            raise
         try:
             stretch = Stretch(walls[0], walls[1], periods[0], periods[1], self._wall_resolution)
         except ValueError as exc:

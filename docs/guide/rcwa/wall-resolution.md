@@ -26,12 +26,12 @@ The default is `None`: the cell's own coordinates, and every solve bit for bit a
 
 ## What the value is
 
-`G` is the slope of the solve's coordinates at a wall, a number in `(0, 1]`. With `x = F(u)` along each axis, `F'(u) = G` at every rectangle edge, so `0.02` places the coordinate lines fifty times more densely there than in the cell's own coordinates, and `1.0` on a structure whose walls are already evenly spaced is no stretch at all.
+`G` is the slope of the solve's coordinates at a wall, a number in `(0, 1]`. With `x = F(u)` along each axis, `F'(u) = G` at every wall, so `0.02` places the coordinate lines fifty times more densely there than in the cell's own coordinates, and `1.0` on a structure whose walls are already evenly spaced is no stretch at all.
 
 - **`0.02` is the recommended value.** It is the value the measurements were taken at.
 - A weaker stretch still helps: `0.1` was measured on two of the layers and was closer than the unstretched solve on both, though not as close as `0.02`.
-- The walls are placed at equal distances in the stretched cell, and one function per axis serves the whole stack: every rectangle edge of every layer is a wall of it. Nothing about the placement is a keyword.
-- Two rectangles of one material that touch still make a wall where they touch, and the solve changes with it: a block written as two halves moved the near field by 4.9%. Write a shape as one rectangle where it is one. A rectangle may not cross the cell's edge, so one that would is written as the pieces the edge cuts, and those carry walls on the edge ({ref}`the measurement <wall-resolution-off-centre>`).
+- The walls are placed at equal distances in the stretched cell, and one function per axis serves the whole stack: every wall of every layer is a wall of it. A wall is a rectangle edge with different materials on its two sides. Nothing about the placement is a keyword.
+- Two rectangles of one material that touch make no wall where they touch, so a shape written as several touching rectangles is solved as the one shape. A rectangle may not cross the cell's edge; one that would is written as the pieces the edge cuts it into, and is then solved as the shape moved ({ref}`the measurement <wall-resolution-off-centre>`). Until 2026-11-28 every rectangle edge was a wall, and a block written as two halves moved the near field by 4.9%.
 - `rcwa.check(...).resolved['wall_resolution']` reports the value, `None` when unset.
 - For a circle or an ellipse the walls of the stretch are the four lines of the matched mesh ({ref}`below <wall-resolution-circles>`), and the same value applies there.
 

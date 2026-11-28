@@ -77,7 +77,9 @@ def _primal_axes(shapes, lattice):
             low, high = period/2+center-fold*period-length/2, period/2+center-fold*period+length/2
             if low < 0 or high > period:
                 raise ValueError('Cartesian shape Li currently requires rectangles inside one cell, including its edges: '
-                                 'a rectangle that crosses the cell edge, wherever it is written, is refused')
+                                 'a rectangle that crosses the cell edge, wherever it is written, is refused; write it as '
+                                 'the rectangles the cell edges cut it into (with wall_resolution, rectangles of one '
+                                 'material that touch make no wall where they touch)')
             values[i, -1], values[i, 1] = low, high
             folds[i][a] = fold
         result.append(values)
@@ -160,22 +162,69 @@ def _table_series(xp, table, dtype):
     return series
 
 
-def wall_positions(layers, lattice, plans=None):
-    """Every rectangle edge of a stack, per axis, in cell coordinates (the corner at 0).
+def _material_key(material, owner):
+    """What tells two owners' materials apart: the permittivity when it is a concrete number.
 
-    A rectangle as long as the period along an axis has no wall across it: its two edges are
-    one line of the lattice with the same material on both sides, and they are left out.
+    A traced or array-valued permittivity keys by its owner, so it counts as a material of its
+    own -- an edge next to it stays a wall, as every edge did before.
+    """
+    import numpy as _np
+    try:
+        value = _np.asarray(_to_host(as_array(_np, as_material(material).epsilon)))
+    except Exception:       # a traced value cannot reach the host
+        return ('owner', owner)
+    if value.ndim != 0 or not _np.isfinite(value):
+        return ('owner', owner)
+    return complex(value)
+
+
+def wall_positions(layers, lattice, plans=None):
+    """The walls of a stack, per axis, in cell coordinates (the corner at 0).
+
+    A wall is a rectangle edge with different materials on its two sides along some stretch of
+    it: a line ``x = x0`` is a wall of a layer when, in at least one row of the layer's partition
+    of positive height, the cells just left and just right of ``x0`` hold different materials,
+    the cell's edge read across the period. So two rectangles of one material that touch make no
+    wall where they touch, an edge painted over by a rectangle of one material on both sides
+    makes none, and a rectangle as long as the period makes none across it.
     """
     walls = ([], [])
     for index, layer in enumerate(layers):
         shapes = layer.get('shapes', [])
         plan = plan_layer(shapes, lattice) if plans is None else plans[index]
-        for a, (axis, nodes) in enumerate(zip(('x', 'y'), (plan.x, plan.y))):
-            period = checked_float(lattice[a][a])
-            spans = {i for i, shape in enumerate(shapes)
-                     if checked_float(shape['l' + axis]) >= period * (1 - 1e-12)}
-            walls[a].extend(checked_float(_coordinate(shapes, axis, n, period, plan.folds))
-                            for n in nodes if n[0] != -1 and n[0] not in spans)
+        periods = [checked_float(lattice[a][a]) for a in (0, 1)]
+        keys = [_material_key(shape.get('material', 1.), i) for i, shape in enumerate(shapes)]
+        keys.append(_material_key(layer.get('background', 1.), -1))
+        positions = [[checked_float(_coordinate(shapes, axis, n, period, plan.folds)) for n in nodes]
+                     for axis, nodes, period in zip(('x', 'y'), (plan.x, plan.y), periods)]
+        for a in (0, 1):
+            period, coords, nodes = periods[a], positions[a], (plan.x, plan.y)[a]
+            other = positions[1 - a]
+            tolerance = 1e-12 * period
+            # the intervals of positive width along this axis, and the rows across it
+            open_cells = [k for k in range(len(coords) - 1) if coords[k + 1] - coords[k] > tolerance]
+            rows = [j for j in range(len(other) - 1) if other[j + 1] - other[j] > tolerance]
+            if not open_cells or not rows:
+                continue
+
+            def owner(row, cell):
+                return plan.owners[row][cell] if a == 0 else plan.owners[cell][row]
+
+            seen = []
+            for n, node in enumerate(nodes):
+                if node[0] == -1:
+                    continue
+                x0 = coords[n]
+                if any(abs(x0 - s) <= tolerance for s in seen):
+                    continue
+                seen.append(x0)
+                # the last open cell ending at x0 and the first starting there, across the period
+                left = [k for k in open_cells if coords[k + 1] <= x0 + tolerance]
+                right = [k for k in open_cells if coords[k] >= x0 - tolerance]
+                k_left = left[-1] if left else open_cells[-1]
+                k_right = right[0] if right else open_cells[0]
+                if any(keys[owner(j, k_left)] != keys[owner(j, k_right)] for j in rows):
+                    walls[a].append(x0)
     return walls
 
 
