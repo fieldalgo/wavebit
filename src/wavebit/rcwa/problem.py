@@ -326,7 +326,8 @@ class Region:
     plus ``m a1 + n a2`` are one structure, and solve the same to rounding. Overlapping
     regions are painted as written, so two that overlap only through a periodic copy are
     refused with the whole-period move that resolves it; ``factorization='li'`` reads a
-    rectangle in the cell wherever it is written and refuses one that crosses the cell edge.
+    rectangle in the cell wherever it is written, cuts one that crosses the cell edge into the
+    rectangles the edges cut it into, and refuses one longer than the period.
     """
     geometry: object
     material: object

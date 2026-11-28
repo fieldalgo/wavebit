@@ -31,7 +31,7 @@ The default is `None`: the cell's own coordinates, and every solve bit for bit a
 - **`0.02` is the recommended value.** It is the value the measurements were taken at.
 - A weaker stretch still helps: `0.1` was measured on two of the layers and was closer than the unstretched solve on both, though not as close as `0.02`.
 - The walls are placed at equal distances in the stretched cell, and one function per axis serves the whole stack: every wall of every layer is a wall of it. A wall is a rectangle edge with different materials on its two sides. Nothing about the placement is a keyword.
-- Two rectangles of one material that touch make no wall where they touch, so a shape written as several touching rectangles is solved as the one shape. A rectangle may not cross the cell's edge; one that would is written as the pieces the edge cuts it into, and is then solved as the shape moved ({ref}`the measurement <wall-resolution-off-centre>`). Until 2026-11-28 every rectangle edge was a wall, and a block written as two halves moved the near field by 4.9%.
+- Two rectangles of one material that touch make no wall where they touch, so a shape written as several touching rectangles is solved as the one shape. A rectangle that crosses the cell's edge is cut into the rectangles the edge cuts it into, and is then solved as the shape moved ({ref}`the measurement <wall-resolution-off-centre>`); written as those pieces it is the same solve. Until 2026-11-28 such a rectangle was refused and had to be written as its pieces. Until 2026-11-28 every rectangle edge was a wall, and a block written as two halves moved the near field by 4.9%.
 - `rcwa.check(...).resolved['wall_resolution']` reports the value, `None` when unset.
 - For a circle or an ellipse the walls of the stretch are the four lines of the matched mesh ({ref}`below <wall-resolution-circles>`), and the same value applies there.
 
@@ -50,7 +50,7 @@ Everything else is refused by name with the code `rcwa.unsupported`, at `rcwa.ch
 - two walls too close for the stretch to hold between them (a piece of the stretched cell is `period / number of walls` wide whatever its physical width);
 - `Outputs(scattering=True)`.
 
-A rectangle as long as the period along one axis has no wall across that axis, and that axis is not stretched: a lamellar grating is stretched along its one direction.
+A rectangle as long as the period along one axis has no wall across that axis, and that axis is not stretched: a lamellar grating is stretched along its one direction. A rectangle longer than the period runs into its own periodic image and is refused (`rcwa.invalid`), with or without `wall_resolution`, as the NVF and Laurent shape builders refuse it.
 
 `jax.jit`, `jax.vmap` and gradients are not supported yet. Which orders propagate, and where a field's samples sit, are read as numbers.
 

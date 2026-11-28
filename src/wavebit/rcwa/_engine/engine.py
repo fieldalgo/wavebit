@@ -7650,8 +7650,8 @@ class CoreFactorizationMixin:
             raise NotImplementedError(traced) from exc
         except ValueError as exc:
             # A traced topology reaches here as the plan's ValueError raised from a TypeError;
-            # any other ValueError is the geometry's own refusal (a rectangle crossing the cell
-            # edge, a size that is not positive) and keeps its message, as without the stretch.
+            # any other ValueError is the geometry's own refusal (a rectangle longer than the
+            # period, a size that is not positive) and keeps its message, as without the stretch.
             if isinstance(exc.__cause__, TypeError):
                 raise NotImplementedError(traced) from exc
             raise

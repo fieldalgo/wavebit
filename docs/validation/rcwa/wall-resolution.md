@@ -250,7 +250,7 @@ Eight more metal cases were checked against the same 3D finite elements, under t
 - **Five shapes moved in the cell.**
   - With one patterned layer a moved shape is the centred structure moved. Its reference `R` and `T` are the centred structure's. Its reference field at a sample is the centred structure's at the sample minus the move, with the Bloch phase. So the finite elements add nothing new here; what is measured is whether the solve keeps its accuracy when the shape crosses the cell's edge or corner.
   - The moves are not multiples of the samples' spacing, so the samples sit in other places on the shape than in the centred rows.
-  - A rectangle may not cross the cell's edge, so the moved block is written as the four rectangles the cell's edges cut it into.
+  - A rectangle could not cross the cell's edge when this was measured, so the moved block is written as the four rectangles the cell's edges cut it into. Since 2026-11-28 the block can be written as one rectangle across the corner: it is cut into the same four, and `tests/rcwa/test_wall_resolution.py` holds the two to 1e-10 in `R` and `T` and 1e-8 of the field's largest value (equal to the last bit at order 6).
 - **Three new layers with no mirror along x.** A T of two rectangles, x -120 to 0 by y -100 to 100 nm and x 0 to 80 by y -50 to 50 nm, puts three walls along x. Two bars of widths 80 and 40 nm, at x -150 to -70 and 50 to 90 nm, put four. All three are at theta 20 deg, phi 0, solved on half the cell in y.
 
 | Case | `wall_resolution=0.02`: `R` / `T` against the reference | Default solve: `R` / `T` | Field: stretched / default (ratio) | Reference's own step (`u_F`) | Verdict |

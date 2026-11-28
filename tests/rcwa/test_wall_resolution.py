@@ -233,7 +233,7 @@ def _blocks(rectangles):
 def test_a_block_written_as_touching_pieces_is_the_block():
     """The 200 nm metal block at theta 20 deg, as one rectangle, as two touching at x = 0, and
     moved by (146, 130) nm across the cell's corner as the four rectangles the edges cut it into
-    (a rectangle may not cross the cell's edge): the same walls, so the same solve -- ``R`` and
+    (until 2026-11-28 a rectangle could not cross the cell's edge): the same walls, so the same solve -- ``R`` and
     ``T`` to 1e-9 and the field, moved back with the Bloch phase, to 1e-8 of its largest value.
     At order 12 the three agree to 4e-11 and 5e-10. Before 2026-11-28 the joins were walls and the
     moved block's field was 6.7% from the block's at order 12."""
@@ -261,12 +261,45 @@ def test_a_block_written_as_touching_pieces_is_the_block():
         assert np.abs(fields[name] - fields['one']).max() < 1e-8 * np.abs(fields['one']).max()
 
 
-def test_a_rectangle_across_the_cell_edge_is_refused_for_what_it_is():
-    """The stretched solve says what the unstretched one says, and how to write the rectangle
-    instead (until 2026-11-28 it blamed a traced size)."""
-    problem = _problem(METAL, center=(150.0, 0.0))
+#: A rectangle written across the cell's edge, and the rectangles the edges cut it into: across
+#: x, across the corner, and as long as the period across x (two pieces that touch).
+ACROSS = {
+    'x': ([(46, 246, -100, 100)], [(46, 200, -100, 100), (-200, -154, -100, 100)]),
+    'corner': ([(46, 246, 30, 230)], [(46, 200, 30, 200), (-200, -154, 30, 200), (46, 200, -200, -170),
+                                      (-200, -154, -200, -170)]),
+    'period': ([(-110, 290, -80, 80)], [(-110, 200, -80, 80), (-200, -110, -80, 80)]),
+}
+
+
+@pytest.mark.parametrize('slope', [None, 0.02])
+@pytest.mark.parametrize('case', sorted(ACROSS))
+def test_a_rectangle_across_the_cell_edge_is_the_rectangles_the_edges_cut_it_into(case, slope):
+    """Until 2026-11-28 such a rectangle was refused and had to be written as its pieces; it is
+    now cut into them (``rectilinear._primal_axes``), so the solve is the pieces' solve, with and
+    without the stretch: the same walls, ``R`` and ``T`` to 1e-10 and the field to 1e-8 of its
+    largest value (criterion written before measuring). Measured: the same numbers to the last
+    bit across one edge and the corner, 1.5e-12 as long as the period."""
+    theta = np.radians(20.0)
+    x, y = np.linspace(-190, 190, 9), np.linspace(-185, 185, 7)
+    whole, pieces = ACROSS[case]
+    walls = [rectilinear.wall_positions([{'shapes': [_rectangle(*r) for r in rects], 'background': 1.0}],
+                                        [[P, 0.0], [0.0, P]]) for rects in (whole, pieces)]
+    assert tuple(sorted(w) for w in walls[0]) == tuple(sorted(w) for w in walls[1])
+    totals, fields = [], []
+    for rects in (whole, pieces):
+        result = _run(_problem(METAL, layers=_blocks(rects), theta=theta), orders=(6, 6), slope=slope)
+        totals.append(_totals(result))
+        fields.append(np.asarray(result.field(x=x, y=y, z=[75.0]).values))
+    assert totals[0] == pytest.approx(totals[1], abs=1e-10)
+    assert np.abs(fields[0] - fields[1]).max() < 1e-8 * np.abs(fields[1]).max()
+
+
+def test_a_rectangle_longer_than_the_period_is_refused_for_what_it_is():
+    """It runs into its own image, as NVF and Laurent's shape builders say; until 2026-11-28 it
+    was refused as a rectangle across the cell's edge."""
+    problem = _problem(METAL, size=(450.0, 200.0))
     for numerics in (_numerics(slope=None), _numerics()):
-        with pytest.raises(ValidationError, match='crosses the cell edge.*cut it into'):
+        with pytest.raises(ValidationError, match='longer than the period along x.*own periodic image'):
             rcwa.run(problem, numerics=numerics)
 
 
@@ -312,14 +345,16 @@ def test_a_grating_uniform_along_y_converges_to_what_the_unstretched_solve_appro
 
 
 @pytest.mark.parametrize('backend', ['jax', 'torch'])
-@pytest.mark.parametrize('material, wavelength', [(12.25, 900.0), (METAL, 350.0)])
-def test_the_backends_agree(backend, material, wavelength):
+@pytest.mark.parametrize('material, wavelength, center', [(12.25, 900.0, (20.0, -10.0)), (METAL, 350.0, (20.0, -10.0)),
+                                                          (METAL, 350.0, (146.0, 130.0))])
+def test_the_backends_agree(backend, material, wavelength, center):
     if backend == 'jax':
         jax = pytest.importorskip('jax')
         jax.config.update('jax_enable_x64', True)
     else:
         pytest.importorskip('torch')
-    problem = _problem(material, size=(250.0, 150.0), center=(20.0, -10.0), wavelength=wavelength,
+    # (146, 130): across the cell's corner, cut into four
+    problem = _problem(material, size=(250.0, 150.0), center=center, wavelength=wavelength,
                        theta=np.deg2rad(20), phi=np.deg2rad(30))
     x, y = np.linspace(-190, 190, 7), np.linspace(-170, 170, 5)
     results = [rcwa.run(problem, numerics=_numerics(orders=(5, 5)), backend=name) for name in ('numpy', backend)]

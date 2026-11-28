@@ -398,7 +398,7 @@ def check_layers(solver):
 
     Each builder refuses a shape layer as it records it, so this makes the call its freeze
     makes, on the same arguments, and keeps nothing: Cartesian Li's plans, which refuse a
-    rectangle that leaves the cell; the integrated shapes' layer checks
+    rectangle longer than the period; the integrated shapes' layer checks
     (:func:`~wavebit.rcwa._engine.tensor_shapes.check_layers`); and the sampled snapshot,
     unpainted. The sampled masks wrap every shape periodically, so a shape larger than the
     period is sampled like any other there; the snapshot refuses a length that is not positive.
