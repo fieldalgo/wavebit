@@ -89,7 +89,7 @@ Solving the half-spaces in the same coordinates needs only the propagating order
 ## Why this function and this placement
 
 - **A bump at each wall did less.** A profile that slows the coordinate only within a fixed band around each wall was measured first, with the slope at the wall as low as 0.02; on the metal rectangle it read 19%, 14% and 4.2% at the three orders, against 4.5%, 3.6%, 3.4% for the sine. With it a dielectric layer's `R` also got worse at low order (3.5% off at order 8, against 0.26% here). The shape of the function matters more than the slope at the wall.
-- **Equal distances between the walls.** With each piece instead as wide in `u` as it is in `x`, the metal rectangle read 6.7% and 6.3% at orders 8 and 12, and on a uniform slab with two walls 37.5 nm apart the field was wrong by more than its own size; with equal distances the same slab's field was uniform to 1.5%.
+- **Equal distances between the walls.** With each piece instead as wide in `u` as it is in `x`, the metal rectangle read 6.7% and 6.3% at orders 8 and 12, and on a uniform slab with two walls 37.5 nm apart the field was wrong by more than its own size; with equal distances the same slab's field was uniform to 1.5%. Placements between the two, on axes with three or more walls, are measured {ref}`below <wall-resolution-many-walls-placement>`.
 - **The slope.** On the metal rectangle a slope of 0.1 read 8.6 / 4.6 / 4.1% and on the dielectric square 0.93 / 0.75 / 0.51%, between the unstretched solve and 0.02.
 
 These three comparisons were made with a test implementation that the product code reproduces to five digits in `R` and `T` on thirteen cases.
@@ -242,6 +242,42 @@ A layer with more than two walls along an axis divides the stretched cell among 
 - Before these, the only check was a uniform slab through four unevenly placed walls, which reads the right `R` to 1e-5.
 - These references are not stored in the repository, and no test asserts them.
 
+(wall-resolution-many-walls-placement)=
+### Placing three or more walls other than at equal distances
+
+Four layers miss the criteria above at order 12, and all four have three or four walls along an axis: the metal bars and the frame in p here, and the T in s and the unequal bars below ({ref}`wall-resolution-off-centre`). Each piece between two walls gets `period / K` of the stretched cell, `K` the number of walls. Giving each piece its physical width instead was worse ({ref}`above <wall-resolution-many-walls>`, "Equal distances between the walls"), so placements between the two were tried on axes with three or more walls. Axes with two walls were left as they are. The criteria, written before measuring, asked for a placement that brings at least two of the four within the criteria at order 12. It also had to keep the three layers with three or four walls that meet them (the bars in s, the dielectric bars and the T in p).
+
+- **Blend**: piece `l` is `(1 - a) period / K + a dx_l` wide, `dx_l` its physical width, for `a` = 0.25, 0.5 and 0.75.
+- **Floor**: the width is proportional to `max(dx_l, m period / K)`, for `m` = 0.5 and 1.
+
+| Placement | The four that miss: met | The three that meet: kept | Notes |
+| --- | --- | --- | --- |
+| equal (the product) | 0 of 4 | 3 of 3 | |
+| blend 0.25 | 1 of 4 (T in s) | 3 of 3 | the frame's field ratio 0.358 |
+| blend 0.5 | 1 of 4 (T in s) | 3 of 3 | the frame's field ratio 1.011 |
+| blend 0.75 | 2 of 4 (bars p, unequal bars) | 2 of 3: the bars in s lose `T` (-0.32%) | |
+| floor 0.5 | 3 of 4 (all but the frame) | 1 of 3: the bars in s lose `R` (-0.33%), the T in p `R` (-0.71%) | |
+| floor 1 | 2 of 4 (T in s, unequal bars) | 2 of 3: the T in p loses `R` (-1.03%) | |
+
+- **None was adopted.** Each placement that brings two or more of the four within the criteria takes one of the three out of them. The T in p is one of the stored references, and two placements lose it. The frame was met by none: its field ratio on the judged samples was 0.35 to 1.01 against 0.25. Only floor 1 put its `R` and `T` both within 0.30% (-0.29 / +0.25%).
+- The placement stays at equal distances. A layer with three or more walls along an axis is solved at a higher order instead ({ref}`below <wall-resolution-many-walls-orders>`).
+- Not tried: a slope that differs from wall to wall. The function above keeps `F'` equal to `G` on both sides of a wall, so it would need another profile.
+
+(wall-resolution-many-walls-orders)=
+### The four by order
+
+With the placement at equal distances, the four layers against their references, `R` / `T` at orders 12, 16 and 20 (the field on the judged samples in brackets at order 20; read after the verdicts above):
+
+| Layer | Walls along x / y | Order 12 | Order 16 | Order 20 | Tolerance |
+| --- | --- | --- | --- | --- | --- |
+| two metal bars, p | 4 / 2 | -1.04 / -0.12% | -0.44 / -0.23% | -0.09 / -0.02% (field 1.7%, ratio 0.088) | 0.52% |
+| metal frame, p | 4 / 4 | -0.35 / -0.59% | -0.10 / -0.03% | -0.07 / +0.02% (field 3.3% on samples 2.5 nm or more from a wall) | 0.30% |
+| metal T, theta 20 deg, s | 3 / 4 | -2.53 / -0.27% | -0.43 / -0.41% | -0.10 / -0.03% (field 2.2%, ratio 0.084) | 0.45% |
+| two metal bars of unequal widths, theta 20 deg, p | 4 / 2 | -1.00 / -0.11% | -0.83 / -0.12% | -0.01 / -0.08% (field 1.4%, ratio 0.104) | 0.55% |
+
+- At order 16 three of the four are within the tolerance in `R` and `T`. At order 20 all four are, and on the bars and the T the field errors are 1.4 to 2.2%, 0.08 to 0.10 of the default solve's.
+- The orders 16 and 20 were not part of the criteria and are not a verdict. They are what the guide's advice for such layers rests on ([the guide](../../guide/rcwa/wall-resolution.md), "Many walls").
+
 (wall-resolution-off-centre)=
 ## Shapes away from the cell's centre
 
@@ -349,7 +385,7 @@ Each scene was solved at orders 4 to 16 and slopes `G` from 0.1 to 0.005, and by
 
 - A reference at phi other than 0; a reference for a structure with no mirror along either axis, or for patterned layers moved by different amounts; a second reference for the metal rows on a substrate. A finer finite-element level for the weak rows above.
 - An independent implementation of the stretched solve or the matched mesh: none was found to compare with at the same truncation.
-- Layers with more than four walls along an axis; four walls at oblique incidence or on a substrate; why the frame's field error at order 12 is larger than the bars', and which side holds the 2.0 to 3.5% left at order 20.
+- Layers with more than four walls along an axis; four walls on a substrate; orders above 20 on layers with three or more walls; why the frame's field error at order 12 is larger than the bars', and which side holds the 2.0 to 3.5% left at order 20.
 - A second mesh level for five of the seven references.
 - `jax.jit`, `jax.vmap` and gradients, which are refused.
 - Spurious modes at slopes below 0.005 or orders above 16; wavelength features narrower than about 4 nm; the cause of the three warnings above.
