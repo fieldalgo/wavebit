@@ -573,7 +573,8 @@ class FieldState:
             parts = [field[..., i] for i in range(6)]
             layer = np.asarray(_host_value(owner)).reshape(-1)
             shape = (-1,) + (1,) * (field.ndim - 2)
-            own = [_array(xp, np.array([scalars[j][k] for j in layer]), parts[0]) for k in (0, 1)]
+            own = [xp.astype(xp.stack([xp.reshape(scalars[j][k], ()) for j in layer]), parts[0].dtype)
+                   for k in (0, 1)]
             scale = xp.where(inside > 0, xp.reshape(own[0], shape), xp.reshape(own[1], shape))
             e_u, e_v = read(parts[0], parts[1], flux[..., 0], flux[..., 1], scale)
             h_u, h_v = read(parts[3], parts[4], flux[..., 3], flux[..., 4], 1.0)

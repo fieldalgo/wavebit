@@ -37,7 +37,7 @@ The default is `None`: the cell's own coordinates, and every solve bit for bit a
 
 ## What it accepts
 
-Rectangles along the cell's axes, or one circle or axis-aligned ellipse ({ref}`below <wall-resolution-circles>`), with `factorization='li'` in a rectangular cell; isotropic, non-magnetic materials in the layers, metals included; lossless dielectric half-spaces; one incident plane wave from either side, at any angle; any number of layers, uniform ones included; the scattering-matrix algorithm (`algorithm='smm'`, the default) and the second-order formulation. NumPy, JAX and PyTorch, run eagerly, at double precision.
+Rectangles along the cell's axes, or one circle or axis-aligned ellipse ({ref}`below <wall-resolution-circles>`), with `factorization='li'` in a rectangular cell; isotropic, non-magnetic materials in the layers, metals included; lossless dielectric half-spaces; one incident plane wave from either side, at any angle; any number of layers, uniform ones included; the scattering-matrix algorithm (`algorithm='smm'`, the default) and the second-order formulation. NumPy, JAX and PyTorch, at double precision; on JAX and PyTorch, derivatives with respect to the materials, the wavelength and the incident angle, and on JAX `jax.jit` and `jax.vmap` over them ({ref}`below <wall-resolution-transforms>`).
 
 Everything else is refused by name with the code `rcwa.unsupported`, at `rcwa.check` as at `rcwa.run`:
 
@@ -50,10 +50,40 @@ Everything else is refused by name with the code `rcwa.unsupported`, at `rcwa.ch
 - two walls too close for the stretch to hold between them (a piece of the stretched cell is `period / number of walls` wide whatever its physical width);
 - `Outputs(scattering=True)`;
 - `precision='single'`: the stretch makes the layer operators large where they meet the walls, and single-precision rounding then moved `R` and `T` by up to a few percent in the measurements ({ref}`why <wall-resolution-single-precision>`).
+- a traced or differentiated geometry -- a size, centre, radius, angle or the cell -- under `jax.grad`, `jax.jit`, `jax.vmap` or a PyTorch tensor that requires grad, refused at its path ({ref}`below <wall-resolution-transforms>`);
+- under `jax.jit` or `jax.vmap`, a traced half-space permittivity.
 
 A rectangle as long as the period along one axis has no wall across that axis, and that axis is not stretched: a lamellar grating is stretched along its one direction.
 
-`jax.jit`, `jax.vmap` and gradients are not supported yet. Which orders propagate, and where a field's samples sit, are read as numbers.
+(wall-resolution-transforms)=
+## Derivatives, `jax.jit` and `jax.vmap`
+
+The materials of the layers, the wavelength and the incident angle may be traced or differentiated; the geometry is read as numbers.
+
+```python
+import jax
+jax.config.update('jax_enable_x64', True)
+import jax.numpy as jnp
+
+def design(epsilon, wavelength):
+    return rcwa.Problem(
+        units=Units(length='nm'),
+        stack=rcwa.Stack(period=(400.0, 400.0), layers=[rcwa.Layer(thickness=150.0, regions=[
+            rcwa.Region(geometry=rcwa.Rectangle(size=(200.0, 200.0)), material=Material(epsilon=epsilon))])]),
+        excitation=rcwa.Excitation(wavelength=wavelength, sources=[rcwa.PlaneWave(polarization='p', theta=0.35)]))
+
+numerics = rcwa.Numerics(orders=(3, 3), factorization='li', wall_resolution=0.02)
+prepared = rcwa.prepare(design(-20 + 1.5j, 900.0), numerics=numerics, backend='jax')
+reflectance = lambda eps, wl: jnp.sum(prepared.run(design(eps + 1.5j, wl)).R)
+value, slope = jax.jit(jax.value_and_grad(reflectance))(-20.0, 900.0)
+sweep = jax.vmap(reflectance, in_axes=(None, 0))(-20.0, jnp.linspace(850.0, 950.0, 5))
+```
+
+- **What may move.** The permittivities of the regions and backgrounds, the wavelength and `theta`: under `jax.grad` (eagerly or inside `jax.jit`), `jax.jit`, `jax.vmap`, and PyTorch autograd. `phi` takes the same code and was not measured. A half-space's permittivity may be differentiated eagerly (measured once); under `jax.jit` or `jax.vmap` it has to be a constant `Material`.
+- **What may not.** The coordinates are built from the walls' positions as numbers, so a size, centre, radius, angle or the cell that is traced or carries a derivative is refused with `rcwa.unsupported` at its path, on JAX and PyTorch alike. Write the geometry as numbers inside the transformed function, as above. A derivative with respect to the geometry would have to move the coordinates with the walls; it is not implemented.
+- **Under `jax.jit` and `jax.vmap`** the run makes the decisions an eager run makes on numbers -- which orders propagate, which of the half-space's modes their plane waves replace -- as array operations, and agrees with the eager run to rounding. Where an eager run would refuse (too few orders to hold a half-space's plane waves), the transformed run answers NaN and `result.validity.checks['numerical_finite']` is false.
+- **Touching rectangles of one material** make no wall, as without a transform. Under `jax.jit` or `jax.vmap` a traced material cannot be compared by value: one traced value written for several rectangles (the same variable, or the same `Material`) is one material, and two different traced values are two. Where two different traced values turn out equal on a touching edge, the run answers NaN rather than solve in coordinates the eager run would not take.
+- **How it is checked.** Derivatives against central differences on a metal block and a metal circle, jitted and vmapped runs against eager ones, and JAX against PyTorch ({ref}`the measurements <wall-resolution-transforms-measured>`).
 
 (wall-resolution-circles)=
 ## Circles and ellipses

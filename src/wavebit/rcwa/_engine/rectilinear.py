@@ -10,6 +10,7 @@ integrated builder the raster path uses, so a plan serves both nestings.
 """
 from collections import namedtuple
 import math
+import sys
 
 from wavebit._common.backend import as_array
 from wavebit._common.backend import checked_float
@@ -166,11 +167,18 @@ def _material_key(material, owner):
     """What tells two owners' materials apart: the permittivity when it is a concrete number.
 
     A traced or array-valued permittivity keys by its owner, so it counts as a material of its
-    own -- an edge next to it stays a wall, as every edge did before.
+    own -- an edge next to it stays a wall, as every edge did before. An eager ``jax.grad``
+    tracer is read through its primal, as a PyTorch tensor is detached (:func:`_to_host`), so the
+    two decide alike; only a ``jax.jit`` or ``jax.vmap`` trace has no value, and
+    :func:`wall_positions` reports the edges that decision placed.
     """
     import numpy as _np
     try:
-        value = _np.asarray(_to_host(as_array(_np, as_material(material).epsilon)))
+        value = as_material(material).epsilon
+        jax = sys.modules.get('jax')
+        if jax is not None and isinstance(value, jax.core.Tracer):
+            value = jax.lax.stop_gradient(value)
+        value = _np.asarray(_to_host(as_array(_np, value)))
     except Exception:       # a traced value cannot reach the host
         return ('owner', owner)
     if value.ndim != 0 or not _np.isfinite(value):
@@ -178,7 +186,11 @@ def _material_key(material, owner):
     return complex(value)
 
 
-def wall_positions(layers, lattice, plans=None):
+def _opaque_key(key):
+    return isinstance(key, tuple) and key[0] in ('owner', 'traced')
+
+
+def wall_positions(layers, lattice, plans=None, undecided=None, groups=None):
     """The walls of a stack, per axis, in cell coordinates (the corner at 0).
 
     A wall is a rectangle edge with different materials on its two sides along some stretch of
@@ -187,6 +199,13 @@ def wall_positions(layers, lattice, plans=None):
     the cell's edge read across the period. So two rectangles of one material that touch make no
     wall where they touch, an edge painted over by a rectangle of one material on both sides
     makes none, and a rectangle as long as the period makes none across it.
+
+    A material with no value to compare (traced under ``jax.jit`` or ``jax.vmap``) is a material
+    of its own, unless ``groups`` (per layer, a label per owner, the background last) says
+    owners share one traced value, which the caller knows from the objects it was given. Where that alone makes an edge a wall, the pairs of owners it rests on are
+    appended to ``undecided`` as ``(layer index, [(owner, owner), ...])``: a concrete solve at
+    the same values would make no wall there if every such pair turned out equal, and the
+    caller answers NaN in that case rather than a solve in other coordinates.
     """
     walls = ([], [])
     for index, layer in enumerate(layers):
@@ -195,6 +214,11 @@ def wall_positions(layers, lattice, plans=None):
         periods = [checked_float(lattice[a][a]) for a in (0, 1)]
         keys = [_material_key(shape.get('material', 1.), i) for i, shape in enumerate(shapes)]
         keys.append(_material_key(layer.get('background', 1.), -1))
+        labels = groups[index] if groups is not None and index < len(groups) else None
+        if labels is not None and len(labels) == len(keys):
+            # One traced value written for several owners is one material (`groups`).
+            keys = [label if _opaque_key(key) and label is not None else key
+                    for key, label in zip(keys, labels)]
         positions = [[checked_float(_coordinate(shapes, axis, n, period, plan.folds)) for n in nodes]
                      for axis, nodes, period in zip(('x', 'y'), (plan.x, plan.y), periods)]
         for a in (0, 1):
@@ -223,8 +247,14 @@ def wall_positions(layers, lattice, plans=None):
                 right = [k for k in open_cells if coords[k] >= x0 - tolerance]
                 k_left = left[-1] if left else open_cells[-1]
                 k_right = right[0] if right else open_cells[0]
-                if any(keys[owner(j, k_left)] != keys[owner(j, k_right)] for j in rows):
-                    walls[a].append(x0)
+                pairs = [(owner(j, k_left), owner(j, k_right)) for j in rows]
+                differ = [(o1, o2) for o1, o2 in pairs if keys[o1] != keys[o2]]
+                if not differ:
+                    continue
+                walls[a].append(x0)
+                if undecided is not None and all(_opaque_key(keys[o1]) or _opaque_key(keys[o2])
+                                                 for o1, o2 in differ):
+                    undecided.append((index, sorted(set(differ))))
     return walls
 
 
@@ -241,11 +271,20 @@ def stretched_layer_matrices(xp, shapes, background, hu, hv, lattice, dtype, str
     axis and comes out as the stretched uniform medium.
     """
     import numpy as _np
-    edges, owners = layer_partition(xp, shapes, lattice, dtype, plan)
+    if plan is None:
+        plan = plan_layer(shapes, lattice)
+    _, owners = layer_partition(xp, shapes, lattice, dtype, plan)
     materials = [as_array(xp, as_material(s.get('material', 1.)).epsilon, dtype=dtype) for s in shapes]
     materials.append(as_array(xp, as_material(background).epsilon, dtype=dtype))
     cell = xp.stack([xp.stack([materials[i] for i in row]) for row in owners])
-    host = [_np.asarray(_to_host(e), dtype=float).reshape(-1) for e in edges]
+    # The edges as the numbers they were written as: the backend's copy is a trace under
+    # jax.jit even for a constant, and the tables below are NumPy. A traced edge is refused
+    # before the solve (rcwa.unsupported); here it would raise TypeError.
+    host = []
+    for axis, nodes, period in zip(('x', 'y'), (plan.x, plan.y), (lattice[0][0], lattice[1][1])):
+        period = checked_float(period)
+        host.append(_np.asarray([checked_float(_coordinate(shapes, axis, n, period, plan.folds))
+                                 / period for n in nodes[1:]], dtype=float))
     series_u = _table_series(xp, stretch.x.segment_table(host[0], hu), dtype)
     series_v = _table_series(xp, stretch.y.segment_table(host[1], hv), dtype)
     ex = _li_slot(xp, cell, hu, hv, series_u, series_v, 'u', nesting)

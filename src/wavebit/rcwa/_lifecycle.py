@@ -95,6 +95,30 @@ def _engine_scene(solver):
     return getattr(solver, '_scene', solver)
 
 
+def _refuse_traced_stretch_geometry(problem):
+    """Refuse a cell or region geometry that is traced or carries a derivative, by its path.
+
+    ``wall_resolution`` builds its coordinates from the walls' positions as numbers (NumPy
+    tables of the stretch, `rcwa._engine.stretch`), so a moving wall would move the solve's
+    coordinates with no derivative through them: a JAX tracer under ``jax.grad``, ``jax.jit``
+    or ``jax.vmap``, or a PyTorch tensor that requires grad. Before 2026-11-28 eager JAX read the
+    primal and refused later with a generic message, and PyTorch failed with "element 0 of
+    tensors does not require grad". A geometry written as numbers inside a transformed function
+    is a constant and is solved.
+    """
+    from .._common.backend import carries_autodiff
+    for path, value in _adapt.geometry_values(problem).items():
+        if any(_adapt.abstract(v) or carries_autodiff(v) for v in _adapt.leaves(value)):
+            raise UnsupportedFeatureError(
+                'This geometry is traced or carries a derivative, and wall_resolution builds its '
+                'coordinates from the walls as numbers: a derivative with respect to the '
+                'geometry (size, centre, radius, angle or cell), and jax.jit or jax.vmap over '
+                'it, is not implemented under wall_resolution. Write the geometry as numbers '
+                '(a constant inside a transformed function), or leave wall_resolution unset. '
+                'Materials, wavelength and the incident angles may be traced.',
+                code='rcwa.unsupported', path=path)
+
+
 def _resolve(problem, numerics, execution):
     if not isinstance(problem, Problem):
         raise ValidationError('rcwa lifecycle functions require rcwa.Problem.', code='problem.type', path='problem')
@@ -116,6 +140,7 @@ def _resolve(problem, numerics, execution):
             raise UnsupportedFeatureError(
                 'wall_resolution is implemented for one incident plane wave.',
                 code='rcwa.unsupported', path='numerics.wall_resolution')
+        _refuse_traced_stretch_geometry(problem)
     if not _adapt.single_plane(problem):
         if problem.outputs.diffraction:
             raise UnsupportedFeatureError('Coherent beams and internal sources currently expose boundary power and requested fields. Use Outputs(diffraction=False); no unique single-incident-port R/T is invented.',
@@ -348,15 +373,13 @@ def _report(problem, numerics, execution, solvers):
         # or vmap that takes a material as its argument, any material gradient -- refuses it.
         # Materials written as constants inside a jitted function stay concrete and are read,
         # but a preparation cannot know which a later jit will do, so jit is not claimed.
-        # wall_resolution reads which orders propagate, and the sample points of a field, as
-        # numbers: eager only, and no gradients through it yet.
+        # wall_resolution takes materials, the wavelength and the incident angles live, under
+        # gradients, jax.jit and jax.vmap; its geometry is read as numbers and refused when traced.
         capabilities={'eager': True, 'material_gradients': (execution.backend != 'numpy' and single
-                                                            and not numerics.half_space_merge_tolerance
-                                                            and numerics.wall_resolution is None),
+                                                            and not numerics.half_space_merge_tolerance),
                       'jit': (execution.backend == 'jax' and single
-                              and not numerics.half_space_merge_tolerance
-                              and numerics.wall_resolution is None),
-                      'vmap': execution.backend == 'jax' and single and numerics.wall_resolution is None,
+                              and not numerics.half_space_merge_tolerance),
+                      'vmap': execution.backend == 'jax' and single,
                       'geometry_reuse': 'concrete topology validation, including eager JAX gradients; Cartesian Li edge-order device guard or explicitly selected scalar-shape host callback under JIT/vmap',
                       'topology_check': numerics.topology_check,
                       'diffraction': single, 'coherent_boundary_power': not single,
@@ -620,6 +643,9 @@ class Prepared:
         if _adapt.coherent_dependencies(problem) != self._coherent_dependencies:
             raise IncompatibleProblemError('Coherent source grouping dependencies changed. Prepare again after changing directions, wavelengths, sampling, cell, or half-space response.',
                                            code='prepared.source_grouping', path='excitation.sources')
+        if self.numerics.wall_resolution is not None:
+            # Before the topology guards, whose refusal does not say why this solve needs numbers.
+            _refuse_traced_stretch_geometry(problem)
         traced_geometry = False
         concrete_topology = True
         if _adapt.has_tracer(problem):
