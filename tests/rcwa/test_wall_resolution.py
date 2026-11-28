@@ -340,7 +340,7 @@ def test_the_option_is_off_by_default_and_reported_when_set():
     report = rcwa.check(_problem(), numerics=_numerics())
     assert not report.issues and report.resolved['wall_resolution'] == 0.02
     assert rcwa.check(_problem(), numerics=_numerics(slope=None)).resolved['wall_resolution'] is None
-    # Eager only for now: which orders propagate, and a field's sample points, are read as numbers.
+    # On NumPy: no transforms and no gradients. JAX and PyTorch are in test_wall_resolution_transforms.
     assert report.capabilities['eager'] and not report.capabilities['jit'] and not report.capabilities['vmap']
     assert not report.capabilities['material_gradients']
 

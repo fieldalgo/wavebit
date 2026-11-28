@@ -1047,10 +1047,9 @@ class _StretchedPorts:
         try:
             kz_host = np.asarray(_host(kz), dtype=complex)
             q_host = np.asarray(_host(q), dtype=complex)
-        except Exception as exc:
-            raise NotImplementedError(
-                'wall_resolution reads which orders propagate from their values, so it does '
-                'not run under jax.jit, jax.vmap or jax.grad yet') from exc
+        except Exception:
+            # Under jax.jit or jax.vmap: the same decisions, as array operations.
+            return self._half_space_traced(W, V, kz, modes_W, modes_V, q)
         if q_host.ndim == 2:
             q_host = np.diagonal(q_host)
         propagating = np.abs(kz_host.imag) < 1e-9 * np.abs(kz_host)
@@ -1078,6 +1077,9 @@ class _StretchedPorts:
             raise ValueError(
                 'wall_resolution: the stretched half-space keeps a propagating mode beside its '
                 'plane waves, whose direction is not determined; raise the orders')
+        replaced = np.zeros(size, dtype=bool)
+        replaced[picked] = True
+        modes_W, modes_V = _apart(xp, modes_W, modes_V, q, replaced)
         # Order j's wave sits at column j; the evanescent modes fill the columns left over.
         source = np.empty(size, dtype=int)
         source[np.flatnonzero(~propagating)] = kept
@@ -1088,8 +1090,91 @@ class _StretchedPorts:
                 xp.where(mask, waves_V, xp.take(modes_V, index, axis=1)))
 
 
+    def _half_space_traced(self, W, V, kz, modes_W, modes_V, q):
+        """:meth:`half_space` where the values cannot be read (``jax.jit``, ``jax.vmap``).
+
+        Every decision the eager method takes on host numbers is taken here on the trace, the
+        same way: which orders propagate, which ``count`` modes carry their waves (a stable sort
+        of the same weights, so ties break alike), and which column each kept mode fills. Its
+        two refusals cannot raise under a trace; a half-space that fails either answers NaN,
+        which the result reports through ``validity.checks['numerical_finite']``.
+        """
+        from wavebit.rcwa._engine.modal_gradient import _stop
+        xp = self.xp
+        roots = _stop(xp.linalg.diagonal(q) if q.ndim == 2 else q)
+        along = xp.abs(xp.imag(kz)) < 1e-9 * xp.abs(kz)
+        # Every order's wave: which ones are read is not known while tracing.
+        waves_W, waves_V = self._to_computational(W, V, None)
+        self.propagating.append(along)
+        propagating = xp.concat([along, along])
+        size = propagating.shape[0]
+        count = xp.sum(xp.astype(propagating, xp.int64))
+        weights = _stop(xp.abs(linear_solve(xp, modes_W, waves_W)) ** 2)
+        heavy = xp.sum(xp.where(propagating[None, :], weights, xp.zeros_like(weights)), axis=1)
+        ranked = xp.argsort(-heavy, stable=True)
+        replaced = xp.argsort(ranked, stable=True) < count          # the first `count` ranked
+        share = (xp.sum(xp.where(replaced, heavy, xp.zeros_like(heavy)))
+                 / xp.maximum(xp.sum(heavy), xp.asarray(1e-300, dtype=heavy.dtype)))
+        held = (count == 0) | (share >= 0.99)
+        held = held & ~xp.any(~replaced & (xp.abs(xp.real(roots)) < 1e-7 * xp.abs(roots)))
+        modes_W, modes_V = _apart(xp, modes_W, modes_V, q, replaced)
+        # The kept modes in their own order fill the columns of the evanescent orders in theirs.
+        kept = xp.argsort(xp.astype(replaced, xp.int32), stable=True)
+        slot = xp.cumsum(xp.astype(~propagating, xp.int64)) - 1
+        index = xp.take(kept, xp.clip(slot, 0, size - 1))
+        mask = propagating[None, :]
+        nan = xp.asarray(complex('nan'), dtype=modes_W.dtype)
+        return tuple(xp.where(held, xp.where(mask, waves, xp.take(modes, index, axis=1)), nan)
+                     for waves, modes in ((waves_W, modes_W), (waves_V, modes_V)))
+
+
+def _apart(xp, W, V, q, replaced):
+    """``(W, V)`` whose columns vary with the subspaces ``replaced`` splits the modes into.
+
+    Under a derivative the eigensolve is stopped and its variation rides on ``q``, a matrix
+    generator in the fixed basis ``W`` (:func:`~wavebit.rcwa._engine.modal_gradient.generator`):
+    ``dQ_ij`` on every pair of modes. A layer reads only the generator, and so loses nothing;
+    the half-space keeps some of the modes and replaces the rest by exact plane waves, and the
+    kept modes' span moves through the entries that join the two sets. Those are turned into a
+    change of basis, ``X_ij = dQ_ij / (q_j - q_i)`` across the sets
+    (:func:`~wavebit.rcwa._engine.modal_gradient.split_generator`'s rule), and what stays inside
+    a set is that set's generator, so ``V`` is re-read from ``Omega_R W = V Q``. Without this a
+    wavelength or angle derivative left out the kept modes' turn: 0.1 to 2% off a central
+    difference on a block at theta 0.35 rad (2026-11-28).
+
+    The values are returned as given, to the bit; only the tangents change. Nothing is done
+    when ``q`` carries no derivative (a vector of roots).
+    """
+    from wavebit._common.backend import carries_autodiff
+    from wavebit.rcwa._engine.modal_gradient import _stop
+    if getattr(q, 'ndim', 1) != 2 or not carries_autodiff(q):
+        return W, V
+    roots = _stop(xp.linalg.diagonal(q))
+    device = getattr(q, 'device', None)
+    label = xp.asarray(replaced, device=device)
+    separate = label[:, None] != label[None, :]
+    gap = roots[None, :] - roots[:, None]
+    zero = xp.zeros_like(q)
+    X = xp.where(separate, q / xp.where(separate & (gap != 0), gap, xp.ones_like(gap)), zero)
+    inside = xp.where(separate, zero, q)
+    eye = xp.eye(q.shape[0], dtype=q.dtype, device=device)
+    turned = V @ q @ (eye + X) @ xp.linalg.inv(inside)
+    # X is zero in value, and `turned - stop(turned)` too: the values stay the ones given, and
+    # `turned` carries all of the new V's tangent (the given V's own is in it).
+    return W + W @ X, _stop(V) + (turned - _stop(turned))
+
+
 def _host(array):
-    """A backend array of concrete numbers as something NumPy reads."""
+    """A backend array of concrete numbers as something NumPy reads.
+
+    An eager ``jax.grad`` tracer is read through its primal, as a PyTorch tensor is detached:
+    what is read here is a decision (which orders propagate, which modes they replace), and
+    the derivative runs through the arrays the decision indexes. A tracer under ``jax.jit`` or
+    ``jax.vmap`` has no value, and NumPy's read of it raises.
+    """
+    jax = sys.modules.get('jax')
+    if jax is not None and isinstance(array, jax.core.Tracer):
+        array = jax.lax.stop_gradient(array)
     if hasattr(array, 'detach'):
         array = array.detach()
     if hasattr(array, 'cpu'):
@@ -1419,7 +1504,8 @@ def _stretched_ports(xp, C, stretch, wavelength, kx, ky, Kx, Ky, I, O, F_c, F_s,
             # E~ = J^T E for the propagating orders' plane waves; the other columns are zero
             # and never read (`_StretchedPorts.half_space`).
             import numpy as np
-            picked = np.flatnonzero(propagating)
+            picked = (np.arange(n_orders) if propagating is None
+                      else np.flatnonzero(propagating))
             orders = [(int(j % n_orders_u) - half_u, int(j // n_orders_u) - half_v) for j in picked]
             columns = matched.wave_columns(xp, centre_u, centre_v, half_u, half_v, orders, C)
             spread = np.zeros((len(picked), n_orders))
