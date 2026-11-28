@@ -258,19 +258,21 @@ Eight more metal cases were checked against the same 3D finite elements, under t
 | metal circle at (196, 187) nm, across the corner, theta 20 deg, p | +0.03 / -0.01% | -2.29 / -1.03% | 0.56 / 22.3% (0.025) | 3.9e-4 | met |
 | metal ellipse 130 by 80 nm at (-146, 130) nm, across the corner, theta 20 deg, p | +0.02 / -0.02% | -1.16 / -1.67% | 0.72 / 27.5% (0.026) | 2.0e-4 | met |
 | metal circle at (60, 110) nm in the 400 by 300 nm cell, across the edge, p | +0.02 / -0.01% | -1.09 / -0.97% | 0.72 / 29.2% (0.025) | 2.3e-4 | met |
-| metal block at (146, 130) nm, across the corner, four rectangles, theta 20 deg, p | -0.18 / -0.26% | -1.63 / -0.40% | 6.73 / 28.1% (0.240) | 1.5e-3 | met, weak |
+| metal block at (146, 130) nm, across the corner, four rectangles, theta 20 deg, p | -0.10 / +0.05% | -1.63 / -0.40% | 1.08 / 28.1% (0.038) | 1.5e-3 | met, weak |
 | metal T, theta 20 deg, p | -0.30 / -0.35% | -1.59 / -2.08% | 5.66 / 27.9% (0.203) | 2.0e-3 | met, weak |
 | metal T, theta 20 deg, s | -2.53 / -0.27% | -2.17 / -1.11% | 9.74 / 30.0% (0.324) | 2.3e-3 | not met, weak |
 | two metal bars of unequal widths, theta 20 deg, p | -1.00 / -0.11% | -3.17 / -0.48% | 2.14 / 19.5% (0.110) | 2.8e-3 | not met, weak |
 
 - **Six of the eight are met.**
   - On the circles and the ellipse the field error is 0.53 to 0.72%, as in their centred rows (0.52 to 0.76%). Moved, the solve gives the centred `R` and `T` to 1.3e-10 and the centred field to 5e-9 of its largest value.
-  - On the moved block `T` is at -0.26% against 0.30% and the field ratio at 0.240 against 0.25; the centred block's field error is 0.73%.
+  - The moved block's row is solved as of 2026-11-28, with touching rectangles of one material no wall (below). Measured before that, it read -0.18 / -0.26% in `R` / `T` and 6.73% in the field (ratio 0.240), and was met as well.
   - On the T in s, `R` is 2.53% low against 0.45% and the field ratio is 0.324.
   - On the bars `R` is 1.00% low against 0.55%. `R` is only 0.014 there; `T` and the field meet the criteria.
-- **Two rectangles of one material that touch make a wall where they touch** (read after the verdict).
-  - Every rectangle edge is a wall of the stretch, also an edge with the same metal on both sides. The moved block's four pieces put such walls on the cell's edges, and the solve then differs from the centred block's: by -7.6e-4 in `R`, -3.1e-3 in `T` and 6.7% in the field (RMS). The default solve does not change, to 1e-12.
-  - The centred block written as two rectangles that meet at x = 0 moves the same way: by -9.9e-4 in `R`, -2.0e-3 in `T` and 4.9% in the field. One rectangle moved within the cell is the centred block to 1.3e-11.
+- **Two rectangles of one material that touched made a wall where they touched** (read after the verdict; changed on 2026-11-28).
+  - Every rectangle edge was a wall of the stretch, also an edge with the same metal on both sides. The moved block's four pieces put such walls on the cell's edges, and the solve then differed from the centred block's: by -7.6e-4 in `R`, -3.1e-3 in `T` and 6.7% in the field (RMS). The default solve did not change, to 1e-12.
+  - The centred block written as two rectangles that meet at x = 0 moved the same way: by -9.9e-4 in `R`, -2.0e-3 in `T` and 4.9% in the field. One rectangle moved within the cell is the centred block to 1.3e-11.
+  - Since 2026-11-28 a wall is an edge with different materials on its two sides. At order 12 the block written as two halves, and moved as four pieces, is the block to 4e-11 in `R` and `T` and 5e-10 of the field's largest value (`tests/rcwa/test_wall_resolution.py` holds this at order 6).
+  - The moved block's field error against the reference is then 1.08%, the centred row's 0.73%. The two are on different samples: the moved block's come within 1.25 nm of a wall, the centred block's no closer than 3.08 nm. A check written before the change asked for 1.0% on the moved block and is recorded as not met; the solve itself is the centred one moved.
 - **By order** (read after the verdict). On the T in s the stretched `R` is -3.89, -2.53, -0.43 and -0.10% off at orders 8, 12, 16 and 20, and the field error 14.5, 9.7, 6.4 and 2.2%. On the T in p the field error is 10.7, 5.7, 3.3 and 2.4%. On the bars `R` is -1.50, -1.00, -0.83 and -0.01% off at orders 8, 12, 16 and 20.
 - **The references.** For the moved shapes, the centred structure's finer level, solved again to read the field at the moved samples. Its `R` is within 4.4e-6 of the stored level's; the rebuilt circle and ellipse meshes differ from the first ones by 23 and 2 of about 80000 cells. For the T and the bars, two new levels each, with 0.73 and 0.82 million complex unknowns on the finer one. Before measuring, their metal volume in the mesh was checked against the analytic one, to 1e-14.
 - The six met are stored in `tests/references/golden_gyptis_wide_d.npz`, with its record, and `tests/references/test_gyptis_wide_golden.py` asserts the criteria on them at order 12 in the slow tier. The two not met are not stored.

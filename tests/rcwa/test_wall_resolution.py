@@ -137,6 +137,41 @@ def test_an_edge_that_is_no_wall_is_not_stretched():
     assert not stretch.x.identity and stretch.y.identity
 
 
+def _rectangle(x0, x1, y0, y1, material=METAL):
+    return {'type': 'rectangle', 'lx': x1 - x0, 'ly': y1 - y0, 'cx': (x0 + x1) / 2, 'cy': (y0 + y1) / 2,
+            'material': material}
+
+
+@pytest.mark.parametrize('shapes, walls', [
+    # a block, and the same block written as two rectangles that touch at x = 0
+    ([_rectangle(-100, 100, -100, 100)], ([100.0, 300.0], [100.0, 300.0])),
+    ([_rectangle(-100, 0, -100, 100), _rectangle(0, 100, -100, 100)], ([100.0, 300.0], [100.0, 300.0])),
+    # the block cut by the cell's corner into four, the cut edges on the cell's edges
+    ([_rectangle(46, 200, 30, 200), _rectangle(-200, -154, 30, 200), _rectangle(46, 200, -200, -170),
+      _rectangle(-200, -154, -200, -170)], ([246.0, 46.0], [230.0, 30.0])),
+    # touching rectangles of two materials keep the wall where they touch
+    ([_rectangle(-100, 0, -100, 100), _rectangle(0, 100, -100, 100, 12.25)],
+     ([100.0, 200.0, 300.0], [100.0, 300.0])),
+    # a rectangle inside another: of the same material it is no wall, of another it is
+    ([_rectangle(-100, 100, -100, 100), _rectangle(-50, 50, -50, 50)], ([100.0, 300.0], [100.0, 300.0])),
+    ([_rectangle(-100, 100, -100, 100), _rectangle(-50, 50, -50, 50, 12.25)],
+     ([100.0, 150.0, 250.0, 300.0], [100.0, 150.0, 250.0, 300.0])),
+    # a T: where its two rectangles touch, metal meets air above and below the narrow one
+    ([_rectangle(-120, 0, -100, 100), _rectangle(0, 80, -50, 50)],
+     ([80.0, 200.0, 280.0], [100.0, 150.0, 250.0, 300.0])),
+])
+def test_a_wall_is_an_edge_with_two_materials_beside_it(shapes, walls):
+    """Two rectangles of one material that touch make no wall where they touch.
+
+    Before 2026-11-28 every rectangle edge was a wall, so a block written as two touching
+    rectangles was solved on other coordinates than the block (``R`` -9.9e-4, the field 4.9% at
+    order 12), and a block across the cell's edge, which has to be written as the rectangles the
+    edges cut it into, got walls on the cell's edges.
+    """
+    found = rectilinear.wall_positions([{'shapes': shapes, 'background': 1.0}], [[P, 0.0], [0.0, P]])
+    assert tuple(sorted(w) for w in found) == tuple(sorted(w) for w in walls)
+
+
 # --------------------------------------------------------------------------- limits and invariants
 
 
@@ -187,6 +222,52 @@ def test_moving_the_rectangle_in_the_cell_moves_nothing_else(material):
     a = np.asarray(at_centre.field(x=x, y=y, z=[75.0]).values)
     b = np.asarray(moved.field(x=x + shift[0], y=y + shift[1], z=[75.0]).values)
     assert np.abs(a - b).max() < 1e-7 * np.abs(a).max()
+
+
+def _blocks(rectangles):
+    return [rcwa.Layer(thickness=H, regions=[rcwa.Region(
+        geometry=rcwa.Rectangle(size=(x1 - x0, y1 - y0), center=((x0 + x1) / 2, (y0 + y1) / 2)),
+        material=Material(epsilon=METAL)) for x0, x1, y0, y1 in rectangles])]
+
+
+def test_a_block_written_as_touching_pieces_is_the_block():
+    """The 200 nm metal block at theta 20 deg, as one rectangle, as two touching at x = 0, and
+    moved by (146, 130) nm across the cell's corner as the four rectangles the edges cut it into
+    (a rectangle may not cross the cell's edge): the same walls, so the same solve -- ``R`` and
+    ``T`` to 1e-9 and the field, moved back with the Bloch phase, to 1e-8 of its largest value.
+    At order 12 the three agree to 4e-11 and 5e-10. Before 2026-11-28 the joins were walls and the
+    moved block's field was 6.7% from the block's at order 12."""
+    theta, shift = np.radians(20.0), (146.0, 130.0)
+    kx = 2 * np.pi / 900.0 * np.sin(theta)
+    x, y = np.linspace(-190, 190, 9), np.linspace(-185, 185, 7)
+    solves = {
+        'one': (_blocks([(-100, 100, -100, 100)]), (0.0, 0.0)),
+        'two': (_blocks([(-100, 0, -100, 100), (0, 100, -100, 100)]), (0.0, 0.0)),
+        'four': (_blocks([(46, 200, 30, 200), (-200, -154, 30, 200), (46, 200, -200, -170),
+                          (-200, -154, -200, -170)]), shift),
+    }
+    totals, fields = {}, {}
+    for name, (layers, (dx, dy)) in solves.items():
+        result = _run(_problem(METAL, layers=layers, theta=theta), orders=(6, 6))
+        totals[name] = _totals(result)
+        xs, ys = x + dx, y + dy
+        folded_x, folded_y = (xs + P / 2) % P - P / 2, (ys + P / 2) % P - P / 2
+        field = np.asarray(result.field(x=folded_x, y=folded_y, z=[75.0]).values)
+        # E at the unfolded point is the folded one times the Bloch phase; the moved structure's
+        # field at x + dx is the block's at x times exp(i kx dx)
+        fields[name] = field * np.exp(1j * kx * (xs - folded_x - dx))[None, None, None, :, None]
+    for name in ('two', 'four'):
+        assert totals[name] == pytest.approx(totals['one'], abs=1e-9)
+        assert np.abs(fields[name] - fields['one']).max() < 1e-8 * np.abs(fields['one']).max()
+
+
+def test_a_rectangle_across_the_cell_edge_is_refused_for_what_it_is():
+    """The stretched solve says what the unstretched one says, and how to write the rectangle
+    instead (until 2026-11-28 it blamed a traced size)."""
+    problem = _problem(METAL, center=(150.0, 0.0))
+    for numerics in (_numerics(slope=None), _numerics()):
+        with pytest.raises(ValidationError, match='crosses the cell edge.*cut it into'):
+            rcwa.run(problem, numerics=numerics)
 
 
 @pytest.mark.parametrize('wavelength, theta, phi, polarization, orders', [
