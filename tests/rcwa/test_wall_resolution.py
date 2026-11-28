@@ -380,6 +380,29 @@ def test_what_is_not_implemented_is_refused_by_name(problem, numerics, said):
     assert code == 'rcwa.unsupported' and said in message
 
 
+@pytest.mark.parametrize('backend', ['numpy', 'jax', 'torch'])
+@pytest.mark.parametrize('layers', [None, [rcwa.Layer(thickness=H, regions=[rcwa.Region(
+    geometry=rcwa.Circle(radius=100.0), material=Material(epsilon=METAL))])]], ids=['rectangle', 'circle'])
+def test_single_precision_is_refused_by_name(backend, layers):
+    """Measured 2026-11-28 against the wide finite-element table (the validation page): at single
+    precision the stretched solve missed its criteria by up to a few percent, and at order 12 on the
+    circle refused a half-space. The rounding the stretch amplifies is in the solve, not its tables.
+    """
+    if backend != 'numpy':
+        pytest.importorskip(backend)
+    problem, numerics = _problem(METAL, layers=layers), _numerics()
+    report = rcwa.check(problem, numerics=numerics, backend=backend, precision='single')
+    assert [issue.code for issue in report.issues] == ['rcwa.unsupported']
+    with pytest.raises(UnsupportedFeatureError) as caught:
+        rcwa.run(problem, numerics=numerics, backend=backend, precision='single')
+    assert caught.value.code == 'rcwa.unsupported' and "precision='single'" in str(caught.value)
+    # The default solve at single precision is not affected, nor the stretch at double.
+    assert not rcwa.check(problem, numerics=rcwa.Numerics(orders=(4, 4)), backend=backend,
+                          precision='single').issues
+    if backend == 'numpy':
+        assert not rcwa.check(problem, numerics=numerics).issues
+
+
 def test_the_result_refuses_what_a_stretched_solve_does_not_hold():
     result = _run(_problem(METAL))
     with pytest.raises(UnsupportedFeatureError) as caught:
