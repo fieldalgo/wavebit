@@ -3,7 +3,9 @@
 The grid follows live rectangle edges. Plans contain only edge order, cell
 ownership and the whole cells each rectangle is written away from the cell (a
 rectangle written ``m`` periods over is the same structure, and the edges are
-read in the cell); materials, lengths and positions are replayed on the active backend.
+read in the cell) and which cell edge each rectangle crosses (it is then the pieces the cell
+edges cut it into, :func:`_pieces`); materials, lengths and positions are replayed on the
+active backend.
 No normal field or pixel raster is constructed. The rules are nested as
 ``nesting`` says (``enums.Nesting``, ``'fixed'`` by default), by the same
 integrated builder the raster path uses, so a plan serves both nestings.
@@ -22,7 +24,59 @@ from wavebit.rcwa._engine.factorization import _li_slot
 from wavebit.lattice import is_axis_aligned
 import wavebit.rcwa._engine.parametric as P
 
-Plan = namedtuple('RectilinearPlan', 'x y owners count folds')
+Plan = namedtuple('RectilinearPlan', 'x y owners count folds pieces')
+
+#: How a rectangle sits on one axis of the cell once folded: inside it, across its lower edge
+#: (``low < 0``) or across its upper edge (``high > P``). Recorded per rectangle and axis in the
+#: plan; a replay that reads another crossing is a new topology.
+INSIDE, LOWER, UPPER = 0, -1, 1
+
+
+def _crossing(low, high, period):
+    if low < 0:
+        return LOWER
+    if high > period:
+        return UPPER
+    return INSIDE
+
+
+def _axis_pieces(crossing):
+    """The pieces the cell edges cut one axis of a rectangle into, as ``(shift, clip)`` pairs.
+
+    ``shift`` is the whole cells the piece is read further over (``+1``: one cell back, so a
+    piece past the upper edge reappears at the lower one); ``clip`` is the side whose edge is
+    the cell's own (``-1``: at 0, ``+1``: at ``P``, ``0``: neither).
+    """
+    if crossing == LOWER:
+        return ((0, -1), (-1, 1))        # [0, high] and [low + P, P]
+    if crossing == UPPER:
+        return ((0, 1), (1, -1))         # [low, P] and [0, high - P]
+    return ((0, 0),)
+
+
+def _pieces(crossings):
+    """Every rectangle's pieces in painting order: ``(shape, ((shift, clip) along x, along y))``."""
+    return tuple((i, (px, py)) for i, (cx, cy) in enumerate(crossings)
+                 for px in _axis_pieces(cx) for py in _axis_pieces(cy))
+
+
+def crossings(plan, axis):
+    """Each rectangle's crossing along ``axis`` (0: x, 1: y), read back from the plan's pieces."""
+    first = {}
+    for owner, cuts in plan.pieces:
+        first.setdefault(owner, cuts[axis][1])  # a rectangle's first piece is never shifted
+    return [first[i] for i in range(plan.count)]
+
+
+def edge(center, length, period, fold, shift, clip, side):
+    """One piece edge in cell coordinates (the corner at 0), on any backend's values.
+
+    A clipped side is the cell edge itself; any other is the rectangle's edge read
+    ``fold + shift`` cells back.
+    """
+    if clip == side:
+        return (side + 1) / 2 * period
+    return period/2 + center - (fold + shift)*period + side*length/2
 
 
 def validate(layers, lattice, matched=False):
@@ -46,49 +100,64 @@ def validate(layers, lattice, matched=False):
                 raise NotImplementedError("factorization='li' on shapes supports only axis-aligned rectangles; use factorization='nvf' (NVF) for other shapes")
 
 
-def _coordinate(shapes, axis, node, period, folds):
-    owner, side = node
-    if owner == -1:
+def _coordinate(shapes, axis, node, period, plan):
+    piece, side = node
+    if piece == -1:
         return side * period
+    owner, cuts = plan.pieces[piece]
+    a = 'xy'.index(axis)
+    shift, clip = cuts[a]
     shape = shapes[owner]
-    fold = folds[owner]['xy'.index(axis)]
-    return period/2 + shape.get('c'+axis, 0.) - fold*period + side*shape['l'+axis]/2
+    return edge(shape.get('c'+axis, 0.), shape['l'+axis], period, plan.folds[owner][a], shift, clip, side)
 
 
 def _primal_axes(shapes, lattice):
-    """Each axis's edge positions in the cell, and each rectangle's whole-cell fold.
+    """Each axis's edge positions in the cell, each rectangle's whole-cell fold, and its pieces.
 
     A centre written ``m`` periods from the cell (``cx`` and ``cx + m Px`` are one structure)
     is read ``m`` periods back, to the nearest cell; the fold is an integer of the plan, so a
     replay reads the same cell and a rectangle moved by whole periods needs a new plan.
+
+    A rectangle that crosses a cell edge once folded is the rectangles that edge cuts it into
+    (:func:`_pieces`): two across one edge, four across a corner. Which edge it crosses is
+    topology, like the fold. One longer than the period runs into its own image and is refused,
+    as NVF and Laurent's shape builders refuse it.
     """
     periods = [checked_float(lattice[i][i]) for i in (0, 1)]
     if any(not math.isfinite(v) or v <= 0 for v in periods):
         raise ValueError('Cartesian shape Li requires positive finite cell periods')
-    result, folds = [], [[0, 0] for _ in shapes]
+    folds = [[0, 0] for _ in shapes]
+    crossings = [[INSIDE, INSIDE] for _ in shapes]
     for a, (axis, period) in enumerate(zip(('x', 'y'), periods)):
-        values = {(-1, 0): 0., (-1, 1): period}
         for i, shape in enumerate(shapes):
             length = checked_float(shape.get('l'+axis, 0.))
             center = checked_float(shape.get('c'+axis, 0.))
             if not math.isfinite(length) or not math.isfinite(center) or length <= 0:
                 raise ValueError('Cartesian shape Li requires positive finite sizes and finite centers')
+            if length > period:
+                raise ValueError(f'Cartesian shape Li: rectangle {i} is longer than the period along {axis} '
+                                 f'(l{axis} = {length:g} > {period:g}) and runs into its own periodic image; '
+                                 'a rectangle as long as the period fills that axis')
             fold = round(center / period)
-            low, high = period/2+center-fold*period-length/2, period/2+center-fold*period+length/2
-            if low < 0 or high > period:
-                raise ValueError('Cartesian shape Li currently requires rectangles inside one cell, including its edges: '
-                                 'a rectangle that crosses the cell edge, wherever it is written, is refused; write it as '
-                                 'the rectangles the cell edges cut it into (with wall_resolution, rectangles of one '
-                                 'material that touch make no wall where they touch)')
-            values[i, -1], values[i, 1] = low, high
+            low = period/2 + center - fold*period - length/2
             folds[i][a] = fold
+            crossings[i][a] = _crossing(low, low + length, period)
+    folds = tuple(tuple(f) for f in folds)
+    pieces = _pieces(crossings)
+    plan = Plan(None, None, None, len(shapes), folds, pieces)
+    result = []
+    for a, (axis, period) in enumerate(zip(('x', 'y'), periods)):
+        values = {(-1, 0): 0., (-1, 1): period}
+        for p in range(len(pieces)):
+            for side in (-1, 1):
+                values[p, side] = checked_float(_coordinate(shapes, axis, (p, side), period, plan))
         result.append(values)
-    return result, tuple(tuple(f) for f in folds)
+    return result, folds, pieces
 
 
 def plan_layer(shapes, lattice):
     try:
-        values, folds = _primal_axes(shapes, lattice)
+        values, folds, pieces = _primal_axes(shapes, lattice)
     except TypeError as error:
         # Only a traced topology cannot be sorted; invalid concrete values keep
         # the diagnosis from _primal_axes.
@@ -104,29 +173,33 @@ def plan_layer(shapes, lattice):
     owners = []
     # Symbolic containment retains zero-width intervals at contact. The upper
     # edge precedes the next lower edge, so an opening gap keeps background.
-    bounds = [(x.index((i, -1)), x.index((i, 1)), y.index((i, -1)), y.index((i, 1)))
-              for i in range(len(shapes))]
+    # Pieces are in painting order and own their rectangle's material.
+    bounds = [(x.index((p, -1)), x.index((p, 1)), y.index((p, -1)), y.index((p, 1)), shape)
+              for p, (shape, _) in enumerate(pieces)]
     for j in range(len(y)-1):
         row = []
         for k in range(len(x)-1):
             owner = -1
-            for i, (x0, x1, y0, y1) in enumerate(bounds):
+            for x0, x1, y0, y1, shape in bounds:
                 if x0 <= k < x1 and y0 <= j < y1:
-                    owner = i  # later shapes paint over earlier ones
+                    owner = shape  # later shapes paint over earlier ones
             row.append(owner)
         owners.append(tuple(row))
-    return Plan(x, y, tuple(owners), len(shapes), folds)
+    return Plan(x, y, tuple(owners), len(shapes), folds, pieces)
 
 
 def check_plan(shapes, lattice, plan):
     if len(shapes) != plan.count:
         raise StaleGeometryError('Cartesian Li shape count changed; freeze_geometry() again')
     try:
-        values, folds = _primal_axes(shapes, lattice)
+        values, folds, pieces = _primal_axes(shapes, lattice)
     except TypeError:
         return  # Frozen replay: ordering is checked on concrete calls, as for other plans.
     if folds != plan.folds:
         raise StaleGeometryError('a Cartesian Li rectangle moved by whole cells; freeze_geometry() again')
+    if pieces != plan.pieces:
+        raise StaleGeometryError("a Cartesian Li rectangle's crossing of the cell edge changed; "
+                                 'freeze_geometry() again')
     for nodes, coords in zip((plan.x, plan.y), values):
         positions = [coords[n] for n in nodes]
         if any(a > b for a, b in zip(positions, positions[1:])):
@@ -142,7 +215,7 @@ def layer_partition(xp, shapes, lattice, dtype, plan=None, device=None):
     real_dtype = xp.float64 if dtype == xp.complex128 else xp.float32
     edges = []
     for axis, nodes, period in zip(('x', 'y'), (plan.x, plan.y), (lattice[0][0], lattice[1][1])):
-        edges.append(xp.stack([as_array(xp, _coordinate(shapes, axis, n, period, plan.folds)/period,
+        edges.append(xp.stack([as_array(xp, _coordinate(shapes, axis, n, period, plan)/period,
                                         dtype=real_dtype, device=device) for n in nodes[1:]]).reshape((-1, 1)))
     return edges, plan.owners
 
@@ -195,7 +268,7 @@ def wall_positions(layers, lattice, plans=None):
         periods = [checked_float(lattice[a][a]) for a in (0, 1)]
         keys = [_material_key(shape.get('material', 1.), i) for i, shape in enumerate(shapes)]
         keys.append(_material_key(layer.get('background', 1.), -1))
-        positions = [[checked_float(_coordinate(shapes, axis, n, period, plan.folds)) for n in nodes]
+        positions = [[checked_float(_coordinate(shapes, axis, n, period, plan)) for n in nodes]
                      for axis, nodes, period in zip(('x', 'y'), (plan.x, plan.y), periods)]
         for a in (0, 1):
             period, coords, nodes = periods[a], positions[a], (plan.x, plan.y)[a]

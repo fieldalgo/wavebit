@@ -593,21 +593,39 @@ class Prepared:
         valid = xp.asarray(True)
         periods = (problem.stack.period if problem.stack.lattice is None else
                    (problem.stack.lattice[0][0], problem.stack.lattice[1][1]))
+        from ._engine import rectilinear
         for geometry in self._geometry:
             for layer, plan in zip(problem.stack.layers, geometry.rectilinear_plans):
                 for axis, nodes in enumerate((plan.x, plan.y)):
                     period = _adapt._array(xp, periods[axis], self.execution)
+
+                    def read(owner):
+                        rectangle = layer.regions[owner].geometry
+                        return (_adapt._array(xp, rectangle.center[axis], self.execution),
+                                _adapt._array(xp, rectangle.size[axis], self.execution))
+
+                    # Each rectangle still crosses the cell edge the plan cut it at, and is
+                    # no longer than the period (`rectilinear._primal_axes`).
+                    for owner, crossing in enumerate(rectilinear.crossings(plan, axis)):
+                        center, size = read(owner)
+                        low = period/2 + center - plan.folds[owner][axis]*period - size/2
+                        high = low + size
+                        valid = valid & (size > 0) & (size <= period)
+                        if crossing == rectilinear.LOWER:
+                            valid = valid & (low < 0)
+                        elif crossing == rectilinear.UPPER:
+                            valid = valid & (high > period)
+                        else:
+                            valid = valid & (low >= 0) & (high <= period)
                     positions = []
-                    for owner, side in nodes:
-                        if owner == -1:
+                    for piece, side in nodes:
+                        if piece == -1:
                             positions.append(side*period)
                         else:
-                            rectangle = layer.regions[owner].geometry
-                            size = _adapt._array(xp, rectangle.size[axis], self.execution)
-                            center = _adapt._array(xp, rectangle.center[axis], self.execution)
-                            valid = valid & (size > 0)
-                            fold = plan.folds[owner][axis]
-                            positions.append(period/2+center-fold*period+side*size/2)
+                            owner, cuts = plan.pieces[piece]
+                            center, size = read(owner)
+                            positions.append(rectilinear.edge(center, size, period, plan.folds[owner][axis],
+                                                              *cuts[axis], side))
                     edges = xp.stack(positions)
                     valid = valid & xp.all(edges[:-1] <= edges[1:])
         return {'rectilinear_topology': valid}

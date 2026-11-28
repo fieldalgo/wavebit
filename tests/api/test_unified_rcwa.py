@@ -759,8 +759,8 @@ def the_issue_check_and_prepare_report(problem, numerics):
     (rcwa.Rectangle(size=(1.3, .4)), 'tensor', 'is larger than the period and runs into its own image'),
     (rcwa.Circle(radius=.6), 'tensor', 'is larger than the period and runs into its own image'),
     (rcwa.Ellipse(radii=(.6, .2), angle=.1), 'tensor', 'is larger than the period and runs into its own image'),
-    (rcwa.Rectangle(size=(1.3, .4)), 'scalar li', 'requires rectangles inside one cell'),
-    (rcwa.Rectangle(size=(1.3, .4)), 'tensor li', 'requires rectangles inside one cell'),
+    (rcwa.Rectangle(size=(1.3, .4)), 'scalar li', 'is longer than the period along x'),
+    (rcwa.Rectangle(size=(1.3, .4)), 'tensor li', 'is longer than the period along x'),
 ], ids=['rectangle', 'circle', 'ellipse', 'tensor-rectangle', 'tensor-circle', 'tensor-ellipse',
         'li-rectangle', 'tensor-li-rectangle'])
 def test_check_refuses_a_region_larger_than_the_period(geometry, build, says):

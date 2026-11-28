@@ -87,7 +87,7 @@ def test_unused_normal_options_are_refused(option):
         solver([box()],**option).solve()
 
 
-@pytest.mark.parametrize('shape', [dict(type='circle',lx=100,material=4),dict(box(),angle=.1),box(lx=701),box(cx=350)])
+@pytest.mark.parametrize('shape', [dict(type='circle',lx=100,material=4),dict(box(),angle=.1),box(lx=701),box(ly=700.5,cx=350)])
 def test_unsupported_geometry_is_refused_on_freeze_and_solve(shape):
     for method in ('freeze_geometry','solve'):
         with pytest.raises((NotImplementedError,ValueError)):
@@ -102,7 +102,8 @@ def test_a_rectangle_written_periods_away_is_the_same_layer():
     layer. The plan now records how many whole cells each rectangle is written away and reads
     its edges back in the cell: the matrices are the same array, since every move here is exact
     in floating point. A plan frozen with the rectangle in the cell is stale once it is written
-    a cell over, and a rectangle that crosses the cell edge is refused wherever it is written.
+    a cell over. A rectangle that crosses the cell edge is the same layer wherever it is written
+    too (it was refused until 2026-11-28).
     """
     from wavebit.rcwa._engine.factorization import StaleGeometryError
     shapes = [box(300, 300, -150, material=4), box(200, 250, 150, 100, material=9)]
@@ -116,8 +117,11 @@ def test_a_rectangle_written_periods_away_is_the_same_layer():
             np.testing.assert_array_equal(a, b)
     with pytest.raises(StaleGeometryError, match='whole cells'):
         solver(moved)._eps_conv_matrices(frozen)
-    with pytest.raises(ValueError, match='crosses the cell edge'):
-        solver([box(cx=350. + 1400.)]).freeze_geometry()
+    across = [solver([box(cx=350. + 700.*m, cy=-200. + 700.*n)]) for m, n in ((0, 0), (2, 0), (-1, 3))]
+    want = across[0]._eps_conv_matrices(across[0].freeze_geometry())
+    for s in across[1:]:
+        for a, b in zip(s._eps_conv_matrices(s.freeze_geometry())[:3], want[:3]):
+            np.testing.assert_array_equal(a, b)
 
 
 def test_the_traced_edge_guard_reads_a_rectangle_written_periods_away_in_the_cell():
@@ -145,6 +149,112 @@ def test_the_traced_edge_guard_reads_a_rectangle_written_periods_away_in_the_cel
             run = jax.jit(lambda c: jnp.real(jnp.sum(prepared.run(problem(c)).T)))
             values.append(float(run(jnp.asarray(cx))))
     assert np.isfinite(values[1]) and abs(values[1] - values[0]) <= 1e-12, values
+
+
+def _paint(shapes, n=28, period=700.):
+    """An independent raster: each rectangle painted with its periodic images, in order."""
+    x, y = np.meshgrid((np.arange(n)+.5)*period/n-period/2, (np.arange(n)+.5)*period/n-period/2)
+    cell = np.full((n, n), 1., dtype=complex)
+    for s in shapes:
+        dx = (x-s['cx']+period/2) % period-period/2
+        dy = (y-s['cy']+period/2) % period-period/2
+        cell[(abs(dx) < s['lx']/2) & (abs(dy) < s['ly']/2)] = s['material']
+    return cell
+
+
+@pytest.mark.parametrize('shapes', [
+    [box(300, 300, 275, material=4)],                                     # across x
+    [box(300, 200, 0, -325, material=4)],                                 # across y
+    [box(300, 250, -300, 275, material=4+.2j)],                           # across the corner
+    [box(400, 400, 200, 200, material=4), box(200, 200, 350, 350, 9+.1j)],  # painted over, both across
+    [box(700, 300, 125, 0, material=4)],                                  # as long as the period, across
+])
+def test_a_rectangle_across_the_cell_edge_is_painted_with_its_image(shapes):
+    """The rectangles the cell edges cut it into, against an independent periodic raster:
+    the same integrals the in-cell cases above are held to (the grid is 25 nm, every edge on it)."""
+    want = F.to_conv_mat_raster_integrated(_paint(shapes)[None], 2, 2)
+    s = solver(shapes); got = s._eps_conv_matrices(s.freeze_geometry())
+    for a, b in zip(got[:3], want[:3]):
+        np.testing.assert_allclose(a, b, rtol=0, atol=2e-12)
+
+
+def test_a_frozen_plan_keeps_the_edge_a_rectangle_crosses():
+    """Which cell edge a rectangle crosses is topology, like the edge order: a frozen plan replays
+    a rectangle moved along the edge it crosses, and is stale once it crosses another or none."""
+    def shapes(cx, cy=0.):
+        return [box(300, 300, cx, cy), box(200, 200, -100, 50, material=9)]
+    g = solver(shapes(275.)).freeze_geometry()
+    for cx in (275., 230., 330.):
+        live = solver(shapes(cx))
+        np.testing.assert_allclose(live.solve(geometry=g).T, live.solve().T, rtol=0, atol=2e-12)
+    for cx in (150., -275.):
+        with pytest.raises(F.StaleGeometryError, match='crossing of the cell edge'):
+            solver(shapes(cx)).solve(geometry=g)
+    with pytest.raises(F.StaleGeometryError, match='crossing of the cell edge'):
+        solver(shapes(275., 300.)).solve(geometry=g)
+
+
+@pytest.mark.parametrize('slope', [None, .02])
+def test_the_traced_guard_reads_the_edge_a_rectangle_crosses(slope):
+    """Under ``jax.jit`` the prepared run replays the plan's pieces on the traced values: a move
+    along the edge it crosses is the eager answer, one that leaves the crossing is NaN
+    (``rectilinear_topology``) rather than the wrong layer."""
+    jax = pytest.importorskip('jax')
+    import jax.numpy as jnp
+    from wavebit import Material, rcwa
+
+    def problem(cx):
+        regions = (rcwa.Region(geometry=rcwa.Rectangle(size=(300., 200.), center=(cx, 330.)),
+                               material=Material(4.)),
+                   rcwa.Region(geometry=rcwa.Rectangle(size=(200., 250.), center=(-100., -40.)),
+                               material=Material(9.)))
+        layer = rcwa.Layer(thickness=300., background=Material(1.), regions=regions)
+        return rcwa.Problem(stack=rcwa.Stack(period=(700., 700.), layers=(layer,)),
+                            excitation=rcwa.Excitation(wavelength=900.,
+                                                       sources=(rcwa.PlaneWave(theta=.2),)))
+
+    numerics = rcwa.Numerics(orders=(2, 2), factorization='li')
+    if slope is not None:
+        numerics = rcwa.Numerics(orders=(4, 4), factorization='li', wall_resolution=slope)
+    with jax.enable_x64(True):
+        prepared = rcwa.prepare(problem(270.), numerics=numerics, backend='jax')
+        if slope is not None:
+            # The stretch reads the walls as numbers (jit under wall_resolution is G1's work);
+            # the eager replay of the frozen pieces is what is checked here.
+            for cx in (270., 240.):
+                got = float(np.sum(np.asarray(prepared.run(problem(cx)).T)))
+                want = float(np.sum(np.asarray(rcwa.run(problem(cx), numerics=numerics, backend='jax').T)))
+                assert abs(got - want) <= 1e-12
+            return
+        run = jax.jit(lambda c: jnp.real(jnp.sum(prepared.run(problem(c)).T)))
+        # (a value written cells away is another fold, so another plan: see the test above)
+        for cx in (270., 240.):
+            want = float(np.sum(np.asarray(rcwa.run(problem(cx), numerics=numerics, backend='jax').T)))
+            assert abs(float(run(jnp.asarray(cx))) - want) <= 1e-12, cx
+        for cx in (150., -270.):
+            assert np.isnan(float(run(jnp.asarray(cx)))), cx
+
+
+def test_a_tensor_rectangle_across_the_cell_edge_is_its_pieces():
+    """Tensor Li reads the same plans (`tensor_li.freeze`), so it takes the cut rectangle too."""
+    eps = np.diag([4., 5., 6.]).astype(complex)
+    whole = [box(300, 300, 275, material=eps)]
+    pieces = [box(225, 300, 237.5, material=eps), box(75, 300, -312.5, material=eps)]
+    a, b = solver(whole).solve(), solver(pieces).solve()
+    np.testing.assert_allclose(np.asarray(a.T), np.asarray(b.T), rtol=0, atol=1e-12)
+    np.testing.assert_allclose(np.asarray(a.R), np.asarray(b.R), rtol=0, atol=1e-12)
+
+
+@pytest.mark.parametrize('backend', ['jax', 'torch'])
+def test_a_rectangle_across_the_corner_solves_alike_on_every_backend(backend):
+    pytest.importorskip(backend)
+    if backend == 'jax':
+        import jax; jax.config.update('jax_enable_x64', True)
+    shapes = [box(300, 250, -300, 275, material=4+.2j), box(200, 200, 50, -50, material=9)]
+    want = solver(shapes).solve()
+    s = solver(shapes, backend); got = s.solve(geometry=s.freeze_geometry())
+    for a, b in ((got.R, want.R), (got.T, want.T)):
+        np.testing.assert_allclose(np.asarray(a), b, rtol=0, atol=1e-12)
 
 
 def test_jitted_gap_and_material_derivatives_match_two_finite_differences():

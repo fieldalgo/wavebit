@@ -190,9 +190,10 @@ prepared = rcwa.prepare(problem, numerics=numerics, backend='jax')
 result = prepared.run(problem)
 ```
 
-Supported cells are positive, axis-aligned rectangles. Shapes must fit inside the
-cell, including its edges; a rectangle may span a full period. Rotated/curved shapes,
-skew cells, and rectangles crossing a cell edge are refused. Leave a `Rectangle`'s `angle`
+Supported cells are positive, axis-aligned rectangles. A rectangle may span a full period. One
+that crosses a cell edge is the rectangles the cell edges cut it into (two across an edge, four
+across a corner; refused until 2026-11-28); one longer than the period runs into its own periodic
+image and is refused, as NVF and Laurent refuse it. Rotated/curved shapes and skew cells are refused. Leave a `Rectangle`'s `angle`
 at its default when differentiating: this route has a fixed zero angle, not an angle derivative.
 `shape_nvf_grid_size`, `raster_normal_method`, and `nvf_projector` are refused because no normal field
 is sampled. Coefficients are integrated; requesting sampled coefficients is refused.
@@ -200,10 +201,11 @@ is sampled. Coefficients are integrated; requesting sampled coefficients is refu
 raster path's integrated Li builder on exact edges, so both nestings agree with an
 independently painted commensurate raster, and one frozen plan serves both.
 
-`rcwa.prepare` (the earlier `freeze_geometry()`) stores edge order and painting ownership.
+`rcwa.prepare` (the earlier `freeze_geometry()`) stores edge order, painting ownership and which
+cell edge each rectangle crosses.
 Lengths, centers, permittivity, and permeability remain live. It retains zero-width intervals at
 contact, so a gap can open continuously using the same plan. Eager replay refuses
-crossed edges (code `prepared.topology`) or a changed shape count (`prepared.structure`). Under
+crossed edges or a rectangle that crosses another cell edge, or none (code `prepared.topology`), or a changed shape count (`prepared.structure`). Under
 JIT on the earlier
 interface those values cannot be checked: keep the
 edge order fixed within a traced optimization step and refreeze on concrete
