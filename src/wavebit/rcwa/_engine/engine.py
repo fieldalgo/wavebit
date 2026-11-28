@@ -7603,6 +7603,17 @@ class CoreFactorizationMixin:
             refuse(f"factorization is {self.factorization.value!r}",
                    "It is implemented for factorization='li' (axis-aligned rectangles, or one "
                    'circle or axis-aligned ellipse).')
+        if self.complex_dtype == self.xp.complex64:
+            # Measured 2026-11-28 (docs/validation/rcwa/wall-resolution.md, single precision):
+            # the stretch raises the layer operator's norm by about 1/G**2 (to 2e6 on the block
+            # and 3e8 on the circle at order 12, G 0.02, against 5e3 and 3e4 unstretched), so
+            # single-precision rounding, eps * ||A||, swamps the propagating modes' |w| ~ 1. The
+            # tables are built in double; rounding them alone moves R by 3e-5 at most, so the
+            # loss is in the single-precision solve, not in its data.
+            refuse("precision='single' was asked for",
+                   'Its layer operators grow as the slope falls, and single-precision rounding '
+                   'then moves R and T by up to a few percent (refuses a half-space at order 12). '
+                   "Use precision='double', or leave wall_resolution unset at single precision.")
         if not self.lattice_is_axis_aligned:
             refuse('the cell is not a rectangle along x and y',
                    'It is implemented for a rectangular, axis-aligned cell.')
