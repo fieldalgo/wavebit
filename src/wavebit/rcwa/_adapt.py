@@ -325,6 +325,53 @@ def _engine_source(source, xp, execution):
     raise TypeError(f'rcwa has no engine lowering for {type(source).__name__}.')
 
 
+def traced_material_groups(problem):
+    """Per region layer, which owners share one traced permittivity, by identity.
+
+    A list per layer of one entry per region and a last for the background: ``None`` for a
+    permittivity that is not traced, else a label shared by the owners whose ``Material`` or
+    permittivity is the *same object*. Identity of a tracer is a dependency proof, as in
+    :func:`_shared_half_space_plan`; it is read here because the engine's copies are separate
+    tracers. ``wall_resolution`` makes no wall between two owners of one label, as a concrete
+    solve makes none between equal values (`rectilinear.wall_positions`).
+    """
+    def label(material):
+        if not isinstance(material, Material) or not has_tracer(material.epsilon):
+            return None
+        return ('traced', id(material.epsilon))
+
+    return [[label(region.material) for region in layer.regions] + [label(layer.background)]
+            for layer in problem.stack.layers]
+
+
+def half_space_numbers(problem):
+    """The half-spaces' permittivities as the caller wrote them, when they are numbers.
+
+    ``(top, bottom)``, each a Python complex or ``None``. Only a constant :class:`Material`
+    whose permittivity is a number (no tracer, no tensor carrying a derivative) has one; its
+    value is the same at every wavelength. The engine's own copy has passed through the
+    wavelength (``constant_response``), so under ``jax.jit`` with a traced wavelength it is a
+    trace even for vacuum. ``wall_resolution`` reads which half-spaces it can solve from these
+    (``CoreFactorizationMixin._refuse_what_the_stretch_does_not_solve``).
+    """
+    from .._common.backend import carries_autodiff
+
+    def number(material):
+        if type(material) is not Material or material.mu is not None:
+            return None
+        value = material.epsilon
+        if isinstance(value, (list, tuple)) or getattr(value, 'shape', ()) != ():
+            return None
+        if has_tracer(value) or carries_autodiff(value):
+            return None
+        try:
+            return complex(value.detach().cpu() if hasattr(value, 'detach') else value)
+        except (TypeError, ValueError):
+            return None
+
+    return number(problem.stack.top), number(problem.stack.bottom)
+
+
 def _shared_half_space_plan(problem, execution):
     """Prove a scalar region layer shares its half-space's live coefficients.
 
@@ -437,6 +484,8 @@ def build_solver(problem, numerics, execution, wavelength):
         solver = legacy_rcwa(**kwargs)
         solver.formulation = formulation
         solver._shared_half_space_plan = _shared_half_space_plan(problem, execution)
+        solver._half_space_numbers = half_space_numbers(problem)
+        solver._traced_material_groups = traced_material_groups(problem)
         return solver
     return legacy_rcwa(**kwargs)
 

@@ -37,7 +37,7 @@ result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(12, 12), factorization
 
 ## 받는 것
 
-직사각 셀에서 셀의 축에 나란한 사각형, 또는 원이나 축에 나란한 타원 하나({ref}`아래 <wall-resolution-circles>`)와 `factorization='li'`. 층의 재료는 등방이고 비자성이며 금속도 됩니다. 반공간은 손실 없는 유전체입니다. 입사 평면파 하나, 어느 쪽에서든 어느 각도로든. 층의 개수는 제한이 없고 균일한 층도 됩니다. 산란 행렬 알고리즘(`algorithm='smm'`, 기본값)과 2차 정식화. NumPy, JAX, PyTorch의 즉시 실행.
+직사각 셀에서 셀의 축에 나란한 사각형, 또는 원이나 축에 나란한 타원 하나({ref}`아래 <wall-resolution-circles>`)와 `factorization='li'`. 층의 재료는 등방이고 비자성이며 금속도 됩니다. 반공간은 손실 없는 유전체입니다. 입사 평면파 하나, 어느 쪽에서든 어느 각도로든. 층의 개수는 제한이 없고 균일한 층도 됩니다. 산란 행렬 알고리즘(`algorithm='smm'`, 기본값)과 2차 정식화. NumPy, JAX, PyTorch. JAX와 PyTorch에서는 재료, 파장, 입사각에 대한 미분, JAX에서는 그에 대한 `jax.jit`, `jax.vmap`({ref}`아래 <wall-resolution-transforms>`).
 
 그 밖의 것은 모두 `rcwa.unsupported` 코드로, `rcwa.check`에서도 `rcwa.run`에서도 이름을 들어 거절합니다.
 
@@ -49,10 +49,40 @@ result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(12, 12), factorization
 - 벽이 있는 축인데 `orders`가 그 축으로 고조파 하나만 유지하는 경우
 - 늘림이 그 사이를 담을 수 없을 만큼 가까운 두 벽(늘린 셀의 한 조각은 물리적 폭과 상관없이 `period / number of walls`만큼 넓습니다)
 - `Outputs(scattering=True)`
+- `jax.grad`, `jax.jit`, `jax.vmap` 아래에서 추적되거나 미분을 지닌 기하(크기, 중심, 반지름, 각도, 셀)와 grad를 요구하는 PyTorch 텐서인 기하. 그 경로를 들어 거절합니다({ref}`아래 <wall-resolution-transforms>`).
+- `jax.jit`이나 `jax.vmap` 아래에서 추적된 반공간 유전율
 
 한 축으로 주기만큼 긴 사각형은 그 축을 가로지르는 벽이 없으므로 그 축은 늘리지 않습니다. 줄무늬 격자는 그 한 방향으로만 늘어납니다.
 
-`jax.jit`, `jax.vmap`, 미분은 아직 지원하지 않습니다. 어느 차수가 진행하는지와 필드 표본의 위치를 숫자로 읽기 때문입니다.
+(wall-resolution-transforms)=
+## 미분, `jax.jit`, `jax.vmap`
+
+층의 재료, 파장, 입사각은 추적하거나 미분할 수 있습니다. 기하는 숫자로 읽습니다.
+
+```python
+import jax
+jax.config.update('jax_enable_x64', True)
+import jax.numpy as jnp
+
+def design(epsilon, wavelength):
+    return rcwa.Problem(
+        units=Units(length='nm'),
+        stack=rcwa.Stack(period=(400.0, 400.0), layers=[rcwa.Layer(thickness=150.0, regions=[
+            rcwa.Region(geometry=rcwa.Rectangle(size=(200.0, 200.0)), material=Material(epsilon=epsilon))])]),
+        excitation=rcwa.Excitation(wavelength=wavelength, sources=[rcwa.PlaneWave(polarization='p', theta=0.35)]))
+
+numerics = rcwa.Numerics(orders=(3, 3), factorization='li', wall_resolution=0.02)
+prepared = rcwa.prepare(design(-20 + 1.5j, 900.0), numerics=numerics, backend='jax')
+reflectance = lambda eps, wl: jnp.sum(prepared.run(design(eps + 1.5j, wl)).R)
+value, slope = jax.jit(jax.value_and_grad(reflectance))(-20.0, 900.0)
+sweep = jax.vmap(reflectance, in_axes=(None, 0))(-20.0, jnp.linspace(850.0, 950.0, 5))
+```
+
+- **움직일 수 있는 것.** 영역과 배경의 유전율, 파장, `theta`. `jax.grad`(즉시 실행이나 `jax.jit` 안), `jax.jit`, `jax.vmap`, PyTorch autograd 모두 됩니다. `phi`는 같은 코드를 지나지만 측정하지 않았습니다. 반공간 유전율은 즉시 실행에서 미분할 수 있습니다(한 번 측정). `jax.jit`이나 `jax.vmap` 아래에서는 상수 `Material`이어야 합니다.
+- **움직일 수 없는 것.** 좌표는 벽의 위치를 숫자로 읽어 만듭니다. 그래서 추적되거나 미분을 지닌 크기, 중심, 반지름, 각도, 셀은 JAX에서도 PyTorch에서도 그 경로를 들어 `rcwa.unsupported`로 거절합니다. 위처럼 변환하는 함수 안에서 기하를 숫자로 적으십시오. 기하에 대한 미분은 벽과 함께 좌표도 움직여야 하는데, 구현하지 않았습니다.
+- **`jax.jit`과 `jax.vmap` 아래에서는** 즉시 실행이 숫자로 내리는 판정(어느 차수가 진행하는지, 반공간의 어느 모드를 그 평면파로 바꾸는지)을 배열 연산으로 내리고, 결과가 즉시 실행과 반올림 오차 안에서 같습니다. 즉시 실행이라면 거절할 곳(반공간의 평면파를 담기에 차수가 모자람)에서는 NaN을 내고 `result.validity.checks['numerical_finite']`가 거짓입니다.
+- **같은 재료로 맞닿은 사각형**은 변환 없이와 같이 벽을 만들지 않습니다. `jax.jit`이나 `jax.vmap` 아래에서는 추적된 재료를 값으로 비교할 수 없습니다. 여러 사각형에 쓴 추적값 하나(같은 변수, 또는 같은 `Material`)는 한 재료이고, 서로 다른 추적값 둘은 두 재료입니다. 서로 다른 추적값 둘이 맞닿은 변에서 같은 값으로 드러나면, 즉시 실행이 쓰지 않을 좌표로 푸는 대신 NaN을 냅니다.
+- **확인 방법.** 금속 블록과 금속 원에서 미분을 중심 차분과, jit·vmap 실행을 즉시 실행과, JAX를 PyTorch와 견줍니다({ref}`측정 <wall-resolution-transforms-measured>`).
 
 (wall-resolution-circles)=
 ## 원과 타원

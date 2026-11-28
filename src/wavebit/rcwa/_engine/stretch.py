@@ -510,4 +510,7 @@ def matched_layer_matrices(xp, matched, inside, outside, half_u, half_v, dtype, 
     scalar = xp.where(xp.asarray(mask), inside, outside)
     tensor = scalar[..., None, None] * xp.astype(xp.asarray(unit, dtype=real), dtype)
     edges = (xp.asarray(edges_u[:, None], dtype=real), xp.asarray(edges_v[:, None], dtype=real))
-    return tuple(tensor_li.layer_matrices(xp, tensor, half_u, half_v, edges))
+    # The map is in-plane: `unit` has no xz, yz, zx or zy entry, which the values cannot show
+    # under a trace.
+    in_plane = not np.any(np.asarray(unit)[..., :2, 2]) and not np.any(np.asarray(unit)[..., 2, :2])
+    return tuple(tensor_li.layer_matrices(xp, tensor, half_u, half_v, edges, in_plane=in_plane))

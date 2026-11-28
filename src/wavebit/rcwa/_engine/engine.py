@@ -561,6 +561,27 @@ def _slot_is(slot, value, tolerance):
     return _concrete(xp.all(xp.abs(slot - value * eye) <= bound)) is True
 
 
+def _numbers_of(value):
+    """``value`` as a NumPy array of floats when it was given as numbers, else ``None``.
+
+    Numbers means no JAX tracer and no PyTorch tensor that carries a derivative anywhere in it:
+    a Python float, a NumPy array, a concrete JAX array, a PyTorch tensor without grad. The
+    engine converts what it is given to its backend's arrays, and under ``jax.jit`` that
+    conversion is itself a tracer even for a constant; this keeps the numbers the caller wrote,
+    for the decisions that need them (:attr:`wall_resolution`'s coordinates).
+    """
+    from wavebit._common.backend import carries_autodiff
+    items = value if isinstance(value, (list, tuple)) else [value]
+    if any(carries_autodiff(v) for v in items):
+        return None
+    try:
+        out = _np.asarray([_np.asarray(v.detach().cpu() if hasattr(v, 'detach') else v,
+                                       dtype=float) for v in items], dtype=float).reshape(-1)
+    except Exception:
+        return None
+    return out if out.size and _np.all(_np.isfinite(out)) else None
+
+
 def _readable_complex(value):
     """``complex(value)`` for a scalar that has a value -- an un-jitted grad tracer has one, and
     ``.item()`` reads it where ``complex()`` refuses -- else ``None``."""
@@ -1797,6 +1818,8 @@ class CoreSolveMixin:
         self._period = period
         self._lattice_basis = A
         self._cell_named = True          # an assignment names it, as a keyword does
+        self._period_numbers = (_numbers_of(_lattice.periods_of(A)) if self.lattice_is_axis_aligned
+                                else None)
 
     #: Whether a cell was ever *named* by the caller. ``True`` here so that anything built
     #: by a route other than the constructor is not accused of omitting one; the constructor
@@ -2570,6 +2593,7 @@ class CoreSolveMixin:
         self._period = lengths
         self._lattice_basis = basis
         self._cell_named = True
+        self._period_numbers = _numbers_of(period)
 
     def _set_period_slot(self, period):
         """Recast the stored lengths without choosing a new cell or changing its basis."""
@@ -7493,6 +7517,23 @@ class CoreFactorizationMixin:
         layers = [placed(layer) for layer in structure]
         return layers if any(a is not b for a, b in zip(layers, structure)) else structure
 
+    #: The cell's two periods as the caller wrote them, when they were numbers (``_numbers_of``).
+    _period_numbers = None
+
+    def _stretch_lattice(self):
+        """The axis-aligned cell :attr:`wall_resolution` builds its coordinates on, as numbers.
+
+        The cell the caller wrote as numbers, also where the engine's own copy is a trace (under
+        ``jax.jit`` every array the engine makes is one); otherwise :attr:`lattice`, which the
+        callers read with ``float`` and refuse when it is traced.
+        """
+        numbers = self._period_numbers
+        if numbers is None:
+            return self.lattice
+        if numbers.size == 1:
+            numbers = _np.repeat(numbers, 2)
+        return _lattice.as_lattice(period=(float(numbers[0]), float(numbers[1])))
+
     def _solve_stretched(self, geometry=None):
         """:meth:`_solve_built` in coordinates that crowd at the walls (:attr:`wall_resolution`).
 
@@ -7510,7 +7551,7 @@ class CoreFactorizationMixin:
         if not isinstance(stretch, _Stretch):
             return self._solve_matched(stretch)
         plans = None if geometry is None else geometry.rectilinear_plans
-        lattice = self.lattice
+        lattice = self._stretch_lattice()
         eps = _rectilinear.layer_stack(
             xp, self.structure, half_width_u, half_width_v, lattice, C, plans=plans,
             nesting=self.li_nesting, stretch=stretch)
@@ -7518,6 +7559,7 @@ class CoreFactorizationMixin:
             xp, [], 1.0, half_width_u, half_width_v, lattice, C, stretch,
             nesting=self.li_nesting)
         vacuum = _rectilinear.stretched_mu(xp, half_width_u, half_width_v, C, stretch)
+        eps = self._poison_undecided_walls(eps)
         n_layers = int(eps.epx.shape[0])
         mu = _fac.ConvMatrices(*(xp.stack([m] * n_layers) for m in vacuum), None, None)
         self._stretch_scope = {'axes': (stretch.x, stretch.y), 'unit': unit, 'mu': vacuum}
@@ -7526,6 +7568,39 @@ class CoreFactorizationMixin:
             return self._solve_conv(*eps, mu=mu)
         finally:
             self.__dict__.pop('_stretch_scope', None)
+
+    #: Edges that are walls only because a traced material could not be compared
+    #: (:func:`~wavebit.rcwa._engine.rectilinear.wall_positions`), from the last stretch built.
+    _undecided_walls = ()
+
+    def _poison_undecided_walls(self, eps):
+        """``eps`` as given, or NaN where the stretch rests on a comparison a trace could not make.
+
+        Under ``jax.jit`` or ``jax.vmap`` a traced material is a material of its own, so an edge
+        between it and its neighbour is a wall. Where every pair of owners that made an edge a
+        wall turns out to hold one value, a concrete solve at the same values would have made no
+        wall there and solved in other coordinates; the traced one answers NaN instead, which
+        ``result.validity.checks['numerical_finite']`` reports.
+        """
+        if not self._undecided_walls:
+            return eps
+        xp, C = self.xp, self.complex_dtype
+        from wavebit.materials.response import as_material
+
+        def value(layer, owner):
+            shapes = layer.get('shapes', [])
+            material = layer.get('background', 1.) if owner == -1 else shapes[owner].get('material', 1.)
+            return as_array(xp, as_material(material).epsilon, dtype=C)
+
+        merged = xp.asarray(False)
+        for index, pairs in self._undecided_walls:
+            layer = self.structure[index]
+            same = xp.asarray(True)
+            for first, second in pairs:
+                same = same & (value(layer, first) == value(layer, second))
+            merged = merged | same
+        nan = xp.asarray(complex('nan'), dtype=C)
+        return _fac.ConvMatrices(*(None if m is None else xp.where(merged, nan, m) for m in eps))
 
     #: The last stretched solve's :class:`~wavebit.rcwa._engine.stretch.Stretch` or
     #: :class:`~wavebit.rcwa._engine.stretch.Matched`, or ``None``.
@@ -7566,7 +7641,9 @@ class CoreFactorizationMixin:
                 inside = background
                 layers.append((background * unit[0], background * unit[1], unit[2] / background,
                                background * unit[3], background * unit[4]))
-            scalars.append((complex(_fac._to_numpy(inside)), complex(_fac._to_numpy(background))))
+            # Backend values, not Python numbers: a derivative or a trace runs through them
+            # into the field reading.
+            scalars.append((inside, background))
         eps = _fac.ConvMatrices(*(xp.stack([layer[i] for layer in layers]) for i in range(5)))
         mu = _fac.ConvMatrices(*(xp.stack([m] * len(layers)) for m in unit))
         # What the field reading needs beside the records: each layer's in-plane slots and
@@ -7595,6 +7672,18 @@ class CoreFactorizationMixin:
                 f'wall_resolution={self._wall_resolution!r} solves in coordinates that crowd '
                 f'at material walls, and {what}. {instead}')
 
+        from wavebit._common.backend import carries_autodiff
+        moving = [name for name, value in (('the cell', None if self._period_numbers is not None
+                                            else self._period),)
+                  if value is not None and carries_autodiff(value)]
+        if self._modeling_path == ModelingPath.PARAMETRIC:
+            moving += [f'a shape of layer {index}' for index, layer in enumerate(self.structure)
+                       if any(carries_autodiff(v) for shape in layer.get('shapes', [])
+                              for key, v in shape.items() if key not in ('type', 'material'))]
+        if moving:
+            refuse(f'{moving[0]} is traced or carries a derivative, and its walls are read as '
+                   'numbers', 'A derivative with respect to the geometry, and jax.jit or '
+                   'jax.vmap over it, is not implemented; write the geometry as numbers.')
         if self._modeling_path != ModelingPath.PARAMETRIC:
             refuse('this structure is a raster',
                    'Describe the layers as rectangles, a circle or an ellipse, or leave '
@@ -7618,8 +7707,14 @@ class CoreFactorizationMixin:
         if self._excitation is not None:
             refuse('the illumination is not one plane wave on the specular order',
                    'It is implemented for a single incident plane wave.')
-        for where, material in (('top', self._top), ('bottom', self._bot)):
+        written = getattr(self, '_half_space_numbers', None) or (None, None)
+        for where, material, number in (('top', self._top, written[0]),
+                                         ('bottom', self._bot, written[1])):
             value = _readable_complex(material.epsilon)
+            if value is None:
+                # A constant the caller wrote as a number, traced here only because it passed
+                # through a traced wavelength (`_adapt.half_space_numbers`).
+                value = number
             if value is None:
                 refuse(f'the {where} half-space\'s permittivity is traced',
                        'It reads which orders propagate from concrete half-spaces.')
@@ -7631,7 +7726,7 @@ class CoreFactorizationMixin:
                        'half-space only.')
         (_, half_width_u), (_, half_width_v) = self.order_window
         plans = None if geometry is None else geometry.rectilinear_plans
-        lattice = self.lattice
+        lattice = self._stretch_lattice()
         matched = self._matched_coordinates(refuse)
         if matched is not None:
             for axis, half_width, name in ((matched.x, half_width_u, 'x'),
@@ -7644,7 +7739,11 @@ class CoreFactorizationMixin:
                   'traced size, position or period (jax.jit, jax.vmap, jax.grad over geometry) '
                   'is not solved in stretched coordinates yet')
         try:
-            walls = _rectilinear.wall_positions(self.structure, lattice, plans)
+            undecided = []
+            walls = _rectilinear.wall_positions(
+                self.structure, lattice, plans, undecided,
+                groups=getattr(self, '_traced_material_groups', None))
+            self._undecided_walls = undecided
             periods = [float(_fac._to_numpy(lattice[i][i])) for i in (0, 1)]
         except TypeError as exc:
             raise NotImplementedError(traced) from exc
@@ -7691,7 +7790,7 @@ class CoreFactorizationMixin:
             return None
         instead = ('Matched coordinates are implemented for one circle or one ellipse with its '
                    'axes along the cell\'s, the same in every patterned layer.')
-        lattice = self.lattice
+        lattice = self._stretch_lattice()
         found = None
         for index, layer in enumerate(layers):
             shapes = layer.get('shapes', [])

@@ -63,11 +63,16 @@ def _rows(xp, values, half_width, edges):
     return xp.reshape(gathered, (coefficients.shape[0], n, n))
 
 
-def layer_matrices(xp, tensor, hu, hv, edges=None):
-    """Five or nine slots for a piecewise-constant (rows, columns, 3, 3) layer."""
+def layer_matrices(xp, tensor, hu, hv, edges=None, in_plane=None):
+    """Five or nine slots for a piecewise-constant (rows, columns, 3, 3) layer.
+
+    ``in_plane=True`` states that the tensor couples no in-plane component to ``z``, which a
+    caller can know from the structure when a trace hides the values (the stretched
+    coordinates of :mod:`~wavebit.rcwa._engine.stretch`); ``None`` reads it off the values.
+    """
     from wavebit.rcwa._engine.anisotropy import full_tensor
     from wavebit.rcwa._engine.anisotropy import tensor_slots
-    size = 3 if full_tensor(xp, tensor) else 2
+    size = 2 if in_plane else (3 if full_tensor(xp, tensor) else 2)
     u_edges, v_edges = (None, None) if edges is None else edges
     block = [[tensor[..., i, j] for j in range(size)] for i in range(size)]
     # Normal D_y and tangential E_x are continuous through a y interface.
