@@ -355,7 +355,7 @@ Measured on 2026-11-28 on Linux with JAX 0.12.1 (x64) and PyTorch 2.15.0+cpu, fo
 - K3: met, 1.1e-15 to 2.0e-13.
 - K4: **not met** on the block at order 5 and theta 0: values 1.6e-12 apart (three cells), and one gradient 1.5e-10 apart. Everywhere else values were within 7.6e-13 and gradients within 9.1e-11.
 - K5: met; 30 combinations (size, centre and cell of the block, radius, centre and cell of the circle, under five transforms).
-- K6: still running when this was written.
+- K6: met. `test_wall_resolution.py`, `test_wall_resolution_matched.py`, `test_rectilinear_li.py` and `test_pytree_round_trip.py`: 183 passed.
 
 The two misses are differences of rounding between two runs of one calculation, each run as close to the central difference as the others; neither is an error against a difference. They are recorded as not met because the criteria were written that way.
 
