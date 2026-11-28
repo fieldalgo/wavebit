@@ -6,6 +6,8 @@ vmapped ``Prepared.run`` against the eager run; the touching-rectangles rule und
 refusal of every traced or differentiated geometry by its path. The measurements behind the
 criteria are in ``docs/validation/rcwa/wall-resolution.md`` ("Derivatives and JAX transforms").
 """
+import dataclasses
+
 import numpy as np
 import pytest
 
@@ -208,3 +210,23 @@ def test_a_traced_half_space_is_refused_under_jit():
     prepared = rcwa.prepare(_problem(bottom=2.25), numerics=numerics, backend='jax')
     with pytest.raises(UnsupportedFeatureError, match="bottom half-space's permittivity is traced"):
         jax.jit(lambda b: jnp.sum(prepared.run(_problem(bottom=b)).R))(2.25)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize('shape', ['P1', 'C1'])
+def test_a_field_takes_a_material_derivative_eagerly_and_is_refused_under_jit(shape):
+    """The circle's field reading took its materials through ``complex()`` until 2026-11-28, which
+    a trace refuses and which dropped their derivative. Measured 2.7e-8 (block), 2.8e-8 (circle)."""
+    numerics = _numerics(orders=(2, 2))
+    with_fields = lambda e: dataclasses.replace(_problem(shape, eps=e), outputs=rcwa.Outputs(fields=True))
+    prepared = rcwa.prepare(with_fields(METAL), numerics=numerics, backend='jax')
+    x = y = np.linspace(-150.0, 150.0, 3)
+
+    def energy(e):
+        field = prepared.run(with_fields(e + 1j * METAL.imag)).field(x=x, y=y, z=[75.0])
+        return jnp.sum(jnp.abs(field.values) ** 2)
+
+    central = (float(energy(METAL.real + 2e-3)) - float(energy(METAL.real - 2e-3))) / 4e-3
+    assert abs(float(jax.grad(energy)(METAL.real)) - central) <= 1e-6 * abs(central)
+    with pytest.raises(UnsupportedFeatureError, match='reads its sample points as numbers'):
+        jax.jit(energy)(METAL.real)
