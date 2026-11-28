@@ -784,6 +784,8 @@ def test_guards_are_skipped_under_jit_and_do_not_break_the_trace():
     either raises or forces a concretization that breaks the trace. The check therefore keys
     on whether the read succeeds, and a jitted solve is the case where it does not — so a
     traced non-finite result still returns quietly. That gap is real and is the accepted cost.
+    Through ``rcwa.Prepared.run`` the result does say so: ``validity.checks['numerical_finite']``
+    is False (:func:`test_an_exact_cutoff_under_a_trace_is_nan_and_flagged`).
     """
     jax = pytest.importorskip('jax')
     _legacy_wavebit_enable_x64()
@@ -822,3 +824,70 @@ def test_grad_is_guarded_and_still_differentiates():
 
     g = float(jax.grad(loss)(jnp.asarray(12.25)))   # a permittivity: the old n = 3.5
     assert np.isfinite(g) and g != 0.0
+
+
+# ---------------------------------------------------------------- the traced contract (#268)
+
+def _cutoff_problem(thickness, wavelength=400.):
+    """A 50 nm ``eps = 4`` layer on glass under a grating, at normal incidence with
+    ``wavelength / period = 1/2``: orders +-4 sit exactly on that layer's light line. Neither
+    half-space is ``eps = 4``, so no half-space merge can remove the layer."""
+    from wavebit import Material, Units, rcwa
+    layers = (rcwa.Layer(thickness=50., background=Material(4.0)),
+              rcwa.Layer(thickness=thickness, background=Material(1.0), regions=(
+                  rcwa.Region(geometry=rcwa.Rectangle(size=(400., 400.), center=(-200., 0.)),
+                              material=Material(6.25)),)))
+    return rcwa.Problem(units=Units(length='nm'),
+                        stack=rcwa.Stack(period=(800., 800.), top=Material(1.0),
+                                         bottom=Material(2.25), layers=layers),
+                        excitation=rcwa.Excitation(wavelength=wavelength, sources=(
+                            rcwa.PlaneWave(theta=0., polarization='s'),)))
+
+
+@pytest.mark.parametrize('algorithm', ['etm', 'smm'])
+def test_an_exact_cutoff_under_a_trace_is_nan_and_flagged(algorithm):
+    """Under a trace, the counterpart of the ``rcwa.singular`` refusal is a NaN that says so.
+
+    An exactly zero mode in a uniform layer has no exponential basis (``rayleigh-points.md``
+    section 5). Eagerly ``Prepared.run`` refuses it, under ``jax.grad`` too, and ``detuning``
+    answers. Under ``jax.jit`` or ``jax.vmap`` nothing can refuse or retry: the value and its
+    gradient are NaN and ``validity.checks['numerical_finite']`` is False. That is the contract
+    (fieldalgo/wavebit#268, decided 2026-11-28): a traced caller reads the flag. One ULP of
+    wavelength off the exact float the stack is ordinary, and the jitted run equals the eager one.
+    """
+    jax = pytest.importorskip('jax')
+    _legacy_wavebit_enable_x64()
+    import jax.numpy as jnp
+    from wavebit import NumericalError, rcwa
+    numerics = rcwa.Numerics(orders=(4, 0), algorithm=algorithm)
+
+    def runner(wavelength):
+        prepared = rcwa.prepare(_cutoff_problem(150., wavelength), numerics=numerics, backend='jax')
+
+        def run(thickness):
+            result = prepared.run(_cutoff_problem(thickness, wavelength))
+            return jnp.sum(result.T), result.validity.checks['numerical_finite']
+        return run
+
+    run = runner(400.)
+    with pytest.raises(NumericalError) as refused:
+        run(150.)
+    assert refused.value.code == 'rcwa.singular'
+    with pytest.raises(NumericalError):
+        jax.grad(lambda t: run(t)[0])(150.)
+
+    (value, finite), gradient = jax.jit(jax.value_and_grad(run, has_aux=True))(150.)
+    assert np.isnan(float(value)) and np.isnan(float(gradient))
+    assert not bool(np.asarray(finite))
+    values, flags = jax.vmap(run)(jnp.asarray([150., 160.]))
+    assert np.all(np.isnan(np.asarray(values))) and not np.any(np.asarray(flags))
+
+    detuned = rcwa.prepare(_cutoff_problem(150.), backend='jax',
+                           numerics=rcwa.Numerics(orders=(4, 0), algorithm=algorithm, detuning=1e-12))
+    assert np.isfinite(float(np.sum(np.asarray(detuned.run(_cutoff_problem(150.)).T))))
+
+    off = runner(float(np.nextafter(400., np.inf)))
+    eager, _ = off(150.)
+    jitted, finite = jax.jit(off)(150.)
+    assert bool(np.asarray(finite))
+    np.testing.assert_allclose(float(jitted), float(eager), rtol=1e-10)
