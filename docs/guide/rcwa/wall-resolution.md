@@ -37,7 +37,7 @@ The default is `None`: the cell's own coordinates, and every solve bit for bit a
 
 ## What it accepts
 
-Rectangles along the cell's axes, or one circle or axis-aligned ellipse ({ref}`below <wall-resolution-circles>`), with `factorization='li'` in a rectangular cell; isotropic, non-magnetic materials in the layers, metals included; lossless dielectric half-spaces; one incident plane wave from either side, at any angle; any number of layers, uniform ones included; the scattering-matrix algorithm (`algorithm='smm'`, the default) and the second-order formulation. NumPy, JAX and PyTorch, run eagerly.
+Rectangles along the cell's axes, or one circle or axis-aligned ellipse ({ref}`below <wall-resolution-circles>`), with `factorization='li'` in a rectangular cell; isotropic, non-magnetic materials in the layers, metals included; lossless dielectric half-spaces; one incident plane wave from either side, at any angle; any number of layers, uniform ones included; the scattering-matrix algorithm (`algorithm='smm'`, the default) and the second-order formulation. NumPy, JAX and PyTorch, run eagerly, at double precision.
 
 Everything else is refused by name with the code `rcwa.unsupported`, at `rcwa.check` as at `rcwa.run`:
 
@@ -48,7 +48,8 @@ Everything else is refused by name with the code `rcwa.unsupported`, at `rcwa.ch
 - several incident waves or an internal source;
 - an axis that has walls while `orders` retains a single harmonic along it;
 - two walls too close for the stretch to hold between them (a piece of the stretched cell is `period / number of walls` wide whatever its physical width);
-- `Outputs(scattering=True)`.
+- `Outputs(scattering=True)`;
+- `precision='single'`: the stretch makes the layer operators large where they meet the walls, and single-precision rounding then moved `R` and `T` by up to a few percent in the measurements ({ref}`why <wall-resolution-single-precision>`).
 
 A rectangle as long as the period along one axis has no wall across that axis, and that axis is not stretched: a lamellar grating is stretched along its one direction.
 
