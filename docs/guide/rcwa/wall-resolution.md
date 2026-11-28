@@ -37,7 +37,7 @@ The default is `None`: the cell's own coordinates, and every solve bit for bit a
 
 ## What it accepts
 
-Rectangles along the cell's axes, or one circle or axis-aligned ellipse ({ref}`below <wall-resolution-circles>`), with `factorization='li'` in a rectangular cell; isotropic, non-magnetic materials in the layers, metals included; lossless dielectric half-spaces; one incident plane wave from either side, at any angle; any number of layers, uniform ones included; the scattering-matrix algorithm (`algorithm='smm'`, the default) and the second-order formulation. NumPy, JAX and PyTorch; on JAX and PyTorch, derivatives with respect to the materials, the wavelength and the incident angle, and on JAX `jax.jit` and `jax.vmap` over them ({ref}`below <wall-resolution-transforms>`).
+Rectangles along the cell's axes, or one circle or axis-aligned ellipse ({ref}`below <wall-resolution-circles>`), with `factorization='li'` in a rectangular cell; isotropic, non-magnetic materials in the layers, metals included; lossless dielectric half-spaces; one incident plane wave from either side, at any angle; any number of layers, uniform ones included; the scattering-matrix algorithm (`algorithm='smm'`, the default) and the second-order formulation. NumPy, JAX and PyTorch, at double precision; on JAX and PyTorch, derivatives with respect to the materials, the wavelength and the incident angle, and on JAX `jax.jit` and `jax.vmap` over them ({ref}`below <wall-resolution-transforms>`).
 
 Everything else is refused by name with the code `rcwa.unsupported`, at `rcwa.check` as at `rcwa.run`:
 
@@ -49,6 +49,7 @@ Everything else is refused by name with the code `rcwa.unsupported`, at `rcwa.ch
 - an axis that has walls while `orders` retains a single harmonic along it;
 - two walls too close for the stretch to hold between them (a piece of the stretched cell is `period / number of walls` wide whatever its physical width);
 - `Outputs(scattering=True)`;
+- `precision='single'`: the stretch makes the layer operators large where they meet the walls, and single-precision rounding then moved `R` and `T` by up to a few percent in the measurements ({ref}`why <wall-resolution-single-precision>`).
 - a traced or differentiated geometry -- a size, centre, radius, angle or the cell -- under `jax.grad`, `jax.jit`, `jax.vmap` or a PyTorch tensor that requires grad, refused at its path ({ref}`below <wall-resolution-transforms>`);
 - under `jax.jit` or `jax.vmap`, a traced half-space permittivity.
 

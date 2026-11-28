@@ -1033,6 +1033,9 @@ def check_finite(xp, **named):
     why it is drawn at concreteness rather than at the namespace. Under ``jax.jit`` nothing is
     readable and the check is skipped — a traced solve that goes non-finite still returns
     quietly, which is a real remaining gap and not one this formulation can close.
+    ``rcwa.Prepared.run`` marks such a result: ``validity.checks['numerical_finite']`` is
+    False, and for an exact zero mode in a uniform layer that NaN with the flag is the
+    contract (``docs/theory/rcwa/rayleigh-points.md`` section 5).
 
     **The remedy in the message is measured, and the two suggestions it used to make are
     not remedies**, which is why they are gone. On the case this fires for — an order landing

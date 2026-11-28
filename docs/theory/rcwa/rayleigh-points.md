@@ -194,9 +194,28 @@ merged and answered. Both now return the stack with that layer deleted (`T = 0.9
 ETM and SMM alike, and its gradient to the last bit), where the eager ladder answers its `1e-8`
 neighbour, 3.2e-7 away. At `theta = pi/2` with the same layer the specular order grazes, and
 the value and gradient of `|t_s|**2` were `NaN` the same way; they are now the deleted stack's.
-`tests/rcwa/test_half_space_merge.py` pins both. A uniform layer whose medium is not the
-half-space's beside it -- the same vacuum layer moved down onto the `eps = 2.25` substrate --
-still returns `NaN` under `jit` where the eager ladder answers; that gap is open.
+`tests/rcwa/test_half_space_merge.py` pins both.
+
+**A uniform layer no merge can remove: `NaN`, and the result says so** (decided 2026-11-28,
+fieldalgo/wavebit#268). An example is the same vacuum layer moved down onto the `eps = 2.25`
+substrate. Under any abstract trace (`jax.jit`, `jax.vmap`, a `jax.lax.map` or `scan` body) an
+exactly zero mode in such a layer returns `NaN`, value and gradient. `Prepared.run` then reports
+`result.validity.checks['numerical_finite']` as False. This is the traced counterpart of the eager
+`rcwa.singular` refusal, and it is the contract. A finite value would need the limit basis `{1, z}`
+inside a traced layer, a construction judged not worth its cost for a set one float wide.
+
+A traced caller reads the flag: it masks or rejects the result, solves that point eagerly with
+`Numerics(detuning=...)`, or moves the input off the exact float. For a uniform layer one ULP is
+enough under `jit` as well.
+
+Measured on a 50 nm `eps = 4` layer on glass under a grating, at normal incidence with
+`wavelength / period = 1/2` (orders ±4 on its light line, 2026-11-28, JAX 0.12.1, ETM and SMM):
+
+- **eager:** refuses with `rcwa.singular`, under `jax.grad` too; `detuning=1e-12` answers.
+- **under `jit` and `vmap`:** `NaN` with the flag False.
+- **one ULP of wavelength off:** the jitted run equals the eager one to 5.3e-14 (`T = 0.8140022`).
+
+`tests/rcwa/test_rayleigh_guard.py::test_an_exact_cutoff_under_a_trace_is_nan_and_flagged` pins it.
 
 ## 6. The 2D coupled-cluster rebuild — what solved it, and the wall that remains
 

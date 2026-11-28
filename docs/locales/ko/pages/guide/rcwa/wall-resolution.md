@@ -37,7 +37,7 @@ result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(12, 12), factorization
 
 ## 받는 것
 
-직사각 셀에서 셀의 축에 나란한 사각형, 또는 원이나 축에 나란한 타원 하나({ref}`아래 <wall-resolution-circles>`)와 `factorization='li'`. 층의 재료는 등방이고 비자성이며 금속도 됩니다. 반공간은 손실 없는 유전체입니다. 입사 평면파 하나, 어느 쪽에서든 어느 각도로든. 층의 개수는 제한이 없고 균일한 층도 됩니다. 산란 행렬 알고리즘(`algorithm='smm'`, 기본값)과 2차 정식화. NumPy, JAX, PyTorch. JAX와 PyTorch에서는 재료, 파장, 입사각에 대한 미분, JAX에서는 그에 대한 `jax.jit`, `jax.vmap`({ref}`아래 <wall-resolution-transforms>`).
+직사각 셀에서 셀의 축에 나란한 사각형, 또는 원이나 축에 나란한 타원 하나({ref}`아래 <wall-resolution-circles>`)와 `factorization='li'`. 층의 재료는 등방이고 비자성이며 금속도 됩니다. 반공간은 손실 없는 유전체입니다. 입사 평면파 하나, 어느 쪽에서든 어느 각도로든. 층의 개수는 제한이 없고 균일한 층도 됩니다. 산란 행렬 알고리즘(`algorithm='smm'`, 기본값)과 2차 정식화. NumPy, JAX, PyTorch, 배정밀도. JAX와 PyTorch에서는 재료, 파장, 입사각에 대한 미분, JAX에서는 그에 대한 `jax.jit`, `jax.vmap`({ref}`아래 <wall-resolution-transforms>`).
 
 그 밖의 것은 모두 `rcwa.unsupported` 코드로, `rcwa.check`에서도 `rcwa.run`에서도 이름을 들어 거절합니다.
 
@@ -49,6 +49,7 @@ result = rcwa.run(problem, numerics=rcwa.Numerics(orders=(12, 12), factorization
 - 벽이 있는 축인데 `orders`가 그 축으로 고조파 하나만 유지하는 경우
 - 늘림이 그 사이를 담을 수 없을 만큼 가까운 두 벽(늘린 셀의 한 조각은 물리적 폭과 상관없이 `period / number of walls`만큼 넓습니다)
 - `Outputs(scattering=True)`
+- `precision='single'`: 늘림이 벽에서 층 연산자를 크게 만들어, 측정에서 단정밀도 반올림이 `R`과 `T`를 몇 퍼센트까지 움직였습니다({ref}`이유 <wall-resolution-single-precision>`).
 - `jax.grad`, `jax.jit`, `jax.vmap` 아래에서 추적되거나 미분을 지닌 기하(크기, 중심, 반지름, 각도, 셀)와 grad를 요구하는 PyTorch 텐서인 기하. 그 경로를 들어 거절합니다({ref}`아래 <wall-resolution-transforms>`).
 - `jax.jit`이나 `jax.vmap` 아래에서 추적된 반공간 유전율
 

@@ -332,6 +332,19 @@ Each scene was solved at orders 4 to 16 and slopes `G` from 0.1 to 0.005, and by
   - At each point `R` was the same to the bit with the handling off. It lay within 7e-6 of the line through the solves 0.5 nm either side, which differ from each other by 3e-4 to 4e-3. It differed from the other order's value by what the neighbouring wavelengths differ by.
   - The cluster's exact cause was not traced.
 
+(wall-resolution-single-precision)=
+## Single precision: refused
+
+`precision='single'` with `wall_resolution` was measured against the criteria below, written before measuring (2026-11-28), and did not meet them; it is refused by name with `rcwa.unsupported`.
+
+- **The criteria.** The wide table above at order 12 and `G` 0.02, under its own criteria; `R` and `T` within 3e-4 (relative) of the double-precision solve and the in-plane field within 1e-3, at orders 8, 12 and 16 on NumPy, JAX and PyTorch; and the exceptional-point and spurious-mode readings of the section above.
+- **What came out** (NumPy, normal incidence or theta 20 deg as in the table):
+  - The table's cheapest cases at order 8, where double precision meets it: on the block at theta 20 deg, p, `R` is 0.75% low against 0.3%; on the circle in the 400 by 300 nm cell, `T` is 1.9% high.
+  - Against double precision, the block at theta 20 deg, p: `R` 0.67% and the field 0.77% apart at order 8, `R` 4.2% and the field 4.1% at order 12. The default solve at single precision is 1.5e-6 to 1.7e-6 from double in `R` and 1e-5 in the field at the same orders.
+  - The circle in the 400 by 300 nm cell at order 12: the field 1.2% apart at `G` 0.1, `R` 4.5% at `G` 0.05, and at `G` 0.02 the stretched half-space is refused ("does not hold its propagating plane waves as 2 modes").
+  - The criteria not met, the rest was not measured: the other cases of the table, JAX and PyTorch beyond the refusal, and the readings on spurious modes.
+- **Why.** The stretch raises the layer operator's norm roughly as `1/G**2`: at order 12 and `G` 0.02 it is 1.9e6 on the block and 2.7e8 on the circle, against 5.1e3 and 3.0e4 unstretched, while the propagating modes' eigenvalues stay near 1. Single-precision rounding, about 6e-8 of the norm, then moves the least-attenuated modes by up to 10%. The loss is in the solve, not its data: the tables are built in double, and a double-precision solve of tables rounded to single moves `R` and `T` by 2.6e-5 at most. Solving the eigenproblem alone in double did not help, as the operator is already formed in single precision.
+
 (wall-resolution-transforms-measured)=
 ## Derivatives and JAX transforms
 
@@ -367,5 +380,5 @@ The two misses are differences of rounding between two runs of one calculation, 
 - An independent implementation of the stretched solve or the matched mesh: none was found to compare with at the same truncation.
 - Layers with more than four walls along an axis; four walls at oblique incidence or on a substrate; why the frame's field error at order 12 is larger than the bars', and which side holds the 2.0 to 3.5% left at order 20.
 - A second mesh level for five of the seven references.
-- Single precision. A derivative with respect to the geometry, which is refused; `phi` as a variable; orders above 5 under a derivative; fields under `jax.jit` or `jax.vmap`, which are refused.
+- A derivative with respect to the geometry, which is refused; `phi` as a variable; orders above 5 under a derivative; fields under `jax.jit` or `jax.vmap`, which are refused.
 - Spurious modes at slopes below 0.005 or orders above 16; wavelength features narrower than about 4 nm; the cause of the three warnings above.
