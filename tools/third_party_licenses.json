@@ -344,7 +344,7 @@
     "gyptis": {
       "spdx": "MIT",
       "url": "https://pypi.org/project/gyptis/",
-      "use": "black-box FEM reference (1.2.0), run by hand in a separate environment: the stored values of tests/references/golden_gyptis_cylinder_field.npz, golden_gyptis_shapes_field.npz, golden_gyptis_rectangles_field.npz, golden_gyptis_wide.npz, golden_gyptis_wide_c1.npz, golden_gyptis_wide_c1e.npz and golden_gyptis_wide_d.npz, and earlier results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
+      "use": "black-box FEM reference (1.2.0), run by hand in a separate environment: the stored values of tests/references/golden_gyptis_cylinder_field.npz, golden_gyptis_shapes_field.npz, golden_gyptis_rectangles_field.npz, golden_gyptis_wide.npz, golden_gyptis_wide_c1.npz, golden_gyptis_wide_c1e.npz, golden_gyptis_wide_d.npz and golden_gyptis_wide_e.npz, and earlier results cited in docs/theory/rcwa/negative-index-media.md. Nothing in this repository runs or imports it",
       "forbidden_imports": [
         "gyptis"
       ],

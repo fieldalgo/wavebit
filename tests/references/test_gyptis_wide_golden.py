@@ -15,6 +15,9 @@ rectangles the cell's edges cut it into, as a rectangle may not cross the cell's
 rectangles with no x mirror at theta 20 deg, p. A moved shape is the centred structure moved: its
 reference ``R`` and ``T`` are the centred structure's, and its field is the centred one read at the
 moved samples.
+``golden_gyptis_wide_e.npz`` holds the dielectric block over glass, normal incidence, p, with a second
+reference beside the finite elements: RETICOLO's unstretched Li solve at order 30 (and at order 24 and
+with its other nesting), which also checked the finite-element substrate model on a patterned layer.
 Each case has ``R`` and ``T`` on the finer of two mesh levels and on the coarser, and the in-plane
 ``E`` on the mid-plane of each patterned layer.
 
@@ -25,12 +28,16 @@ metal the in-plane plane error (RMS over the reference's plane RMS, all patterne
 is at most a quarter of the default solve's at the same order -- uncompressed Li on a block or
 rectangles, NVF on a circle or an ellipse. On the dielectric it is at most 1%.
 
-All thirty-three run at order 12 in the slow tier, about 1 to 3 minutes each. The default run takes
+All thirty-four run at order 12 in the slow tier, about 1 to 3 minutes each. The default run takes
 the cheapest metal and dielectric cases, the 400 x 300 circle (p) and the block at normal
 incidence, at order 8 under the same criteria: measured when the table was made, order 8 already
 met them there (circle: ``R`` +0.06%, ``T`` -0.12%, field ratio 0.064; block: ``R`` -0.07%,
 ``T`` 0.00%, field 0.73%). Other cases do not all meet them at order 8 (the substrate ones least),
 so order 8 is not asserted for them.
+
+On the dielectric block over glass the stretched solve at orders 12 and 16 is also held to RETICOLO, under
+the comparison written before measuring: ``R`` and ``T`` within max(2u, 2e-4) of RETICOLO's order-30 value
+(relative), ``u`` the larger of its step from order 24 to 30 and the difference between its nestings.
 """
 from pathlib import Path
 
@@ -41,7 +48,7 @@ from wavebit import Material, Units, rcwa
 
 GOLDENS = [Path(__file__).with_name(name)
            for name in ('golden_gyptis_wide.npz', 'golden_gyptis_wide_c1.npz', 'golden_gyptis_wide_c1e.npz',
-                        'golden_gyptis_wide_d.npz')]
+                        'golden_gyptis_wide_d.npz', 'golden_gyptis_wide_e.npz')]
 METAL, GLASS = -20 + 1.5j, 1.45 ** 2
 BOX, CIRCLE, ELLIPSE = ('box', 200.0, 200.0), ('cyl', 100.0), ('ell', 130.0, 80.0)
 #: a shape away from the cell's centre: ('at', shape, (x, y)); several rectangles: ('rects', ((x0, y0, x1, y1), ..))
@@ -89,6 +96,8 @@ CASES = {
     'C1cp_m': ((400.0, 300.0), 900.0, 0, 'p', 1.0, None, [(150.0, ('at', CIRCLE, (60.0, 110.0)), METAL, 1.0)]),
     'R1p_m': ((400.0, 400.0), 900.0, 20, 'p', 1.0, None, [(150.0, BLOCK_MOVED, METAL, 1.0)]),
     'A1T_o20p': ((400.0, 400.0), 900.0, 20, 'p', 1.0, None, [(150.0, T_SHAPE, METAL, 1.0)]),
+    # golden_gyptis_wide_e.npz
+    'blk_d_sub': ((400.0, 400.0), 900.0, 0, 'p', GLASS, None, [(150.0, BOX, 12.25, 1.0)]),
 }
 
 
@@ -181,7 +190,7 @@ def _check(name, order):
         assert error <= 1e-2, error
 
 
-def test_the_goldens_hold_the_thirty_three_cases():
+def test_the_goldens_hold_the_thirty_four_cases():
     assert sum((_cases(path) for path in GOLDENS), []) == list(CASES)
     for path in GOLDENS:
         with np.load(path) as golden:
@@ -201,3 +210,19 @@ def test_order_8_already_meets_the_criteria_on_the_cheapest_cases(name):
 @pytest.mark.parametrize('name', list(CASES))
 def test_order_12_meets_the_preregistered_criteria(name):
     _check(name, 12)
+
+
+@pytest.mark.slow
+@pytest.mark.shard_unit
+@pytest.mark.parametrize('order', [12, 16])
+def test_the_dielectric_block_on_glass_meets_reticolo_too(order):
+    with np.load(GOLDENS[-1]) as golden:
+        k = list(golden['case']).index('blk_d_sub')
+        reference = {side: float(golden[f'reticolo_{side}'][k]) for side in 'RT'}
+        u = {side: max(abs(float(golden[f'reticolo_{side}_order24'][k]) - reference[side]),
+                       abs(float(golden[f'reticolo_{side}_other_nesting'][k]) - reference[side])) / reference[side]
+             for side in 'RT'}
+    R, T, _ = _solve('blk_d_sub', order, stretched=True)
+    for side, value in (('R', R), ('T', T)):
+        limit = max(2 * u[side], 2e-4)
+        assert abs(value - reference[side]) / reference[side] <= limit, (side, value, reference[side], limit)

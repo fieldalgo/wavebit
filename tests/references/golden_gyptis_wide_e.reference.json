@@ -1,0 +1,169 @@
+{
+  "schema": "wavebit.reference-values/1",
+  "case": "golden_gyptis_wide_e",
+  "physics": "rcwa",
+  "comparison": "different-discretization",
+  "role": "external oracles for wall_resolution on the dielectric block over glass: the 3D finite-element solve of the widened table's substrate model, and RETICOLO's unstretched Li solve at order 30, which also checks that substrate model on a patterned layer; the widened table's criteria and the RETICOLO comparison written before measuring are asserted against them",
+  "references": [
+    {
+      "tool": "gyptis",
+      "version": "1.2.0",
+      "build": "FEniCS (dolfin) 2019.1.0, gmsh 4.15.2, PETSc/petsc4py 3.26.1, MUMPS 5.8.2 (conda-forge), one thread, out of core",
+      "modified": {
+        "value": false,
+        "description": "used through its public Python API; the package itself was not changed"
+      },
+      "spdx": "MIT",
+      "source": "https://pypi.org/project/gyptis/",
+      "install": {
+        "kind": "conda",
+        "command": null
+      },
+      "settings": "Maxwell3DPeriodic on a quarter of the cell at the full height over the substrate (x mirrors perfect electric, y mirrors perfect magnetic walls), the excitation the analytic air/substrate (Fresnel) field; second-order edge (Nedelec) elements, 400 nm of air and of substrate and 900 nm of perfectly matched layer above and below. R and T by projecting the periodic part of the scattered field on each diffraction order over an air slab and a substrate slab. Relative residuals of the direct solves 2.8e-12. The stored phasors are in gyptis's time convention, the conjugate of Wavebit's; the consumer maps them as sign * conj(E), sign -1 for p. Before measuring, the block's volume in the mesh was checked against the analytic one (to 2e-15)",
+      "discretization": "tetrahedral meshes graded toward the walls and edges, two levels (coarser/finer: 51111/105016 cells), the finer with 0.69 million complex unknowns and a smallest edge of about 1.5 nm; the product side is a Fourier truncation of the same cell",
+      "arrays": [
+        "E_*",
+        "R",
+        "T",
+        "R_coarse",
+        "T_coarse",
+        "u_F",
+        "case",
+        "x_*",
+        "y_*",
+        "depth_*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    },
+    {
+      "tool": "RETICOLO",
+      "version": "V10",
+      "build": "reticolo_allege_v10 tree of the Zenodo archive 'RETICOLO V10.zip' (md5 9c9c5e23397c6db5b39f0ed8d0993b03), run by GNU Octave 8.4.0",
+      "modified": {
+        "value": false,
+        "description": "called through res0/res1/res2 from a driver script; the tree itself was not changed"
+      },
+      "spdx": "CC-BY-4.0",
+      "source": "https://doi.org/10.5281/zenodo.14631951",
+      "install": {
+        "kind": "manual",
+        "command": null
+      },
+      "settings": "res1/res2 on the crossed grating: the block as a rectangle [0, 0, 200, 200, n, 1] (not a staircase) in a 400 x 400 nm period, 150 nm thick, air above, n = 1.45 below, normal incidence from the air; both mirror planes (parm.sym, one polarization per run), p = TM; Li's rule with no stretch (granet = 0, the only setting of the public version), fixed nesting (li = 1) at orders 24 and 30 and the symmetric nesting (li = 0) at order 30. The same driver first reproduced the eight RETICOLO values stored in tests/references/test_reticolo_li_nesting.py to 4.2e-11",
+      "discretization": "truncation order N = 24 and 30 in both directions (scalar to RETICOLO)",
+      "arrays": [
+        "reticolo_*"
+      ],
+      "execution": "separate-process",
+      "independence": {
+        "product_loaded_in_reference_process": false,
+        "reference_inputs_built_from_product_objects": false
+      }
+    }
+  ],
+  "generator": {
+    "path": "private research repository",
+    "sha256": "cfa3ac2aa8d9de360d16f743b26a8c00e7e8dfd7c71fb43297e18446bd6267b2",
+    "command": "python fem_sym.py blk_d_sub <level> with the mesh rule v2 at levels 0 and 1; python run_reticolo_sub.py 12,16,20,24,30 1 and 30 0 for RETICOLO; then python make_golden_e.py, which takes R and T of the newest records, the finer level's plane field reduced to its in-plane components in single precision, and RETICOLO's totals for p at orders 24 and 30 and the other nesting",
+    "product_commit": null,
+    "clean_tree": null
+  },
+  "generated_utc": "2026-11-28",
+  "environment": {
+    "python": "3.13.18",
+    "numpy": "2.5.5",
+    "threads": 1
+  },
+  "cost": {
+    "wall_seconds": 1051,
+    "max_rss_gb": 7.8,
+    "note": "the two finite-element levels (449 and 603 s; the finer level's first run was killed for memory while another job ran beside it and was run again alone); RETICOLO took 1 to 71 s per order. The machine shared its CPU with other work, so the time is not a cost measurement"
+  },
+  "inputs": {
+    "cells": {
+      "period_nm": "400 x 400",
+      "layer_thickness_nm": 150.0,
+      "shapes": "blk_d_sub: a 200 x 200 nm block centred in the cell",
+      "shape_epsilon": 12.25,
+      "background_epsilon": 1.0,
+      "superstrate_epsilon": 1.0,
+      "substrate_epsilon": 2.1025
+    },
+    "incidence": {
+      "wavelength_nm": 900.0,
+      "theta_deg": 0,
+      "polarization": "p (E along x; the square block gives the same for s)",
+      "source": "a plane wave from the top"
+    },
+    "cases": [
+      "blk_d_sub"
+    ],
+    "values": {
+      "R, T": "total reflectance and transmittance on the finer mesh level (level 1)",
+      "R_coarse, T_coarse": "the same on the coarser level (level 0)",
+      "u_F": "|R - R_coarse| / R",
+      "E_<case>": "in-plane (Ex, Ey) on each patterned layer's mid-plane, E[plane, j, i, component] at (x[i], y[j]); complex64; gyptis's convention, normalised so the incident wave has phase 0 at the stack's top and x = 0",
+      "x_<case>, y_<case>": "48 points each, ((i + 0.37)/48 - 1/2) * Px and ((j + 0.41)/48 - 1/2) * Py",
+      "depth_<case>": "each plane's depth below the stack's top, top layer first",
+      "reticolo_R, reticolo_T": "RETICOLO's total R and T for p at order 30, fixed nesting (li = 1)",
+      "reticolo_R_order24, reticolo_T_order24": "the same at order 24",
+      "reticolo_R_other_nesting, reticolo_T_other_nesting": "the same at order 30 with the symmetric nesting (li = 0)"
+    },
+    "mesh_rule": "v2 of 2026-11-22: PML 40 nm and air 20 nm elements at every level, refinement at the true edges and on the shapes' walls, top and bottom faces; the two levels differ only in the wall and edge sizes"
+  },
+  "outcomes": {
+    "matched": null,
+    "not_matched": null,
+    "reference_self_check": "u_F, the relative R change between the two levels, is 3.7e-3 (above 1e-3, which the criteria call weak); the finer level is within 6.5e-4 in R and 6.0e-6 in T of RETICOLO's order-30 value (1e-3 written before measuring), 2.2e-3 in R from its other nesting; RETICOLO's R moves by 1.4e-3 from order 24 to 30 and by 2.9e-3 between its nestings",
+    "failed_or_discarded": "none; the same measurement found RETICOLO (to order 40) and fmmax (to 1600 terms) not settled to 1e-3 on the metal block and the metal circle over glass, so no second reference is stored for those",
+    "not_run": null
+  },
+  "payload": {
+    "file": "golden_gyptis_wide_e.npz",
+    "format": "npz",
+    "file_sha256": "32dfbd66d1251de92ac4aba2a7aa08c71b731810ce12f446d237a8cf54b3b789",
+    "arrays": [
+      "E_blk_d_sub",
+      "R",
+      "R_coarse",
+      "T",
+      "T_coarse",
+      "case",
+      "depth_blk_d_sub",
+      "reticolo_R",
+      "reticolo_R_order24",
+      "reticolo_R_other_nesting",
+      "reticolo_T",
+      "reticolo_T_order24",
+      "reticolo_T_other_nesting",
+      "u_F",
+      "x_blk_d_sub",
+      "y_blk_d_sub"
+    ]
+  },
+  "values_sha256": "f51a63b87cea2749cd752e927231626f4c928662689c813262bbb772348e0a82",
+  "content_sha256": "1bb0060f895ff88048201ea56b7f13c3416c73e07b297047e7c55ce7c3efe66c",
+  "consumers": [
+    "tests/references/test_gyptis_wide_golden.py"
+  ],
+  "provenance_status": "reconstructed",
+  "sources": {
+    "references[0]": "the run script, its results file and the run logs, read on 2026-11-28",
+    "references[0].independence": "the finite-element script imports numpy, dolfin, gmsh, gyptis and a NumPy-only case table",
+    "references[1]": "the RETICOLO driver, its results file and the run logs, read on 2026-11-28"
+  },
+  "regeneration": [],
+  "not_recorded": {
+    "generator.clean_tree": "the generator does not load the product and records no commit",
+    "generator.product_commit": "the generator does not load the product and records no commit",
+    "outcomes.matched": "what the comparison found is in the consumer test",
+    "outcomes.not_matched": "what the comparison found is in the consumer test",
+    "outcomes.not_run": "what the comparison found is in the consumer test",
+    "references[0].install.command": "the method notes name the conda-forge environment and its versions, not the command that built it",
+    "references[1].install.command": "the archive was unpacked by hand; its md5 is recorded in the build"
+  }
+}
