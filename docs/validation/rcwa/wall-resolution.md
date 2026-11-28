@@ -332,11 +332,40 @@ Each scene was solved at orders 4 to 16 and slopes `G` from 0.1 to 0.005, and by
   - At each point `R` was the same to the bit with the handling off. It lay within 7e-6 of the line through the solves 0.5 nm either side, which differ from each other by 3e-4 to 4e-3. It differed from the other order's value by what the neighbouring wavelengths differ by.
   - The cluster's exact cause was not traced.
 
+(wall-resolution-transforms-measured)=
+## Derivatives and JAX transforms
+
+Measured on 2026-11-28 on Linux with JAX 0.12.1 (x64) and PyTorch 2.15.0+cpu, for the {ref}`guide's section <wall-resolution-transforms>`. Two cases: a metal block of 200 by 200 nm (rectangles, `Stretch`) and a metal circle of radius 110 nm (`Matched`), both of permittivity -20+1.5j, 150 nm thick, in a 400 nm cell in air, at 900 nm, p, `G` 0.02. The observables were `sum(R)`, `sum(T)` and the specular `R`.
+
+**A wrong derivative found first.** Before this change a wavelength or angle derivative was 0.1 to 2% off a central difference, on JAX and PyTorch alike, wherever an axis along the incidence was stretched; material derivatives were right. The stretched half-space keeps its evanescent modes and replaces its propagating ones by exact plane waves. Under a derivative the eigensolve is stopped and its variation is carried by the modal generator, a matrix in the fixed basis, and picking the kept columns dropped the generator's entries that join the kept modes to the replaced ones -- the turn of the kept modes' span. Those entries now become a change of basis, `X_ij = dQ_ij / (q_j - q_i)` across the two sets. On the block at theta 0.35 rad and order 3 the angle derivative went from 0.39% off to 4e-10, and at order 5 from 1.6% to 1.7e-7. The values are unchanged to the bit.
+
+**Criteria written before measuring.**
+
+- K1: JAX `jax.grad` and PyTorch autograd with respect to the permittivity's real and imaginary parts, the wavelength (at theta 0 and 0.35 rad) and theta (0.35 rad), at orders 3 and 5, within 1e-6 of a central difference relative to `max(|FD|, 1e-6)`. A difference counts only where the steps `h` and `h/10` agree to 1e-7; a cell where they do not is set aside and counted.
+- K2: a jitted `Prepared.run` within `1e-12 max(1, |value|)` of the eager run; a jitted gradient within 1e-10 of the eager one.
+- K3: `jax.vmap` over three values of each variable within `1e-12 max(1, |value|)` of the eager runs.
+- K4: PyTorch values within 1e-12 of JAX's, gradients within 1e-10.
+- K5: a traced or differentiated geometry refused by `rcwa.unsupported` at its path under `jax.grad`, `jax.jit`, `jax.vmap` and PyTorch.
+- K6: the existing tests unchanged.
+
+**Results.**
+
+- K1: met. Of 84 cells, 46 had a stable difference, and there JAX and PyTorch read at most 9.1e-8 off it (order 3: 8e-9 to 9e-8). The other 38 were set aside. They are 20 of the block's 21 cells at order 5 and 18 of the circle's 42, all six of its imaginary-part cells at order 3 among them. The two steps disagreed there by more than 1e-7, as rounding of about 1e-12 in the solve would make the smaller step do; the cause was not pinned down.
+- K2: met for the values (block 4.9e-14 to 8.9e-14, circle 2.0e-13 to 2.8e-13) and for seven of eight gradients (7.6e-14 to 7.5e-12). **Not met** for the circle's gradient with respect to the permittivity's real part: 2.3e-10 against 1e-10, at order 3.
+- K3: met, 1.1e-15 to 2.0e-13.
+- K4: **not met** on the block at order 5 and theta 0: values 1.6e-12 apart (three cells), and one gradient 1.5e-10 apart. Everywhere else values were within 7.6e-13 and gradients within 9.1e-11.
+- K5: met; 30 combinations (size, centre and cell of the block, radius, centre and cell of the circle, under five transforms).
+- K6: still running when this was written.
+
+The two misses are differences of rounding between two runs of one calculation, each run as close to the central difference as the others; neither is an error against a difference. They are recorded as not met because the criteria were written that way.
+
+**Measured once, outside the criteria.** An eager derivative with respect to a glass substrate's permittivity (`T`, block, order 3) read 3.7e-9 off a central difference. An eager derivative of `sum |E|**2` over nine points in the layer with respect to the permittivity's real part (order 2) read 2.7e-8 off on the block and 2.8e-8 on the circle; under `jax.jit` the field reading is refused by name. The guide's example ran end to end.
+
 ## Not measured
 
 - A reference at phi other than 0; a reference for a structure with no mirror along either axis, or for patterned layers moved by different amounts; a second reference for the metal rows on a substrate. A finer finite-element level for the weak rows above.
 - An independent implementation of the stretched solve or the matched mesh: none was found to compare with at the same truncation.
 - Layers with more than four walls along an axis; four walls at oblique incidence or on a substrate; why the frame's field error at order 12 is larger than the bars', and which side holds the 2.0 to 3.5% left at order 20.
 - A second mesh level for five of the seven references.
-- Single precision; `jax.jit`, `jax.vmap` and gradients, which are refused.
+- Single precision. A derivative with respect to the geometry, which is refused; `phi` as a variable; orders above 5 under a derivative; fields under `jax.jit` or `jax.vmap`, which are refused.
 - Spurious modes at slopes below 0.005 or orders above 16; wavelength features narrower than about 4 nm; the cause of the three warnings above.
